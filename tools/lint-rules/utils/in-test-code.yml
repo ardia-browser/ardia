@@ -1,0 +1,27 @@
+id: in-test-code
+language: rust
+rule:
+  any:
+    - inside:
+        stopBy: end
+        kind: mod_item
+        follows:
+          kind: attribute_item
+          regex: cfg\(.*test
+    - inside:
+        stopBy: end
+        kind: function_item
+        follows:
+          stopBy:
+            not:
+              any:
+                - kind: attribute_item
+                - kind: line_comment
+          kind: attribute_item
+          regex: ^#\[(\w+::)?test\b
+    - inside:
+        stopBy: end
+        kind: mod_item
+        has:
+          field: name
+          regex: ^tests?$

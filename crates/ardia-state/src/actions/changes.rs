@@ -87,6 +87,32 @@ impl ChangeSet {
         self.topics.is_empty()
     }
 
+    pub(crate) fn note_settled(
+        &mut self,
+        before: &crate::state::BrowserState,
+        after: &crate::state::BrowserState,
+    ) {
+        for (id, tab) in after.tabs.iter() {
+            if before.tabs.get(id).is_none_or(|was| !std::sync::Arc::ptr_eq(was, tab)) {
+                self.note(Topics::TABS, false);
+                push_unique(&mut self.tabs, id);
+            }
+        }
+        for (id, window) in after.windows.iter() {
+            if before
+                .windows
+                .get(id)
+                .is_none_or(|was| !std::sync::Arc::ptr_eq(was, window))
+            {
+                self.note(Topics::WINDOWS, false);
+                push_unique(&mut self.windows, id);
+            }
+        }
+        if !std::sync::Arc::ptr_eq(&before.groups, &after.groups) {
+            self.note(Topics::GROUPS, false);
+        }
+    }
+
     pub fn touches_tab(&self, id: &str) -> bool {
         self.tabs.iter().any(|t| t == id)
     }

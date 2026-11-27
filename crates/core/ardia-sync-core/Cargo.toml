@@ -13,3 +13,6 @@ rustcrypto = ["ardia-crypto/rustcrypto"]
 ardia-crypto.workspace = true
 base64.workspace = true
 zeroize.workspace = true
+
+[lints]
+workspace = true

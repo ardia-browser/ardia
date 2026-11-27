@@ -29,6 +29,16 @@ pub const RESERVED_COMMANDS: &[&str] = &[
 pub struct AppPolicy {
     coordinator: Weak<AppCoordinator>,
     keys: DefaultPolicy,
+    page_full_screen_keys: DefaultPolicy,
+}
+
+pub fn page_full_screen_chords() -> Vec<KeyChord> {
+    use ardia_engine::Modifiers;
+    vec![
+        KeyChord::new("q", Modifiers::COMMAND),
+        KeyChord::new("f", Modifiers::COMMAND | Modifiers::CONTROL),
+        KeyChord::new("f", Modifiers::FUNCTION),
+    ]
 }
 
 impl std::fmt::Debug for AppPolicy {
@@ -46,7 +56,13 @@ impl AppPolicy {
     ) -> Self {
         let keys = DefaultPolicy::new();
         keys.set_reserved_shortcuts(reserved);
-        Self { coordinator, keys }
+        let page_full_screen_keys = DefaultPolicy::new();
+        page_full_screen_keys.set_reserved_shortcuts(page_full_screen_chords());
+        Self {
+            coordinator,
+            keys,
+            page_full_screen_keys,
+        }
     }
 }
 
@@ -57,7 +73,12 @@ impl HostPolicy for AppPolicy {
         kind: NewBrowserKind,
     ) -> NewBrowserWindow {
         match kind {
-            NewBrowserKind::Popup => NewBrowserWindow::Create,
+            NewBrowserKind::Popup => self
+                .coordinator
+                .upgrade()
+                .filter(|coordinator| coordinator.popups_open_as_tabs())
+                .and_then(|coordinator| coordinator.window_for_new_tabs(profile))
+                .map_or(NewBrowserWindow::Create, NewBrowserWindow::Use),
             NewBrowserKind::Normal => self
                 .coordinator
                 .upgrade()
@@ -70,7 +91,15 @@ impl HostPolicy for AppPolicy {
     }
 
     fn is_reserved_key(&self, chord: &KeyChord) -> bool {
-        self.keys.is_reserved_key(chord)
+        let page_full_screen = self
+            .coordinator
+            .upgrade()
+            .is_some_and(|coordinator| coordinator.focused_page_full_screen());
+        if page_full_screen {
+            self.page_full_screen_keys.is_reserved_key(chord)
+        } else {
+            self.keys.is_reserved_key(chord)
+        }
     }
 
     fn window_should_close(&self, window: EngineWindowId) -> bool {
@@ -87,7 +116,29 @@ impl HostPolicy for AppPolicy {
     }
 }
 
+pub fn popups_open_as_tabs_in(enabled: bool, front: Option<WindowKind>) -> bool {
+    enabled && front != Some(WindowKind::LittleArdia)
+}
+
 impl AppCoordinator {
+    pub fn popups_open_as_tabs(&self) -> bool {
+        let state = self.store().snapshot();
+        let front = state
+            .focus_order
+            .first()
+            .and_then(|id| state.window(id.as_str()))
+            .map(|w| w.kind);
+        popups_open_as_tabs_in(state.settings.popups_open_as_tabs, front)
+    }
+
+    pub fn focused_page_full_screen(&self) -> bool {
+        let state = self.store().snapshot();
+        state
+            .focus_order
+            .first()
+            .is_some_and(|window| state.fullscreen_tab(window.as_str()).is_some())
+    }
+
     pub fn window_for_new_tabs(&self, profile: Option<EngineProfileId>) -> Option<EngineWindowId> {
         let state = self.store().snapshot();
         let bridge = self.bridge.try_lock()?;
@@ -132,8 +183,14 @@ impl AppCoordinator {
         let tab = window.as_ref().and_then(|w| state.active_tab(w.as_str()));
         match command {
             "noop" => false,
+            "togglePin" if arg == Some("tile") => {
+                tab.is_some_and(|t| t.pin.as_ref().is_some_and(|pin| !pin.is_tile()))
+            }
             "reopenClosedTab" => state.newest_closed(window.as_ref()).is_some(),
             "reopenClosedWindow" => !state.closed.windows.is_empty(),
+            "clearRecentlyClosed" => {
+                !ardia_state::closed::recently_closed_to_clear(&state, window.as_ref()).is_empty()
+            }
             "closeTab" | "duplicateTab" | "togglePin" | "togglePinnedRow" | "reload"
             | "forceReload" | "stop" | "copyUrl" | "copyUrlAsMarkdown" | "share" | "toggleMute"
             | "findInPage" | "zoomIn" | "zoomOut" | "zoomReset" | "devTools" | "toggleDevTools"
@@ -143,10 +200,16 @@ impl AppCoordinator {
             "returnToPinnedUrl" => {
                 tab.is_some_and(|t| t.pinned_url.as_deref().is_some_and(|home| home != t.url))
             }
+            "toggleReader" => tab.is_some_and(|t| {
+                let reader = self.reader_status_of(&t.id);
+                reader.active || reader.available
+            }),
             "closeTabGroup" => tab.is_some_and(|t| state.group_of(t.id.as_str()).is_some()),
             "switchProfile" => arg.is_some_and(|profile| state.profile(profile).is_some()),
             "nextProfile" | "previousProfile" => state.profile_order.len() > 1,
             "findNext" | "findPrevious" => tab.is_some_and(|t| !t.live.find.query.is_empty()),
+            "togglePageEngine" => tab
+                .is_some_and(|t| ardia_state::engines::switchable_engine(&state.settings, &t.url)),
             _ => true,
         }
     }
@@ -165,4 +228,18 @@ pub fn reserved_chords(bar: &ardia_engine::macos::menu::MenuBar) -> Vec<KeyChord
             ))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod popup_tests {
+    use super::*;
+
+    #[test]
+    fn pop_ups_open_as_tabs_only_when_chosen_and_never_from_little_ardia() {
+        assert!(!popups_open_as_tabs_in(false, Some(WindowKind::Main)));
+        assert!(popups_open_as_tabs_in(true, Some(WindowKind::Main)));
+        assert!(popups_open_as_tabs_in(true, None));
+        assert!(popups_open_as_tabs_in(true, Some(WindowKind::Incognito)));
+        assert!(!popups_open_as_tabs_in(true, Some(WindowKind::LittleArdia)));
+    }
 }

@@ -26,7 +26,7 @@ use crate::events::EventBus;
 use crate::launch::LaunchOptions;
 use crate::loader::{EngineLibrary, LoaderEnvironment, Platform, describe_attempts};
 use crate::policy::{DefaultPolicy, HostPolicy, NewBrowserWindow};
-use crate::reply::{Completion, CompletionStatus, PendingRequests, Reply};
+use crate::reply::{Completion, CompletionStatus, Finally, PendingRequests, Reply};
 use crate::services::{SecretValue, ServiceArgs, ServiceName};
 use crate::types::*;
 
@@ -705,19 +705,27 @@ pub(crate) fn ownership() -> ObjectOwnership {
 
 impl Drop for MacEngine {
     fn drop(&mut self) {
+        tear_down(&self.shared.bus, &REQUESTS, abi::service_replies());
+    }
+}
+
+fn tear_down(bus: &EventBus, requests: &PendingRequests, services: &PendingRequests) {
+    let _inactive = Finally::new(|| ACTIVE.store(false, Ordering::Release));
+    let _detached = Finally::new(|| {
         abi::SERVICE_SINK.detach();
         *HOST.shared.write() = None;
-        let mut released = 0;
-        if unsafe { ffi::ardia_bridge_release_confirms(false, &mut released) } == ffi::OK
-            && released > 0
-        {
-            log::info!("kept {released} windows open that were waiting on a download answer");
-        }
-        self.shared.bus.close();
-        REQUESTS.cancel_all();
-        abi::cancel_service_replies();
-        ACTIVE.store(false, Ordering::Release);
+        bus.close();
+    });
+    let mut released = 0;
+    if unsafe { ffi::ardia_bridge_release_confirms(false, &mut released) } == ffi::OK
+        && released > 0
+    {
+        log::info!("kept {released} windows open that were waiting on a download answer");
     }
+    let _services = Finally::new(|| {
+        services.cancel_all();
+    });
+    requests.cancel_all();
 }
 
 impl BrowserEngine for MacEngine {
@@ -1175,10 +1183,33 @@ impl BrowserEngine for MacEngine {
         )
     }
 
+    fn cover_page(&self, tab: EngineTabId) -> Reply<bool> {
+        self.tab_async(tab, &json!({ "op": "coverPage" }), |c| {
+            field(&payload(c)?, "covered")
+        })
+    }
+
+    fn uncover_page(&self, tab: EngineTabId, fade: bool) -> EngineResult<()> {
+        self.tab_call(tab, &json!({ "op": "uncoverPage", "fade": fade }), false)
+            .map(|_| ())
+    }
+
     fn ask_before_leaving(&self, tab: EngineTabId) -> Reply<bool> {
         self.tab_async(tab, &json!({ "op": "askBeforeLeaving" }), |c| {
             field(&payload(c)?, "leave")
         })
+    }
+
+    fn choose_files_to_open(
+        &self,
+        window: Option<EngineWindowId>,
+    ) -> Reply<Vec<std::path::PathBuf>> {
+        let parent = match window.map(|window| self.native_window_handle(window)) {
+            Some(Ok(parent)) => Some(parent),
+            Some(Err(error)) => return Reply::err(error),
+            None => None,
+        };
+        dialogs::FilePanel::open_files().show(parent.as_ref())
     }
 
     fn enter_pip(&self, tab: EngineTabId, click_time: f64) -> Reply<PipEntry> {
@@ -2047,7 +2078,7 @@ mod tests {
             bus: EventBus::new(),
             policy: RwLock::new(Arc::new(Reentrant(weak.clone()))),
         });
-        *HOST.shared.write() = Some(shared.clone());
+        *HOST.shared.write() = Some(shared);
         let popup = CString::new("popup").unwrap();
         let answer = unsafe { host_new_window(std::ptr::null_mut(), 1, popup.as_ptr()) };
         *HOST.shared.write() = None;
@@ -2117,5 +2148,35 @@ mod tests {
         for good in ["Default", "Profile 1", "Work"] {
             assert!(validate_profile_folder(good).is_ok());
         }
+    }
+
+    #[test]
+    fn a_panicking_waker_still_leaves_the_engine_inactive() {
+        let _slot = HOST_SLOT.lock();
+        let requests: &'static PendingRequests = Box::leak(Box::new(PendingRequests::new()));
+        let services: &'static PendingRequests = Box::leak(Box::new(PendingRequests::new()));
+        ACTIVE.store(true, Ordering::Release);
+        let (_, before) = requests.register_reply(Completion::into_json);
+        requests.register(|_| panic!("a custom waker panicked on wake"));
+        let (_, after) = requests.register_reply(Completion::into_json);
+        services.register(|_| panic!("a service waker panicked on wake"));
+        let (_, service) = services.register_reply(Completion::into_json);
+        let bus = EventBus::new();
+        let outcome = catch_unwind(AssertUnwindSafe(|| tear_down(&bus, requests, services)));
+        assert!(outcome.is_ok(), "waker panics stay inside teardown");
+        assert!(!ACTIVE.load(Ordering::Acquire));
+        assert!(requests.is_empty() && services.is_empty());
+        assert_eq!(
+            futures::executor::block_on(service),
+            Err(EngineError::Cancelled)
+        );
+        assert_eq!(
+            futures::executor::block_on(before),
+            Err(EngineError::Cancelled)
+        );
+        assert_eq!(
+            futures::executor::block_on(after),
+            Err(EngineError::Cancelled)
+        );
     }
 }

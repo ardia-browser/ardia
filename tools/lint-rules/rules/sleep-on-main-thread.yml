@@ -1,0 +1,41 @@
+id: sleep-on-main-thread
+language: rust
+severity: error
+message: "thread::sleep in UI code blocks the main thread"
+note: "Flags sleeps in render bodies, window-open paths, Render/RenderOnce/Element impls and functions that take &mut App, &mut Window or &mut Context, which all run on the main thread. Use a gpui timer (cx.background_executor().timer(..).await inside a spawned task) instead. Worker threads (std::thread::spawn, background_spawn, the ardia-profile reporter) and tests are not flagged."
+files:
+  - crates/**/src/**/*.rs
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+rule:
+  all:
+    - any:
+        - pattern: std::thread::sleep($$$)
+        - pattern: thread::sleep($$$)
+    - any:
+        - matches: render-scope
+        - matches: main-thread-fn
+        - inside:
+            stopBy: end
+            kind: impl_item
+            has:
+              field: trait
+              regex: ^(Render|RenderOnce|Element)$
+    - not:
+        matches: in-deferred-closure
+    - not:
+        inside:
+          stopBy: end
+          kind: closure_expression
+          inside:
+            kind: arguments
+            inside:
+              kind: call_expression
+              regex: ^(std::)?thread::(spawn|Builder)|\.spawn\(|\.spawn_scoped\(|scope\(
+    - not:
+        matches: in-test-code

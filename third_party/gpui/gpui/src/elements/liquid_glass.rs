@@ -27,6 +27,7 @@ struct GlassLook {
     tint: Option<Rgba>,
     style: LiquidGlassStyle,
     group_id: Option<u64>,
+    alpha: Option<f32>,
     frame: Option<GlassFrame>,
 }
 
@@ -50,6 +51,12 @@ impl LiquidGlass {
 
     pub fn group_id(self, group_id: u64) -> Self {
         self.update(|look| look.group_id = Some(group_id))
+    }
+
+    /// Sets the alpha of the native glass view, from 0 to 1, keeping it real glass rather than
+    /// the painted frost a fading element falls back to.
+    pub fn alpha(self, alpha: f32) -> Self {
+        self.update(|look| look.alpha = Some(alpha))
     }
 
     pub fn corner_radius(self, corner_radius: impl Into<Pixels>) -> Self {
@@ -95,6 +102,13 @@ impl Stateful<LiquidGlass> {
 
     pub fn group_id(mut self, group_id: u64) -> Self {
         self.element = self.element.group_id(group_id);
+        self
+    }
+
+    /// Sets the alpha of the native glass view, from 0 to 1, keeping it real glass rather than
+    /// the painted frost a fading element falls back to.
+    pub fn alpha(mut self, alpha: f32) -> Self {
+        self.element = self.element.alpha(alpha);
         self
     }
 
@@ -263,6 +277,7 @@ impl Element for GlassLayer {
                 tint: look.tint,
                 style: look.style,
                 group_id: look.group_id,
+                alpha: look.alpha.unwrap_or(1.),
             });
         }
     }
@@ -272,33 +287,37 @@ impl Element for GlassLayer {
 mod tests {
     use super::*;
     use crate::{
-        BackdropLayerSpec, Context, IntoElement, NativeView, Render, ScaledPixels, TestAppContext,
-        WindowBackgroundAppearance, WindowHandle, point, prelude::*, rgb, rgba, size,
+        BackdropLayerSpec, Context, IntoElement, NativeView, Render, RequestFrameOptions,
+        ScaledPixels, TestAppContext, WindowBackgroundAppearance, WindowHandle, point, prelude::*,
+        rgb, rgba, size,
     };
     use std::ptr::NonNull;
 
     struct GlassView {
         opacity: f32,
+        alpha: Option<f32>,
     }
 
     impl Render for GlassView {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let tile = liquid_glass()
+                .absolute()
+                .left(px(10.))
+                .top(px(20.))
+                .w(px(100.))
+                .h(px(50.))
+                .rounded(px(12.))
+                .tint(rgba(0x33669980))
+                .style(LiquidGlassStyle::Clear)
+                .group_id(9)
+                .child(div().size(px(10.)).bg(rgb(0xff0000)));
             div()
                 .size_full()
                 .opacity(self.opacity)
-                .child(
-                    liquid_glass()
-                        .absolute()
-                        .left(px(10.))
-                        .top(px(20.))
-                        .w(px(100.))
-                        .h(px(50.))
-                        .rounded(px(12.))
-                        .tint(rgba(0x33669980))
-                        .style(LiquidGlassStyle::Clear)
-                        .group_id(9)
-                        .child(div().size(px(10.)).bg(rgb(0xff0000))),
-                )
+                .child(match self.alpha {
+                    Some(alpha) => tile.alpha(alpha),
+                    None => tile,
+                })
                 .child(
                     liquid_glass()
                         .id("named")
@@ -312,7 +331,10 @@ mod tests {
     }
 
     fn open(cx: &mut TestAppContext, composites: bool) -> WindowHandle<GlassView> {
-        let window = cx.add_window(|_, _| GlassView { opacity: 1. });
+        let window = cx.add_window(|_, _| GlassView {
+            opacity: 1.,
+            alpha: None,
+        });
         let platform_window = cx.test_window(window.into());
         platform_window.set_composites_liquid_glass(composites);
         window
@@ -425,6 +447,75 @@ mod tests {
     }
 
     #[crate::test]
+    fn native_glass_alpha_reaches_the_platform_as_real_glass(cx: &mut TestAppContext) {
+        let window = open(cx, true);
+        let platform_window = cx.test_window(window.into());
+        let set_look = |cx: &mut TestAppContext, opacity: f32, alpha: Option<f32>| {
+            window
+                .update(cx, |view, _, cx| {
+                    view.opacity = opacity;
+                    view.alpha = alpha;
+                    cx.notify();
+                })
+                .unwrap();
+            cx.run_until_parked();
+        };
+        let alphas = |cx: &mut TestAppContext| {
+            platform_window.simulate_frame_request(RequestFrameOptions {
+                require_presentation: true,
+                ..RequestFrameOptions::default()
+            });
+            let regions = regions(cx, window);
+            assert_eq!(regions, platform_window.liquid_glass());
+            regions
+                .iter()
+                .map(|region| region.alpha)
+                .collect::<Vec<_>>()
+        };
+        let opaque = regions(cx, window);
+        assert_eq!(alphas(cx), [1., 1.]);
+
+        set_look(cx, 1., Some(0.5));
+        assert_eq!(alphas(cx), [0.5, 1.]);
+        let faint = regions(cx, window);
+        assert_eq!(
+            faint
+                .iter()
+                .map(|region| (region.id, region.bounds, region.group_id))
+                .collect::<Vec<_>>(),
+            opaque
+                .iter()
+                .map(|region| (region.id, region.bounds, region.group_id))
+                .collect::<Vec<_>>()
+        );
+        window
+            .update(cx, |_, window, _| {
+                let scene = &window.rendered_frame.scene;
+                assert!(scene.paths.is_empty());
+                assert!(!scene.native_views.is_empty());
+            })
+            .unwrap();
+
+        set_look(cx, 1., Some(4.));
+        assert_eq!(alphas(cx), [1., 1.]);
+        set_look(cx, 1., Some(f32::NAN));
+        assert_eq!(alphas(cx), [1., 1.]);
+        set_look(cx, 1., Some(-1.));
+        assert_eq!(alphas(cx), [1.]);
+
+        set_look(cx, 0.5, Some(0.5));
+        assert!(alphas(cx).is_empty());
+        window
+            .update(cx, |_, window, _| {
+                assert_eq!(window.rendered_frame.scene.paths.len(), 2);
+            })
+            .unwrap();
+
+        set_look(cx, 1., None);
+        assert_eq!(regions(cx, window), opaque);
+    }
+
+    #[crate::test]
     fn opaque_windows_paint_frosted_glass_even_when_the_platform_composites(
         cx: &mut TestAppContext,
     ) {
@@ -437,6 +528,105 @@ mod tests {
             .unwrap();
         cx.run_until_parked();
         assert!(regions(cx, window).is_empty());
+    }
+
+    struct ClippedGlassView {
+        opacity: f32,
+    }
+
+    impl Render for ClippedGlassView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let favicon = std::sync::Arc::new(crate::RenderImage::new([image::Frame::new(
+                image::RgbaImage::from_pixel(4, 4, image::Rgba([0, 0, 0, 255])),
+            )]));
+            div().size_full().child(
+                div()
+                    .absolute()
+                    .left(px(0.))
+                    .top(px(0.))
+                    .size(px(100.))
+                    .overflow_hidden()
+                    .opacity(self.opacity)
+                    .child(
+                        liquid_glass()
+                            .absolute()
+                            .left(px(60.))
+                            .top(px(10.))
+                            .w(px(80.))
+                            .h(px(40.))
+                            .rounded(px(8.))
+                            .group_id(9)
+                            .child(crate::img(favicon).w(px(80.)).h(px(40.))),
+                    ),
+            )
+        }
+    }
+
+    #[crate::test]
+    fn liquid_glass_and_what_is_painted_above_it_are_clipped_by_the_parent(
+        cx: &mut TestAppContext,
+    ) {
+        for (composites, opacity) in [(true, 1.), (false, 1.), (true, 0.5)] {
+            let window = cx.add_window(|_, _| ClippedGlassView { opacity });
+            cx.test_window(window.into())
+                .set_composites_liquid_glass(composites);
+            window
+                .update(cx, |_, window, _| {
+                    window.set_background_appearance(WindowBackgroundAppearance::LiquidGlass);
+                    window.refresh();
+                })
+                .unwrap();
+            cx.run_until_parked();
+            window
+                .update(cx, |_, window, _| {
+                    let scale = window.scale_factor();
+                    let parent = scaled(0., 0., 100. * scale, 100. * scale);
+                    let inside = |mask: &Bounds<ScaledPixels>| {
+                        mask.intersect(&parent) == *mask && !mask.is_empty()
+                    };
+                    let scene = &window.rendered_frame.scene;
+                    if composites && opacity == 1. {
+                        assert_eq!(scene.liquid_glass_regions.len(), 1);
+                        let region = scene.liquid_glass_regions[0];
+                        assert!(inside(&region.content_mask));
+                        assert!(region.is_clipped());
+                        assert_eq!(
+                            region.visible_bounds(),
+                            scaled(60. * scale, 10. * scale, 40. * scale, 40. * scale)
+                        );
+                        assert!(
+                            scene
+                                .native_views
+                                .iter()
+                                .all(|cutout| inside(&cutout.content_mask.bounds))
+                        );
+                    } else {
+                        assert!(scene.liquid_glass_regions.is_empty());
+                        assert!(!scene.quads.is_empty());
+                        assert!(!scene.paths.is_empty());
+                    }
+                    assert_eq!(scene.polychrome_sprites.len(), 1);
+                    let primitives = scene
+                        .quads
+                        .iter()
+                        .cloned()
+                        .map(crate::Primitive::from)
+                        .chain(scene.shadows.iter().cloned().map(crate::Primitive::from))
+                        .chain(scene.paths.iter().cloned().map(crate::Primitive::from))
+                        .chain(
+                            scene
+                                .polychrome_sprites
+                                .iter()
+                                .cloned()
+                                .map(crate::Primitive::from),
+                        );
+                    let masks = primitives
+                        .map(|primitive| primitive.content_mask().bounds)
+                        .collect::<Vec<_>>();
+                    assert!(masks.iter().all(inside), "{masks:?}");
+                })
+                .unwrap();
+        }
     }
 
     #[crate::test]

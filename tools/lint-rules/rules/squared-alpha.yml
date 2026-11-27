@@ -1,0 +1,19 @@
+id: squared-alpha
+language: rust
+severity: error
+message: "opacity() multiplies the colour's own alpha, so passing that alpha in again squares it"
+note: "Pass only the extra factor ($C.opacity(k)), or set the alpha outright with $C.alpha(a)."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+rule:
+  any:
+    - pattern: $C.opacity($C.a * $K)
+    - pattern: $C.opacity($K * $C.a)
+    - pattern: $C.opacity($C.a)
+    - pattern: $C.opacity(($C.a * $K).clamp($$$))
+    - pattern: $C.opacity(($K * $C.a).clamp($$$))

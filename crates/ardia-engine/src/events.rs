@@ -123,6 +123,11 @@ pub enum EngineEvent {
         tab: EngineTabId,
         title: String,
     },
+    ShownTitleChanged {
+        tab: EngineTabId,
+        title: String,
+        url: String,
+    },
     UrlChanged {
         tab: EngineTabId,
         url: String,
@@ -212,6 +217,12 @@ pub enum EngineEvent {
     ActivationRequested {
         tab: EngineTabId,
         reason: String,
+        from_other_app: bool,
+    },
+    PipActivity {
+        tab: EngineTabId,
+        name: String,
+        payload: Value,
     },
     PipChanged {
         tab: EngineTabId,
@@ -275,6 +286,7 @@ pub enum EngineEvent {
     Service(ServiceEvent),
     OpenUrls {
         urls: Vec<String>,
+        sender: Option<UrlSender>,
     },
     DockReopen {
         has_visible_windows: bool,
@@ -322,6 +334,7 @@ impl EngineEvent {
             | PasswordPrompt { tab, .. }
             | AutofillPrompt { tab, .. }
             | TitleChanged { tab, .. }
+            | ShownTitleChanged { tab, .. }
             | UrlChanged { tab, .. }
             | LoadingChanged { tab, .. }
             | ProgressChanged { tab, .. }
@@ -344,6 +357,7 @@ impl EngineEvent {
             | PreferredSizeChanged { tab, .. }
             | ExternalAppRequest { tab, .. }
             | ActivationRequested { tab, .. }
+            | PipActivity { tab, .. }
             | PipChanged { tab, .. }
             | AutofillSuggestionsShown { tab, .. }
             | RequestsBlocked { tab, .. }
@@ -1075,7 +1089,7 @@ mod tests {
     fn stream_wakes_a_waiting_task_from_another_thread() {
         let bus = EventBus::new();
         let mut events = bus.subscribe();
-        let sender = bus.clone();
+        let sender = bus;
         let thread = std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(20));
             sender.publish(EngineEvent::TabWillClose { tab: tab(9) });
@@ -1428,4 +1442,10 @@ mod tests {
             })
         );
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UrlSender {
+    pub bundle_id: Option<String>,
+    pub app_name: Option<String>,
 }

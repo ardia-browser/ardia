@@ -433,6 +433,215 @@ impl BookmarkTree {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BookmarkPlace {
+    pub id: BookmarkId,
+    pub parent: BookmarkId,
+    pub index: usize,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RemovedBookmarks {
+    pub nodes: Vec<BookmarkNode>,
+    pub places: Vec<BookmarkPlace>,
+}
+
+impl BookmarkTree {
+    pub fn is_folder(&self, id: &str) -> bool {
+        matches!(self.nodes.get(id), Some(BookmarkNode::Folder { .. }))
+    }
+
+    pub fn depth_of(&self, id: &str) -> usize {
+        self.ancestors(id).len()
+    }
+
+    pub fn height_of(&self, id: &str) -> usize {
+        let mut deepest = 0;
+        let mut stack = vec![(BookmarkId::new(id), 0usize)];
+        while let Some((at, depth)) = stack.pop() {
+            deepest = deepest.max(depth);
+            if depth > MAX_BOOKMARK_DEPTH {
+                break;
+            }
+            if let Some(BookmarkNode::Folder { children, .. }) = self.nodes.get(&at) {
+                stack.extend(children.iter().map(|c| (c.clone(), depth + 1)));
+            }
+        }
+        deepest
+    }
+
+    pub fn set_url(&mut self, id: &str, new_url: &str) -> Result<(), BookmarkError> {
+        match self.nodes.get_mut(id) {
+            Some(BookmarkNode::Url { url, .. }) => {
+                *url = new_url.to_owned();
+                Ok(())
+            }
+            Some(BookmarkNode::Folder { .. }) => Err(BookmarkError::NotAFolder),
+            None => Err(BookmarkError::Missing),
+        }
+    }
+
+    fn removable_tops(&self, ids: &[BookmarkId]) -> Vec<BookmarkId> {
+        let removable: std::collections::HashSet<&BookmarkId> = ids
+            .iter()
+            .filter(|id| self.nodes.get(*id).and_then(BookmarkNode::parent).is_some())
+            .collect();
+        let mut tops: Vec<BookmarkId> = Vec::new();
+        for id in ids {
+            if removable.contains(id)
+                && !tops.contains(id)
+                && !self
+                    .ancestors(id.as_str())
+                    .iter()
+                    .any(|a| removable.contains(a))
+            {
+                tops.push(id.clone());
+            }
+        }
+        tops
+    }
+
+    pub fn removal_of(&self, ids: &[BookmarkId]) -> RemovedBookmarks {
+        let mut removed = RemovedBookmarks::default();
+        for id in self.removable_tops(ids) {
+            let Some(parent) = self.nodes.get(&id).and_then(BookmarkNode::parent).cloned() else {
+                continue;
+            };
+            let index = self
+                .children(parent.as_str())
+                .iter()
+                .position(|c| c == &id)
+                .unwrap_or(0);
+            removed.places.push(BookmarkPlace {
+                id: id.clone(),
+                parent,
+                index,
+            });
+            let mut stack = vec![id];
+            while let Some(at) = stack.pop() {
+                if let Some(node) = self.nodes.get(&at) {
+                    if let BookmarkNode::Folder { children, .. } = node {
+                        stack.extend(children.iter().cloned());
+                    }
+                    removed.nodes.push(node.clone());
+                }
+            }
+        }
+        removed
+    }
+
+    pub fn remove_many(&mut self, ids: &[BookmarkId]) -> usize {
+        self.removable_tops(ids)
+            .iter()
+            .filter_map(|id| self.remove(id.as_str()).ok())
+            .sum()
+    }
+
+    pub fn restore_removed(&mut self, removed: &RemovedBookmarks) -> usize {
+        let mut by_parent: IndexMap<BookmarkId, Vec<&BookmarkPlace>> = IndexMap::new();
+        for place in &removed.places {
+            if self.nodes.contains_key(&place.id) {
+                continue;
+            }
+            by_parent
+                .entry(place.parent.clone())
+                .or_default()
+                .push(place);
+        }
+        let mut restored = 0;
+        for (parent, mut list) in by_parent {
+            let Some(BookmarkNode::Folder { children, .. }) = self.nodes.get(&parent) else {
+                continue;
+            };
+            list.sort_by_key(|p| p.index);
+            let staying = children.clone();
+            let mut next: Vec<BookmarkId> = Vec::with_capacity(staying.len() + list.len());
+            let mut kept = 0;
+            for place in &list {
+                while next.len() < place.index && kept < staying.len() {
+                    next.push(staying[kept].clone());
+                    kept += 1;
+                }
+                next.push(place.id.clone());
+            }
+            next.extend(staying[kept..].iter().cloned());
+            if let Some(BookmarkNode::Folder { children, .. }) = self.nodes.get_mut(&parent) {
+                *children = next;
+            }
+            let mut stack: Vec<BookmarkId> = list.iter().map(|p| p.id.clone()).collect();
+            while let Some(id) = stack.pop() {
+                if self.nodes.contains_key(&id) {
+                    continue;
+                }
+                let Some(node) = removed.nodes.iter().find(|n| n.id() == &id) else {
+                    continue;
+                };
+                if let BookmarkNode::Folder { children, .. } = node {
+                    stack.extend(children.iter().cloned());
+                }
+                self.nodes.insert(id, node.clone());
+                restored += 1;
+            }
+        }
+        restored
+    }
+
+    pub fn move_many(
+        &mut self,
+        ids: &[BookmarkId],
+        parent: &BookmarkId,
+        index: Option<usize>,
+    ) -> Result<usize, BookmarkError> {
+        if !self.nodes.contains_key(parent) {
+            return Err(BookmarkError::Missing);
+        }
+        if !self.is_folder(parent.as_str()) {
+            return Err(BookmarkError::NotAFolder);
+        }
+        let mut above: std::collections::HashSet<BookmarkId> =
+            self.ancestors(parent.as_str()).into_iter().collect();
+        above.insert(parent.clone());
+        let picked: Vec<BookmarkId> = ids
+            .iter()
+            .filter(|id| {
+                self.nodes.get(*id).and_then(BookmarkNode::parent).is_some() && !above.contains(*id)
+            })
+            .fold(Vec::new(), |mut out, id| {
+                if !out.contains(id) {
+                    out.push(id.clone());
+                }
+                out
+            });
+        let picked_set: std::collections::HashSet<&BookmarkId> = picked.iter().collect();
+        let moving: Vec<BookmarkId> = picked
+            .iter()
+            .filter(|id| {
+                !self
+                    .ancestors(id.as_str())
+                    .iter()
+                    .any(|a| picked_set.contains(a))
+            })
+            .cloned()
+            .collect();
+        if moving.is_empty() {
+            return Ok(0);
+        }
+        for id in &moving {
+            self.detach(id.as_str());
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.set_parent(parent.clone());
+            }
+        }
+        if let Some(BookmarkNode::Folder { children, .. }) = self.nodes.get_mut(parent) {
+            let at = index.unwrap_or(children.len()).min(children.len());
+            for (offset, id) in moving.iter().enumerate() {
+                children.insert(at + offset, id.clone());
+            }
+        }
+        Ok(moving.len())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

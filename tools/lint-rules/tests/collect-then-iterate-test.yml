@@ -1,0 +1,8 @@
+id: collect-then-iterate
+valid:
+  - "fn f(v: &[u8]) -> Vec<u8> { v.iter().copied().collect::<Vec<_>>() }"
+  - "fn f(v: &[&str]) -> String { v.iter().map(|s| s.trim()).collect::<Vec<_>>().join(\" \") }"
+invalid:
+  - "fn f(v: &[u8]) -> usize { v.iter().filter(|b| **b > 3).collect::<Vec<_>>().len() }"
+  - "fn f(s: &str) -> String { s.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect() }"
+  - "fn f(v: &[u8]) -> bool { v.iter().filter(|b| **b > 3).collect::<Vec<_>>().is_empty() }"

@@ -809,7 +809,6 @@ pub struct FrameTiming {
 }
 
 /// How long each phase of a window draw took.
-#[cfg(feature = "profiler")]
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct DrawPhases {
     /// Rendering views into elements and requesting their layout.
@@ -819,6 +818,35 @@ pub struct DrawPhases {
     pub prepaint: Duration,
     /// Painting elements into the scene.
     pub paint: Duration,
+}
+
+/// The timing of one drawn window frame, delivered by
+/// [`Window::on_frame_presented`](crate::Window::on_frame_presented) once the
+/// frame was handed to the platform.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct WindowFrameTiming {
+    /// When `Window::draw` began.
+    pub draw_start: Instant,
+    /// When the draw began rendering views into elements. Its phases run back
+    /// to back from here: prepaint starts after
+    /// [`DrawPhases::request_layout`], and paint after
+    /// [`DrawPhases::prepaint`].
+    pub layout_start: Instant,
+    /// How long each phase of the draw took. All zero when the app skips
+    /// drawing.
+    pub phases: DrawPhases,
+    /// When `Window::draw` returned.
+    pub draw_end: Instant,
+    /// When the platform accepted the frame, i.e. when GPUI's submission to the
+    /// platform window returned. The GPU may still be rendering it, and it
+    /// reaches the display later.
+    pub submitted_at: Instant,
+    /// When the platform scheduled the frame to reach the display, if it
+    /// reports that: the target presentation time of a `CAMetalDisplayLink`
+    /// update on macOS 14 and later; `None` elsewhere. The time a frame was
+    /// actually presented is reported for input-driven frames by
+    /// [`Window::on_input_latency`](crate::Window::on_input_latency).
+    pub target_presented_at: Option<Instant>,
 }
 
 /// A phase of drawing a view.

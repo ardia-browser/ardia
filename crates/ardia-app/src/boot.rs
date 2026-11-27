@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ardia_engine::{BrowserEngine, MockBrowserEngine};
 use ardia_state::persistence::documents;
-use ardia_state::persistence::session::LoadOptions;
+use ardia_state::persistence::session::{LoadOptions, SessionSource};
 use ardia_state::{BrowserStore, DataDir};
 use futures::channel::mpsc::unbounded;
 
@@ -13,6 +13,7 @@ use crate::policy::AppPolicy;
 use crate::shell::{self, ShellMode};
 
 pub fn run(args: impl IntoIterator<Item = OsString>) -> i32 {
+    crate::telemetry_events::mark_main();
     crate::logging::init();
     let config = match cli::parse(args, &|name| std::env::var(name).ok()) {
         CliOutcome::Run(config) => *config,
@@ -46,9 +47,19 @@ fn prepare_environment(config: &LaunchConfig) {
 pub fn open_store(config: &LaunchConfig) -> anyhow::Result<(Arc<BrowserStore>, bool)> {
     std::fs::create_dir_all(&config.data_dir)?;
     let dir = DataDir::new(&config.data_dir);
-    let onboarding =
-        config.onboarding && documents::load_onboarding(&dir).is_none_or(|doc| !doc.completed());
-    let (store, report) = BrowserStore::open(dir, LoadOptions::default())?;
+    let saved = documents::load_onboarding(&dir);
+    let mut onboarding = config.onboarding && saved.as_ref().is_none_or(|doc| !doc.completed());
+    let (store, report) = {
+        let _span = ardia_profile::span(ardia_profile::Span::SessionRestore);
+        BrowserStore::open(dir, LoadOptions::default())?
+    };
+    if let SessionSource::Backup { age_days, .. } = &report.source {
+        RESTORED_BACKUP_DAYS.store(*age_days, std::sync::atomic::Ordering::Relaxed);
+    }
+    if saved.is_none() && report.source != SessionSource::Fresh {
+        crate::onboarding_doc::mark_completed_for_existing_session(&config.data_dir);
+        onboarding = false;
+    }
     log::info!(
         "session from {:?} ({} rows dropped{})",
         report.source,
@@ -56,6 +67,26 @@ pub fn open_store(config: &LaunchConfig) -> anyhow::Result<(Arc<BrowserStore>, b
         report.problem.map(|p| format!(", {p}")).unwrap_or_default()
     );
     Ok((Arc::new(store), onboarding))
+}
+
+static RESTORED_BACKUP_DAYS: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(-1);
+
+fn note_session_counts(store: &Arc<BrowserStore>) {
+    let days = RESTORED_BACKUP_DAYS.swap(-1, std::sync::atomic::Ordering::Relaxed);
+    if days >= 0 {
+        ardia_telemetry::counts::count("session_restored_from_backup");
+        ardia_telemetry::counts::raise("session_restored_backup_days_max", days as u64);
+    }
+    let store = Arc::clone(store);
+    let last = std::sync::atomic::AtomicU64::new(store.saves());
+    ardia_telemetry::counts::register_source(move |_| {
+        let now = store.saves();
+        let before = last.swap(now, std::sync::atomic::Ordering::Relaxed);
+        serde_json::Map::from_iter([(
+            "session_saves".to_owned(),
+            serde_json::json!(now.saturating_sub(before)),
+        )])
+    });
 }
 
 #[cfg(unix)]
@@ -88,6 +119,7 @@ fn launch(config: LaunchConfig) -> anyhow::Result<i32> {
         }
     };
     prepare_environment(&config);
+    crate::profiling::start(&config.data_dir);
     #[cfg(target_os = "macos")]
     if config.engine == EngineChoice::Auto {
         match chromium::load() {
@@ -142,7 +174,12 @@ fn run_standalone(config: LaunchConfig, engine: Arc<dyn BrowserEngine>) -> anyho
     if !engine.is_started() {
         engine.run_with_args(&config.launch_options().to_args())?;
     }
+    crate::telemetry_events::mark_engine_started();
     let (store, onboarding) = open_store(&config)?;
+    crate::telemetry::start(&config.data_dir, config.scratch);
+    let _usage = crate::telemetry::watch_store(&store);
+    let _snapshot = crate::telemetry_snapshot::start(&store, &config.data_dir);
+    note_session_counts(&store);
     let coordinator = AppCoordinator::new(
         store,
         engine.clone(),
@@ -150,11 +187,18 @@ fn run_standalone(config: LaunchConfig, engine: Arc<dyn BrowserEngine>) -> anyho
             hosts_native_windows: false,
             background: config.background,
             onboarding,
+            data_dir: Some(config.data_dir.clone()),
+            scratch: config.scratch,
+            favicon_dir: Some(config.data_dir.join("Favicons")),
+            delays_new_tab_pages: true,
             ..CoordinatorConfig::default()
         },
     );
     engine.set_policy(Arc::new(AppPolicy::new(coordinator.weak(), Vec::new())));
+    crate::telemetry::started(&coordinator);
+    ardia_telemetry::counts::add("launch_command_line_links", config.open_urls.len() as u64);
     coordinator.queue_urls(config.open_urls.clone());
+    coordinator.start_plugins(&config.data_dir, config.scratch);
     let control = start_ipc(&config, &coordinator);
     let (sender, wakes) = unbounded();
     coordinator.set_waker(move || {
@@ -167,11 +211,16 @@ fn run_standalone(config: LaunchConfig, engine: Arc<dyn BrowserEngine>) -> anyho
     }
     {
         let coordinator = coordinator.clone();
-        app.on_open_urls(move |urls| coordinator.queue_urls(urls));
+        app.on_open_urls(move |urls| {
+            crate::link_sources::remember(&urls, &crate::link_sources::current_sender());
+            coordinator.queue_urls(urls)
+        });
     }
     let shell_coordinator = coordinator.clone();
     app.run(move |cx| shell::install(cx, shell_coordinator, wakes, ShellMode::Standalone));
     coordinator.begin_shutdown();
+    crate::telemetry::quit();
+    crate::profiling::stop();
     coordinator.flush();
     drop(control);
     Ok(0)
@@ -253,6 +302,7 @@ mod chromium {
                 self.coordinator.pump();
                 return;
             }
+            crate::telemetry_events::mark_engine_started();
             let Some(wakes) = self.wakes.take() else {
                 return;
             };
@@ -286,9 +336,15 @@ mod chromium {
 
     pub fn run(config: LaunchConfig, engine: Arc<MacEngine>) -> anyhow::Result<i32> {
         log::info!("Chromium from {}", engine.framework_path().display());
+        crate::symbols::register_icon_symbols();
+        ardia_ui::primitives::haptics::install_performer(crate::profile_sync::haptic_alignment);
         let hooks = install_hosted_window_hooks(GpuiInputRoutes)?;
         platform::install_app_events(true, true)?;
         let (store, onboarding) = open_store(&config)?;
+        crate::telemetry::start(&config.data_dir, config.scratch);
+        let _usage = crate::telemetry::watch_store(&store);
+        let _snapshot = crate::telemetry_snapshot::start(&store, &config.data_dir);
+        super::note_session_counts(&store);
         let shared: Arc<dyn BrowserEngine> = engine.clone();
         let coordinator = AppCoordinator::new(
             store,
@@ -297,12 +353,19 @@ mod chromium {
                 hosts_native_windows: true,
                 background: config.background,
                 onboarding,
+                data_dir: Some(config.data_dir.clone()),
+                scratch: config.scratch,
+                favicon_dir: Some(config.data_dir.join("Favicons")),
+                delays_new_tab_pages: true,
                 ..CoordinatorConfig::default()
             },
         );
         let reserved = reserved_chords(&native::menu_bar(&MenuContext::default()));
         engine.set_policy(Arc::new(AppPolicy::new(coordinator.weak(), reserved)));
+        crate::telemetry::started(&coordinator);
+        ardia_telemetry::counts::add("launch_command_line_links", config.open_urls.len() as u64);
         coordinator.queue_urls(config.open_urls.clone());
+        coordinator.start_plugins(&config.data_dir, config.scratch);
         let control = start_ipc(&config, &coordinator);
         let (sender, wakes) = unbounded();
         let booted = Arc::new(AtomicBool::new(false));
@@ -322,6 +385,8 @@ mod chromium {
         });
         let exit = engine.launch(&config.launch_options());
         coordinator.begin_shutdown();
+        crate::telemetry::quit();
+        crate::profiling::stop();
         if !coordinator.flush() {
             log::warn!("the session didn't finish saving before Chromium exited");
         }

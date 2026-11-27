@@ -13,18 +13,22 @@ pub enum PromptEntry {
         request_id: String,
         kind: PermissionKind,
         origin: String,
+        permissions: Vec<String>,
     },
     ExternalApp {
         request_id: String,
         origin: String,
+        request: Value,
     },
     Password {
         origin: String,
         username: String,
+        prompt: PasswordPrompt,
     },
     Autofill {
         id: i64,
         kind: AutofillKind,
+        prompt: AutofillPrompt,
     },
 }
 
@@ -39,7 +43,9 @@ impl PromptEntry {
                 kind: PermissionKind::ExternalApp,
                 origin: origin.clone(),
             },
-            Self::Password { origin, username } => SitePrompt::SavePassword {
+            Self::Password {
+                origin, username, ..
+            } => SitePrompt::SavePassword {
                 origin: origin.clone(),
                 username: username.clone(),
             },
@@ -147,6 +153,7 @@ impl PromptBook {
                 request_id: request.id.clone(),
                 kind,
                 origin: request.origin.clone(),
+                permissions: request.permissions.clone(),
             },
         );
         true
@@ -171,6 +178,7 @@ impl PromptBook {
             PromptEntry::ExternalApp {
                 request_id: id.to_owned(),
                 origin,
+                request: request.clone(),
             },
         );
         true
@@ -185,6 +193,7 @@ impl PromptBook {
             PromptEntry::Password {
                 origin: prompt.origin.clone(),
                 username: prompt.username.clone(),
+                prompt: prompt.clone(),
             },
         );
         true
@@ -199,6 +208,7 @@ impl PromptBook {
             PromptEntry::Autofill {
                 id: prompt.id,
                 kind: autofill_kind(&prompt.kind),
+                prompt: prompt.clone(),
             },
         );
         true
@@ -229,6 +239,21 @@ impl PromptBook {
 
     pub fn request(&self, request_id: &str) -> Option<(TabId, RequestKind)> {
         self.requests.get(request_id).cloned()
+    }
+
+    pub fn permissions_of(&self, request_id: &str) -> Vec<String> {
+        self.by_tab
+            .values()
+            .flatten()
+            .find_map(|entry| match entry {
+                PromptEntry::Permission {
+                    request_id: id,
+                    permissions,
+                    ..
+                } if id == request_id => Some(permissions.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
     }
 
     pub fn settle_request(&mut self, request_id: &str) -> Option<TabId> {

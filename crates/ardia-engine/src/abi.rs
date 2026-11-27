@@ -45,7 +45,12 @@ pub(crate) enum ServiceRoute {
 }
 
 static SERVICE_REPLIES: LazyLock<PendingRequests> = LazyLock::new(PendingRequests::new);
-static HOST_REPLIES: LazyLock<PendingRequests> = LazyLock::new(PendingRequests::new);
+pub(crate) static HOST_REPLIES: LazyLock<PendingRequests> = LazyLock::new(PendingRequests::new);
+
+#[cfg(target_os = "macos")]
+pub(crate) fn service_replies() -> &'static PendingRequests {
+    &SERVICE_REPLIES
+}
 
 pub fn pending_service_replies() -> usize {
     SERVICE_REPLIES.len()
@@ -100,14 +105,44 @@ fn service_answer(label: &str, completion: &Completion, secret: bool) -> EngineR
     }
 }
 
+pub fn abandoned_host_opens() -> usize {
+    HOST_REPLIES.abandoned()
+}
+
+pub(crate) fn abandon_host_calls(owner: u64) -> usize {
+    HOST_REPLIES.abandon(owner)
+}
+
+pub(crate) unsafe extern "C" fn ignore_reply(_: *mut c_void, _: *const c_char) {}
+
+#[cfg(test)]
 pub(crate) fn call_with_callback(
     label: &str,
     done: impl FnOnce(EngineResult<Value>) + Send + 'static,
     invoke: impl FnOnce(AcEngineReply, *mut c_void),
 ) {
+    call_owned(0, label, done, None, invoke)
+}
+
+pub(crate) fn call_owned(
+    owner: u64,
+    label: &str,
+    done: impl FnOnce(EngineResult<Value>) + Send + 'static,
+    if_abandoned: Option<Box<dyn FnOnce(EngineResult<Value>) + Send>>,
+    invoke: impl FnOnce(AcEngineReply, *mut c_void),
+) {
     let label = label.to_owned();
-    let request =
-        HOST_REPLIES.register(move |completion| done(service_answer(&label, &completion, false)));
+    let late_label = label.clone();
+    let fallback = if_abandoned.map(|late| -> crate::reply::Waiter {
+        Box::new(move |completion: Completion| {
+            late(service_answer(&late_label, &completion, false))
+        })
+    });
+    let request = HOST_REPLIES.register_owned(
+        owner,
+        Box::new(move |completion| done(service_answer(&label, &completion, false))),
+        fallback,
+    );
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         invoke(host_replied, request as usize as *mut c_void)
     }));

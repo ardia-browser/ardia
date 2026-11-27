@@ -1,17 +1,18 @@
 use std::sync::Arc;
 
+use crate::scale::px;
 use ardia_state::tabs::Tab;
 use ardia_state::windows::BrowserWindow;
 use ardia_state::{BrowserState, TabId};
 use gpui::{
     Context, Entity, FontWeight, Hsla, IntoElement, ParentElement, Pixels, Point, Render,
-    SharedString, Styled, Window, div, prelude::*, px,
+    SharedString, Styled, Window, div, prelude::*,
 };
 
 use crate::host::UiHost;
 use crate::look::{Look, Palette};
 use crate::msg::{Emit, MenuTarget, RenameTarget};
-use crate::primitives::favicon::{Favicon, favicon_of, render_favicon};
+use crate::primitives::favicon::{Favicon, favicon_of, render_favicon, resolve_favicon};
 use crate::primitives::text_input::TextInput;
 use crate::sidebar::model::Sections;
 use crate::window::layout::ChromeLayout;
@@ -26,6 +27,7 @@ pub struct ChromeUi {
     pub sidebar_drag: Option<f32>,
     pub profile_offset: f32,
     pub profile_alpha: f32,
+    pub toast_hold: crate::popovers::toast::ToastHold,
 }
 
 pub struct Chrome<'a> {
@@ -40,6 +42,7 @@ pub struct Chrome<'a> {
     pub active: Option<&'a Arc<Tab>>,
     pub rename_input: &'a Entity<TextInput>,
     pub sections: &'a Sections,
+    pub toast_focus: Option<&'a [gpui::FocusHandle; 2]>,
 }
 
 impl Chrome<'_> {
@@ -56,12 +59,23 @@ impl Chrome<'_> {
     }
 
     pub fn favicon(&self, tab: &Tab) -> Favicon {
-        favicon_of(
+        let favicon = favicon_of(
             &tab.url,
             tab.favicon.as_deref(),
             tab.custom_icon.as_deref(),
             &tab.label(),
+        );
+        crate::primitives::favicon::resolve_tab_favicon(
+            favicon,
+            &tab.url,
+            tab.live.engine_tab_id.is_some(),
+            self.host.as_ref(),
+            &tab.profile_id,
         )
+    }
+
+    pub fn resolve_favicon(&self, favicon: Favicon, profile: &ardia_state::ProfileId) -> Favicon {
+        resolve_favicon(favicon, self.host.as_ref(), profile)
     }
 
     pub fn points(&self, value: f32) -> f32 {
@@ -121,61 +135,107 @@ impl Render for TabDragGhost {
 
 pub struct TabHoverCard {
     title: SharedString,
-    host: SharedString,
-    url: Option<SharedString>,
+    away: Option<crate::sidebar::away_title::AwayTitle>,
+    address: String,
+    full_url: bool,
+    sleeping: bool,
+    favicon: Favicon,
+    icon_side: f32,
     p: Palette,
 }
 
 impl TabHoverCard {
-    pub fn new(tab: &Tab, full_url: bool, p: &Palette) -> Self {
-        let host = ardia_state::omnibox::url::breadcrumb_host(&tab.url);
+    pub fn new(tab: &Tab, favicon: Favicon, icon_side: f32, full_url: bool, p: &Palette) -> Self {
         TabHoverCard {
             title: tab_title(tab),
-            host: SharedString::from(if host.is_empty() { tab.label() } else { host }),
-            url: (full_url && !tab.url.is_empty())
-                .then(|| SharedString::from(ardia_state::omnibox::url::display_url(&tab.url))),
+            away: crate::sidebar::away_title::away_title(tab),
+            address: crate::sidebar::hover_card::card_address(&tab.url, full_url),
+            full_url,
+            sleeping: tab.page.is_asleep(),
+            favicon,
+            icon_side,
             p: *p,
         }
     }
 }
 
-impl Render for TabHoverCard {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+impl TabHoverCard {
+    pub fn body(&self) -> gpui::Div {
+        use crate::sidebar::hover_card::{HEADER, PAD, WIDTH};
+        use crate::sidebar::row_look::SPACE_XS;
         let p = &self.p;
-        div()
-            .max_w(px(320.))
-            .px(px(12.))
-            .py(px(10.))
-            .rounded(px(12.))
-            .bg(p.popover_fill)
-            .border(px(0.5))
-            .border_color(p.popover_border)
-            .shadow(crate::primitives::controls::panel_shadows(p))
+        let full_url = self.full_url;
+        crate::primitives::controls::hover_card(WIDTH, p)
+            .debug_selector(|| "strip-hover-card".into())
+            .p(px(PAD))
             .flex()
             .flex_col()
-            .gap(px(3.))
             .child(
                 div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(p.text)
-                    .line_clamp(2)
-                    .child(self.title.clone()),
+                    .h(px(HEADER))
+                    .flex()
+                    .items_center()
+                    .gap(px(crate::sidebar::tab_row::TITLE_GAP))
+                    .child(render_favicon(&self.favicon, self.icon_side, p))
+                    .child(match &self.away {
+                        Some(away) => crate::sidebar::away_title::away_label(
+                            away,
+                            crate::sidebar::away_title::AwayLabel {
+                                color: p.text,
+                                size: 13.,
+                                weight: FontWeight::MEDIUM,
+                                height: 18.,
+                                struck: false,
+                                max_width: WIDTH - 2.0 * PAD - self.icon_side,
+                            },
+                        ),
+                        None => crate::primitives::fade_label::fade_label(
+                            self.title.clone(),
+                            p.text,
+                            13.,
+                        )
+                        .weight(FontWeight::MEDIUM)
+                        .line_height(18.)
+                        .into_any_element(),
+                    }),
             )
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(p.text_secondary)
-                    .truncate()
-                    .child(self.host.clone()),
-            )
-            .when_some(self.url.clone(), |this, url| {
+            .when(!self.address.is_empty(), |this| {
                 this.child(
                     div()
+                        .mt(px(SPACE_XS))
                         .text_size(px(11.))
-                        .text_color(p.text_tertiary)
-                        .truncate()
-                        .child(url),
+                        .line_height(px(14.))
+                        .text_color(p.text_secondary)
+                        .when(full_url, |d| d.line_clamp(2))
+                        .when(!full_url, |d| d.truncate())
+                        .child(self.address.clone()),
+                )
+            })
+            .when(self.sleeping, |this| {
+                this.child(
+                    div()
+                        .mt(px(SPACE_XS))
+                        .flex()
+                        .items_center()
+                        .gap(px(SPACE_XS))
+                        .child(
+                            div()
+                                .size(px(14.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(crate::primitives::icons::icon(
+                                    crate::primitives::icons::Icon::MoonZzz,
+                                    10.,
+                                    p.text_tertiary,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(p.text_tertiary)
+                                .child("This tab needs to reload"),
+                        ),
                 )
             })
     }

@@ -210,3 +210,37 @@ impl Tx<'_> {
         index
     }
 }
+
+impl Tx<'_> {
+    pub(super) fn arrange_tabs(
+        &mut self,
+        window: &WindowId,
+        tabs: &[TabId],
+    ) -> Result<(), ActionError> {
+        let w = self.require_window(window)?;
+        let wanted: HashSet<&TabId> = tabs.iter().collect();
+        if wanted.len() != tabs.len() || !tabs.iter().all(|t| w.tab_ids.contains(t)) {
+            return Err(ActionError::Invalid("those tabs aren't all in this window"));
+        }
+        let mut next = tabs.iter();
+        let arranged: Vec<TabId> = w
+            .tab_ids
+            .iter()
+            .map(|t| {
+                if wanted.contains(t) {
+                    next.next().cloned().unwrap_or_else(|| t.clone())
+                } else {
+                    t.clone()
+                }
+            })
+            .collect();
+        if arranged == w.tab_ids {
+            return Ok(());
+        }
+        if let Some(w) = self.window_mut(window) {
+            w.tab_ids = arranged;
+        }
+        self.reorder_window(window);
+        Ok(())
+    }
+}

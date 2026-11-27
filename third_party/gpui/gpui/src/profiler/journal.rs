@@ -16,7 +16,7 @@ use std::cell::{RefCell, UnsafeCell};
 use std::collections::{HashMap, VecDeque};
 use std::mem::MaybeUninit;
 use std::sync::{
-    Arc,
+    Arc, OnceLock,
     atomic::{AtomicU64, AtomicUsize, Ordering},
 };
 use std::time::Duration;
@@ -737,6 +737,9 @@ pub(crate) fn foreground_runnable_counter() -> ForegroundRunnableCounter {
 /// Starts journaling on the calling thread. Called once by `App` construction
 /// on the main thread; every other thread's recording calls are no-ops.
 /// Idempotent so that multiple `App`s on one thread (tests) share one journal.
+///
+/// The ring is allocated when the first collector is created, so an app that
+/// never collects never pays for it.
 pub(crate) fn install_foreground_journal() -> ForegroundJournal {
     let foreground_runnables = foreground_runnable_counter();
     FOREGROUND_JOURNAL.with(|journal| {
@@ -747,14 +750,30 @@ pub(crate) fn install_foreground_journal() -> ForegroundJournal {
             };
         }
 
-        let (handle, publisher) =
-            ForegroundJournal::new(MAX_JOURNAL_ENTRIES, MAX_PENDING_JOURNAL_ENTRIES);
+        let ring = Arc::new(JournalRing::deferred(MAX_JOURNAL_ENTRIES));
+        let handle = ForegroundJournal {
+            ring: Arc::clone(&ring),
+        };
         *journal = Some(ForegroundJournalWriter::new(
             foreground_runnables,
-            publisher,
+            JournalPublisher::new(ring, MAX_PENDING_JOURNAL_ENTRIES),
         ));
         handle
     })
+}
+
+/// Stops journaling on the calling thread when `journal` is the thread's
+/// journal, so recording calls become no-ops.
+pub(crate) fn uninstall_foreground_journal(journal: &ForegroundJournal) {
+    FOREGROUND_JOURNAL.with(|installed| {
+        let mut installed = installed.borrow_mut();
+        if installed
+            .as_ref()
+            .is_some_and(|writer| Arc::ptr_eq(&writer.publisher.ring, &journal.ring))
+        {
+            *installed = None;
+        }
+    });
 }
 
 /// Restores the previous foreground journal on drop, so a test's writer
@@ -1189,33 +1208,68 @@ impl Drop for JournalSlotReadGuard<'_> {
 }
 
 struct JournalRing {
-    slots: Box<[JournalSlot]>,
+    requested_capacity: AtomicUsize,
+    slots: OnceLock<Box<[JournalSlot]>>,
     finalized: AtomicU64,
     offered: AtomicU64,
 }
 
 impl JournalRing {
+    #[cfg(test)]
     fn new(capacity: usize) -> Self {
-        let capacity = capacity.max(1);
+        let ring = Self::deferred(capacity.max(1));
+        ring.allocate();
+        ring
+    }
+
+    /// A ring whose slots are allocated by [`Self::allocate`]. Until then, and
+    /// forever when `capacity` is zero, entries offered to it are dropped
+    /// without being counted, since no collector could observe them.
+    fn deferred(capacity: usize) -> Self {
         Self {
-            slots: (0..capacity).map(|_| JournalSlot::new()).collect(),
+            requested_capacity: AtomicUsize::new(capacity),
+            slots: OnceLock::new(),
             finalized: AtomicU64::new(0),
             offered: AtomicU64::new(0),
         }
     }
 
+    fn allocate(&self) {
+        let capacity = self.requested_capacity.load(Ordering::Acquire);
+        if capacity > 0 {
+            self.slots
+                .get_or_init(|| (0..capacity).map(|_| JournalSlot::new()).collect());
+        }
+    }
+
+    fn slots(&self) -> &[JournalSlot] {
+        self.slots.get().map_or(&[], |slots| slots)
+    }
+
+    fn is_allocated(&self) -> bool {
+        self.slots.get().is_some()
+    }
+
     fn capacity(&self) -> usize {
-        self.slots.len()
+        self.slots().len()
     }
 
     fn try_publish(&self, sequence: u64, entry: ForegroundJournalEntry) -> bool {
-        let index = (sequence % self.slots.len() as u64) as usize;
-        self.slots[index].try_publish(sequence, entry)
+        let slots = self.slots();
+        if slots.is_empty() {
+            return false;
+        }
+        let index = (sequence % slots.len() as u64) as usize;
+        slots[index].try_publish(sequence, entry)
     }
 
     fn read(&self, sequence: u64) -> Option<ForegroundJournalEntry> {
-        let index = (sequence % self.slots.len() as u64) as usize;
-        self.slots[index].try_read(sequence)
+        let slots = self.slots();
+        if slots.is_empty() {
+            return None;
+        }
+        let index = (sequence % slots.len() as u64) as usize;
+        slots[index].try_read(sequence)
     }
 }
 
@@ -1252,6 +1306,9 @@ impl JournalPublisher {
     }
 
     fn publish_one(&mut self, entry: ForegroundJournalEntry) {
+        if !self.ring.is_allocated() {
+            return;
+        }
         let sequence = self.next_sequence;
         self.next_sequence += 1;
         self.ring
@@ -1309,6 +1366,7 @@ pub struct ForegroundJournal {
 }
 
 impl ForegroundJournal {
+    #[cfg(test)]
     fn new(capacity: usize, pending_capacity: usize) -> (Self, JournalPublisher) {
         let ring = Arc::new(JournalRing::new(capacity));
         (
@@ -1319,9 +1377,38 @@ impl ForegroundJournal {
         )
     }
 
+    /// Whether entries can be collected: false once the journal was disabled
+    /// before its ring was allocated.
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.ring.is_allocated() || self.ring.requested_capacity.load(Ordering::Acquire) > 0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn allocated_capacity(&self) -> Option<usize> {
+        self.ring.slots.get().map(|slots| slots.len())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn writer_installed() -> bool {
+        FOREGROUND_JOURNAL.with(|journal| journal.borrow().is_some())
+    }
+
+    /// Sets how many entries the ring holds when it is allocated, with zero
+    /// disabling it. Has no effect once a collector allocated the ring.
+    pub(crate) fn set_capacity(&self, capacity: usize) {
+        if !self.ring.is_allocated() {
+            self.ring
+                .requested_capacity
+                .store(capacity, Ordering::Release);
+        }
+    }
+
     /// Creates an independent collector that observes entries offered after
-    /// this call.
+    /// this call. A journal disabled with
+    /// [`Application::with_profiler_journal_capacity`](crate::Application::with_profiler_journal_capacity)
+    /// yields collectors that never observe anything.
     pub fn collector(&self) -> ForegroundJournalCollector {
+        self.ring.allocate();
         ForegroundJournalCollector {
             cursor: self.ring.offered.load(Ordering::Acquire),
             ring: Arc::clone(&self.ring),
@@ -3160,7 +3247,7 @@ mod tests {
                     RingOperation::Pin(slot) => {
                         let index = usize::from(slot) % capacity;
                         if pins[index].is_none() {
-                            pins[index] = JournalSlotReadGuard::try_new(&journal.ring.slots[index]);
+                            pins[index] = JournalSlotReadGuard::try_new(&journal.ring.slots()[index]);
                             prop_assert!(pins[index].is_some());
                             model.pinned[index] = true;
                         }

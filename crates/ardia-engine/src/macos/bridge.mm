@@ -1,10 +1,95 @@
 #import <AppKit/AppKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 
 #import "ArdiaCore.h"
 #import "bridge.h"
+#import "pip/ACPiPHost.h"
 
+@interface ACPageCover : NSView
++ (void)coverTab:(ArdiaCoreTab *)tab then:(void (^)(BOOL covered))then;
+- (void)uncover:(BOOL)fade;
+@end
+
+@implementation ACPageCover {
+  CGImageRef _picture;
+}
+
++ (void)coverTab:(ArdiaCoreTab *)tab then:(void (^)(BOOL covered))then {
+  NSView *page = tab.view;
+  if (!page.window || page.isHiddenOrHasHiddenAncestor) return then(NO);
+  __weak ArdiaCoreTab *weakTab = tab;
+  __weak NSWindow *weakWindow = page.window;
+  __weak NSView *weakHost = page.superview;
+  [tab copyPicture:0.25
+        completion:^(CGImageRef picture) {
+          ArdiaCoreTab *t = weakTab;
+          NSView *now = t.view;
+          if (!picture || !now.window || now.window != weakWindow || now.superview != weakHost) return then(NO);
+          for (NSView *view in now.subviews.copy)
+            if ([view isKindOfClass:ACPageCover.class]) [view removeFromSuperview];
+          ACPageCover *cover = [[ACPageCover alloc] initWithFrame:now.bounds picture:picture];
+          [now addSubview:cover];
+          [cover displayIfNeeded];
+          then(YES);
+        }];
+}
+
+- (instancetype)initWithFrame:(NSRect)frame picture:(CGImageRef)picture {
+  if ((self = [super initWithFrame:frame])) {
+    _picture = CGImageRetain(picture);
+    self.wantsLayer = YES;
+    self.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    self.layer.contents = (__bridge id)_picture;
+    self.layer.contentsGravity = kCAGravityResize;
+    __weak ACPageCover *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      [weakSelf uncover:NO];
+    });
+  }
+  return self;
+}
+
+- (void)dealloc {
+  CGImageRelease(_picture);
+}
+
+- (BOOL)wantsUpdateLayer {
+  return YES;
+}
+
+- (void)updateLayer {
+  self.layer.contents = (__bridge id)_picture;
+  self.layer.contentsGravity = kCAGravityResize;
+}
+
+- (NSView *)hitTest:(NSPoint)point {
+  return nil;
+}
+
+- (BOOL)isAccessibilityElement {
+  return NO;
+}
+
+- (void)uncover:(BOOL)fade {
+  if (!self.superview) return;
+  if (!fade) return [self removeFromSuperview];
+  [NSAnimationContext
+      runAnimationGroup:^(NSAnimationContext *context) {
+        context.duration = 0.1;
+        self.animator.alphaValue = 0;
+      }
+      completionHandler:^{
+        [self removeFromSuperview];
+      }];
+}
+
+@end
+
+
+#include <libproc.h>
+#include <sys/param.h>
 #include <atomic>
 #include <climits>
 #include <cmath>
@@ -754,6 +839,7 @@ bool Listening() {
 
 - (void)engineDidStart {
   gStarted = true;
+  ardia_pip::Install();
   if (gPageScriptPending) ApplyPageScript();
   if (gScrollObserverWanted) [PageViewClass() setScrollObserver:ScrollObserver()];
   if (gGuardInstalled.load() && NSApp) [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
@@ -931,18 +1017,24 @@ bool Listening() {
 
 @end
 
+static void EmitTitle(ArdiaCoreTab *tab, NSString *event) {
+  Emit(@{@"event" : event, @"tab" : @(TabIdent(tab)), @"title" : tab.title ?: @"", @"url" : tab.url ?: @"", @"loading" : @(tab.loading)});
+}
+
 @implementation ABTabDelegate
 
 - (void)tabDidChangeTitle:(ArdiaCoreTab *)tab {
-  Emit(@{@"event" : @"title", @"tab" : @(TabIdent(tab)), @"title" : tab.title ?: @""});
+  EmitTitle(tab, @"title");
 }
 
 - (void)tabDidChangeURL:(ArdiaCoreTab *)tab {
   Emit(@{@"event" : @"url", @"tab" : @(TabIdent(tab)), @"url" : tab.url ?: @""});
+  EmitTitle(tab, @"shownTitle");
 }
 
 - (void)tabDidChangeLoading:(ArdiaCoreTab *)tab {
   Emit(@{@"event" : @"loading", @"tab" : @(TabIdent(tab)), @"loading" : @(tab.loading)});
+  EmitTitle(tab, @"shownTitle");
 }
 
 - (void)tabDidChangeProgress:(ArdiaCoreTab *)tab {
@@ -967,6 +1059,7 @@ bool Listening() {
                     frame:(NSString *)frameId
                      main:(BOOL)main
                    origin:(NSString *)origin {
+  if ([kind isEqualToString:@"nowPlaying"]) ardia_pip::NoteMediaFrame(tab, frameId ?: @"", main);
   Emit(@{
     @"event" : @"pageMessage",
     @"tab" : @(TabIdent(tab)),
@@ -1035,11 +1128,14 @@ bool Listening() {
 }
 
 - (void)tab:(ArdiaCoreTab *)tab requestsActivation:(NSString *)reason {
-  Emit(@{@"event" : @"activation", @"tab" : @(TabIdent(tab)), @"reason" : reason ?: @""});
+  BOOL fromOtherApp = NO;
+  const BOOL backToTab = ardia_pip::TabRequestedActivationFor(tab, &fromOtherApp);
+  Emit(@{@"event" : @"activation", @"tab" : @(TabIdent(tab)), @"reason" : backToTab ? @"pictureInPicture" : reason ?: @"", @"fromOtherApp" : @(backToTab && fromOtherApp)});
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didChangePictureInPicture:(NSDictionary<NSString *, id> *)state {
   Emit(@{@"event" : @"pip", @"tab" : @(TabIdent(tab)), @"state" : state ?: @{}});
+  ardia_pip::TabChangedPictureInPicture(tab, state ?: @{});
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString *, NSString *> *> *)items {
@@ -1572,6 +1668,11 @@ NSDictionary<NSString *, TabOp> *TabOps() {
         [tab exitPictureInPicture];
         return nil;
       },
+      @"uncoverPage" : ^id(ArdiaCoreTab *tab, NSDictionary *a) {
+        for (NSView *view in tab.view.subviews.copy)
+          if ([view isKindOfClass:ACPageCover.class]) [(ACPageCover *)view uncover:Flag(a, @"fade")];
+        return nil;
+      },
       @"exitFullscreen" : ^id(ArdiaCoreTab *tab, NSDictionary *) {
         [tab exitFullscreen];
         return nil;
@@ -1601,7 +1702,7 @@ NSDictionary<NSString *, TabOp> *TabOps() {
         return nil;
       },
       @"noteShown" : ^id(ArdiaCoreTab *tab, NSDictionary *a) {
-        [tab noteShownByHost:Flag(a, @"shown")];
+        ardia_pip::NoteHostShown(tab, Flag(a, @"shown"));
         return nil;
       },
       @"noteInShownSlot" : ^id(ArdiaCoreTab *tab, NSDictionary *) {
@@ -1647,6 +1748,14 @@ Op LookUp(NSDictionary *ops, NSDictionary *args) {
   return op;
 }
 
+}
+
+void ACPiPEmit(NSDictionary *event) {
+  Emit(event);
+}
+
+uint64_t ACPiPTabIdent(ArdiaCoreTab *tab) {
+  return TabIdent(tab);
 }
 
 extern "C" ArdiaBridgeStatus ardia_bridge_install(const ArdiaBridgeHost *host) {
@@ -1880,6 +1989,8 @@ extern "C" ArdiaBridgeStatus ardia_bridge_tab_async(uint64_t tabId, const char *
     ABCompletion *done = [[ABCompletion alloc] initWithRequest:request];
     if ([op isEqualToString:@"evaluate"]) {
       [tab evaluate:Str(args, @"code") completion:^(NSString *result) { [done finish:@{@"json" : result ?: NSNull.null}]; }];
+    } else if ([op isEqualToString:@"coverPage"]) {
+      [ACPageCover coverTab:tab then:^(BOOL covered) { [done finish:@{@"covered" : @(covered)}]; }];
     } else if ([op isEqualToString:@"askBeforeLeaving"]) {
       [tab askBeforeLeaving:^(BOOL leave) { [done finish:@{@"leave" : @(leave)}]; }];
     } else if ([op isEqualToString:@"enterPip"]) {
@@ -2584,7 +2695,25 @@ extern "C" ArdiaBridgeStatus ardia_bridge_workspace(const char *json, char **out
 
 - (void)getURL:(NSAppleEventDescriptor *)event withReply:(NSAppleEventDescriptor *)reply {
   NSString *url = [event paramDescriptorForKeyword:keyDirectObject].stringValue;
-  if (url.length) Emit(@{@"event" : @"openUrls", @"urls" : @[ url ]});
+  if (!url.length) return;
+  NSMutableDictionary *opened = [@{@"event" : @"openUrls", @"urls" : @[ url ]} mutableCopy];
+  pid_t pid = 0;
+  NSData *token = [event attributeDescriptorForKeyword:keySenderAuditTokenAttr].data;
+  if (token.length == sizeof(audit_token_t)) {
+    audit_token_t audit;
+    memcpy(&audit, token.bytes, sizeof audit);
+    pid = (pid_t)audit.val[5];
+  }
+  if (pid <= 0) pid = [event attributeDescriptorForKeyword:keySenderPIDAttr].int32Value;
+  if (pid > 0) {
+    NSRunningApplication *app = [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+    NSString *name = app.localizedName;
+    char process[2 * MAXCOMLEN + 1] = {};
+    if (!name.length && proc_name(pid, process, sizeof process) > 0) name = @(process);
+    if (app.bundleIdentifier.length) opened[@"bundleId"] = app.bundleIdentifier;
+    if (name.length) opened[@"appName"] = name;
+  }
+  Emit(opened);
 }
 
 - (void)reopen:(NSAppleEventDescriptor *)event withReply:(NSAppleEventDescriptor *)reply {

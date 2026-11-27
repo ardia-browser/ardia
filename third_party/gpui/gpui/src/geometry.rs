@@ -2681,6 +2681,7 @@ impl From<Pixels> for Corners<Pixels> {
     PartialEq,
     Serialize,
     Deserialize,
+    JsonSchema,
     Debug,
 )]
 #[repr(transparent)]

@@ -1,6 +1,8 @@
 pub mod bangs;
 pub mod calc;
 pub mod engines;
+pub mod providers;
+pub mod site_search;
 pub mod suggest;
 pub mod url;
 

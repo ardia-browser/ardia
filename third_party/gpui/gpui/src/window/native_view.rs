@@ -1,9 +1,9 @@
 use crate::{Action, KeyBinding, KeyDownEvent, PlatformInput};
 use crate::{
-    AnyWindowHandle, App, Bounds, Element, ElementId, FocusHandle, FocusId, Focusable,
-    GlobalElementId, Hitbox, HitboxBehavior, HitboxId, Hsla, InspectorElementId,
+    AnyWindowHandle, App, Bounds, ContentMask, Corners, Element, ElementId, FocusHandle, FocusId,
+    Focusable, GlobalElementId, Hitbox, HitboxBehavior, HitboxId, Hsla, InspectorElementId,
     InteractiveElement, IntoElement, LayoutId, PaintNativeView, ParentElement, Pixels, Point,
-    Style, Styled, Window, div,
+    ScaledPixels, Style, Styled, Window, div, px, scene::PaintTransform,
 };
 use anyhow::{Context as _, Result};
 use collections::HashSet;
@@ -39,7 +39,22 @@ impl NativeViewId {
 /// The view is composited beneath the window's GPUI content and shows through
 /// wherever this handle is used as an element, so elements painted after it
 /// cover it like they would cover any other element. The view is treated as
-/// opaque, and is not affected by element opacity or transformations.
+/// opaque.
+///
+/// Inside [`Window::with_transform_xy`], or an element styled with `scale` or
+/// `scale_xy`, the view keeps its layout size and is scaled along each axis as
+/// a whole about its center, so its content isn't laid out again while the
+/// transform animates. A view is never turned: inside `rotate`, it stays
+/// upright like an image, scaled by how much the transform stretches each of
+/// its axes and centered where the transform moves its center, so a parent's
+/// uneven scale under a turn doesn't shear it. Its frame, its hitbox and what
+/// the renderer erases for it are then the same rectangle. Inside element
+/// opacity, the view fades with its element. A fading view shows what is
+/// behind the window's content, such as a native view beneath it, rather than
+/// what the window painted beneath it.
+///
+/// A pinch over the view reaches the elements that hold it, which hear it
+/// with [`InteractiveElement::on_pinch`], and not the elements behind it.
 ///
 /// Mouse input over the view goes to the view, and to nothing behind it,
 /// wherever no element painted after the view takes mouse input. An element
@@ -80,6 +95,10 @@ pub(crate) struct NativeViewState {
     /// The hitbox of the occurrence that shows the view, which is the one
     /// painted first in a frame that paints the view more than once.
     shown_hitbox: Cell<Option<HitboxId>>,
+    corner_radii: Cell<Corners<Pixels>>,
+    /// The hitbox of the element that holds the shown occurrence, which a
+    /// position in a rounded corner sees through along with the view.
+    holder_hitbox: Cell<Option<HitboxId>>,
     reserved_actions: RefCell<HashSet<TypeId>>,
     _attachment: Box<dyn Any>,
 }
@@ -115,6 +134,8 @@ impl NativeView {
             focus_handle: cx.focus_handle(),
             background: Cell::new(Hsla::transparent_black()),
             shown_hitbox: Cell::new(None),
+            corner_radii: Cell::new(Corners::default()),
+            holder_hitbox: Cell::new(None),
             reserved_actions: RefCell::default(),
             _attachment: attachment,
         });
@@ -239,9 +260,23 @@ impl Element for NativeViewElement {
         } else {
             HitboxBehavior::Normal
         };
-        let hitbox = window.insert_hitbox(bounds, behavior);
+        let holder = window.next_frame.hitboxes.last().cloned();
+        let mut hitbox = window.insert_hitbox(bounds, behavior);
+        // Both hitboxes are in window space, transformed alike.
+        let holder = holder
+            .filter(|holder| holder.bounds == hitbox.bounds)
+            .map(|holder| holder.id);
+        if let Some(transform) = window.next_frame.scene.paint_transform() {
+            let scale_factor = window.scale_factor();
+            let upright = upright_bounds(&transform, bounds.scale(scale_factor));
+            hitbox.bounds = to_logical(upright, scale_factor);
+            if let Some(inserted) = window.next_frame.hitboxes.last_mut() {
+                inserted.bounds = hitbox.bounds;
+            }
+        }
         if shows_view {
             state.shown_hitbox.set(Some(hitbox.id));
+            state.holder_hitbox.set(holder);
         }
         Some(hitbox)
     }
@@ -250,7 +285,7 @@ impl Element for NativeViewElement {
         &mut self,
         _id: Option<&GlobalElementId>,
         _inspector_id: Option<&InspectorElementId>,
-        _bounds: Bounds<Pixels>,
+        bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         hitbox: &mut Option<Hitbox>,
         window: &mut Window,
@@ -260,8 +295,35 @@ impl Element for NativeViewElement {
             return;
         };
         let id = self.0.0.id;
-        let bounds = window.snap_bounds(hitbox.bounds);
-        let content_mask = window.snapped_content_mask();
+        // The view keeps its layout size, so the platform scales it as a
+        // whole instead of laying out its content again each frame.
+        let unscaled = crate::point(1., 1.);
+        let (bounds, layout_size, scale, axis_scale) =
+            match window.next_frame.scene.paint_transform() {
+                Some(transform) => {
+                    let layout = window.snap_bounds(bounds);
+                    let scales = transform.scale();
+                    let (scale, axis_scale) = if transform.is_uniform() {
+                        (scales.x, unscaled)
+                    } else {
+                        (1., scales)
+                    };
+                    (
+                        upright_bounds(&transform, layout),
+                        layout.size,
+                        scale,
+                        axis_scale,
+                    )
+                }
+                None => {
+                    let bounds = window.snap_bounds(hitbox.bounds);
+                    (bounds, bounds.size, 1., unscaled)
+                }
+            };
+        let content_mask = ContentMask {
+            bounds: window.cover_bounds(hitbox.content_mask.bounds),
+        };
+        let opacity = window.element_opacity();
         window.next_frame.scene.insert_primitive(PaintNativeView {
             order: 0,
             id,
@@ -269,6 +331,14 @@ impl Element for NativeViewElement {
             bounds,
             content_mask,
             background: self.0.0.background.get(),
+            layout_size,
+            scale,
+            axis_scale,
+            opacity: if opacity.is_nan() {
+                1.
+            } else {
+                opacity.clamp(0., 1.)
+            },
         });
     }
 }
@@ -318,15 +388,48 @@ impl Window {
     }
 
     /// The native view that a mouse event at this position reaches, if no
-    /// GPUI hitbox is above it there.
+    /// GPUI hitbox is above it there. A native view's rounded corners are
+    /// see-through, so a position in one reaches whatever is beneath the view
+    /// and the element that holds it.
     pub(super) fn hit_test_native_view(&self, position: Point<Pixels>) -> Option<NativeViewId> {
-        let hit_test = self.rendered_frame.hit_test(position);
-        let topmost = hit_test.ids.first()?;
-        self.rendered_frame
-            .scene
-            .attached_native_views()
-            .find(|native_view| native_view.hitbox_id == *topmost)
-            .map(|native_view| native_view.id)
+        let mut see_through: Option<HitboxId> = None;
+        for hitbox in self.rendered_frame.hitboxes.iter().rev() {
+            let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
+            if !bounds.contains(&position) {
+                continue;
+            }
+            let native_view = self
+                .rendered_frame
+                .scene
+                .attached_native_views()
+                .find(|native_view| native_view.hitbox_id == hitbox.id);
+            let Some(native_view) = native_view else {
+                if see_through == Some(hitbox.id) {
+                    continue;
+                }
+                return None;
+            };
+            let state = self
+                .native_views
+                .iter()
+                .filter_map(Weak::upgrade)
+                .find(|view| view.id == native_view.id);
+            let radii = state
+                .as_ref()
+                .map(|state| state.corner_radii.get())
+                .unwrap_or_default();
+            let contains = if native_view.is_transformed() {
+                let (frame, position) = untransformed(native_view, self.scale_factor(), position);
+                rounded_bounds_contain(frame, radii, position)
+            } else {
+                rounded_bounds_contain(hitbox.bounds, radii, position)
+            };
+            if contains {
+                return Some(native_view.id);
+            }
+            see_through = state.and_then(|state| state.holder_hitbox.get());
+        }
+        None
     }
 
     /// Dispatches a key press that the focused native view has not seen yet, if
@@ -409,10 +512,106 @@ impl Window {
     ) {
         if view.0.window == self.handle {
             let radii = radii.into().map(|radius| (*radius).max(Pixels::ZERO));
+            view.0.corner_radii.set(radii);
             self.platform_window
                 .set_native_view_corner_radius(view.0.id, radii);
         }
     }
+}
+
+/// Where a native view shows under `transform`: `bounds` scaled by how much
+/// the transform stretches each of its axes, about where the transform moves
+/// its center, and never turned.
+///
+/// A matrix that turns, or that shears because an uneven scale is applied
+/// after a turn, leaves the view upright with only the length each of its
+/// axes is stretched to, so its frame, its hitbox and the rect the renderer
+/// erases for it stay the same axis-aligned rectangle.
+fn upright_bounds(
+    transform: &PaintTransform,
+    bounds: Bounds<ScaledPixels>,
+) -> Bounds<ScaledPixels> {
+    let center = transform.point(bounds.center());
+    let scale = transform.scale();
+    let size = crate::size(
+        ScaledPixels(bounds.size.width.0 * scale.x),
+        ScaledPixels(bounds.size.height.0 * scale.y),
+    );
+    Bounds {
+        origin: crate::point(center.x - size.width / 2., center.y - size.height / 2.),
+        size,
+    }
+}
+
+fn to_logical(bounds: Bounds<ScaledPixels>, scale_factor: f32) -> Bounds<Pixels> {
+    Bounds {
+        origin: crate::point(
+            px(bounds.origin.x.0 / scale_factor),
+            px(bounds.origin.y.0 / scale_factor),
+        ),
+        size: crate::size(
+            px(bounds.size.width.0 / scale_factor),
+            px(bounds.size.height.0 / scale_factor),
+        ),
+    }
+}
+
+/// The frame a scaled native view is laid out in, in logical pixels, and
+/// `position` moved back by the view's scale into that frame.
+fn untransformed(
+    native_view: &PaintNativeView,
+    scale_factor: f32,
+    position: Point<Pixels>,
+) -> (Bounds<Pixels>, Point<Pixels>) {
+    let center = native_view.bounds.center();
+    let center = Point::new(center.x.0 / scale_factor, center.y.0 / scale_factor);
+    let size = crate::size(
+        px(native_view.layout_size.width.0 / scale_factor),
+        px(native_view.layout_size.height.0 / scale_factor),
+    );
+    let frame = Bounds {
+        origin: crate::point(
+            px(center.x) - size.width / 2.,
+            px(center.y) - size.height / 2.,
+        ),
+        size,
+    };
+    let scales = native_view.scales();
+    let (scale_x, scale_y) = (scales.x.max(f32::EPSILON), scales.y.max(f32::EPSILON));
+    let position = crate::point(
+        px(center.x + (position.x.0 - center.x) / scale_x),
+        px(center.y + (position.y.0 - center.y) / scale_y),
+    );
+    (frame, position)
+}
+
+fn rounded_bounds_contain(
+    bounds: Bounds<Pixels>,
+    radii: Corners<Pixels>,
+    position: Point<Pixels>,
+) -> bool {
+    if !bounds.contains(&position) {
+        return false;
+    }
+    let (left, top) = (bounds.origin.x.0, bounds.origin.y.0);
+    let (right, bottom) = (left + bounds.size.width.0, top + bounds.size.height.0);
+    let limit = bounds.size.width.0.min(bounds.size.height.0) / 2.;
+    let radius = |corner: Pixels| corner.0.max(0.).min(limit);
+    let (x, y) = (position.x.0, position.y.0);
+    [
+        (radius(radii.top_left), [left, top], [-1., -1.]),
+        (radius(radii.top_right), [right, top], [1., -1.]),
+        (radius(radii.bottom_right), [right, bottom], [1., 1.]),
+        (radius(radii.bottom_left), [left, bottom], [-1., 1.]),
+    ]
+    .into_iter()
+    .all(|(radius, [corner_x, corner_y], [side_x, side_y])| {
+        let (dx, dy) = (
+            x - (corner_x - side_x * radius),
+            y - (corner_y - side_y * radius),
+        );
+        dx * side_x <= 0. || dy * side_y <= 0. || dx * dx + dy * dy <= radius * radius
+    })
 }
 
 #[cfg(test)]
@@ -420,8 +619,8 @@ mod tests {
     use super::*;
     use crate::{
         Context, Entity, FocusHandle, InputHandler, KeyBinding, Keystroke, Modifiers, MouseButton,
-        Render, ScaledPixels, TestAppContext, UTF16Selection, VisualTestContext, WindowHandle,
-        canvas, point, prelude::*, px, rgb,
+        Radians, Render, TestAppContext, UTF16Selection, VisualTestContext, WindowHandle, canvas,
+        point, prelude::*, px, rgb,
     };
     use std::ops::Range;
 
@@ -569,6 +768,54 @@ mod tests {
     }
 
     #[gpui::test]
+    fn mouse_in_a_rounded_corner_reaches_the_native_view_beneath(cx: &mut TestAppContext) {
+        let window = open_window(cx);
+        let platform_window = cx.test_window(window.into());
+        let (lower, upper) = window
+            .update(cx, |view, window, cx| {
+                let upper = new_native_view(window, cx);
+                window.set_native_view_corner_radius(&upper, px(20.));
+                view.rounded_view = Some(upper.clone());
+                cx.notify();
+                (view.native_view.0.id, upper.0.id)
+            })
+            .unwrap();
+        cx.run_until_parked();
+
+        let inside_upper = point(px(80.), px(80.));
+        let clipped_corner = point(px(61.), px(61.));
+        assert_eq!(
+            platform_window.hit_test_native_view(inside_upper),
+            Some(upper)
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(clipped_corner),
+            Some(lower)
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(99.), px(61.))),
+            Some(lower)
+        );
+
+        window
+            .update(cx, |view, _, cx| {
+                view.occludes_under_rounded_view = true;
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+        assert_eq!(
+            platform_window.hit_test_native_view(inside_upper),
+            Some(upper)
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(clipped_corner),
+            None,
+            "an element between the views keeps the corner from the view beneath"
+        );
+    }
+
+    #[gpui::test]
     fn mouse_press_on_a_native_view_reaches_nothing_behind_it(cx: &mut TestAppContext) {
         let window = open_window(cx);
         cx.run_until_parked();
@@ -711,6 +958,8 @@ mod tests {
             keys: Vec::new(),
             presses: Vec::new(),
             paints_native_view_twice: false,
+            rounded_view: None,
+            occludes_under_rounded_view: false,
             unmark_count: 0,
         });
         cx.run_until_parked();
@@ -746,6 +995,811 @@ mod tests {
         assert_eq!(unmark_count, 1);
     }
 
+    struct ScaledClip(NativeView);
+
+    impl Render for ScaledClip {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child(
+                div()
+                    .absolute()
+                    .left(px(100.))
+                    .top_0()
+                    .size(px(100.))
+                    .overflow_hidden()
+                    .scale(0.5)
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(-50.))
+                            .top_0()
+                            .w(px(200.))
+                            .h(px(100.))
+                            .child(self.0.clone()),
+                    ),
+            )
+        }
+    }
+
+    #[gpui::test]
+    fn a_native_view_under_a_scaled_clip_is_hit_where_it_shows(cx: &mut TestAppContext) {
+        let window = cx.add_window(|window, cx| ScaledClip(new_native_view(window, cx)));
+        cx.run_until_parked();
+        let platform_window = cx.test_window(window.into());
+        let (id, shown) = window
+            .update(cx, |view, window, _| {
+                let native_views = &window.rendered_frame.scene.native_views;
+                assert_eq!(native_views.len(), 1);
+                let native_view = native_views[0];
+                let scale_factor = window.scale_factor();
+                let shown = native_view
+                    .bounds
+                    .intersect(&native_view.content_mask.bounds);
+                (
+                    view.0.0.id,
+                    Bounds::from_corners(
+                        point(
+                            px(shown.left().0 / scale_factor),
+                            px(shown.top().0 / scale_factor),
+                        ),
+                        point(
+                            px(shown.right().0 / scale_factor),
+                            px(shown.bottom().0 / scale_factor),
+                        ),
+                    ),
+                )
+            })
+            .unwrap();
+        for x in [105., 110., 124., 126., 150., 174., 176., 190.] {
+            let position = point(px(x), px(50.));
+            assert_eq!(
+                platform_window.hit_test_native_view(position),
+                shown.contains(&position).then_some(id),
+                "{x}, shown {shown:?}"
+            );
+        }
+        assert_eq!(shown.left(), px(125.));
+        assert_eq!(shown.right(), px(175.));
+    }
+
+    struct Transformed {
+        view: NativeView,
+        effects: Option<(f32, f32, f32, f32)>,
+    }
+
+    impl Render for Transformed {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let holder = div()
+                .absolute()
+                .left(px(100.))
+                .top(px(100.))
+                .w(px(200.))
+                .h(px(100.));
+            let Some((outer_scale, inner_scale, angle, opacity)) = self.effects else {
+                return div().size_full().child(holder.child(self.view.clone()));
+            };
+            div().size_full().child(
+                holder.scale(outer_scale).opacity(opacity).child(
+                    div()
+                        .size_full()
+                        .scale(inner_scale)
+                        .rotate(Radians(angle))
+                        .opacity(opacity)
+                        .child(self.view.clone()),
+                ),
+            )
+        }
+    }
+
+    fn painted_native_view(
+        window: WindowHandle<Transformed>,
+        cx: &mut TestAppContext,
+    ) -> (PaintNativeView, f32) {
+        window
+            .update(cx, |_, window, _| {
+                let native_views = &window.rendered_frame.scene.native_views;
+                assert_eq!(native_views.len(), 1);
+                (native_views[0], window.scale_factor())
+            })
+            .unwrap()
+    }
+
+    #[gpui::test]
+    fn a_native_view_carries_the_scale_and_opacity_it_is_painted_in_and_stays_upright(
+        cx: &mut TestAppContext,
+    ) {
+        let window = cx.add_window(|window, cx| Transformed {
+            view: new_native_view(window, cx),
+            effects: Some((0.5, 1.5, std::f32::consts::FRAC_PI_2, 0.5)),
+        });
+        cx.run_until_parked();
+        let (native_view, scale_factor) = painted_native_view(window, cx);
+        assert!((native_view.scale - 0.75).abs() < 1e-6);
+        assert!((native_view.opacity - 0.25).abs() < 1e-6);
+        assert!(native_view.is_transformed());
+        let layout = native_view
+            .layout_size
+            .map(|length| length.0 / scale_factor);
+        assert_eq!((layout.width, layout.height), (200., 100.));
+        // Both scales are about the holder's center, so the view's center
+        // stays put, and the quarter turn leaves it upright.
+        let center = native_view.bounds.center();
+        let shown = native_view.bounds.size;
+        for (actual, expected) in [
+            (center.x.0 / scale_factor, 200.),
+            (center.y.0 / scale_factor, 150.),
+            (shown.width.0 / scale_factor, 150.),
+            (shown.height.0 / scale_factor, 75.),
+        ] {
+            assert!((actual - expected).abs() < 1e-3, "{actual} != {expected}");
+        }
+
+        // The view is hit inside its upright frame, which is 150 points wide
+        // and 75 tall around (200, 150).
+        let platform_window = cx.test_window(window.into());
+        let id = window.update(cx, |view, _, _| view.view.0.id).unwrap();
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(270.), px(150.))),
+            Some(id)
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(200.), px(185.))),
+            Some(id)
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(200.), px(195.))),
+            None
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(280.), px(150.))),
+            None
+        );
+
+        window
+            .update(cx, |view, _, cx| {
+                view.effects = None;
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+        let (native_view, scale_factor) = painted_native_view(window, cx);
+        assert_eq!(native_view.scale, 1.);
+        assert_eq!(native_view.opacity, 1.);
+        assert!(!native_view.is_transformed());
+        assert_eq!(native_view.layout_size, native_view.bounds.size);
+        assert_eq!(
+            native_view.bounds.origin.x.0 / scale_factor,
+            100.,
+            "an untransformed view is placed as before"
+        );
+    }
+
+    struct TurnedOverButton {
+        view: NativeView,
+        scale_xy: (f32, f32),
+        angle: f32,
+        presses: Vec<Point<Pixels>>,
+    }
+
+    impl Render for TurnedOverButton {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let (x, y) = self.scale_xy;
+            div()
+                .size_full()
+                .child(div().id("button").absolute().size_full().on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, event: &crate::MouseDownEvent, _, _| {
+                        this.presses.push(event.position)
+                    }),
+                ))
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(100.))
+                        .top(px(100.))
+                        .w(px(200.))
+                        .h(px(100.))
+                        .scale_xy(x, y)
+                        .child(
+                            div()
+                                .size_full()
+                                .rotate(Radians(self.angle))
+                                .child(self.view.clone()),
+                        ),
+                )
+        }
+    }
+
+    /// The painted view, its hitbox, the rect the renderer erases for it, all
+    /// in logical pixels, and the window's scale factor.
+    fn upright_frames(
+        window: WindowHandle<TurnedOverButton>,
+        cx: &mut TestAppContext,
+    ) -> (
+        PaintNativeView,
+        Bounds<Pixels>,
+        Bounds<Pixels>,
+        Bounds<Pixels>,
+        f32,
+    ) {
+        window
+            .update(cx, |_, window, _| {
+                let native_views = &window.rendered_frame.scene.native_views;
+                assert_eq!(native_views.len(), 1);
+                let native_view = native_views[0];
+                let scale_factor = window.scale_factor();
+                let to_logical = |bounds: Bounds<ScaledPixels>| Bounds {
+                    origin: point(
+                        px(bounds.origin.x.0 / scale_factor),
+                        px(bounds.origin.y.0 / scale_factor),
+                    ),
+                    size: crate::size(
+                        px(bounds.size.width.0 / scale_factor),
+                        px(bounds.size.height.0 / scale_factor),
+                    ),
+                };
+                let hitbox = window
+                    .rendered_frame
+                    .hitboxes
+                    .iter()
+                    .find(|hitbox| hitbox.id == native_view.hitbox_id)
+                    .expect("the view's hitbox")
+                    .clone();
+                let erased = native_view
+                    .bounds
+                    .intersect(&native_view.content_mask.bounds);
+                (
+                    native_view,
+                    to_logical(native_view.bounds),
+                    hitbox.bounds.intersect(&hitbox.content_mask.bounds),
+                    to_logical(erased),
+                    scale_factor,
+                )
+            })
+            .unwrap()
+    }
+
+    fn assert_bounds_near(actual: Bounds<Pixels>, expected: [f32; 4], what: &str) {
+        let actual_values = [
+            actual.origin.x.0,
+            actual.origin.y.0,
+            actual.size.width.0,
+            actual.size.height.0,
+        ];
+        for (actual_value, expected_value) in actual_values.into_iter().zip(expected) {
+            assert!(
+                (actual_value - expected_value).abs() < 1e-2,
+                "{what}: {actual_values:?} != {expected:?}"
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn a_turned_native_view_stays_upright_and_leaves_its_corners_to_what_is_behind(
+        cx: &mut TestAppContext,
+    ) {
+        let window = cx.add_window(|window, cx| TurnedOverButton {
+            view: new_native_view(window, cx),
+            scale_xy: (1., 1.),
+            angle: std::f32::consts::FRAC_PI_4,
+            presses: Vec::new(),
+        });
+        cx.run_until_parked();
+        let (_, bounds, hitbox, erased, _) = upright_frames(window, cx);
+        for (frame, what) in [(bounds, "bounds"), (hitbox, "hitbox"), (erased, "erased")] {
+            assert_bounds_near(frame, [100., 100., 200., 100.], what);
+        }
+
+        let platform_window = cx.test_window(window.into());
+        let id = window.update(cx, |view, _, _| view.view.0.id).unwrap();
+        // Inside the bounds the turned frame would have, outside the view.
+        let empty_corner = point(px(105.), px(60.));
+        assert_eq!(platform_window.hit_test_native_view(empty_corner), None);
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(290.), px(140.))),
+            Some(id),
+            "the upright view is hit across its whole frame"
+        );
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.simulate_mouse_down(empty_corner, MouseButton::Left, Modifiers::default());
+        let presses = window
+            .update(&mut cx, |view, _, _| std::mem::take(&mut view.presses))
+            .unwrap();
+        assert_eq!(presses, [empty_corner]);
+    }
+
+    #[gpui::test]
+    fn a_native_view_under_an_uneven_scale_and_a_turn_has_one_upright_frame(
+        cx: &mut TestAppContext,
+    ) {
+        let window = cx.add_window(|window, cx| TurnedOverButton {
+            view: new_native_view(window, cx),
+            scale_xy: (2., 1.),
+            angle: std::f32::consts::FRAC_PI_4,
+            presses: Vec::new(),
+        });
+        cx.run_until_parked();
+        let (native_view, bounds, hitbox, erased, scale_factor) = upright_frames(window, cx);
+        // Each of the view's axes is stretched by the length the matrix gives
+        // it, which is the same for both here, and the parent's shear is left
+        // out.
+        let scale = 2.5f32.sqrt();
+        let scales = native_view.scales();
+        assert!((scales.x - scale).abs() < 1e-5 && (scales.y - scale).abs() < 1e-5);
+        let expected = [
+            200. - 100. * scale,
+            150. - 50. * scale,
+            200. * scale,
+            100. * scale,
+        ];
+        for (frame, what) in [(bounds, "bounds"), (hitbox, "hitbox"), (erased, "erased")] {
+            assert_bounds_near(frame, expected, what);
+        }
+        let layout = native_view
+            .layout_size
+            .map(|length| length.0 / scale_factor);
+        assert_eq!((layout.width, layout.height), (200., 100.));
+
+        let platform_window = cx.test_window(window.into());
+        let corner = point(px(expected[0] + 1.), px(expected[1] + 1.));
+        assert!(platform_window.hit_test_native_view(corner).is_some());
+        let above = point(px(200.), px(expected[1] - 5.));
+        assert_eq!(platform_window.hit_test_native_view(above), None);
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.simulate_mouse_down(above, MouseButton::Left, Modifiers::default());
+        let presses = window
+            .update(&mut cx, |view, _, _| std::mem::take(&mut view.presses))
+            .unwrap();
+        assert_eq!(presses, [above]);
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum PinchLayout {
+        Plain,
+        Deferred,
+        Cached,
+        Covered,
+    }
+
+    struct PinchedOverNativeView {
+        view: NativeView,
+        holder: Entity<NativeViewHolder>,
+        layout: PinchLayout,
+        pinches: Vec<&'static str>,
+    }
+
+    struct NativeViewHolder {
+        view: NativeView,
+        renders: usize,
+    }
+
+    impl Render for NativeViewHolder {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            self.renders += 1;
+            div().size_full().child(self.view.clone())
+        }
+    }
+
+    impl Render for PinchedOverNativeView {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let holder = div().absolute().left(px(50.)).top(px(50.)).size(px(100.));
+            let holder = match self.layout {
+                PinchLayout::Plain | PinchLayout::Covered => {
+                    holder.child(self.view.clone()).into_any_element()
+                }
+                PinchLayout::Deferred => {
+                    crate::deferred(holder.child(self.view.clone())).into_any_element()
+                }
+                PinchLayout::Cached => holder
+                    .child(
+                        crate::AnyView::from(self.holder.clone())
+                            .cached(crate::StyleRefinement::default().size_full()),
+                    )
+                    .into_any_element(),
+            };
+            div()
+                .size_full()
+                .child(div().absolute().size_full().on_pinch(
+                    cx.listener(|this, _: &crate::PinchEvent, _, _| this.pinches.push("behind")),
+                ))
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(100.))
+                        .top(px(100.))
+                        .size(px(200.))
+                        .on_pinch(cx.listener(|this, _: &crate::PinchEvent, _, _| {
+                            this.pinches.push("ancestor")
+                        }))
+                        .child(holder),
+                )
+                .when(self.layout == PinchLayout::Covered, |page| {
+                    page.child(
+                        div()
+                            .absolute()
+                            .left(px(180.))
+                            .top(px(180.))
+                            .size(px(100.))
+                            .block_mouse_except_scroll(),
+                    )
+                })
+        }
+    }
+
+    fn open_pinch_window(
+        layout: PinchLayout,
+        cx: &mut TestAppContext,
+    ) -> (WindowHandle<PinchedOverNativeView>, VisualTestContext) {
+        let window = cx.add_window(|window, cx| {
+            let view = new_native_view(window, cx);
+            PinchedOverNativeView {
+                holder: cx.new(|_| NativeViewHolder {
+                    view: view.clone(),
+                    renders: 0,
+                }),
+                view,
+                layout,
+                pinches: Vec::new(),
+            }
+        });
+        cx.run_until_parked();
+        (window, VisualTestContext::from_window(window.into(), cx))
+    }
+
+    fn pinch_at(
+        window: WindowHandle<PinchedOverNativeView>,
+        cx: &mut VisualTestContext,
+        x: f32,
+        y: f32,
+    ) -> Vec<&'static str> {
+        cx.simulate_event(crate::PinchEvent {
+            position: point(px(x), px(y)),
+            delta: 0.1,
+            modifiers: Modifiers::default(),
+            phase: crate::TouchPhase::Moved,
+            ..Default::default()
+        });
+        window
+            .update(cx, |view, _, _| std::mem::take(&mut view.pinches))
+            .unwrap()
+    }
+
+    #[gpui::test]
+    fn a_pinch_over_a_native_view_reaches_its_ancestors_only(cx: &mut TestAppContext) {
+        for layout in [PinchLayout::Plain, PinchLayout::Deferred] {
+            let (window, mut cx) = open_pinch_window(layout, cx);
+            let cx = &mut cx;
+            assert_eq!(
+                pinch_at(window, cx, 200., 200.),
+                ["ancestor"],
+                "over the native view"
+            );
+            assert_eq!(
+                pinch_at(window, cx, 110., 110.),
+                ["ancestor", "behind"],
+                "beside the native view, as before"
+            );
+            assert_eq!(pinch_at(window, cx, 50., 50.), ["behind"]);
+        }
+    }
+
+    #[gpui::test]
+    fn a_pinch_over_a_native_view_in_a_reused_cached_view_reaches_its_ancestors(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, mut cx) = open_pinch_window(PinchLayout::Cached, cx);
+        let cx = &mut cx;
+        assert_eq!(pinch_at(window, cx, 200., 200.), ["ancestor"]);
+        let renders = |cx: &mut VisualTestContext| {
+            window
+                .update(cx, |view, _, cx| view.holder.read(cx).renders)
+                .unwrap()
+        };
+        let renders_before = renders(cx);
+        window.update(cx, |_, _, cx| cx.notify()).unwrap();
+        cx.run_until_parked();
+        assert_eq!(renders(cx), renders_before, "the cached view is reused");
+        assert_eq!(pinch_at(window, cx, 200., 200.), ["ancestor"]);
+    }
+
+    #[gpui::test]
+    fn a_pinch_through_an_overlay_over_a_native_view_skips_its_holders(cx: &mut TestAppContext) {
+        let (window, mut cx) = open_pinch_window(PinchLayout::Covered, cx);
+        let cx = &mut cx;
+        assert_eq!(
+            pinch_at(window, cx, 190., 190.),
+            Vec::<&str>::new(),
+            "under the overlay"
+        );
+        assert_eq!(pinch_at(window, cx, 160., 160.), ["ancestor"]);
+    }
+
+    struct ClaimingPinchHolder {
+        view: NativeView,
+        claims: bool,
+    }
+
+    impl Render for ClaimingPinchHolder {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child(
+                div()
+                    .absolute()
+                    .left(px(50.))
+                    .top(px(50.))
+                    .size(px(100.))
+                    .on_pinch(cx.listener(|this, _: &crate::PinchEvent, _, cx| {
+                        if this.claims {
+                            cx.stop_propagation();
+                        }
+                    }))
+                    .child(self.view.clone()),
+            )
+        }
+    }
+
+    #[gpui::test]
+    fn a_pinch_a_holder_stops_over_its_native_view_does_not_propagate(cx: &mut TestAppContext) {
+        for claims in [true, false] {
+            let window = cx.add_window(|window, cx| ClaimingPinchHolder {
+                view: new_native_view(window, cx),
+                claims,
+            });
+            cx.run_until_parked();
+            let platform_window = cx.test_window(window.into());
+            let over_view = point(px(100.), px(100.));
+            assert!(platform_window.hit_test_native_view(over_view).is_some());
+            let result = cx
+                .update_window(window.into(), |_, window, cx| {
+                    window.dispatch_event(
+                        PlatformInput::Pinch(crate::PinchEvent {
+                            position: over_view,
+                            delta: 0.1,
+                            modifiers: Modifiers::default(),
+                            phase: crate::TouchPhase::Started,
+                            ..Default::default()
+                        }),
+                        cx,
+                    )
+                })
+                .unwrap();
+            assert_eq!(result.propagate, !claims);
+        }
+    }
+
+    struct RetryingHolder {
+        child: crate::AnyElement,
+        holder: Rc<Cell<Option<HitboxId>>>,
+        pinches: Rc<Cell<usize>>,
+    }
+
+    impl Element for RetryingHolder {
+        type RequestLayoutState = ();
+        type PrepaintState = Hitbox;
+
+        fn id(&self) -> Option<ElementId> {
+            None
+        }
+
+        fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+            None
+        }
+
+        fn request_layout(
+            &mut self,
+            _: Option<&GlobalElementId>,
+            _: Option<&InspectorElementId>,
+            window: &mut Window,
+            cx: &mut App,
+        ) -> (LayoutId, ()) {
+            let child = self.child.request_layout(window, cx);
+            let mut style = Style::default();
+            style.size.width = px(100.).into();
+            style.size.height = px(100.).into();
+            (window.request_layout(style, [child], cx), ())
+        }
+
+        fn prepaint(
+            &mut self,
+            _: Option<&GlobalElementId>,
+            _: Option<&InspectorElementId>,
+            bounds: Bounds<Pixels>,
+            _: &mut (),
+            window: &mut Window,
+            cx: &mut App,
+        ) -> Hitbox {
+            let rolled_back = window.transact(|window| {
+                window.insert_hitbox(bounds, HitboxBehavior::Normal);
+                Err::<(), ()>(())
+            });
+            assert!(rolled_back.is_err());
+            let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+            self.holder.set(Some(hitbox.id));
+            self.child.prepaint(window, cx);
+            hitbox
+        }
+
+        fn paint(
+            &mut self,
+            _: Option<&GlobalElementId>,
+            _: Option<&InspectorElementId>,
+            _: Bounds<Pixels>,
+            _: &mut (),
+            hitbox: &mut Hitbox,
+            window: &mut Window,
+            cx: &mut App,
+        ) {
+            self.child.paint(window, cx);
+            let hitbox = hitbox.clone();
+            let pinches = self.pinches.clone();
+            window.on_mouse_event(move |_: &crate::PinchEvent, phase, window, _| {
+                if phase == crate::DispatchPhase::Bubble && hitbox.should_handle_pinch(window) {
+                    pinches.set(pinches.get() + 1);
+                }
+            });
+        }
+    }
+
+    struct RetriedHolderView {
+        view: NativeView,
+        holder: Rc<Cell<Option<HitboxId>>>,
+        pinches: Rc<Cell<usize>>,
+    }
+
+    impl Render for RetriedHolderView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child(RetryingHolder {
+                child: self.view.clone().into_any_element(),
+                holder: self.holder.clone(),
+                pinches: self.pinches.clone(),
+            })
+        }
+    }
+
+    #[gpui::test]
+    fn a_rolled_back_hitbox_does_not_stay_the_holder_of_a_native_view(cx: &mut TestAppContext) {
+        let holder = Rc::new(Cell::new(None));
+        let pinches = Rc::new(Cell::new(0));
+        let window = cx.add_window({
+            let (holder, pinches) = (holder.clone(), pinches.clone());
+            move |window, cx| RetriedHolderView {
+                view: new_native_view(window, cx),
+                holder,
+                pinches,
+            }
+        });
+        cx.run_until_parked();
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        let (ancestors, dangling) = window
+            .update(&mut cx, |_, window, _| {
+                let frame = &window.rendered_frame;
+                let parent_of = |id: HitboxId| {
+                    frame
+                        .hitboxes
+                        .iter()
+                        .find(|hitbox| hitbox.id == id)
+                        .and_then(|hitbox| hitbox.parent)
+                };
+                let ancestors =
+                    std::iter::successors(parent_of(frame.scene.native_views[0].hitbox_id), |id| {
+                        parent_of(*id)
+                    })
+                    .collect::<Vec<_>>();
+                let dangling = frame
+                    .hitboxes
+                    .iter()
+                    .filter_map(|hitbox| hitbox.parent)
+                    .filter(|parent| frame.hitboxes.iter().all(|hitbox| hitbox.id != *parent))
+                    .collect::<Vec<_>>();
+                (ancestors, dangling)
+            })
+            .unwrap();
+        assert_eq!(dangling, [], "parents that were rolled back");
+        assert!(
+            ancestors.contains(&holder.get().unwrap()),
+            "the live holder holds the native view: {ancestors:?}"
+        );
+        cx.simulate_event(crate::PinchEvent {
+            position: point(px(50.), px(50.)),
+            delta: 0.1,
+            modifiers: Modifiers::default(),
+            phase: crate::TouchPhase::Moved,
+            ..Default::default()
+        });
+        assert_eq!(pinches.get(), 1, "the live holder hears the pinch");
+    }
+
+    struct PanicsInPrepaint;
+
+    impl Element for PanicsInPrepaint {
+        type RequestLayoutState = ();
+        type PrepaintState = ();
+
+        fn id(&self) -> Option<ElementId> {
+            None
+        }
+
+        fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+            None
+        }
+
+        fn request_layout(
+            &mut self,
+            _: Option<&GlobalElementId>,
+            _: Option<&InspectorElementId>,
+            window: &mut Window,
+            cx: &mut App,
+        ) -> (LayoutId, ()) {
+            (window.request_layout(Style::default(), [], cx), ())
+        }
+
+        fn prepaint(
+            &mut self,
+            _: Option<&GlobalElementId>,
+            _: Option<&InspectorElementId>,
+            _: Bounds<Pixels>,
+            _: &mut (),
+            _: &mut Window,
+            _: &mut App,
+        ) {
+            panic!("prepaint failed");
+        }
+
+        fn paint(
+            &mut self,
+            _: Option<&GlobalElementId>,
+            _: Option<&InspectorElementId>,
+            _: Bounds<Pixels>,
+            _: &mut (),
+            _: &mut (),
+            _: &mut Window,
+            _: &mut App,
+        ) {
+        }
+    }
+
+    struct CatchingParentView {
+        owners: Rc<Cell<Option<(usize, usize)>>>,
+    }
+
+    impl Render for CatchingParentView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let owners = self.owners.clone();
+            div().size_full().child(
+                canvas(
+                    |_, window, cx| {
+                        let mut child = PanicsInPrepaint.into_any_element();
+                        child.layout_as_root(crate::AvailableSpace::min_size(), window, cx);
+                        let before = window.hitbox_owners.len();
+                        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            child.prepaint(window, cx);
+                        }));
+                        assert!(caught.is_err());
+                        (before, window.hitbox_owners.len())
+                    },
+                    move |_, depths, _, _| owners.set(Some(depths)),
+                )
+                .size_full(),
+            )
+        }
+    }
+
+    #[gpui::test]
+    fn a_caught_panic_in_a_child_prepaint_leaves_the_hitbox_owners_balanced(
+        cx: &mut TestAppContext,
+    ) {
+        let owners = Rc::new(Cell::new(None));
+        let window = cx.add_window({
+            let owners = owners.clone();
+            move |_, _| CatchingParentView { owners }
+        });
+        cx.run_until_parked();
+        let (before, after) = owners.get().expect("the parent painted");
+        assert_eq!(after, before, "inside the parent's prepaint");
+        let leftover = window
+            .update(cx, |_, window, _| window.hitbox_owners.len())
+            .unwrap();
+        assert_eq!(leftover, 0, "after the frame");
+    }
+
     actions!(native_view_tests, [Reserved, Ordinary]);
 
     struct TestView {
@@ -756,6 +1810,8 @@ mod tests {
         keys: Vec<String>,
         presses: Vec<&'static str>,
         paints_native_view_twice: bool,
+        rounded_view: Option<NativeView>,
+        occludes_under_rounded_view: bool,
         /// How many times the input handler of the "cover" element was told to
         /// end its composition.
         unmark_count: usize,
@@ -783,6 +1839,27 @@ mod tests {
                         )
                         .child(self.native_view.clone()),
                 )
+                .when(self.occludes_under_rounded_view, |this| {
+                    this.child(
+                        div()
+                            .id("under rounded view")
+                            .absolute()
+                            .top(px(60.))
+                            .left(px(60.))
+                            .size(px(40.))
+                            .occlude(),
+                    )
+                })
+                .when_some(self.rounded_view.clone(), |this, rounded_view| {
+                    this.child(
+                        div()
+                            .absolute()
+                            .top(px(60.))
+                            .left(px(60.))
+                            .size(px(40.))
+                            .child(rounded_view),
+                    )
+                })
                 .when(self.paints_native_view_twice, |this| {
                     this.child(
                         div()
@@ -898,6 +1975,124 @@ mod tests {
         }
     }
 
+    struct StretchedView {
+        view: NativeView,
+        scale_xy: (f32, f32),
+        angle: f32,
+    }
+
+    impl Render for StretchedView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let (x, y) = self.scale_xy;
+            div().size_full().child(
+                div()
+                    .absolute()
+                    .left(px(100.))
+                    .top(px(100.))
+                    .w(px(200.))
+                    .h(px(100.))
+                    .scale_xy(x, y)
+                    .rotate(Radians(self.angle))
+                    .child(self.view.clone()),
+            )
+        }
+    }
+
+    fn painted_stretched_view(
+        window: WindowHandle<StretchedView>,
+        cx: &mut TestAppContext,
+    ) -> (PaintNativeView, f32) {
+        window
+            .update(cx, |_, window, _| {
+                let native_views = &window.rendered_frame.scene.native_views;
+                assert_eq!(native_views.len(), 1);
+                (native_views[0], window.scale_factor())
+            })
+            .unwrap()
+    }
+
+    #[gpui::test]
+    fn a_native_view_carries_the_scale_of_each_axis_it_is_painted_in(cx: &mut TestAppContext) {
+        let window = cx.add_window(|window, cx| StretchedView {
+            view: new_native_view(window, cx),
+            scale_xy: (0.5, 2.),
+            angle: 0.,
+        });
+        cx.run_until_parked();
+        let (native_view, scale_factor) = painted_stretched_view(window, cx);
+        assert_eq!(native_view.scale, 1.);
+        assert_eq!(native_view.axis_scale, point(0.5, 2.));
+        assert_eq!(native_view.scales(), point(0.5, 2.));
+        assert!(native_view.is_transformed());
+        let in_points = |length: ScaledPixels| length.0 / scale_factor;
+        assert_eq!(
+            (
+                in_points(native_view.layout_size.width),
+                in_points(native_view.layout_size.height)
+            ),
+            (200., 100.)
+        );
+        assert_eq!(
+            (
+                in_points(native_view.bounds.origin.x),
+                in_points(native_view.bounds.origin.y),
+                in_points(native_view.bounds.size.width),
+                in_points(native_view.bounds.size.height),
+            ),
+            (150., 50., 100., 200.)
+        );
+
+        let platform_window = cx.test_window(window.into());
+        let id = window.update(cx, |view, _, _| view.view.0.id).unwrap();
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(160.), px(60.))),
+            Some(id),
+            "the view is hit where it is drawn, above its layout"
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(120.), px(150.))),
+            None,
+            "and not in its layout beside where it is drawn"
+        );
+
+        window
+            .update(cx, |view, _, cx| {
+                view.scale_xy = (0.5, 0.5);
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+        let (native_view, _) = painted_stretched_view(window, cx);
+        assert_eq!(native_view.scale, 0.5);
+        assert_eq!(native_view.axis_scale, point(1., 1.));
+
+        window
+            .update(cx, |view, _, cx| {
+                view.scale_xy = (0.5, 2.);
+                view.angle = std::f32::consts::FRAC_PI_2;
+                cx.notify();
+            })
+            .unwrap();
+        cx.run_until_parked();
+        let (native_view, scale_factor) = painted_stretched_view(window, cx);
+        let scales = native_view.scales();
+        assert!((scales.x - 0.5).abs() < 1e-6 && (scales.y - 2.).abs() < 1e-6);
+        let shown = native_view
+            .bounds
+            .size
+            .map(|length| length.0 / scale_factor);
+        assert!((shown.width - 100.).abs() < 1e-3 && (shown.height - 200.).abs() < 1e-3);
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(200.), px(240.))),
+            Some(id),
+            "the turned view stays upright, stretched along its own axes"
+        );
+        assert_eq!(
+            platform_window.hit_test_native_view(point(px(290.), px(150.))),
+            None
+        );
+    }
+
     fn open_window(cx: &mut TestAppContext) -> WindowHandle<TestView> {
         cx.add_window(|window, cx| TestView {
             native_view: new_native_view(window, cx),
@@ -906,6 +2101,8 @@ mod tests {
             keys: Vec::new(),
             presses: Vec::new(),
             paints_native_view_twice: false,
+            rounded_view: None,
+            occludes_under_rounded_view: false,
             unmark_count: 0,
         })
     }

@@ -44,6 +44,7 @@ objc2-core-graphics = { version = "=0.3.2", default-features = false, features =
 objc2-core-media = { version = "=0.3.2", default-features = false, features = ["CMSampleBuffer", "objc2-core-video"], optional = true }
 objc2-core-video = { version = "=0.3.2", default-features = false, features = ["CVBuffer", "CVImageBuffer", "CVHostTime"] }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = [ "NSArray", "NSAttributedString", "NSBundle", "NSCoder", "NSData", "NSDate", "NSDictionary", "NSEnumerator", "NSError", "NSGeometry", "NSNull", "NSObjCRuntime", "NSObject", "NSProcessInfo", "NSRange", "NSRunLoop", "NSSet", "NSString", "NSURL", "NSValue", "objc2-core-foundation", "std", ] }
+objc2-metal = { version = "=0.3.2", default-features = false, features = ["std", "MTLAllocation", "MTLBlitCommandEncoder", "MTLBuffer", "MTLCommandBuffer", "MTLCommandEncoder", "MTLCommandQueue", "MTLDevice", "MTLDrawable", "MTLPixelFormat", "MTLResource", "MTLTexture", "MTLTypes"] }
 objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "CAMetalDisplayLink", "CAMetalLayer", "objc2-metal"] }
 objc2-screen-capture-kit = { version = "=0.3.2", default-features = false, features = [ "block2", "dispatch2", "objc2-core-graphics", "objc2-core-media", "SCShareableContent", "SCStream", "std" ], optional = true }
 objc2-uniform-type-identifiers = { version = "0.3", default-features = false, features = ["std", "UTCoreTypes", "UTType"] }
@@ -62,4 +63,7 @@ uuid = { version = "1.1", features = ["serde"] }
 # `cfg(test)`, so dev-dependencies enable those APIs only for test builds.
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 gpui = { path = "../gpui", default-features = false, features = ["test-support"] }
-gpui_apple = { git = "https://github.com/zed-industries/zed", rev = "a3ce8d5e88e35697b2ba1cf9cb3c6816089b8281", features = ["test-support"] }
+gpui_apple = { git = "https://github.com/zed-industries/zed", rev = "a3ce8d5e88e35697b2ba1cf9cb3c6816089b8281", features = ["test-support", "font-kit"] }
+
+[lints.cargo]
+missing_lints_inheritance = "allow"

@@ -174,7 +174,9 @@ pub fn forward(socket: &Path, urls: &[String], wait: Duration) -> io::Result<usi
         let Some(error) = reply.get("error") else {
             return Ok(());
         };
-        if error.get("code").and_then(Value::as_str) == Some("timeout") {
+        if error.get("message").and_then(Value::as_str)
+            == Some(crate::control_protocol::NO_ANSWER_IN_TIME)
+        {
             log::info!("the running Ardia is still starting, so the link opens once it's ready");
             return Ok(());
         }

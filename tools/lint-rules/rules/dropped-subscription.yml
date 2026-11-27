@@ -1,0 +1,16 @@
+id: dropped-subscription
+language: rust
+severity: error
+message: "a gpui Subscription bound to _ is dropped at once, so the callback never runs"
+note: "Keep it in a field (_subscriptions: Vec<Subscription>) or call .detach() when it should live as long as the entity (gpui-troubleshooting: Subscription Dropped)."
+ignores:
+  - third_party/**
+rule:
+  any:
+    - pattern: let _ = $C.$M($$$);
+    - pattern: let _ = $C.$M::<$$$T>($$$);
+constraints:
+  C:
+    regex: ^(cx|window|app)$
+  M:
+    regex: ^(subscribe|subscribe_in|observe|observe_in|observe_global|observe_global_in|observe_release|observe_release_in|observe_new|on_release|on_release_in|on_app_quit|observe_window_activation|observe_window_bounds|observe_window_appearance|observe_keystrokes|on_focus|on_blur|on_focus_in|on_focus_out)$

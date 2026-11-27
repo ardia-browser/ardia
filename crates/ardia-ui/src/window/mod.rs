@@ -2,9 +2,20 @@ pub mod backdrop;
 pub mod browser_window;
 pub mod chrome;
 pub mod commands;
+pub mod frozen_page;
+pub mod full_screen_restore;
+pub mod hover_hold;
 pub mod layout;
 pub mod motion;
 pub mod native_views;
+pub mod page_full_screen;
+pub mod page_overlays;
+pub mod peek_stage;
+pub mod profile_pager;
+pub mod retiring_page;
+pub mod sidebar_peek;
+pub mod swipe_overlay;
+pub mod swipe_tracker;
 
 use std::collections::HashMap;
 
@@ -68,6 +79,20 @@ pub struct WindowSpec {
     pub resizable: bool,
 }
 
+pub const BACKGROUND_ENV: &str = "ARDIA_BACKGROUND";
+
+pub fn hidden_instance(value: Option<&str>) -> bool {
+    value == Some("1")
+}
+
+pub fn keeps_key_look() -> bool {
+    hidden_instance(std::env::var(BACKGROUND_ENV).ok().as_deref())
+}
+
+pub fn looks_active(window: &gpui::Window) -> bool {
+    window.is_window_active() || keeps_key_look()
+}
+
 pub fn window_options(spec: WindowSpec) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(spec.bounds)),
@@ -81,9 +106,22 @@ pub fn window_options(spec: WindowSpec) -> WindowOptions {
         show: true,
         is_resizable: spec.resizable,
         window_min_size: Some(spec.min),
-        use_display_p3: true,
+        use_display_p3: false,
+        keeps_key_appearance: keeps_key_look(),
         app_id: Some("dev.ardia.browser".into()),
         host_window: spec.host_window,
         ..WindowOptions::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_hidden_instances_keep_the_key_look() {
+        assert!(hidden_instance(Some("1")));
+        assert!(!hidden_instance(Some("0")));
+        assert!(!hidden_instance(None));
     }
 }

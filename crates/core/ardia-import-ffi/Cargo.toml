@@ -17,3 +17,6 @@ zeroize.workspace = true
 [dev-dependencies]
 serde.workspace = true
 cbindgen = { version = "0.29", default-features = false }
+
+[lints]
+workspace = true

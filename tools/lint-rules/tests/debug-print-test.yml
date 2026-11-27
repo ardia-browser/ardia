@@ -1,0 +1,12 @@
+id: debug-print
+valid:
+  - "fn f() { log::info!(\"hi\"); }"
+  - |
+    #[cfg(test)]
+    mod tests {
+        fn f() { println!("hi"); }
+    }
+invalid:
+  - "fn f() { println!(\"hi\"); }"
+  - "fn f(x: u8) -> u8 { dbg!(x) }"
+  - "fn f() { eprintln!(\"oops\"); }"

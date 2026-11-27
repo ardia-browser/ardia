@@ -60,9 +60,25 @@ extern "C" fn on_terminate(_signal: i32) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn wake_pipe(pipe: &mut [i32; 2]) -> bool {
+    if unsafe { libc::pipe(pipe.as_mut_ptr()) } != 0 {
+        return false;
+    }
+    pipe.iter().all(|&fd| unsafe {
+        libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) == 0
+            && libc::fcntl(fd, libc::F_SETFL, libc::fcntl(fd, libc::F_GETFL) | libc::O_NONBLOCK) == 0
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn wake_pipe(pipe: &mut [i32; 2]) -> bool {
+    unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC | libc::O_NONBLOCK) == 0 }
+}
+
 fn install_signals() -> Result<RawFd, String> {
     let mut pipe = [0; 2];
-    if unsafe { libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC | libc::O_NONBLOCK) } != 0 {
+    if !wake_pipe(&mut pipe) {
         return Err("the plugin host couldn't make its wake pipe".into());
     }
     WAKE_FD.store(pipe[1], Ordering::Relaxed);

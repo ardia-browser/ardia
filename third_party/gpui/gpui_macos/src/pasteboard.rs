@@ -1,17 +1,20 @@
 use std::ffi::CStr;
 use std::path::PathBuf;
+use std::ptr;
 
-use objc2::{Message, class, msg_send, rc::Retained};
+use objc2::{
+    AnyThread, MainThreadMarker, Message, class, msg_send, rc::Retained, runtime::AnyObject,
+};
 #[expect(
     deprecated,
     reason = "Preserve the existing file-copy pasteboard format"
 )]
 use objc2_app_kit::NSFilenamesPboardType;
 use objc2_app_kit::{
-    NSPasteboard, NSPasteboardNameFind, NSPasteboardTypePNG, NSPasteboardTypeString,
-    NSPasteboardTypeTIFF,
+    NSPasteboard, NSPasteboardNameFind, NSPasteboardTypeHTML, NSPasteboardTypePNG,
+    NSPasteboardTypeRTF, NSPasteboardTypeRTFD, NSPasteboardTypeString, NSPasteboardTypeTIFF,
 };
-use objc2_foundation::{NSArray, NSData, NSString};
+use objc2_foundation::{NSArray, NSAttributedString, NSData, NSString};
 use smallvec::SmallVec;
 use strum::IntoEnumIterator as _;
 #[cfg(test)]
@@ -38,6 +41,10 @@ impl Pasteboard {
         let pasteboard: Option<Retained<NSPasteboard>> =
             unsafe { msg_send![class!(NSPasteboard), pasteboardWithName: NSPasteboardNameFind] };
         pasteboard.map(Self::new)
+    }
+
+    pub fn with_name(name: &str) -> Self {
+        Self::new(NSPasteboard::pasteboardWithName(&NSString::from_str(name)))
     }
 
     #[cfg(test)]
@@ -99,6 +106,17 @@ impl Pasteboard {
                 });
             }
 
+            if let Some(string_entry) = self.read_plain_text_from_rich_text() {
+                let mut entries = vec![string_entry];
+                entries.extend(
+                    ImageFormat::iter()
+                        .find_map(|format| self.read_image(format))
+                        .into_iter()
+                        .flat_map(|item| item.entries),
+                );
+                return Some(ClipboardItem { entries });
+            }
+
             // Finally, try the various supported image types.
             for format in ImageFormat::iter() {
                 if let Some(item) = self.read_image(format) {
@@ -153,6 +171,56 @@ impl Pasteboard {
             });
 
         Some(ClipboardEntry::String(ClipboardString { text, metadata }))
+    }
+
+    /// Converts RTFD, RTF or HTML on the pasteboard to plain text, in that order of preference.
+    ///
+    /// HTML goes through AppKit's WebKit-based importer, which must run on the main thread, can
+    /// take a while and spins the run loop while it works. It is skipped off the main thread.
+    fn read_plain_text_from_rich_text(&self) -> Option<ClipboardEntry> {
+        let types = self.inner.types()?;
+        let on_main_thread = MainThreadMarker::new().is_some();
+        let (kind, data) = [RichText::Rtfd, RichText::Rtf, RichText::Html]
+            .into_iter()
+            .filter(|kind| on_main_thread || *kind != RichText::Html)
+            .find_map(|kind| {
+                let pasteboard_type = kind.pasteboard_type();
+                if !types.containsObject(pasteboard_type) {
+                    return None;
+                }
+                Some((kind, self.inner.dataForType(pasteboard_type)?))
+            })?;
+
+        let attributed: Option<Retained<NSAttributedString>> = unsafe {
+            let no_attributes = ptr::null_mut::<*mut AnyObject>();
+            match kind {
+                RichText::Rtfd => msg_send![
+                    NSAttributedString::alloc(),
+                    initWithRTFD: &*data,
+                    documentAttributes: no_attributes
+                ],
+                RichText::Rtf => msg_send![
+                    NSAttributedString::alloc(),
+                    initWithRTF: &*data,
+                    documentAttributes: no_attributes
+                ],
+                RichText::Html => msg_send![
+                    NSAttributedString::alloc(),
+                    initWithHTML: &*data,
+                    documentAttributes: no_attributes
+                ],
+            }
+        };
+        let text: String = attributed?
+            .string()
+            .to_string()
+            .chars()
+            .filter(|character| *character != ATTACHMENT_CHARACTER)
+            .collect();
+        if text.is_empty() {
+            return None;
+        }
+        Some(ClipboardEntry::String(ClipboardString::new(text)))
     }
 
     fn data_for_type(&self, kind: &NSString) -> Option<Vec<u8>> {
@@ -233,6 +301,27 @@ impl Pasteboard {
     }
 }
 
+const ATTACHMENT_CHARACTER: char = '\u{fffc}';
+
+#[derive(Clone, Copy, PartialEq)]
+enum RichText {
+    Rtfd,
+    Rtf,
+    Html,
+}
+
+impl RichText {
+    fn pasteboard_type(self) -> &'static NSString {
+        unsafe {
+            match self {
+                Self::Rtfd => NSPasteboardTypeRTFD,
+                Self::Rtf => NSPasteboardTypeRTF,
+                Self::Html => NSPasteboardTypeHTML,
+            }
+        }
+    }
+}
+
 impl From<ImageFormat> for UTType {
     fn from(value: ImageFormat) -> Self {
         match value {
@@ -307,6 +396,7 @@ impl UTType {
 mod tests {
     use gpui::{ClipboardEntry, ClipboardItem, ClipboardString, ImageFormat};
     use objc2::rc::autoreleasepool;
+    use objc2_foundation::{NSDictionary, NSRange};
 
     use super::*;
 
@@ -442,6 +532,87 @@ mod tests {
             }
             other => panic!("expected String, got {:?}", other),
         }
+    }
+
+    fn write_only(pasteboard: &Pasteboard, kind: &str, bytes: &[u8]) {
+        let kind = NSString::from_str(kind);
+        unsafe {
+            pasteboard
+                .inner
+                .declareTypes_owner(&NSArray::from_slice(&[&*kind]), None)
+        };
+        pasteboard
+            .inner
+            .setData_forType(Some(&NSData::with_bytes(bytes)), &kind);
+    }
+
+    const RTF: &[u8] = br"{\rtf1\ansi{\fonttbl\f0 Helvetica;}\f0 Hello \b rich\b0  w\u246?rld}";
+
+    #[test]
+    fn test_read_rtf_only_as_plain_text() {
+        let pasteboard = Pasteboard::unique();
+        write_only(&pasteboard, "public.rtf", RTF);
+        assert_eq!(
+            pasteboard.read(),
+            Some(ClipboardItem::new_string(
+                "Hello rich w\u{f6}rld".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_read_flat_rtfd_only_as_plain_text() {
+        let rtfd = unsafe {
+            let rich: Option<Retained<NSAttributedString>> = msg_send![
+                NSAttributedString::alloc(),
+                initWithRTF: &*NSData::with_bytes(RTF),
+                documentAttributes: ptr::null_mut::<*mut AnyObject>()
+            ];
+            let rich = rich.expect("valid RTF");
+            let length = rich.length();
+            let data: Option<Retained<NSData>> = msg_send![
+                &*rich,
+                RTFDFromRange: NSRange::new(0, length),
+                documentAttributes: &*NSDictionary::<NSString, AnyObject>::new()
+            ];
+            data.expect("flat RTFD").to_vec()
+        };
+        let pasteboard = Pasteboard::unique();
+        write_only(&pasteboard, "com.apple.flat-rtfd", &rtfd);
+        assert_eq!(
+            pasteboard.read(),
+            Some(ClipboardItem::new_string(
+                "Hello rich w\u{f6}rld".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_plain_text_wins_over_rich_text() {
+        let pasteboard = Pasteboard::unique();
+        write_only(&pasteboard, "public.rtf", RTF);
+        unsafe {
+            pasteboard
+                .inner
+                .addTypes_owner(&NSArray::from_slice(&[NSPasteboardTypeString]), None);
+            pasteboard
+                .inner
+                .setData_forType(Some(&NSData::with_bytes(b"plain")), NSPasteboardTypeString);
+        }
+        assert_eq!(
+            pasteboard.read(),
+            Some(ClipboardItem::new_string("plain".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_html_only_is_not_imported_off_the_main_thread() {
+        assert!(MainThreadMarker::new().is_none());
+        let pasteboard = Pasteboard::unique();
+        write_only(&pasteboard, "public.html", b"<p>Hello <b>html</b></p>");
+        let started = std::time::Instant::now();
+        assert_eq!(pasteboard.read(), None);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 
     #[test]

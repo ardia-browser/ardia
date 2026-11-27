@@ -18,7 +18,7 @@ impl Tx<'_> {
                     && self.s.tabs.get(*t).is_some_and(|t| {
                         t.window_id == first.window_id
                             && t.profile_id == first.profile_id
-                            && t.pin.is_none()
+                            && t.pin.as_ref().is_none_or(TabPin::is_row)
                     })
             })
             .cloned()
@@ -26,6 +26,7 @@ impl Tx<'_> {
         if members.is_empty() {
             return Err(ActionError::Invalid("pinned tabs can't join a group"));
         }
+        let had_rows = self.house_pinned_rows(&members);
         if first.profile_id.is_incognito() && false {
             return Err(ActionError::Invalid("unreachable"));
         }
@@ -57,6 +58,7 @@ impl Tx<'_> {
             group.parent_id = Some(parent.id.clone());
             group.pinned = parent.pinned;
         } else {
+            group.pinned = had_rows;
             let gone: HashSet<TabId> = members.iter().cloned().collect();
             let left = groups::leave_groups(&self.s.groups, &gone);
             if left != *self.s.groups {
@@ -79,7 +81,238 @@ impl Tx<'_> {
         Ok(id)
     }
 
+    fn house_pinned_rows(&mut self, tabs: &[TabId]) -> bool {
+        let rows: Vec<TabId> = tabs
+            .iter()
+            .filter(|t| {
+                self.s
+                    .tabs
+                    .get(*t)
+                    .and_then(|t| t.pin.as_ref())
+                    .is_some_and(TabPin::is_row)
+            })
+            .cloned()
+            .collect();
+        for id in &rows {
+            if let Some(t) = self.tab_mut(id) {
+                let home = t.pin_home().to_owned();
+                t.pin = None;
+                t.pinned_url = Some(home).filter(|h| !h.is_empty());
+            }
+        }
+        !rows.is_empty()
+    }
+
     pub(super) fn close_group(&mut self, group: &GroupId) -> Result<(), ActionError> {
+        self.close_or_delete_group(group, false)
+    }
+
+    pub(super) fn delete_group(&mut self, group: &GroupId) -> Result<(), ActionError> {
+        self.close_or_delete_group(group, true)
+    }
+
+    pub(super) fn duplicate_group(&mut self, group: &GroupId) -> Result<GroupId, ActionError> {
+        let g = self
+            .s
+            .groups
+            .get(group)
+            .cloned()
+            .ok_or_else(|| ActionError::NoGroup(group.to_string()))?;
+        let window = g.window_id.clone();
+        let after = self
+            .s
+            .windows
+            .get(&window)
+            .and_then(|w| {
+                g.tab_ids
+                    .last()
+                    .and_then(|last| w.tab_ids.iter().position(|t| t == last))
+            })
+            .map_or(0, |i| i + 1);
+        let originals: Vec<(TabId, TabSnapshot)> = g
+            .tab_ids
+            .iter()
+            .filter_map(|t| self.s.tabs.get(t))
+            .map(|t| {
+                (
+                    t.id.clone(),
+                    TabSnapshot {
+                        pin: None,
+                        last_active_at: None,
+                        ..t.snapshot()
+                    },
+                )
+            })
+            .collect();
+        #[expect(
+            clippy::needless_collect,
+            reason = "originals is consumed by the loop below before sources is zipped"
+        )]
+        let sources: Vec<TabId> = originals.iter().map(|(id, _)| id.clone()).collect();
+        let mut copies = Vec::with_capacity(originals.len());
+        for (offset, (_, snapshot)) in originals.into_iter().enumerate() {
+            let id = self.new_tab(
+                &window,
+                NewTab {
+                    index: Some(after + offset),
+                    background: true,
+                    ..NewTab::restoring(snapshot)
+                },
+            )?;
+            if let Some(t) = self.tab_mut(&id) {
+                t.page = TabPage::LOADED;
+            }
+            copies.push(id);
+        }
+        if copies.is_empty() {
+            return Err(ActionError::Invalid("the group has no tabs"));
+        }
+        let copy = self.create_group(&copies, &g.name)?;
+        if let Some(made) = Arc::make_mut(&mut self.s.groups).get_mut(&copy) {
+            let made = Arc::make_mut(made);
+            made.icon = g.icon.clone();
+            made.color = g.color;
+            made.pinned = g.pinned;
+            if made.parent_id.is_none() {
+                made.parent_id = g.parent_id.clone();
+            }
+        }
+        if let Some(parent) = g.parent_id.as_ref() {
+            let parent = parent.clone();
+            let _ = self.add_to_group(parent, copies.clone());
+        }
+        let copied: HashMap<TabId, TabId> =
+            sources.into_iter().zip(copies.iter().cloned()).collect();
+        let mut parents: HashMap<GroupId, GroupId> = HashMap::from([(g.id.clone(), copy.clone())]);
+        for nested in groups::descendants(&self.s.groups, g.id.as_str()) {
+            let Some(original) = self.s.groups.get(&nested).cloned() else {
+                continue;
+            };
+            let members: Vec<TabId> = original
+                .tab_ids
+                .iter()
+                .filter_map(|t| copied.get(t).cloned())
+                .collect();
+            let Some(parent) = original
+                .parent_id
+                .as_ref()
+                .and_then(|p| parents.get(p).cloned())
+            else {
+                continue;
+            };
+            if members.is_empty() {
+                continue;
+            }
+            let id = self.ids.group();
+            let mut made = TabGroup::new(
+                id.clone(),
+                window.clone(),
+                original.profile_id.clone(),
+                members,
+                self.now,
+            );
+            made.name = original.name.clone();
+            made.icon = original.icon.clone();
+            made.color = original.color;
+            made.collapsed = original.collapsed;
+            made.pinned = original.pinned;
+            made.parent_id = Some(parent);
+            Arc::make_mut(&mut self.s.groups).insert(id.clone(), Arc::new(made));
+            push_unique(&mut self.out.changes.groups, &id);
+            parents.insert(nested, id);
+        }
+        self.out.changes.note(Topics::GROUPS, false);
+        push_unique(&mut self.out.changes.groups, &copy);
+        self.out.group = Some(copy.clone());
+        Ok(copy)
+    }
+
+    pub(super) fn move_group_to_window(
+        &mut self,
+        group: &GroupId,
+        window: &WindowId,
+    ) -> Result<(), ActionError> {
+        let g = self
+            .s
+            .groups
+            .get(group)
+            .cloned()
+            .ok_or_else(|| ActionError::NoGroup(group.to_string()))?;
+        if g.window_id == *window {
+            return Ok(());
+        }
+        self.require_window(window)?;
+        let mut family: Vec<Arc<TabGroup>> = vec![Arc::clone(&g)];
+        family.extend(
+            groups::descendants(&self.s.groups, g.id.as_str())
+                .iter()
+                .filter_map(|id| self.s.groups.get(id).cloned()),
+        );
+        let tabs = g.tab_ids.clone();
+        for tab in &tabs {
+            self.move_tab(tab, window, usize::MAX)?;
+        }
+        let groups = Arc::make_mut(&mut self.s.groups);
+        for member in family {
+            let mut moved = (*member).clone();
+            moved.window_id = window.clone();
+            if moved.id == g.id {
+                moved.parent_id = None;
+            }
+            moved.tab_ids.retain(|t| tabs.contains(t));
+            push_unique(&mut self.out.changes.groups, &moved.id);
+            groups.insert(moved.id.clone(), Arc::new(moved));
+        }
+        self.out.changes.note(Topics::GROUPS, false);
+        if let Some(w) = self.window_mut(window) {
+            w.tab_ids = groups::place_block(&w.tab_ids, &tabs);
+        }
+        self.reorder_window(window);
+        Ok(())
+    }
+
+    pub(super) fn new_nested_group(&mut self, parent: &GroupId) -> Result<GroupId, ActionError> {
+        let p = self
+            .s
+            .groups
+            .get(parent)
+            .cloned()
+            .ok_or_else(|| ActionError::NoGroup(parent.to_string()))?;
+        let index = self
+            .s
+            .windows
+            .get(&p.window_id)
+            .and_then(|w| {
+                p.tab_ids
+                    .last()
+                    .and_then(|last| w.tab_ids.iter().position(|t| t == last))
+            })
+            .map(|i| i + 1);
+        let tab = self.new_tab(
+            &p.window_id,
+            NewTab {
+                profile: Some(p.profile_id.clone()),
+                index,
+                ..NewTab::default()
+            },
+        )?;
+        self.add_to_group(parent.clone(), vec![tab.clone()])?;
+        let child = self.create_group(std::slice::from_ref(&tab), "")?;
+        if let Some(made) = Arc::make_mut(&mut self.s.groups).get_mut(&child) {
+            let made = Arc::make_mut(made);
+            made.parent_id = Some(parent.clone());
+            made.pinned = p.pinned;
+        }
+        if let Some(opened) = Arc::make_mut(&mut self.s.groups).get_mut(parent) {
+            Arc::make_mut(opened).collapsed = false;
+        }
+        self.activate(&tab);
+        push_unique(&mut self.out.changes.groups, parent);
+        self.out.group = Some(child.clone());
+        Ok(child)
+    }
+
+    fn close_or_delete_group(&mut self, group: &GroupId, deleted: bool) -> Result<(), ActionError> {
         let mut g = self
             .s
             .groups
@@ -159,7 +392,11 @@ impl Tx<'_> {
                 closed_at: self.now,
                 extra: Default::default(),
             };
-            self.closed_mut().push_group(entry);
+            if deleted {
+                self.closed_mut().deleted_groups.push(entry);
+            } else {
+                self.closed_mut().push_group(entry);
+            }
         }
         let members = g.tab_ids.clone();
         if let Some(w) = self.s.windows.get(&g.window_id).cloned() {
@@ -346,6 +583,9 @@ impl Tx<'_> {
         if let Some(collapsed) = patch.collapsed {
             g.collapsed = collapsed;
         }
+        if let Some(shown) = patch.shown_tab_ids {
+            g.shown_tab_ids = (!shown.is_empty()).then_some(shown);
+        }
         let window = g.window_id.clone();
         if let Some(pinned) = patch.pinned {
             let root =
@@ -382,11 +622,13 @@ impl Tx<'_> {
                     && self.s.tabs.get(t).is_some_and(|tab| {
                         tab.window_id == g.window_id
                             && tab.profile_id == g.profile_id
-                            && tab.pin.is_none()
+                            && (tab.pin.is_none()
+                                || (g.pinned && tab.pin.as_ref().is_some_and(TabPin::is_row)))
                     })
                     && !g.tab_ids.contains(t)
             })
             .collect();
+        self.house_pinned_rows(&joining);
         let mut next = groups::leave_groups(&self.s.groups, &joining.iter().cloned().collect());
         let Some(target) = next.get_mut(&group) else {
             return Err(ActionError::NoGroup(group.to_string()));

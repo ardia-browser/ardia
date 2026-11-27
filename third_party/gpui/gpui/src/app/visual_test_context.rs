@@ -383,7 +383,7 @@ impl VisualTestAppContext {
     /// which does not require the window to be visible on screen.
     #[cfg(any(test, feature = "test-support"))]
     pub fn capture_screenshot(&mut self, window: AnyWindowHandle) -> Result<RgbaImage> {
-        self.update_window(window, |_, window, _cx| window.render_to_image())?
+        self.update_window(window, |_, window, _cx| window.render_to_image(1.))?
     }
 
     /// Waits for animations to complete by waiting a couple of frames.

@@ -7,6 +7,7 @@ publish.workspace = true
 build = "build.rs"
 
 [dependencies]
+ardia-profile.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -37,3 +38,6 @@ harness = false
 name = "appkit_main_thread"
 path = "tests/appkit_main_thread.rs"
 harness = false
+
+[lints]
+workspace = true

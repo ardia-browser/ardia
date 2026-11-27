@@ -82,6 +82,7 @@ pub struct TabLive {
     pub prompts: Vec<SitePrompt>,
     pub find: FindState,
     pub peek: bool,
+    pub fullscreen: bool,
     pub navigation: Option<String>,
 }
 
@@ -178,6 +179,14 @@ pub struct Tab {
     pub live: TabLive,
     #[serde(flatten)]
     pub extra: Fields,
+}
+
+pub fn same_page_key(a: &str, b: &str) -> bool {
+    let key = |url: &str| {
+        let page = url.split_once('#').map_or(url, |(page, _)| page);
+        page.strip_suffix('/').unwrap_or(page).to_owned()
+    };
+    key(a) == key(b)
 }
 
 pub fn single_line(text: &str) -> String {
@@ -305,12 +314,12 @@ impl Tab {
     }
 
     pub fn own_title(&self) -> String {
-        single_line(
-            self.custom_title
-                .as_deref()
-                .filter(|t| !t.is_empty())
-                .unwrap_or(&self.title),
-        )
+        let title = match self.custom_title.as_deref().filter(|t| !t.is_empty()) {
+            Some(custom) => custom,
+            None if is_placeholder_title(&self.title, &self.url) => "",
+            None => &self.title,
+        };
+        single_line(title)
     }
 
     pub fn display_title(&self) -> String {
@@ -464,6 +473,17 @@ impl TabSnapshot {
     }
 }
 
+pub const BLANK_ADDRESS: &str = "about:blank";
+pub const NEW_TAB_ADDRESS: &str = "ardia://newtab";
+
+pub fn is_blank_address(url: &str) -> bool {
+    url.is_empty() || url == BLANK_ADDRESS
+}
+
+pub fn is_placeholder_title(title: &str, url: &str) -> bool {
+    title == BLANK_ADDRESS && (is_blank_address(url) || url.eq_ignore_ascii_case(NEW_TAB_ADDRESS))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -476,6 +496,32 @@ mod tests {
             "pin": {"as": "tile"}, "pinnedUrl": "https://mail.example/", "profileId": "default", "restoredAt": 1795624452665u64,
             "title": "Inbox", "url": "https://mail.example/inbox", "windowId": "w-mwwc6vmmx98j-2p", "zoom": 1
         })
+    }
+
+    #[test]
+    fn a_blank_page_title_never_shows_on_a_new_tab() {
+        let titled = |url: &str, title: &str| {
+            let mut tab = Tab::new(
+                TabId::new("t"),
+                WindowId::new("w"),
+                ProfileId::default_profile(),
+                url,
+                0,
+            );
+            tab.title = title.into();
+            tab
+        };
+        for url in ["", "about:blank", "ardia://newtab"] {
+            assert_eq!(titled(url, "about:blank").own_title(), "", "{url}");
+        }
+        assert_eq!(titled("", "about:blank").display_title(), "New Tab");
+        assert_eq!(
+            titled("https://example.com/", "about:blank").own_title(),
+            "about:blank"
+        );
+        assert!(is_blank_address(""));
+        assert!(is_blank_address("about:blank"));
+        assert!(!is_blank_address("https://example.com/"));
     }
 
     #[test]

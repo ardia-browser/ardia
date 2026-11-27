@@ -223,6 +223,11 @@ impl<Callback: 'static> SingleSubscriberSet<Callback> {
         })
     }
 
+    /// Whether the set holds no subscriptions.
+    pub fn is_empty(&self) -> bool {
+        self.0.borrow().subscribers.is_empty()
+    }
+
     /// Removes all subscriptions and returns the active callbacks in registration order.
     pub fn remove(&self) -> impl IntoIterator<Item = Callback> + use<Callback> {
         let subscribers = mem::take(&mut self.0.borrow_mut().subscribers);

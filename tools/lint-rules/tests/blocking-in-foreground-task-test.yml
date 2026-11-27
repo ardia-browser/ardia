@@ -1,0 +1,22 @@
+id: blocking-in-foreground-task
+valid:
+  - |
+    fn load(cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let bytes = cx.background_spawn(async move { std::fs::read("x") }).await;
+            this.update(cx, |v, cx| { v.bytes = bytes.ok(); cx.notify(); })
+        }).detach();
+    }
+  - "fn load() { std::thread::spawn(|| std::fs::read(\"x\")); }"
+invalid:
+  - |
+    fn load(cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let bytes = std::fs::read("x");
+            this.update(cx, |v, cx| { v.bytes = bytes.ok(); cx.notify(); })
+        }).detach();
+    }
+  - |
+    fn wait(window: &mut Window, cx: &mut App) {
+        window.spawn(cx, async move |cx| { let answer = replies.recv(); }).detach();
+    }

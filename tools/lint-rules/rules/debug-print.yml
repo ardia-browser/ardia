@@ -1,0 +1,30 @@
+id: debug-print
+language: rust
+severity: error
+message: "println!/eprintln!/dbg! left in app code; use log::{debug,info,warn} so it reaches the log file"
+note: "Allowed on purpose: the ardia-shell-migration and ardia-plugins command-line mains, boot.rs (--help/--version output) and instance.rs (the second-launch message for the terminal) print for a person at a shell; webkit/native_audit.rs is compiled for tests only (cfg(test) in webkit/mod.rs). Tests, build scripts (cargo directives) and benches are not flagged."
+files:
+  - crates/**/src/**/*.rs
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+  - crates/**/build.rs
+  - crates/core/ardia-shell-migration/src/main.rs
+  - crates/plugins/integration/src/main.rs
+  - crates/ardia-app/src/boot.rs
+  - crates/ardia-app/src/instance.rs
+  - crates/ardia-app/src/webkit/native_audit.rs
+rule:
+  all:
+    - any:
+        - pattern: println!($$$)
+        - pattern: eprintln!($$$)
+        - pattern: dbg!($$$)
+        - pattern: print!($$$)
+        - pattern: eprint!($$$)
+    - not:
+        matches: in-test-code

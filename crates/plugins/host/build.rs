@@ -17,7 +17,7 @@ fn swift_source() -> PathBuf {
         return PathBuf::from(path);
     }
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    manifest.join("../../../shell/plugin-host/HostPrelude.swift")
+    manifest.join("prelude/HostPrelude.swift")
 }
 
 fn extract(swift: &str) -> Result<String, String> {

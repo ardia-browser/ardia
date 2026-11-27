@@ -113,6 +113,14 @@ fn serialize_theme<S: Serializer>(
     }
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde serialize_with hands the field over by reference"
+)]
+fn serialize_cleared_theme<S: Serializer>(_: &bool, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_unit()
+}
+
 fn serialize_seen_theme<S: Serializer>(
     theme: &Option<Option<Arc<ProfileTheme>>>,
     serializer: S,
@@ -152,6 +160,13 @@ pub struct Profile {
         deserialize_with = "lenient_theme"
     )]
     pub theme: Option<Arc<ProfileTheme>>,
+    #[serde(
+        rename = "theme",
+        skip_deserializing,
+        skip_serializing_if = "json::is_false",
+        serialize_with = "serialize_cleared_theme"
+    )]
+    pub theme_cleared: bool,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -217,6 +232,7 @@ impl Profile {
             created_at,
             data_id: None,
             theme: None,
+            theme_cleared: false,
             preset_themes: Some(IndexMap::new()),
             seen_theme: Some(None),
             seen_color: Some(ColorChoice::Preset(color)),

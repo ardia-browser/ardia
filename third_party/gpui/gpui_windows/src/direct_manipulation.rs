@@ -176,6 +176,7 @@ impl DirectManipulationEventHandler {
                         modifiers,
                         touch_phase: TouchPhase::Ended,
                         source: ScrollSource::Pointer,
+                        ..Default::default()
                     }));
             }
             GestureKind::Pinch => {
@@ -186,6 +187,7 @@ impl DirectManipulationEventHandler {
                         delta: 0.0,
                         modifiers,
                         phase: TouchPhase::Ended,
+                        ..Default::default()
                     }));
             }
             GestureKind::None => {}
@@ -310,6 +312,7 @@ impl IDirectManipulationViewportEventHandler_Impl for DirectManipulationEventHan
                         delta: 0.0,
                         modifiers,
                         phase: TouchPhase::Started,
+                        ..Default::default()
                     }));
             }
         } else if self.gesture_kind.get() == GestureKind::None {
@@ -331,6 +334,7 @@ impl IDirectManipulationViewportEventHandler_Impl for DirectManipulationEventHan
                         modifiers,
                         touch_phase,
                         source: ScrollSource::Pointer,
+                        ..Default::default()
                     }));
             }
             GestureKind::Pinch => {
@@ -342,6 +346,7 @@ impl IDirectManipulationViewportEventHandler_Impl for DirectManipulationEventHan
                         delta: scale_delta - 1.0,
                         modifiers,
                         phase: TouchPhase::Moved,
+                        ..Default::default()
                     }));
             }
             GestureKind::None => {}

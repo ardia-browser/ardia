@@ -1,0 +1,9 @@
+id: missing-notify
+valid:
+  - "fn f(cx: &mut App) { view.update(cx, |view, cx| { view.open = true; cx.notify(); }); }"
+  - "fn f(cx: &mut App) { held.update(cx, |held, _| { held.target = None; }); }"
+  - "fn f(cx: &mut App) { view.update(cx, |view, cx| { view.open = true; cx.emit(Opened); }); }"
+  - "fn f(cx: &mut AsyncApp) { cx.update(|window, cx| { state.open = true; }); }"
+invalid:
+  - "fn f(cx: &mut App) { view.update(cx, |view, cx| { view.open = true; }); }"
+  - "fn f(cx: &mut App) { self.ui.update(cx, |ui, cx| { if ui.hover { ui.pressed = false; } }); }"

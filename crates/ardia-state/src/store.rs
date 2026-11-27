@@ -100,7 +100,7 @@ struct SaveQueue {
 }
 
 struct Shared {
-    state: RwLock<Arc<BrowserState>>,
+    state: ardia_profile::strict::RwLock<Arc<BrowserState>>,
     revision: AtomicU64,
     ids: IdGen,
     listeners: RwLock<Listeners>,
@@ -165,7 +165,7 @@ pub fn load_state(
 impl BrowserStore {
     fn with_shared(state: BrowserState, ids: IdGen, persists: bool) -> Arc<Shared> {
         Arc::new(Shared {
-            state: RwLock::new(Arc::new(state)),
+            state: ardia_profile::strict::RwLock::new(Arc::new(state)),
             revision: AtomicU64::new(0),
             ids,
             listeners: RwLock::new(Listeners::default()),
@@ -494,6 +494,7 @@ fn save_until_shutdown(shared: &Shared, mut files: SessionFiles) {
         let failed = if dirty.any() {
             let state = Arc::clone(&shared.state.read());
             let saved = catch_unwind(AssertUnwindSafe(|| {
+                let _span = ardia_profile::span(ardia_profile::Span::SessionSave);
                 save_dirty(&dir, &mut files, &state, dirty, now_ms())
             }));
             let (failed, error) =

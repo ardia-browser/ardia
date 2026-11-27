@@ -1,6 +1,14 @@
+use crate::icon_picker::symbols::SymbolWeight;
+pub use crate::primitives::symbol_glyphs::symbol_fit;
+use crate::primitives::symbol_glyphs::{
+    SymbolGlyph, SymbolRaster, drawn_symbol_name, fitted_symbol_glyph, glyph_bounds,
+};
+use crate::scale::px;
+use std::time::Duration;
+
 use gpui::{
     App, Bounds, Element, ElementId, GlobalElementId, Hsla, InspectorElementId, LayoutId, Pixels,
-    SharedString, Style, TransformationMatrix, Window, px, size,
+    SharedString, Style, TimedTransformation, Transformation, TransformationMatrix, Window, size,
 };
 
 macro_rules! glyph {
@@ -54,6 +62,8 @@ icons! {
     Bookmark => "bookmark", "<path d=\"M4.25 2.25h7.5v11.5L8 11l-3.75 2.75Z\"/>";
     Split => "rectangle.split.2x1", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M8 2.75v10.5\"/>";
     Reader => "text.justify", "<path d=\"M3 4h10M3 7h10M3 10h10M3 13h6\"/>";
+    TextFormat => "textformat", "<path d=\"M1.75 12.75 4.6 5.75l2.85 7M2.8 10.25h3.6M8.25 12.75 11.4 3.25l3.1 9.5M9.4 9.5h4.1\"/>";
+    DocPlaintext => "doc.plaintext", "<rect x=\"3\" y=\"1\" width=\"10\" height=\"14\" rx=\"2\"/><path d=\"M5.5 4.75h5M5.5 7.5h5M5.5 10.25h3\"/>";
     Sliders => "slider.horizontal.3", "<path d=\"M2 4h1.75M7.25 4H14M2 8h6.25M11.75 8H14M2 12h2.75M8.25 12H14\"/><circle cx=\"5.5\" cy=\"4\" r=\"1.75\"/><circle cx=\"10\" cy=\"8\" r=\"1.75\"/><circle cx=\"6.5\" cy=\"12\" r=\"1.75\"/>";
     Speaker => "speaker.wave.2", "<path d=\"M2.5 6h2.25L8 3.25v9.5L4.75 10H2.5Z\"/><path d=\"M10.5 5.75a3 3 0 0 1 0 4.5M12.5 3.75a6 6 0 0 1 0 8.5\"/>";
     SpeakerSlash => "speaker.slash", "<path d=\"M2.5 6h2.25L8 3.25v9.5L4.75 10H2.5Z\"/><path d=\"M10.25 6l4 4M14.25 6l-4 4\"/>";
@@ -71,14 +81,21 @@ icons! {
     Warning => "exclamationmark.triangle", "<path d=\"M8 2.25 14.25 13.25H1.75Z\"/><path d=\"M8 6.25v3.25M8 11.4v.1\"/>";
     Pin => "pin", "<path d=\"M5.75 2.25h4.5M6.75 2.25v4L4.5 9h7l-2.25-2.75v-4M8 9v4.75\"/>";
     Incognito => "eyeglasses", "<circle cx=\"4.5\" cy=\"9.5\" r=\"2.5\"/><circle cx=\"11.5\" cy=\"9.5\" r=\"2.5\"/><path d=\"M7 9.25c.65-.5 1.35-.5 2 0M2 9.25 3 5.5M14 9.25 13 5.5\"/>";
-    ArdiaMark => "ardia.mark", "<circle cx=\"8\" cy=\"4.6\" r=\"2.6\" fill=\"#000\" stroke=\"none\"/><path d=\"M1.5 14.5V11c3.2-.4 6-2.2 8.2-4.3 1.7-1.6 4.8-1.2 4.8 2.3v5.5Z\" fill=\"#000\" stroke=\"none\"/>";
+    ArdiaMark => "ardia.mark", "<circle cx=\"7.75\" cy=\"2.75\" r=\"2.75\" fill=\"#000\" stroke=\"none\"/><path d=\"M.5 11.25V8C.5 6.5 1.5 5.5 3 5.5S6 6.5 7.5 8Z\" fill=\"#000\" stroke=\"none\"/><path d=\"M.5 12.25 10 6c.75-.5 1.5-.6 2.5-.5 1.75.25 3 1 3 2.5v4.5c0 1.5-1 2.5-2.5 2.5H3c-1.5 0-2.5-1-2.5-2Z\" fill=\"#000\" stroke=\"none\"/>";
     Mic => "mic", "<rect x=\"5.75\" y=\"1.75\" width=\"4.5\" height=\"7.5\" rx=\"2.25\"/><path d=\"M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.25\"/>";
     ArrowUp => "arrow.up", "<path d=\"M8 13V3.25M3.75 7.5 8 3.25l4.25 4.25\"/>";
+    ArrowDown => "arrow.down", "<path d=\"M8 3v9.75M3.75 8.5 8 12.75l4.25-4.25\"/>";
+    MoonZzz => "moon.zzz", "<path d=\"M10.25 9.9A5 5 0 0 1 5.6 3.25a5 5 0 1 0 4.65 6.65Z\"/><path d=\"M10 2.25h3l-3 3.5h3\"/>";
     Return => "return", "<path d=\"M13 3.5v3.75A1.75 1.75 0 0 1 11.25 9H3.5M6.25 6 3.25 9l3 3\"/>";
     Link => "link", "<path d=\"M7 9a3 3 0 0 0 4.24 0l2-2a3 3 0 0 0-4.24-4.24l-.75.75M9 7a3 3 0 0 0-4.24 0l-2 2a3 3 0 0 0 4.24 4.24l.75-.75\"/>";
     Share => "square.and.arrow.up", "<path d=\"M8 1.75v8M5 4.5l3-3 3 3M5.25 6.5h-1A1.25 1.25 0 0 0 3 7.75v5A1.25 1.25 0 0 0 4.25 14h7.5A1.25 1.25 0 0 0 13 12.75v-5a1.25 1.25 0 0 0-1.25-1.25h-1\"/>";
     Ellipsis => "ellipsis", "<circle cx=\"3.5\" cy=\"8\" r=\"1.15\" fill=\"#000\" stroke=\"none\"/><circle cx=\"8\" cy=\"8\" r=\"1.15\" fill=\"#000\" stroke=\"none\"/><circle cx=\"12.5\" cy=\"8\" r=\"1.15\" fill=\"#000\" stroke=\"none\"/>";
+    Tv => "tv", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"8.5\" rx=\"1.5\"/><path d=\"M5.5 13.75h5M8 11.25v2.5\"/>";
+    Display => "display", "<rect x=\"1.75\" y=\"2.25\" width=\"12.5\" height=\"8.75\" rx=\"1.25\"/><path d=\"M6.25 11v2.75M9.75 11v2.75M4.75 13.75h6.5\"/>";
     Person => "person", "<circle cx=\"8\" cy=\"5.25\" r=\"2.75\"/><path d=\"M2.75 14a5.25 5.25 0 0 1 10.5 0\"/>";
+    PersonPair => "person.2.fill", "<circle cx=\"6\" cy=\"5.5\" r=\"2.25\" fill=\"#000\"/><circle cx=\"11\" cy=\"6\" r=\"1.9\" fill=\"#000\"/><path d=\"M1.75 13.25a4.25 4.25 0 0 1 8.5 0Z\" fill=\"#000\"/><path d=\"M10.75 9.5a3.5 3.5 0 0 1 3.5 3.75h-2.5\" fill=\"#000\"/>";
+    HalfCircle => "circle.lefthalf.filled", "<circle cx=\"8\" cy=\"8\" r=\"6\"/><path d=\"M8 2a6 6 0 0 0 0 12Z\" fill=\"#000\"/>";
+    Wand => "wand.and.rays", "<path d=\"M2.5 13.5 9.5 6.5\"/><path d=\"M11 2v2M11 7v2M8.5 4.5h-2M15 4.5h-2M13 2.5l-1 1M13 6.5l-1-1\"/>";
     Pause => "pause", "<path d=\"M5.5 3.5v9M10.5 3.5v9\"/>";
     Play => "play", "<path d=\"M5 3.25v9.5L12.75 8Z\" fill=\"#000\"/>";
     Camera => "video", "<rect x=\"1.75\" y=\"4.25\" width=\"9\" height=\"7.5\" rx=\"1.75\"/><path d=\"m10.75 7 3.5-2v6l-3.5-2\"/>";
@@ -108,16 +125,85 @@ icons! {
     Command => "command", "<path d=\"M5.25 5.25h5.5v5.5h-5.5ZM5.25 5.25V3.9a1.4 1.4 0 1 0-1.35 1.35h1.35M10.75 5.25h1.35a1.4 1.4 0 1 0-1.35-1.35ZM10.75 10.75v1.35a1.4 1.4 0 1 0 1.35-1.35ZM5.25 10.75H3.9a1.4 1.4 0 1 0 1.35 1.35Z\"/>";
     DevTools => "chevron.left.forwardslash.chevron.right", "<path d=\"M5 4.5 1.75 8 5 11.5M11 4.5 14.25 8 11 11.5M9.25 3 6.75 13\"/>";
     Laptop => "laptopcomputer", "<rect x=\"2.75\" y=\"3.25\" width=\"10.5\" height=\"7.5\" rx=\"1.25\"/><path d=\"M1.25 13h13.5\"/>";
+    Iphone => "iphone", "<rect x=\"4.75\" y=\"1.25\" width=\"6.5\" height=\"13.5\" rx=\"1.5\"/><path d=\"M7 3h2\"/>";
+    DesktopComputer => "desktopcomputer", "<rect x=\"1.75\" y=\"2.25\" width=\"12.5\" height=\"8.75\" rx=\"1.25\"/><path d=\"M8 11v2.75M5.25 13.75h5.5\"/>";
+    MacbookAndIphone => "macbook.and.iphone", "<rect x=\"1.75\" y=\"3.25\" width=\"8.5\" height=\"6.5\" rx=\"1\"/><path d=\"M0.75 12h8.5\"/><rect x=\"11.25\" y=\"5.25\" width=\"4\" height=\"7.5\" rx=\"1\"/>";
+    PersonTwo => "person.2", "<circle cx=\"6\" cy=\"5.5\" r=\"2.25\"/><circle cx=\"11\" cy=\"6\" r=\"1.9\"/><path d=\"M1.75 13.25a4.25 4.25 0 0 1 8.5 0\"/><path d=\"M10.75 9.5a3.5 3.5 0 0 1 3.5 3.75\"/>";
+    PersonBadgePlus => "person.crop.circle.badge.plus", "<circle cx=\"7\" cy=\"8.5\" r=\"5.75\"/><circle cx=\"7\" cy=\"7.25\" r=\"2\"/><path d=\"M3.5 12.5a4 4 0 0 1 7 0\"/><path d=\"M13 1.5v4M11 3.5h4\"/>";
+    IcloudSlash => "icloud.slash", "<path d=\"M4.5 12.5h7a3 3 0 0 0 .4-6a4 4 0 0 0-7.6 1A2.5 2.5 0 0 0 4.5 12.5Z\"/><path d=\"M2 2l12 12\"/>";
     Grid => "square.grid.2x2", "<rect x=\"2\" y=\"2\" width=\"5\" height=\"5\" rx=\"1.25\"/><rect x=\"9\" y=\"2\" width=\"5\" height=\"5\" rx=\"1.25\"/><rect x=\"2\" y=\"9\" width=\"5\" height=\"5\" rx=\"1.25\"/><rect x=\"9\" y=\"9\" width=\"5\" height=\"5\" rx=\"1.25\"/>";
     TopStrip => "menubar.rectangle", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M1.75 6h12.5M5 4.4h.01M7.5 4.4h.01\"/>";
     SidebarRight => "sidebar.right", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2.5\"/><path d=\"M10 2.75v10.5M11.5 5.4h.9M11.5 7.4h.9\"/>";
+    BookmarkFill => "bookmark.fill", "<path d=\"M4.25 2.25h7.5v11.5L8 11l-3.75 2.75Z\" fill=\"#000\"/>";
+    ZoomIn => "plus.magnifyingglass", "<circle cx=\"7\" cy=\"7\" r=\"4.75\"/><path d=\"M10.5 10.5 14 14M7 4.9v4.2M4.9 7h4.2\"/>";
+    ZoomOut => "minus.magnifyingglass", "<circle cx=\"7\" cy=\"7\" r=\"4.75\"/><path d=\"M10.5 10.5 14 14M4.9 7h4.2\"/>";
+    LockWarning => "lock.open.trianglebadge.exclamationmark.fill", "<path d=\"M3.5 7h6.25a1.5 1.5 0 0 1 1.5 1.5v.5L8.5 14.25H3.5A1.5 1.5 0 0 1 2 12.75V8.5A1.5 1.5 0 0 1 3.5 7Z\" fill=\"#000\" stroke=\"none\"/><path d=\"M4.25 7V4.75a2.75 2.75 0 0 1 5.4-.75\"/><path d=\"M12.25 8.75 15 14.25H9.5Z\" fill=\"#000\" stroke=\"none\"/>";
+    PopupBlocked => "macwindow.badge.plus", "<path d=\"M9 13.25H3.75a2 2 0 0 1-2-2v-6.5a2 2 0 0 1 2-2h8.5a2 2 0 0 1 2 2V8.5M1.75 5.75h12.5M12.5 10.5v4M10.5 12.5h4\"/>";
+    TvMedia => "tv.and.mediabox.fill", "<rect x=\"1.25\" y=\"2.5\" width=\"10.5\" height=\"8\" rx=\"1.5\" fill=\"#000\" stroke=\"none\"/><path d=\"M4.5 13h4.25\"/><rect x=\"12.5\" y=\"5.5\" width=\"2.5\" height=\"8\" rx=\".75\" fill=\"#000\" stroke=\"none\"/>";
+    PuzzleExtension => "puzzlepiece.extension", "<path d=\"M2.75 5.25H5.5a1.5 1.5 0 1 1 3 0h2.25V7.5a1.5 1.5 0 1 1 0 3v2.75h-8v-2.5a1.5 1.5 0 1 0 0-3Z\"/>";
     Dot => "circle.fill", "<circle cx=\"8\" cy=\"8\" r=\"3\" fill=\"#000\" stroke=\"none\"/>";
+    TvAndMediabox => "tv.and.mediabox", "<rect x=\"1.25\" y=\"2.5\" width=\"10.5\" height=\"7.5\" rx=\"1.25\"/><path d=\"M4.25 12.75h4.5\"/><rect x=\"12.75\" y=\"5.25\" width=\"2.25\" height=\"7.5\" rx=\"0.75\"/>";
+    HifiSpeaker => "hifispeaker", "<rect x=\"4\" y=\"1.75\" width=\"8\" height=\"12.5\" rx=\"1.75\"/><circle cx=\"8\" cy=\"9.75\" r=\"2.25\"/><circle cx=\"8\" cy=\"4.6\" r=\"0.9\"/>";
+    HifiSpeakers => "hifispeaker.2", "<rect x=\"1.75\" y=\"3\" width=\"6.5\" height=\"11\" rx=\"1.5\"/><circle cx=\"5\" cy=\"10\" r=\"1.8\"/><path d=\"M9.75 3h3a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-3\"/>";
+    PinSlash => "pin.slash", "<path d=\"M5.75 2.25h4.5M6.75 2.25v4L4.5 9h7l-2.25-2.75v-4M8 9v4.75M2.5 2.5l11 11\"/>";
+    PinFill => "pin.fill", "<path d=\"M5.75 2.25h4.5M6.75 2.25v4L4.5 9h7l-2.25-2.75v-4Z\" fill=\"#000\"/><path d=\"M8 9v4.75\"/>";
+    ChevronUpDown => "chevron.up.chevron.down", "<path d=\"M5 6.25 8 3.25l3 3M5 9.75l3 3 3-3\"/>";
+    CheckCircleFill => "checkmark.circle.fill", "<defs><mask id=\"c\"><rect width=\"16\" height=\"16\" fill=\"#fff\"/><path d=\"M5.25 8.25 7.25 10.25 10.75 6\" stroke=\"#000\" stroke-width=\"1.6\"/></mask></defs><circle cx=\"8\" cy=\"8\" r=\"6.75\" fill=\"#000\" stroke=\"none\" mask=\"url(#c)\"/>";
+    WarningFill => "exclamationmark.triangle.fill", "<defs><mask id=\"w\"><rect width=\"16\" height=\"16\" fill=\"#fff\"/><path d=\"M8 6v3.5M8 11.5v.25\" stroke=\"#000\" stroke-width=\"1.6\"/></mask></defs><path d=\"M8 1.75 14.75 13.75H1.25Z\" fill=\"#000\" mask=\"url(#w)\"/>";
+    ExclamationCircleFill => "exclamationmark.circle.fill", "<defs><mask id=\"x\"><rect width=\"16\" height=\"16\" fill=\"#fff\"/><path d=\"M8 4.75v3.75M8 10.75v.25\" stroke=\"#000\" stroke-width=\"1.6\"/></mask></defs><circle cx=\"8\" cy=\"8\" r=\"6.75\" fill=\"#000\" stroke=\"none\" mask=\"url(#x)\"/>";
+    Clock => "clock", "<circle cx=\"8\" cy=\"8\" r=\"6.25\"/><path d=\"M8 4.5V8l2.5 1.5\"/>";
+    StopCircle => "stop.circle", "<circle cx=\"8\" cy=\"8\" r=\"6.25\"/><rect x=\"5.75\" y=\"5.75\" width=\"4.5\" height=\"4.5\" rx=\"0.75\"/>";
+    ScreenShare => "rectangle.inset.filled", "<rect x=\"1.75\" y=\"3\" width=\"12.5\" height=\"10\" rx=\"1.75\"/><rect x=\"4.25\" y=\"5.5\" width=\"7.5\" height=\"5\" rx=\"0.75\" fill=\"#000\"/>";
+    Expand => "arrow.up.left.and.arrow.down.right", "<path d=\"M2.75 7V2.75H7M2.75 2.75l4.5 4.5M13.25 9v4.25H9M13.25 13.25l-4.5-4.5\"/>";
+    SplitVertical => "rectangle.split.1x2", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M1.75 8h12.5\"/>";
+    SwapVertical => "arrow.up.arrow.down", "<path d=\"M5 13V3M2.75 5.25 5 3l2.25 2.25M11 3v10M8.75 10.75 11 13l2.25-2.25\"/>";
+    SwapHorizontal => "arrow.left.arrow.right", "<path d=\"M3 5h10M10.75 2.75 13 5l-2.25 2.25M13 11H3M5.25 8.75 3 11l2.25 2.25\"/>";
+    HalfLeft => "rectangle.lefthalf.filled", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M3.75 2.75H8v10.5H3.75a2 2 0 0 1-2-2v-6.5a2 2 0 0 1 2-2Z\" fill=\"#000\"/>";
+    HalfRight => "rectangle.righthalf.filled", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M8 2.75h4.25a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2H8Z\" fill=\"#000\"/>";
+    HalfTop => "rectangle.tophalf.filled", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M1.75 8V4.75a2 2 0 0 1 2-2h8.5a2 2 0 0 1 2 2V8Z\" fill=\"#000\"/>";
+    HalfBottom => "rectangle.bottomhalf.filled", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><path d=\"M1.75 8h12.5v3.25a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2Z\" fill=\"#000\"/>";
+    PlusSquareOnSquare => "plus.square.on.square", "<rect x=\"3.75\" y=\"4.75\" width=\"10.5\" height=\"9\" rx=\"1.75\"/><path d=\"M1.75 11V3.75A1.75 1.75 0 0 1 3.5 2h7.25M9 6.75v5M6.5 9.25h5\"/>";
+    ArrowRight => "arrow.right", "<path d=\"M3 8h9.75M8.5 3.75 12.75 8 8.5 12.25\"/>";
+    ArrowUpRight => "arrow.up.right", "<path d=\"M4.5 11.5 11.5 4.5M5.75 4.5h5.75v5.75\"/>";
+    EqualCircle => "equal.circle", "<circle cx=\"8\" cy=\"8\" r=\"6.25\"/><path d=\"M5.5 6.75h5M5.5 9.25h5\"/>";
+    Doc => "doc", "<path d=\"M4.25 1.75h4.75l2.75 2.75v9.75h-7.5Z\"/><path d=\"M9 1.75V4.5h2.75\"/>";
+    Stethoscope => "stethoscope", "<path d=\"M3.5 2v3.5a2.75 2.75 0 0 0 5.5 0V2M6.25 8.25v1.5a3 3 0 0 0 6 0V8\"/><circle cx=\"12.25\" cy=\"6.75\" r=\"1.25\"/>";
+    TextSearch => "text.magnifyingglass", "<path d=\"M2 4h7M2 7h4M2 10h3\"/><circle cx=\"10.5\" cy=\"9.5\" r=\"2.75\"/><path d=\"m12.5 11.5 2 2\"/>";
+    Pencil => "pencil", "<path d=\"M10.75 2.75l2.5 2.5-7.5 7.5-3.25.75.75-3.25Z\"/><path d=\"M9.25 4.25l2.5 2.5\"/>";
+    Photo => "photo", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"10.5\" rx=\"2\"/><circle cx=\"5.5\" cy=\"6.25\" r=\"1.25\"/><path d=\"M1.75 11.5 5.5 8.5l2.5 2 2.75-2.75 3.5 3.25\"/>";
+    EyeSlash => "eye.slash", "<path d=\"M1.5 8s2.4-4.75 6.5-4.75S14.5 8 14.5 8s-2.4 4.75-6.5 4.75S1.5 8 1.5 8Z\"/><circle cx=\"8\" cy=\"8\" r=\"2\"/><path d=\"M2.75 2.75l10.5 10.5\"/>";
+    PersonCropCircle => "person.crop.circle", "<circle cx=\"8\" cy=\"8\" r=\"6.25\"/><circle cx=\"8\" cy=\"6.5\" r=\"2.25\"/><path d=\"M4 12.4a4.6 4.6 0 0 1 8 0\"/>";
+    QuestionCircle => "questionmark.circle", "<circle cx=\"8\" cy=\"8\" r=\"6.25\"/><path d=\"M6.1 6.2a1.95 1.95 0 1 1 2.65 1.85c-.5.2-.75.55-.75 1.05v.4M8 11.1v.1\"/>";
+    LockFill => "lock.fill", "<rect x=\"3.25\" y=\"7\" width=\"9.5\" height=\"7\" rx=\"1.75\" fill=\"#000\"/><path d=\"M5.25 7V5a2.75 2.75 0 0 1 5.5 0v2\"/>";
+    PlayTv => "play.tv", "<rect x=\"1.75\" y=\"2.75\" width=\"12.5\" height=\"9\" rx=\"2\"/><path d=\"M5.5 14h5M6.75 5.25v4l3.25-2Z\"/>";
+    RecordCircle => "record.circle", "<circle cx=\"8\" cy=\"8\" r=\"6.25\"/><circle cx=\"8\" cy=\"8\" r=\"3.25\" fill=\"#000\"/>";
 }
 
 pub struct IconElement {
     icon: Icon,
     size: Pixels,
     color: Hsla,
+    weight: SymbolWeight,
+    centres_ink: bool,
+    symbol: Option<SharedString>,
+    spin: Option<Duration>,
+    fit: Option<(f32, f32)>,
+}
+
+pub const SPINNER_TURN: Duration = Duration::from_millis(1000);
+
+impl Icon {
+    pub fn from_symbol(name: &str) -> Option<Icon> {
+        Icon::ALL
+            .iter()
+            .copied()
+            .find(|glyph| glyph.symbol_name() == name)
+    }
+
+    pub fn symbol_name(self) -> &'static str {
+        let key = self.key();
+        key.strip_prefix("ardia-icon:").unwrap_or(key)
+    }
 }
 
 pub fn icon(icon: Icon, side: f32, color: impl Into<Hsla>) -> IconElement {
@@ -125,6 +211,89 @@ pub fn icon(icon: Icon, side: f32, color: impl Into<Hsla>) -> IconElement {
         icon,
         size: px(side),
         color: color.into(),
+        weight: SymbolWeight::Regular,
+        centres_ink: false,
+        symbol: None,
+        spin: None,
+        fit: None,
+    }
+}
+
+pub fn symbol_icon(
+    name: impl Into<SharedString>,
+    fallback: Icon,
+    side: f32,
+    color: impl Into<Hsla>,
+) -> IconElement {
+    let name = name.into();
+    let mut element = icon(
+        Icon::from_symbol(name.as_ref()).unwrap_or(fallback),
+        side,
+        color,
+    );
+    element.symbol = Some(name);
+    element
+}
+
+impl IconElement {
+    pub fn weight(mut self, weight: SymbolWeight) -> Self {
+        self.weight = weight;
+        self
+    }
+
+    pub fn centres_ink(mut self) -> Self {
+        self.centres_ink = true;
+        self
+    }
+
+    pub fn spinning(mut self, turn: Duration) -> Self {
+        self.spin = Some(turn);
+        self
+    }
+
+    pub fn fit_within(mut self, width: f32, height: f32) -> Self {
+        self.fit = Some((width, height));
+        self
+    }
+
+    fn system_symbol(&self, window: &Window) -> Option<SymbolGlyph> {
+        self.system_symbol_at(window.scale_factor(), 1.0)
+    }
+
+    fn fitted_symbol(&self, window: &Window) -> Option<(SymbolGlyph, f32)> {
+        let glyph = self.system_symbol(window)?;
+        let ratio = self.fit.map_or(1.0, |(width, height)| {
+            symbol_fit(glyph.width, glyph.height, width, height)
+        });
+        if ratio >= 1.0 {
+            return Some((glyph, 1.0));
+        }
+        let small = self.system_symbol_at(window.scale_factor(), ratio)?;
+        Some((
+            SymbolGlyph {
+                ink_offset: (glyph.ink_offset.0 * ratio, glyph.ink_offset.1 * ratio),
+                ..small
+            },
+            ratio,
+        ))
+    }
+
+    fn system_symbol_at(&self, scale: f32, fit: f32) -> Option<SymbolGlyph> {
+        let name = drawn_symbol_name(
+            self.symbol
+                .as_ref()
+                .map_or(self.icon.symbol_name(), |name| name.as_ref()),
+        );
+        fitted_symbol_glyph(
+            &SymbolRaster {
+                name: &name,
+                point_size: f32::from(self.size),
+                weight: self.weight,
+                scale,
+            },
+            fit,
+            gpui::white(),
+        )
     }
 }
 
@@ -179,6 +348,30 @@ impl Element for IconElement {
         if self.color.a <= 0.0 {
             return;
         }
+        if let Some((glyph, _)) = self.fitted_symbol(window) {
+            let placed = glyph_bounds(bounds, &glyph, window.scale_factor(), self.centres_ink);
+            let painted = match self.spin {
+                Some(turn) => window.paint_animated_image_mask(
+                    placed,
+                    glyph.image,
+                    0,
+                    TimedTransformation::rotation(turn, Transformation::default()),
+                    self.color,
+                    cx,
+                ),
+                None => window.paint_image_mask(
+                    placed,
+                    glyph.image,
+                    0,
+                    TransformationMatrix::unit(),
+                    self.color,
+                ),
+            };
+            match painted {
+                Ok(()) => return,
+                Err(error) => log::debug!("symbol {} failed to paint: {error}", self.icon.key()),
+            }
+        }
         let painted = window.paint_svg(
             bounds,
             SharedString::new_static(self.icon.key()),
@@ -195,7 +388,66 @@ impl Element for IconElement {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn symbols_shrink_to_fit_their_frame_like_the_old_symbol_view() {
+        assert_eq!(symbol_fit(16.0, 12.0, 16.0, 10.0), 10.0 / 12.0);
+        assert_eq!(symbol_fit(10.0, 14.0, 16.0, 16.0), 1.0);
+        assert_eq!(symbol_fit(20.0, 10.0, 16.0, 10.0), 0.8);
+        assert_eq!(symbol_fit(0.0, 10.0, 16.0, 10.0), 1.0);
+        let fitted = icon(Icon::PersonPair, 10.0, gpui::black()).fit_within(16.0, 10.0);
+        assert_eq!(fitted.fit, Some((16.0, 10.0)));
+    }
+
+    #[test]
+    fn spinning_icons_turn_once_a_second_by_default() {
+        let spinner = icon(Icon::Reload, 13.0, gpui::black()).spinning(SPINNER_TURN);
+        assert_eq!(spinner.spin, Some(Duration::from_millis(1000)));
+    }
+
+    #[test]
+    fn any_system_symbol_name_draws_with_a_table_fallback() {
+        let known = symbol_icon("doc.plaintext", Icon::Puzzle, 13.0, gpui::black());
+        assert_eq!(known.icon, Icon::DocPlaintext);
+        assert_eq!(known.symbol.as_deref(), Some("doc.plaintext"));
+        let other = symbol_icon("lightbulb", Icon::Puzzle, 13.0, gpui::black());
+        assert_eq!(other.icon, Icon::Puzzle);
+        assert_eq!(other.symbol.as_deref(), Some("lightbulb"));
+    }
+
+    #[test]
+    fn symbols_name_their_icons() {
+        assert_eq!(Icon::from_symbol("doc.plaintext"), Some(Icon::DocPlaintext));
+        assert_eq!(Icon::from_symbol("no.such.symbol"), None);
+        assert_eq!(Icon::SidebarLeft.symbol_name(), "sidebar.left");
+        assert_eq!(Icon::ArdiaMark.symbol_name(), "ardia.mark");
+    }
+
+    #[test]
+    fn icons_draw_regular_until_asked_and_fall_back_to_svg_without_a_renderer() {
+        let plain = icon(Icon::ChevronLeft, 13.0, gpui::black());
+        assert_eq!(plain.weight, SymbolWeight::Regular);
+        assert!(!plain.centres_ink);
+        assert!(plain.spin.is_none());
+        let tuned = plain.weight(SymbolWeight::Medium).centres_ink();
+        assert_eq!(tuned.weight, SymbolWeight::Medium);
+        assert!(tuned.centres_ink);
+        assert!(
+            symbol_glyph(
+                &SymbolRaster {
+                    name: Icon::ChevronLeft.symbol_name(),
+                    point_size: 13.0,
+                    weight: SymbolWeight::Medium,
+                    scale: 2.0,
+                },
+                gpui::black(),
+            )
+            .is_none()
+        );
+    }
+
     use super::*;
+    use crate::primitives::symbol_glyphs::symbol_glyph;
     use std::collections::HashSet;
 
     #[test]

@@ -72,7 +72,7 @@ pub const TAB_CORNERS_MAX: f64 = 20.0;
 pub const MAX_LAUNCH_ACTIONS: usize = 20;
 pub const COMMAND_BAR_START_MAX_TABS: u64 = 50;
 
-const LOCAL_ONLY_KEYS: [&str; 16] = [
+const LOCAL_ONLY_KEYS: [&str; 17] = [
     "cliControl",
     "allowJavaScriptFromAppleEvents",
     "extensionSearchEngines",
@@ -88,6 +88,7 @@ const LOCAL_ONLY_KEYS: [&str; 16] = [
     "engineSwitchKeepsPage",
     "engineSwitchAsksAboutUnsavedWork",
     "engineSwitchCarriesSiteData",
+    "showCliPill",
     "webKitFraudWarnings",
 ];
 
@@ -136,10 +137,18 @@ fn any<T>(_: &T) -> bool {
     true
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "settings validators share the fn(&T) -> bool shape of the settings table"
+)]
 fn positive(v: &f64) -> bool {
     v.is_finite() && *v > 0.0
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "settings validators share the fn(&T) -> bool shape of the settings table"
+)]
 fn fraction(v: &f64) -> bool {
     (0.0..=1.0).contains(v)
 }
@@ -152,6 +161,10 @@ pub fn valid_interface_scale(v: &f64) -> bool {
     (v * 100.0 - percent).abs() < 1e-6 && (80.0..=150.0).contains(&percent) && percent % 5.0 == 0.0
 }
 
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "settings validators share the fn(&T) -> bool shape of the settings table"
+)]
 fn page_frame(v: &f64) -> bool {
     v.fract() == 0.0 && (f64::from(PAGE_FRAME_MIN)..=f64::from(PAGE_FRAME_MAX)).contains(v)
 }
@@ -300,6 +313,7 @@ settings! {
     hide_toolbar_while_scrolling: "hideToolbarWhileScrolling" => bool = false, any, true;
     new_tab_position: "newTabPosition" => NewTabPosition = NewTabPosition::Bottom, any, true;
     new_tab_button_position: "newTabButtonPosition" => Placement = Placement::Bottom, any, true;
+    show_tab_menu_button: "showTabMenuButton" => bool = true, any, true;
     app_links_first: "appLinksFirst" => bool = false, any, true;
     new_tab_opens: "newTabOpens" => NewTabOpens = NewTabOpens::Page, any, true;
     new_tab_url: "newTabUrl" => String = String::new(), any, true;
@@ -371,6 +385,7 @@ settings! {
     show_full_url: "showFullUrl" => bool = false, any, true;
     allow_javascript_from_apple_events: "allowJavaScriptFromAppleEvents" => bool = false, any, false;
     cli_control: "cliControl" => bool = false, any, false;
+    show_cli_pill: "showCliPill" => bool = true, any, true;
     compact_cli_pill: "compactCliPill" => bool = false, any, true;
     show_bookmarks: "showBookmarks" => bool = true, any, true;
     bookmarks_bar: "bookmarksBar" => BookmarksBar = BookmarksBar::Never, any, true;
@@ -477,6 +492,14 @@ pub struct AppliedPatch {
 }
 
 impl Settings {
+    pub fn shown_selected_top_app(&self) -> SelectedTopApp {
+        if self.element_outlines {
+            self.selected_top_app
+        } else {
+            SelectedTopApp::Fill
+        }
+    }
+
     pub fn info(key: &str) -> Option<&'static SettingInfo> {
         SETTINGS.iter().find(|s| s.key == key)
     }
@@ -715,8 +738,8 @@ mod tests {
         keys.dedup();
         assert_eq!(keys.len(), SETTINGS.len());
         assert_eq!(Settings::from_value(Some(&Value::Object(fields))), defaults);
-        assert_eq!(SETTINGS.len(), 131);
-        assert_eq!(SETTINGS.iter().filter(|s| !s.config_file).count(), 16);
+        assert_eq!(SETTINGS.len(), 133);
+        assert_eq!(SETTINGS.iter().filter(|s| !s.config_file).count(), 17);
     }
 
     #[test]

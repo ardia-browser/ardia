@@ -1,0 +1,8 @@
+id: no-comments
+valid:
+  - "#[allow(clippy::too_many_arguments, reason = \"mirrors the C ABI\")]\nfn f() {}"
+  - "fn f() { unsafe {\n// SAFETY: the pointer outlives the call\nread(p) } }"
+invalid:
+  - "// increments the counter\nfn f() {}"
+  - "/// Builds the row.\nfn row() {}"
+  - "fn f() { /* later */ }"

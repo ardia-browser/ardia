@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
@@ -50,6 +51,12 @@ impl<T> Reply<T> {
     fn settled(&mut self) {
         self.state = State::Ready(None);
         self.registration = None;
+    }
+
+    #[cfg_attr(debug_assertions, track_caller)]
+    pub fn block(self) -> EngineResult<T> {
+        ardia_profile::strict::blocking(ardia_profile::strict::Blocking::Ipc);
+        futures::executor::block_on(self)
     }
 
     pub fn try_take(&mut self) -> Option<EngineResult<T>> {
@@ -178,17 +185,42 @@ impl Completion {
     }
 }
 
-type Waiter = Box<dyn FnOnce(Completion) + Send>;
+pub type Waiter = Box<dyn FnOnce(Completion) + Send>;
+
+struct Entry {
+    owner: u64,
+    waiter: Waiter,
+    fallback: Option<Waiter>,
+    abandoned: bool,
+    started: std::time::Instant,
+}
 
 pub struct PendingRequests {
     next: AtomicU64,
-    waiting: Mutex<HashMap<u64, Waiter>>,
+    waiting: Mutex<HashMap<u64, Entry>>,
 }
 
 impl Default for PendingRequests {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn cancelled() -> Completion {
+    Completion {
+        status: CompletionStatus::Cancelled,
+        ..Completion::default()
+    }
+}
+
+fn cancel_each(waiters: Vec<Waiter>) -> usize {
+    let count = waiters.len();
+    for waiter in waiters {
+        if catch_unwind(AssertUnwindSafe(|| waiter(cancelled()))).is_err() {
+            log::warn!("a reply waiter panicked while it was cancelled");
+        }
+    }
+    count
 }
 
 impl PendingRequests {
@@ -200,8 +232,21 @@ impl PendingRequests {
     }
 
     pub fn register(&self, waiter: impl FnOnce(Completion) + Send + 'static) -> u64 {
+        self.register_owned(0, Box::new(waiter), None)
+    }
+
+    pub fn register_owned(&self, owner: u64, waiter: Waiter, fallback: Option<Waiter>) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        self.waiting.lock().insert(id, Box::new(waiter));
+        self.waiting.lock().insert(
+            id,
+            Entry {
+                owner,
+                waiter,
+                fallback,
+                abandoned: false,
+                started: std::time::Instant::now(),
+            },
+        );
         id
     }
 
@@ -220,10 +265,11 @@ impl PendingRequests {
     }
 
     pub fn complete_with(&self, id: u64, completion: impl FnOnce() -> Completion) -> bool {
-        let waiter = self.waiting.lock().remove(&id);
-        match waiter {
-            Some(waiter) => {
-                waiter(completion());
+        let entry = self.waiting.lock().remove(&id);
+        match entry {
+            Some(entry) => {
+                ardia_profile::record_since(ardia_profile::Span::EngineReply, entry.started);
+                (entry.waiter)(completion());
                 true
             }
             None => false,
@@ -231,17 +277,45 @@ impl PendingRequests {
     }
 
     pub fn cancel(&self, id: u64) -> bool {
-        self.complete(
-            id,
-            Completion {
-                status: CompletionStatus::Cancelled,
-                ..Completion::default()
-            },
-        )
+        self.complete(id, cancelled())
     }
 
     pub fn withdraw(&self, id: u64) -> bool {
         self.waiting.lock().remove(&id).is_some()
+    }
+
+    pub fn abandon(&self, owner: u64) -> usize {
+        let drained: Vec<Waiter> = {
+            let mut waiting = self.waiting.lock();
+            #[expect(
+                clippy::needless_collect,
+                reason = "the ids are collected so the map can be mutated while they are walked"
+            )]
+            let ids: Vec<u64> = waiting
+                .iter()
+                .filter(|(_, entry)| !entry.abandoned && entry.owner == owner)
+                .map(|(id, _)| *id)
+                .collect();
+            ids.into_iter()
+                .filter_map(|id| {
+                    let entry = waiting.remove(&id)?;
+                    if let Some(fallback) = entry.fallback {
+                        waiting.insert(
+                            id,
+                            Entry {
+                                owner: entry.owner,
+                                waiter: fallback,
+                                fallback: None,
+                                abandoned: true,
+                                started: entry.started,
+                            },
+                        );
+                    }
+                    Some(entry.waiter)
+                })
+                .collect()
+        };
+        cancel_each(drained)
     }
 
     pub fn cancel_all(&self) -> usize {
@@ -249,24 +323,53 @@ impl PendingRequests {
             .waiting
             .lock()
             .drain()
-            .map(|(_, waiter)| waiter)
+            .map(|(_, entry)| entry.waiter)
             .collect();
-        let count = drained.len();
-        for waiter in drained {
-            waiter(Completion {
-                status: CompletionStatus::Cancelled,
-                ..Completion::default()
-            });
-        }
-        count
+        cancel_each(drained)
     }
 
     pub fn len(&self) -> usize {
-        self.waiting.lock().len()
+        self.waiting
+            .lock()
+            .values()
+            .filter(|entry| !entry.abandoned)
+            .count()
+    }
+
+    pub fn abandoned(&self) -> usize {
+        self.waiting
+            .lock()
+            .values()
+            .filter(|entry| entry.abandoned)
+            .count()
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn count(&self, owner: u64, abandoned: bool) -> usize {
+        self.waiting
+            .lock()
+            .values()
+            .filter(|entry| entry.owner == owner && entry.abandoned == abandoned)
+            .count()
+    }
+}
+
+pub(crate) struct Finally<F: FnOnce()>(Option<F>);
+
+impl<F: FnOnce()> Finally<F> {
+    pub(crate) fn new(run: F) -> Self {
+        Self(Some(run))
+    }
+}
+
+impl<F: FnOnce()> Drop for Finally<F> {
+    fn drop(&mut self) {
+        if let Some(run) = self.0.take() {
+            run();
+        }
     }
 }
 
@@ -360,6 +463,63 @@ mod tests {
         assert!(matches!(garbage.into_json(), Err(EngineError::BadReply(_))));
         assert_eq!(CompletionStatus::from_raw(2), CompletionStatus::Cancelled);
         assert_eq!(CompletionStatus::from_raw(9), CompletionStatus::Error);
+    }
+
+    #[test]
+    fn a_panicking_waiter_never_stops_the_others_being_cancelled() {
+        let pending = registry();
+        let (_, first) = pending.register_reply(Completion::into_json);
+        pending.register(|_| panic!("a custom waker panicked on wake"));
+        let (_, last) = pending.register_reply(Completion::into_json);
+        assert_eq!(pending.cancel_all(), 3);
+        assert!(pending.is_empty());
+        assert_eq!(block_on(first), Err(EngineError::Cancelled));
+        assert_eq!(block_on(last), Err(EngineError::Cancelled));
+    }
+
+    #[test]
+    fn abandoning_an_owner_leaves_only_its_fallbacks() {
+        let pending = registry();
+        let seen = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let note = |tag: &'static str| -> Waiter {
+            let seen = seen.clone();
+            Box::new(move |c: Completion| seen.lock().push((tag, c.status)))
+        };
+        let other = pending.register_owned(2, note("other"), None);
+        pending.register_owned(1, note("plain"), None);
+        let opening = pending.register_owned(1, note("open"), Some(note("late")));
+        pending.register_owned(1, Box::new(|_| panic!("boom")), None);
+        assert_eq!(pending.abandon(1), 3);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending.abandoned(), 1);
+        assert_eq!(pending.abandon(1), 0);
+        assert!(pending.complete(opening, Completion::default()));
+        assert!(pending.complete(other, Completion::default()));
+        assert!(pending.is_empty());
+        assert_eq!(pending.abandoned(), 0);
+        let mut seen = seen.lock().clone();
+        seen.sort_by_key(|(tag, _)| *tag);
+        assert_eq!(
+            seen,
+            vec![
+                ("late", CompletionStatus::Ok),
+                ("open", CompletionStatus::Cancelled),
+                ("other", CompletionStatus::Ok),
+                ("plain", CompletionStatus::Cancelled),
+            ]
+        );
+    }
+
+    #[test]
+    fn finally_runs_while_unwinding() {
+        let ran = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = ran.clone();
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = Finally::new(move || flag.store(true, Ordering::Release));
+            panic!("teardown panicked");
+        }));
+        assert!(outcome.is_err());
+        assert!(ran.load(Ordering::Acquire));
     }
 
     #[test]

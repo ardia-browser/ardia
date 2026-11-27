@@ -1,0 +1,20 @@
+id: rc-refcell-view-state
+language: rust
+severity: warning
+message: "[gpui-entities: Shared State Entity] Rc<RefCell<..>> view state bypasses gpui's notify and observe, so changes do not redraw and borrows can panic at runtime"
+note: "Hold shared view state in an Entity<T> (cx.new) and read or update it through the context."
+metadata:
+  source: gpui-entities SKILL.md (Shared State Entity, Entity as Global State)
+files:
+  - crates/ardia-ui/src/**/*.rs
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - kind: field_declaration
+    - has:
+        field: type
+        regex: ^(std::rc::)?Rc<(std::cell::)?RefCell<
+    - not:
+        matches: in-test-code

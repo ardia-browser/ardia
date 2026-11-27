@@ -104,3 +104,6 @@ gpui = { path = "../gpui", default-features = false, features = ["test-support"]
 
 [package.metadata.cargo-shear]
 ignored = ["scap"]
+
+[lints.cargo]
+missing_lints_inheritance = "allow"

@@ -326,6 +326,10 @@ struct ViewElementCacheKey {
     content_mask: ContentMask<Pixels>,
     text_style: TextStyle,
     opacity: f32,
+    paint_effects: (
+        Option<crate::PaintTransform>,
+        smallvec::SmallVec<[crate::FadeRamp; 2]>,
+    ),
 }
 
 #[cfg(not(gpui_hot_reload))]
@@ -538,6 +542,7 @@ fn prepaint_view(
                 let content_mask = window.content_mask();
                 let text_style = window.text_style();
                 let opacity = window.element_opacity();
+                let paint_effects = window.next_frame.scene.paint_effects();
 
                 // Opacity is compared by bits so that a NaN opacity still matches itself
                 // and the view keeps using its cache.
@@ -546,6 +551,7 @@ fn prepaint_view(
                     && element_state.cache_key.content_mask == content_mask
                     && element_state.cache_key.text_style == text_style
                     && element_state.cache_key.opacity.to_bits() == opacity.to_bits()
+                    && element_state.cache_key.paint_effects == paint_effects
                     && !window.dirty_views.contains(&entity_id)
                     && !window.refreshing
                 {
@@ -582,6 +588,7 @@ fn prepaint_view(
                             content_mask,
                             text_style,
                             opacity,
+                            paint_effects,
                         },
                     },
                 )
@@ -622,6 +629,7 @@ fn paint_view(
 
                     let paint_start = window.paint_index();
                     let opacity = window.element_opacity();
+                    let paint_effects = window.next_frame.scene.paint_effects();
 
                     // Prepaint can only predict the opacity paint applies: an ancestor's
                     // hover or drag-over style depends on this frame's hit test, which
@@ -635,9 +643,12 @@ fn paint_view(
                         element_state.accessed_entities.extend(accessed_entities);
                         window.refreshing = refreshing;
                         element_state.cache_key.opacity = opacity;
+                        element_state.cache_key.paint_effects = paint_effects;
                     } else {
                         window.reuse_paint(element_state.paint_range.clone());
-                        if element_state.cache_key.opacity.to_bits() != opacity.to_bits() {
+                        if element_state.cache_key.opacity.to_bits() != opacity.to_bits()
+                            || element_state.cache_key.paint_effects != paint_effects
+                        {
                             window.request_animation_frame();
                         }
                     }

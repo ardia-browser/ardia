@@ -1,0 +1,17 @@
+id: spine-min_w_0
+language: rust
+rule:
+  kind: call_expression
+  any:
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: field
+          regex: ^min_w_0$
+    - has:
+        field: function
+        kind: field_expression
+        has:
+          field: value
+          matches: spine-min_w_0

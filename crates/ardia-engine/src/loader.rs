@@ -545,7 +545,7 @@ mod tests {
                 &LoaderEnvironment {
                     executable: Some(dir.join("ardia")),
                     home: None,
-                    override_path: Some(file.clone()),
+                    override_path: Some(file),
                     trust_override_in_bundle: false,
                 },
             )

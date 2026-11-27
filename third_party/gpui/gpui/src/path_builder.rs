@@ -402,6 +402,62 @@ impl Path {
         self.even_odd
     }
 
+    /// The path scaled by `scale` and then moved by `translation`, in logical
+    /// pixels.
+    pub(crate) fn scaled(&self, scale: f32, translation: Point<f32>) -> Self {
+        let move_point =
+            |p: Point<f32>| point(p.x * scale + translation.x, p.y * scale + translation.y);
+        let scale_vector = |v: Point<f32>| point(v.x * scale, v.y * scale);
+        Self {
+            curves: self
+                .curves
+                .iter()
+                .map(|curve| PathCurve {
+                    p0: move_point(curve.p0),
+                    p1: move_point(curve.p1),
+                    a: scale_vector(curve.a),
+                    b: scale_vector(curve.b),
+                    ..*curve
+                })
+                .collect(),
+            even_odd: self.even_odd,
+        }
+    }
+
+    /// The path transformed by `linear` and then moved by `translation`, in
+    /// logical pixels. Curves are split again where the transform leaves
+    /// them no longer monotone.
+    pub(crate) fn transformed(&self, linear: [[f32; 2]; 2], translation: Point<f32>) -> Self {
+        let move_point = |p: Point<f32>| {
+            point(
+                linear[0][0] * p.x + linear[0][1] * p.y + translation.x,
+                linear[1][0] * p.x + linear[1][1] * p.y + translation.y,
+            )
+        };
+        let mut curves = Vec::with_capacity(self.curves.len());
+        for curve in self.curves.iter() {
+            let ctrl = point(curve.p0.x + curve.b.x / 2., curve.p0.y + curve.b.y / 2.);
+            let (from, to) = if curve.sign < 0. {
+                (curve.p1, curve.p0)
+            } else {
+                (curve.p0, curve.p1)
+            };
+            let (from, ctrl, to) = (move_point(from), move_point(ctrl), move_point(to));
+            if from == to {
+                continue;
+            }
+            if curve.a == point(0., 0.) {
+                curves.push(PathCurve::line(from, to));
+            } else {
+                PathCurve::push_monotone(&mut curves, from, ctrl, to);
+            }
+        }
+        Self {
+            curves: curves.into(),
+            even_odd: self.even_odd,
+        }
+    }
+
     /// Bin the curves into tiles in device pixels, for painting at the given
     /// display scale.
     pub(crate) fn bin(&self, scale: f32) -> PathTiles {

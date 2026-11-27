@@ -52,7 +52,6 @@ use anyhow::{Context as _, Result};
 use async_task::Runnable;
 use collections::FxHashMap;
 use futures::channel::oneshot;
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
 use image::RgbaImage;
 use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
 use image::{DynamicImage, Frame, Rgba};
@@ -1120,6 +1119,50 @@ pub struct RequestFrameOptions {
     pub signal_at: Option<Instant>,
     /// Distinguishes native callbacks from local scheduling requests.
     pub signal_source: FrameRequestSource,
+    /// When the platform means this frame to reach the display, if it knows.
+    pub target_presented_at: Option<Instant>,
+}
+
+/// The kind of input an [`InputLatencySample`] measures.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum InputLatencyKind {
+    /// A scroll event during a gesture, or a wheel tick.
+    Scroll,
+    /// A scroll event in a gesture's momentum phase.
+    Momentum,
+    /// A trackpad pinch.
+    Magnify,
+}
+
+/// How long one input took to reach the display: from the input event to the
+/// presentation of the first frame drawn after it. Delivered by
+/// [`Window::on_input_latency`](crate::Window::on_input_latency).
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct InputLatencySample {
+    /// What the input was.
+    pub kind: InputLatencyKind,
+    /// When the input happened, by the platform event's timestamp.
+    pub event_time: Instant,
+    /// When the window received the event.
+    pub received_time: Instant,
+    /// When the update that drew the frame showing the input began.
+    pub frame_start: Instant,
+    /// When the platform meant that frame to reach the display, when it set
+    /// a target.
+    pub target_presented_time: Option<Instant>,
+    /// When the frame reached the display.
+    pub presented_time: Instant,
+    /// Whether the frame reached the display more than a millisecond after
+    /// its target; `None` without a target.
+    pub late: Option<bool>,
+}
+
+impl InputLatencySample {
+    /// The time from the input to the presentation of the frame showing it.
+    pub fn latency(&self) -> Duration {
+        self.presented_time
+            .saturating_duration_since(self.event_time)
+    }
 }
 
 /// Preserves the first platform frame request time across coalesced notifications.
@@ -1422,7 +1465,17 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn composites_liquid_glass(&self) -> bool {
         false
     }
+    /// Whether the window shows the [`VisualEffectRegion`](crate::VisualEffectRegion)s
+    /// of the scenes it draws, as system materials beneath its content.
+    fn composites_visual_effects(&self) -> bool {
+        false
+    }
     fn set_backdrop_layer(&self, _spec: Option<BackdropLayerSpec>) {}
+    /// Sets the gradients the backdrop layer draws, see [`BackdropGradients`].
+    fn set_backdrop_gradients(&self, _gradients: BackdropGradients) {}
+    /// Keeps the window's key appearance (active traffic lights and vibrancy)
+    /// while the application is inactive, if it was the key or main window.
+    fn set_keeps_key_appearance(&self, _keeps: bool) {}
     fn set_traffic_light_origin(&self, _origin: Point<Pixels>) {}
     fn set_native_view_corner_radius(&self, _id: crate::NativeViewId, _radii: Corners<Pixels>) {}
     fn draw(&self, scene: &Scene);
@@ -1512,6 +1565,11 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
         WindowInsets::default()
     }
 
+    /// Sets the callback that receives this window's input latency samples on
+    /// the main thread, or clears it with `None`. Platforms that don't measure
+    /// input latency never invoke it.
+    fn on_input_latency(&self, _callback: Option<Box<dyn FnMut(InputLatencySample)>>) {}
+
     /// Registers a callback invoked whenever [`Self::insets`] change.
     ///
     /// Contract: fires continuously during animated transitions (Android
@@ -1552,11 +1610,10 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
         None
     }
 
-    /// Renders the given scene to a texture and returns the pixel data as an RGBA image.
-    /// This does not present the frame to screen - useful for visual testing where we want
-    /// to capture what would be rendered without displaying it or requiring the window to be visible.
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
+    /// Renders the given scene to a texture and returns the pixel data as an RGBA image,
+    /// without presenting it. `scale` is relative to the window's device pixels: 1.0 renders
+    /// at the window's drawable size and 0.5 at half of it, each side rounded down.
+    fn render_to_image(&self, _scene: &Scene, _scale: f32) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
     }
 }
@@ -2406,6 +2463,14 @@ impl PlatformInputHandler {
             .unwrap_or(false)
     }
 
+    /// See [`InputHandler::do_command_by_selector`].
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub fn do_command_by_selector(&mut self, selector: &str) -> bool {
+        self.cx
+            .update(|window, cx| self.handler.do_command_by_selector(selector, window, cx))
+            .unwrap_or(false)
+    }
+
     /// See [`InputHandler::text_input_configuration`].
     pub fn text_input_configuration(
         &mut self,
@@ -2625,6 +2690,24 @@ pub trait InputHandler: 'static {
         false
     }
 
+    /// Perform a platform text command, such as AppKit's `moveWordLeft:` or
+    /// `deleteBackward:`, named by its selector (including the trailing colon).
+    /// Corresponds to [doCommand(by:)](https://developer.apple.com/documentation/appkit/nstextinputclient/1438256-docommand)
+    ///
+    /// macOS sends these for keys the text system interprets, including those the
+    /// user rebinds in `~/Library/KeyBindings/DefaultKeyBinding.dict`. Return `true`
+    /// once the command is handled; the keystroke is then not dispatched to GPUI's
+    /// key bindings. Return `false` (the default) to have the keystroke that produced
+    /// the command dispatched as if the text system hadn't seen it.
+    fn do_command_by_selector(
+        &mut self,
+        _selector: &str,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> bool {
+        false
+    }
+
     /// Get this handler's preferences for platform text assistance.
     ///
     /// GPUI re-queries this every frame and forwards it to the platform window
@@ -2794,6 +2877,11 @@ pub struct WindowOptions {
 
     #[allow(missing_docs)]
     pub host_window: Option<ExternalWindowHandle>,
+
+    /// Whether the window keeps its key appearance (active traffic lights and
+    /// vibrancy) while the application is inactive, if it was the key or main
+    /// window when the application resigned active. macOS only.
+    pub keeps_key_appearance: bool,
 }
 
 /// The variables that can be configured when creating a new window
@@ -2958,6 +3046,7 @@ impl Default for WindowOptions {
             tabbing_identifier: None,
             use_display_p3: false,
             host_window: None,
+            keeps_key_appearance: false,
         }
     }
 }

@@ -9,7 +9,9 @@ pub const PAGE_FRAME_MAX: u8 = 12;
 pub const PAGE_FRAME_DEFAULT: u8 = 9;
 pub const SPLIT_MIN_GAP: f32 = 2.0;
 pub const MIN_PEEK_GAP: f32 = 1.0;
-pub const PEEK_EDGE_BAND: f32 = 8.0;
+pub const PEEK_EDGE_STRIP: f32 = 3.0;
+pub const TAB_DRAG_EDGE_STRIP: f32 = 8.0;
+pub const PEEK_HOLD_SLACK: f32 = 40.0;
 pub const DEFAULT_SIDEBAR_WIDTH: f32 = 190.0;
 pub const SIDEBAR_MIN_WIDTH: f32 = 160.0;
 pub const SIDEBAR_MAX_WIDTH: f32 = 400.0;
@@ -132,7 +134,11 @@ impl PageFrame {
     }
 
     pub fn edge_watch_band(&self) -> f32 {
-        self.inset.max(PEEK_EDGE_BAND)
+        PEEK_EDGE_STRIP
+    }
+
+    pub fn peek_hold_width(&self, sidebar_width: f32) -> f32 {
+        self.peek.left + sidebar_width + PEEK_HOLD_SLACK
     }
 }
 
@@ -235,6 +241,77 @@ pub mod sidebar {
     pub const SPINNER_TRACK_ALPHA: f32 = 0.18;
     pub const SPINNER_MIN_ROW_WIDTH: f32 = 48.0;
 
+    pub const MINIMALISM_ROW_HEIGHT: f32 = 28.0;
+    pub const MINIMALISM_ROW_GAP: f32 = 2.0;
+    pub const MINIMALISM_PINNED_TILE_HEIGHT: f32 = 34.0;
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct RowMetrics {
+        pub row_height: f32,
+        pub row_gap: f32,
+        pub pinned_height: f32,
+    }
+
+    impl RowMetrics {
+        pub const BASE: RowMetrics = RowMetrics {
+            row_height: ROW_HEIGHT,
+            row_gap: ROW_GAP,
+            pinned_height: PINNED_TILE_HEIGHT,
+        };
+
+        pub const MINIMALISM: RowMetrics = RowMetrics {
+            row_height: MINIMALISM_ROW_HEIGHT,
+            row_gap: MINIMALISM_ROW_GAP,
+            pinned_height: MINIMALISM_PINNED_TILE_HEIGHT,
+        };
+
+        pub fn of(minimalism: bool, text_size: super::SidebarTextSize) -> RowMetrics {
+            let base = if minimalism {
+                RowMetrics::MINIMALISM
+            } else {
+                RowMetrics::BASE
+            };
+            let scale = text_size.scale();
+            if scale == 1.0 {
+                return base;
+            }
+            RowMetrics {
+                row_height: (base.row_height * scale).round(),
+                row_gap: (base.row_gap * scale).round(),
+                pinned_height: (base.pinned_height * scale).round(),
+            }
+        }
+    }
+
+    thread_local! {
+        static METRICS: std::cell::Cell<RowMetrics> = const { std::cell::Cell::new(RowMetrics::BASE) };
+    }
+
+    pub fn set_row_metrics(metrics: RowMetrics) -> bool {
+        METRICS.with(|cell| cell.replace(metrics) != metrics)
+    }
+
+    pub fn row_metrics() -> RowMetrics {
+        METRICS.with(std::cell::Cell::get)
+    }
+
+    pub fn row_height() -> f32 {
+        row_metrics().row_height
+    }
+
+    pub fn row_gap() -> f32 {
+        row_metrics().row_gap
+    }
+
+    pub fn row_pitch() -> f32 {
+        let m = row_metrics();
+        m.row_height + m.row_gap
+    }
+
+    pub fn pinned_tile_height() -> f32 {
+        row_metrics().pinned_height
+    }
+
     pub fn row_radius(height: f32) -> f32 {
         (height / 3.0).min(10.0)
     }
@@ -335,7 +412,7 @@ pub mod toolbar {
         extension_button: 22.0,
     };
 
-    pub const ICON_CENTERS: [f32; 4] = [21.0, 55.0, 92.0, 126.0];
+    pub const ICON_CENTERS: [f32; 4] = [21.0, 56.0, 92.0, 127.0];
     pub const GLYPH: f32 = 13.0;
     pub const BREADCRUMB_X: f32 = 153.0;
     pub const HOVER_SQUARE: f32 = 30.0;
@@ -612,7 +689,32 @@ mod tests {
             PageFrame::default_window(9.0).docked_card_left(190.0),
             190.0
         );
-        assert_eq!(PageFrame::default_window(4.0).edge_watch_band(), 8.0);
+        assert_eq!(PageFrame::default_window(4.0).edge_watch_band(), 3.0);
+        assert_eq!(PageFrame::default_window(12.0).edge_watch_band(), 3.0);
+        assert_eq!(PageFrame::default_window(9.0).peek_hold_width(190.0), 239.0);
+    }
+
+    #[test]
+    fn row_metrics_follow_minimalism_and_sidebar_text_size() {
+        use sidebar::RowMetrics;
+        let m = |min, size| {
+            let r = RowMetrics::of(min, size);
+            (r.row_height, r.row_gap, r.pinned_height)
+        };
+        assert_eq!(m(false, SidebarTextSize::Default), (34.0, 3.0, 41.0));
+        assert_eq!(m(false, SidebarTextSize::Large), (39.0, 3.0, 47.0));
+        assert_eq!(m(false, SidebarTextSize::Larger), (44.0, 4.0, 54.0));
+        assert_eq!(m(true, SidebarTextSize::Default), (28.0, 2.0, 34.0));
+        assert_eq!(m(true, SidebarTextSize::Large), (32.0, 2.0, 39.0));
+        assert_eq!(m(true, SidebarTextSize::Larger), (37.0, 3.0, 44.0));
+        assert!(sidebar::set_row_metrics(RowMetrics::of(
+            true,
+            SidebarTextSize::Default
+        )));
+        assert_eq!(sidebar::row_pitch(), 30.0);
+        assert!(!sidebar::set_row_metrics(RowMetrics::MINIMALISM));
+        sidebar::set_row_metrics(RowMetrics::BASE);
+        assert_eq!(sidebar::row_height(), sidebar::ROW_HEIGHT);
     }
 
     #[test]

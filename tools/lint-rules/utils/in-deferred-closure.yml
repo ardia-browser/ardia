@@ -1,0 +1,18 @@
+id: in-deferred-closure
+language: rust
+rule:
+  inside:
+    stopBy:
+      kind: function_item
+    kind: arguments
+    inside:
+      kind: call_expression
+      has:
+        field: function
+        any:
+          - kind: field_expression
+            has:
+              field: field
+              regex: ^(on_\w+|capture_\w+|background_spawn|spawn|spawn_in|defer|defer_in|observe\w*|subscribe\w*|listener|timer|update_in_background)$
+          - kind: scoped_identifier
+            regex: (^|::)spawn$

@@ -1,0 +1,10 @@
+id: squared-alpha
+valid:
+  - "fn f(c: Hsla) -> Hsla { c.opacity(0.5) }"
+  - "fn f(c: Hsla, k: f32) -> Hsla { c.alpha(c.a * k) }"
+  - "fn f(c: Hsla, d: Hsla) -> Hsla { c.opacity(d.a * 0.5) }"
+invalid:
+  - "fn f(c: Hsla, k: f32) -> Hsla { c.opacity(c.a * k) }"
+  - "fn f(p: Palette, k: f32) -> Hsla { p.text.opacity(k * p.text.a) }"
+  - "fn f(c: Hsla) -> Hsla { c.opacity(c.a) }"
+  - "fn f(c: Hsla, k: f32) -> Hsla { c.opacity((c.a * k).clamp(0.0, 1.0)) }"

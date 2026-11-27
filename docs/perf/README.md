@@ -590,6 +590,78 @@ build the same return took 0.93 to 1.14 s in three rounds, 0.8 to 1.0 s of it th
 uBlock Origin rulesets are ready; the page came back at its URL, scroll position and back/forward list, with its
 cookies (session cookies too) and local storage.
 
+## GPUI app profiler (`crates/ardia-profile`)
+
+The GPUI app profiles itself all the time, in release too. Every number lives in fixed atomic log-bucket histograms
+(140 buckets, each at most a quarter as wide as its start, so p50/p90/p99 land within about 12%), about 30 KB in all;
+recording a sample is four relaxed atomics, never an allocation or a lock held across a frame.
+
+What it measures:
+- **Frames**, per window kind (`main`, `settings`, `onboarding`, `little`): render + layout, prepaint, paint and the
+  whole frame, from the root view's `render` to the end of its paint; frames drawn, late (over 16.7 ms) and dropped
+  (refreshes missed inside a run of frames); and `input_to_frame`, from a click, scroll or key reaching the window to the
+  end of the next frame it painted (samples over 250 ms are left out: those inputs changed nothing).
+- **Main thread**: every run-loop turn (CFRunLoop observers); a turn of 250 ms or more is a stall, named after the
+  slowest span, frame, command or keyboard action that ran in it (`unattributed` when nothing measured did).
+- **Spans**: `window.open.*` and `window.first_frame.*` (settings, main, onboarding, Little Ardia), `omnibox.query`,
+  `session.restore`, `session.save`, `sync.cycle`, `sync.save`, `engine.reply` (every Chromium request to its reply),
+  `webkit.reply`, `control.request` and `control.handler`, `favicon.decode`, `image.decode`, `settings.query`,
+  `command` (menu and shortcut commands, named) and `action.key` (key bindings, named after the action).
+
+Locally:
+- `ARDIA_PROFILE=1` logs a summary every 10 s (target `ardia::profile`): frames per window with p50/p90/p99 of each
+  phase, the 10 slowest spans by p99, stalls with what was running, and the slowest actions.
+- `ARDIA_PROFILE=trace` also keeps the last 16,384 spans, frames and stalls in a ring (640 KB) and writes them every
+  5 s and at quit to `<data>/profile-<unix seconds>.json`, a Chrome trace: open it in Perfetto (ui.perfetto.dev) or
+  `chrome://tracing`.
+- The control socket's read-only `profile` method returns everything as JSON, from any hidden instance, even while its
+  main thread hangs (it is answered on the socket's thread):
+
+      printf '%s\n' '{"id":1,"method":"profile"}' | nc -U <data>/ArdiaControl.sock | jq '.result.spans["window.first_frame.settings"]'
+
+In the field (sharing on only): `perf_gpui` once an hour with each span's and frame phase's count and p50/p95/p99/max
+in ms for that hour, and the old app's `main_stall_*` fields; `perf_omnibox` with the old fields (`samples`, `p50_ms`,
+`p95_ms`, `max_ms`); and `app_freeze` for a stall of 0.4 s or more (at most 5 a session) with `freeze_duration`,
+`freeze_ms`, `uptime` and `activity`, the name of what was running. Nothing from before sharing was turned on is sent.
+
+To build without it, turn off `ardia-profile`'s default `enabled` feature; every call then compiles to nothing.
+
+## GPUI strict mode (debug builds)
+
+Debug builds of the GPUI app also check themselves while they run (`crates/ardia-profile/src/strict.rs`). It is on by
+default in debug and `ARDIA_STRICT=0` silences it: each finding is logged once per call site (frames once per window,
+again only when one is 1.5 times worse), so a normal session logs a handful of lines, and a check that has to be
+switched on is a check nobody runs. Release builds compile it out: the only strict code left in a release
+`ardia-profile` is the `profile` reply's stub (`strict::snapshot_json`, 860 bytes of text, answering
+`{"compiled": false}`); every hook is an empty `#[inline(always)]` function and the counting allocator isn't built
+(measured with `nm` and `size` on release `libardia_profile.rlib` with and without the module).
+
+What it reports (target `ardia::strict`):
+- **Main-thread blocking**, from wrappers at the app's own chokepoints rather than libc interposition: file reads and
+  writes through `DataDir` (`read`, `read_json`, `write_atomic`, `create_new`), the keychain and the secrets file
+  (`SecretStore::get/set/delete`, plus waits on its lock), HTTP through `net::HttpTransport::send` and the control
+  socket's wait for the main thread's answer, engine replies waited on synchronously (`Reply::block`), favicon cache
+  reads (`favicons::read_cached`) and image and favicon decodes (any `Span::ImageDecode` or `Span::FaviconDecode` span
+  opened on the main thread). A call on the main thread is logged with its caller's file and line
+  (`#[track_caller]`), the span it ran inside and a captured backtrace. Lock waits count only past 2 ms
+  (`strict::lock(|| mutex.lock())`); the two locks the main thread takes most, the coordinator's `bridge` and the
+  store's state, are `ardia_profile::strict::Mutex` and `strict::RwLock`, parking_lot locks whose `lock`, `read` and
+  `write` time the wait (every other parking_lot method passes straight through).
+  New chokepoints call `ardia_profile::strict::blocking(Blocking::File)` (or
+  `Network`, `Ipc`, `Keychain`).
+- **Frames over 8 ms**, from the same frame records as the profiler (`ProfiledRoot`): the window kind, the phase that
+  took longest (layout, prepaint or paint) and the three slowest spans that ran during the frame.
+- **Allocation-heavy frames**: a counting global allocator (debug only, in `ardia-app`'s `main.rs`) counts main-thread
+  allocations; a frame making more than 5,000 is logged with its window kind and slowest phase.
+
+The socket's read-only `profile` method gains a `strict` section: `compiled`, `enabled`, the limits, `findings` (kind,
+`site` as file:line, count, worst wait, the span it ran inside) and `frames` (per window kind: slow frames, the worst
+one's time, phase, spans and allocations, and allocation-heavy frames):
+
+    printf '%s\n' '{"id":1,"method":"profile"}' | nc -U <data>/ArdiaControl.sock | jq '.result.strict'
+
+The static checks that catch the same problems before a run are in [GPUI fast checks](../gpui-checks.md).
+
 ## Freeze monitoring (#2479)
 
 Every copy watches two threads for stalls: the app's main thread (AppKit, our native code and Chromium's browser UI

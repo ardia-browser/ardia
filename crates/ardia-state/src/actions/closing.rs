@@ -32,12 +32,15 @@ impl Tx<'_> {
                     .is_some_and(|t| &t.profile_id == profile)
             })
             .collect();
+        let pinned_closed = self.s.in_pinned_container(closed.as_str());
+        let keep = self.keep_top_apps();
         let left: Vec<&TabId> = order
             .iter()
             .copied()
             .filter(|t| !gone.contains(*t))
+            .filter(|t| !(keep && self.kept_with_top_app(t)))
+            .filter(|t| !self.s.hidden_empty_card(&self.s.tabs[*t]))
             .collect();
-        let pinned_closed = self.s.in_pinned_container(closed.as_str());
         let regular: Vec<&TabId> = left
             .iter()
             .copied()
@@ -272,6 +275,15 @@ impl Tx<'_> {
     }
 
     pub(super) fn close_tabs(&mut self, ids: &[TabId], last_closes_window: bool) {
+        self.close_tabs_recording(ids, last_closes_window, true);
+    }
+
+    pub(super) fn close_tabs_recording(
+        &mut self,
+        ids: &[TabId],
+        last_closes_window: bool,
+        record: bool,
+    ) {
         let peeks: Vec<WindowId> = ids
             .iter()
             .filter_map(|id| self.s.tabs.get(id))
@@ -281,16 +293,14 @@ impl Tx<'_> {
         for window in peeks {
             let _ = self.close_peek(&window);
         }
-        let ids: Vec<TabId> = ids
+        let (pinned, regular): (Vec<TabId>, Vec<TabId>) = ids
             .iter()
             .filter(|id| self.s.tabs.contains_key(*id))
             .cloned()
-            .collect();
-        let (pinned, regular): (Vec<TabId>, Vec<TabId>) = ids
-            .into_iter()
-            .partition(|id| self.s.in_pinned_container(id.as_str()));
+            .partition(|id| record && self.s.in_pinned_container(id.as_str()));
         self.close_pinned(&pinned);
         let gone: HashSet<&TabId> = regular.iter().collect();
+        let keep = self.keep_top_apps();
         let mut emptied = Vec::new();
         for w in self.s.windows.values() {
             let view: Vec<&TabId> = w
@@ -303,12 +313,26 @@ impl Tx<'_> {
                         .is_some_and(|t| t.profile_id == w.profile_id)
                 })
                 .collect();
+            let kept_running = keep
+                && view
+                    .iter()
+                    .any(|t| !gone.contains(t) && self.runs_kept_top_app(t));
             if view.iter().any(|t| gone.contains(t))
-                && view.iter().all(|t| gone.contains(t) || self.is_asleep(t))
+                && view.iter().all(|t| {
+                    gone.contains(t)
+                        || self.is_asleep(t)
+                        || (kept_running && self.kept_with_top_app(t))
+                })
             {
+                let keeps_beside_top_apps = kept_running
+                    && !view
+                        .iter()
+                        .filter(|t| gone.contains(*t))
+                        .all(|t| self.is_empty_card(t));
                 emptied.push((
                     w.id.clone(),
-                    last_closes_window || w.kind == WindowKind::LittleArdia,
+                    !keeps_beside_top_apps
+                        && (last_closes_window || w.kind == WindowKind::LittleArdia),
                 ));
             }
         }
@@ -319,7 +343,33 @@ impl Tx<'_> {
                 let _ = self.new_tab(&window, NewTab::default());
             }
         }
-        self.remove_tabs(&regular, true);
+        self.remove_tabs(&regular, record);
+    }
+
+    pub(super) fn clean_up_tabs(&mut self, ids: &[TabId]) {
+        let ids: Vec<TabId> = ids
+            .iter()
+            .filter(|id| self.s.tabs.contains_key(*id))
+            .cloned()
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        let batch = (ids.len() > 1).then(|| self.ids.next("batch"));
+        let entries: Vec<ClosedTab> = ids
+            .iter()
+            .filter_map(|id| self.s.tabs.get(id))
+            .map(|tab| {
+                let small = self
+                    .s
+                    .windows
+                    .get(&tab.window_id)
+                    .is_some_and(|w| w.kind == WindowKind::LittleArdia);
+                self.closed_entry(tab, batch.as_deref(), small)
+            })
+            .collect();
+        self.remove_tabs(&ids, false);
+        self.closed_mut().push_cleaned(entries);
     }
 
     pub(super) fn is_tile(&self, id: &TabId) -> bool {
@@ -354,6 +404,20 @@ impl Tx<'_> {
 
     pub(super) fn kept_with_top_app(&self, id: &TabId) -> bool {
         self.s.in_pinned_container(id.as_str()) && self.with_top_app(id)
+    }
+
+    fn runs_kept_top_app(&self, id: &TabId) -> bool {
+        self.kept_with_top_app(id)
+            && self.s.tabs.get(id).is_some_and(|t| {
+                t.page.has_page() || matches!(t.page.kind, crate::model::PageKind::Frozen { .. })
+            })
+    }
+
+    fn is_empty_card(&self, id: &TabId) -> bool {
+        self.s
+            .tabs
+            .get(id)
+            .is_some_and(|t| self.s.is_empty_card_tab(t))
     }
 
     pub(super) fn most_recent<'t>(&self, ids: impl Iterator<Item = &'t TabId>) -> Option<TabId> {
@@ -444,7 +508,7 @@ impl Tx<'_> {
         if asked.is_empty() {
             return;
         }
-        let keep = self.s.settings.keep_top_apps_running;
+        let keep = self.keep_top_apps();
         let switched_away: Vec<TabId> = if keep {
             let tops: Vec<TabId> = asked
                 .iter()

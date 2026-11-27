@@ -304,6 +304,31 @@ impl Application {
         self
     }
 
+    /// Sets how many entries the foreground profiler journal holds, with zero
+    /// disabling it.
+    ///
+    /// The journal only exists with the `profiler` feature, and its ring is
+    /// only allocated once something collects from it (a hang monitor or an
+    /// `App::foreground_journal` collector); by default it holds about 4 MiB
+    /// of entries. With zero, nothing is journaled, collectors observe nothing
+    /// and `App::start_hang_monitor` fails, while action timings
+    /// ([`take_action_stats`](crate::take_action_stats)) and the window frame
+    /// and input latency observers keep working. Has no effect without the
+    /// `profiler` feature or once the ring was allocated.
+    pub fn with_profiler_journal_capacity(self, entries: usize) -> Self {
+        #[cfg(feature = "profiler")]
+        {
+            let journal = self.0.borrow().foreground_journal.clone();
+            journal.set_capacity(entries);
+            if !journal.is_enabled() {
+                crate::profiler::journal::uninstall_foreground_journal(&journal);
+            }
+        }
+        #[cfg(not(feature = "profiler"))]
+        let _ = entries;
+        self
+    }
+
     /// Start the application. The provided callback will be called once the
     /// app is fully launched.
     ///
@@ -2572,8 +2597,9 @@ impl App {
     ///
     /// # Errors
     ///
-    /// Fails if the monitor was already started or its thread can't be
-    /// spawned.
+    /// Fails if the monitor was already started, the journal was disabled
+    /// with [`Application::with_profiler_journal_capacity`], or its thread
+    /// can't be spawned.
     ///
     /// [`HangMonitorPollReason::Flush`]: crate::profiler::hang::HangMonitorPollReason::Flush
     #[cfg(all(feature = "profiler", not(target_family = "wasm")))]
@@ -2587,6 +2613,9 @@ impl App {
         if self.hang_monitor.is_some() {
             debug_assert!(false, "the hang monitor was started twice");
             return Err(HangMonitorError::AlreadyStarted);
+        }
+        if !self.foreground_journal.is_enabled() {
+            return Err(HangMonitorError::JournalDisabled);
         }
         let detector = HangDetector::new(
             self.foreground_journal(),
@@ -4040,5 +4069,103 @@ mod test {
 
     fn missing_glyph(grapheme: &'static str) -> MissingGlyph {
         MissingGlyph::new(grapheme.into(), FallbackFontClass::Proportional)
+    }
+
+    #[cfg(feature = "profiler")]
+    mod profiler_journal {
+        use std::time::Duration;
+
+        use crate::{
+            Context, FocusHandle, InteractiveElement as _, IntoElement, Render, TestAppContext,
+            Window,
+            app::Application,
+            div,
+            profiler::{
+                hang::{HangMonitorConfig, HangMonitorError},
+                journal::ForegroundJournal,
+            },
+            take_action_stats,
+        };
+
+        actions!(journal_test, [SlowJournalTestAction]);
+
+        const SLOW_ACTION: Duration = Duration::from_millis(30);
+
+        struct SlowActionView {
+            focus_handle: FocusHandle,
+        }
+
+        impl Render for SlowActionView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                div()
+                    .track_focus(&self.focus_handle)
+                    .on_action(|_: &SlowJournalTestAction, _, _| std::thread::sleep(SLOW_ACTION))
+            }
+        }
+
+        fn hang_monitor_config() -> HangMonitorConfig {
+            HangMonitorConfig {
+                threshold: Duration::from_millis(100),
+                frame_budget: Duration::from_millis(16),
+                interval: Duration::from_secs(3600),
+            }
+        }
+
+        #[gpui::test]
+        fn the_journal_ring_waits_for_a_collector(cx: &mut TestAppContext) {
+            let journal = cx.update(|cx| cx.foreground_journal());
+            assert_eq!(journal.allocated_capacity(), None);
+            let sized = Application(cx.app.clone()).with_profiler_journal_capacity(64);
+            drop(sized);
+            assert_eq!(journal.allocated_capacity(), None);
+            let _collector = journal.collector();
+            assert_eq!(journal.allocated_capacity(), Some(64));
+            let resized = Application(cx.app.clone()).with_profiler_journal_capacity(0);
+            drop(resized);
+            assert_eq!(
+                journal.allocated_capacity(),
+                Some(64),
+                "an allocated ring keeps its size"
+            );
+            assert!(ForegroundJournal::writer_installed());
+        }
+
+        #[gpui::test]
+        fn a_disabled_journal_allocates_nothing_and_keeps_action_timings(cx: &mut TestAppContext) {
+            let journal = cx.update(|cx| cx.foreground_journal());
+            let disabled = Application(cx.app.clone()).with_profiler_journal_capacity(0);
+            drop(disabled);
+            assert!(!ForegroundJournal::writer_installed());
+            let mut collector = journal.collector();
+            assert_eq!(journal.allocated_capacity(), None);
+            cx.update(|cx| {
+                assert!(matches!(
+                    cx.start_hang_monitor(hang_monitor_config(), |_| {}),
+                    Err(HangMonitorError::JournalDisabled)
+                ));
+            });
+
+            let (_view, cx) = cx.add_window_view(|window, cx| {
+                let focus_handle = cx.focus_handle();
+                window.focus(&focus_handle, cx);
+                SlowActionView { focus_handle }
+            });
+            let mut timed = None;
+            for _ in 0..3 {
+                cx.dispatch_action(SlowJournalTestAction);
+                cx.run_until_parked();
+                timed = take_action_stats()
+                    .longest_runtimes(false)
+                    .find(|timing| timing.name.contains("SlowJournalTestAction"));
+                if timed.is_some() {
+                    break;
+                }
+            }
+            let timed = timed.expect("the action was timed");
+            assert!(timed.duration() >= SLOW_ACTION, "{timed:?}");
+            assert!(collector.collect_unseen().entries.is_empty());
+            assert_eq!(journal.allocated_capacity(), None);
+            assert!(!ForegroundJournal::writer_installed());
+        }
     }
 }

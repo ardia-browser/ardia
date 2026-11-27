@@ -10,6 +10,8 @@ mod events;
 mod keyboard;
 mod pasteboard;
 mod system_notifications;
+#[cfg(any(test, feature = "font-kit"))]
+mod text_system;
 
 #[cfg(feature = "screen-capture")]
 mod screen_capture;
@@ -43,6 +45,13 @@ pub(crate) use platform::*;
 pub(crate) use window::*;
 
 pub use platform::MacPlatform;
+#[doc(hidden)]
+pub use window::gesture_forwarding::monitor_gesture;
+
+#[doc(hidden)]
+pub fn read_pasteboard_with_name(name: &str) -> Option<gpui::ClipboardItem> {
+    pasteboard::Pasteboard::with_name(name).read()
+}
 
 pub mod hosted_window {
     pub use crate::window::hosted::{

@@ -102,11 +102,26 @@ fn build_bridge(manifest: &Path, repo: &Path) {
     for file in ["bridge.h", "bridge.mm"] {
         println!("cargo:rerun-if-changed={}", bridge_dir.join(file).display());
     }
+    let pip_dir = bridge_dir.join("pip");
+    println!("cargo:rerun-if-changed={}", pip_dir.display());
+    let mut pip_sources: Vec<PathBuf> = fs::read_dir(&pip_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "mm"))
+                .collect()
+        })
+        .unwrap_or_default();
+    pip_sources.sort();
     println!("cargo:rerun-if-changed={}", header.display());
     cc::Build::new()
         .cpp(true)
         .file(bridge_dir.join("bridge.mm"))
+        .files(&pip_sources)
         .include(&bridge_dir)
+        .include(&pip_dir)
+        .link_lib_modifier("+whole-archive")
         .flag("-isystem")
         .flag(
             header_dir
@@ -119,9 +134,17 @@ fn build_bridge(manifest: &Path, repo: &Path) {
         .flag("-Wall")
         .flag("-Wextra")
         .flag("-Wno-unused-parameter")
+        .flag("-Wno-objc-protocol-method-implementation")
+        .flag("-Wno-incomplete-implementation")
         .flag("-Werror")
         .compile("ardia_engine_bridge");
-    for framework in ["AppKit", "Foundation", "UniformTypeIdentifiers"] {
+    for framework in [
+        "AppKit",
+        "Foundation",
+        "UniformTypeIdentifiers",
+        "QuartzCore",
+        "ApplicationServices",
+    ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
     println!("cargo:rustc-link-lib=objc");

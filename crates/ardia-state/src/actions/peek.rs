@@ -1,5 +1,30 @@
 use super::*;
 
+pub(crate) fn settle_stranded_peeks(state: &BrowserState) -> Option<BrowserState> {
+    let stranded: Vec<(WindowId, TabId)> = state
+        .windows
+        .values()
+        .filter_map(|w| {
+            let peek = w.chrome.peek.as_ref()?;
+            let source = peek.source_tab_id.as_ref()?;
+            (!w.tab_ids.contains(source)).then(|| (w.id.clone(), peek.tab_id.clone()))
+        })
+        .collect();
+    if stranded.is_empty() {
+        return None;
+    }
+    let mut next = state.clone();
+    for (window, peek) in stranded {
+        if let Some(w) = Arc::make_mut(&mut next.windows).get_mut(&window) {
+            Arc::make_mut(w).chrome.peek = None;
+        }
+        if next.tabs.get(&peek).is_some_and(|t| t.live.peek) {
+            Arc::make_mut(&mut next.tabs).shift_remove(&peek);
+        }
+    }
+    Some(next)
+}
+
 impl Tx<'_> {
     pub(super) fn settle_peeks(&mut self, gone: &HashSet<TabId>) {
         let ended: Vec<(WindowId, TabId)> = self
@@ -25,6 +50,23 @@ impl Tx<'_> {
                 self.note_tab(&peek, Topics::LIVE, true);
             }
         }
+    }
+
+    pub(super) fn open_peek_at(
+        &mut self,
+        window: &WindowId,
+        url: &str,
+        source: Option<TabId>,
+        click_px: [f32; 2],
+    ) -> Result<TabId, ActionError> {
+        let id = self.open_peek(window, url, source)?;
+        let click_px = (click_px[0].is_finite() && click_px[1].is_finite()).then_some(click_px);
+        if let Some(w) = self.window_mut_as(window, Topics::CHROME)
+            && let Some(peek) = w.chrome.peek.as_mut()
+        {
+            peek.click_px = click_px;
+        }
+        Ok(id)
     }
 
     pub(super) fn open_peek(
@@ -64,6 +106,7 @@ impl Tx<'_> {
             w.chrome.peek = Some(PeekCard {
                 tab_id: id.clone(),
                 source_tab_id: source,
+                click_px: None,
             });
         }
         self.out.tab = Some(id.clone());

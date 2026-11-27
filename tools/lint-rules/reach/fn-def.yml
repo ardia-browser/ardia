@@ -1,0 +1,15 @@
+id: reach-fn-def
+language: rust
+severity: hint
+message: "function definition"
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  kind: function_item
+  has:
+    field: name
+    pattern: $NAME
+  not:
+    matches: in-test-code

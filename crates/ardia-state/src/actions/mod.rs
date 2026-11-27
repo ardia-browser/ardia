@@ -19,27 +19,35 @@ use crate::tabs::{FindState, SecurityState, SitePrompt, Tab, TabSnapshot};
 use crate::windows::{BrowserWindow, CommandBarState, PeekCard, Popover, Toast, WindowKind};
 use ardia_theme::{IconTheme, ProfileColor, ProfileTheme, RgbaColor};
 use indexmap::IndexMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::BitOr;
 use std::sync::Arc;
 
 mod action;
+mod bookmarks_edit;
 mod changes;
 mod closing;
+mod group_moves;
 mod group_ops;
 mod library;
 mod peek;
+mod pin_mirror;
 mod placement;
+mod profile_moves;
 mod profile_ops;
 mod reopen;
 mod split_ops;
+mod tab_mirror;
 mod tab_ops;
+mod tidy_ops;
+mod tile_folders;
 mod window_ops;
 
 use crate::omnibox::url::same_page;
 pub use action::{Action, GroupPatch, NewTab, PageUpdate, ProfilePatch};
 use changes::push_unique;
 pub use changes::{ChangeSet, Topics};
+pub use group_moves::can_move_group;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ActionError {
@@ -68,6 +76,7 @@ pub struct Outcome {
     pub split: Option<SplitId>,
     pub profile: Option<ProfileId>,
     pub closed_windows: Vec<WindowId>,
+    pub bookmark: Option<BookmarkId>,
 }
 
 pub struct Tx<'a> {
@@ -75,6 +84,7 @@ pub struct Tx<'a> {
     pub(crate) now: Millis,
     pub(crate) ids: &'a IdGen,
     pub(crate) out: Outcome,
+    pub(crate) keeps_top_apps: Option<bool>,
 }
 
 impl<'a> Tx<'a> {
@@ -84,7 +94,13 @@ impl<'a> Tx<'a> {
             now,
             ids,
             out: Outcome::default(),
+            keeps_top_apps: None,
         }
+    }
+
+    pub(crate) fn keep_top_apps(&self) -> bool {
+        self.keeps_top_apps
+            .unwrap_or(self.s.settings.keep_top_apps_running)
     }
 
     fn note_tab(&mut self, id: &TabId, topics: Topics, cosmetic: bool) {
@@ -385,10 +401,24 @@ impl<'a> Tx<'a> {
                 self.close_tabs(&tabs, last_closes_window);
                 Ok(())
             }
+            Action::CloseSyncedTabs { tabs } => {
+                self.close_tabs_recording(&tabs, false, false);
+                Ok(())
+            }
             Action::ReopenClosed { window } => self.reopen(window.as_ref()),
             Action::RestoreClosed { id, window } => self.restore_entry(&id, window.as_ref()),
+            Action::ClearRecentlyClosed { window } => {
+                self.clear_recently_closed(window.as_ref());
+                Ok(())
+            }
             Action::MoveTab { tab, window, index } => self.move_tab(&tab, &window, index),
             Action::SetPin { tab, pin } => self.set_pin(&tab, pin),
+            Action::MoveTabsToProfile {
+                tabs,
+                profile,
+                before,
+                background,
+            } => self.move_tabs_to_profile(&tabs, &profile, before.as_ref(), background),
             Action::RenameTab { tab, title } => {
                 let title = title
                     .map(|s| crate::tabs::single_line(s.trim()))
@@ -396,6 +426,21 @@ impl<'a> Tx<'a> {
                 self.edit_tab(&tab, Topics::TABS, false, |t| t.custom_title = title)
                     .map(|_| ())
             }
+            Action::SetTileLetters { tab, letters } => self
+                .edit_tab(&tab, Topics::TABS, false, |t| t.tile_letters = letters)
+                .map(|_| ()),
+            Action::SetTabLiveItem {
+                tab,
+                live_item,
+                home,
+            } => self
+                .edit_tab(&tab, Topics::TABS, false, |t| {
+                    t.live_item = live_item;
+                    if let Some(home) = home {
+                        t.pinned_url = home.filter(|h| !h.is_empty());
+                    }
+                })
+                .map(|_| ()),
             Action::SetTabIcon { tab, icon } => self
                 .edit_tab(&tab, Topics::TABS, false, |t| {
                     t.custom_icon = icon.filter(|s| !s.is_empty())
@@ -404,6 +449,7 @@ impl<'a> Tx<'a> {
             Action::SetMuted { tab, muted } => self
                 .edit_tab(&tab, Topics::TABS, false, |t| t.muted = muted)
                 .map(|_| ()),
+            Action::SetSiteMuted { tab, muted } => self.set_site_muted(&tab, muted),
             Action::SetZoom { tab, zoom } => {
                 if !(zoom.is_finite() && (0.25..=5.0).contains(&zoom)) {
                     return Err(ActionError::Invalid("zoom must be between 25% and 500%"));
@@ -421,6 +467,14 @@ impl<'a> Tx<'a> {
                 .map(|_| ()),
             Action::SleepTabs { tabs } => {
                 self.sleep_tabs(&tabs);
+                Ok(())
+            }
+            Action::UnloadTopApp { tab } => {
+                self.unload_top_app(&tab);
+                Ok(())
+            }
+            Action::ForgetPages { tabs } => {
+                self.forget_pages(&tabs);
                 Ok(())
             }
             Action::DuplicateTab { tab } => self.duplicate(&tab).map(|_| ()),
@@ -442,14 +496,32 @@ impl<'a> Tx<'a> {
                 Ok(())
             }
             Action::ReturnToPinnedUrl { tab } => self.return_to_pinned(&tab),
+            Action::SetPinnedUrl { tab, url } => self.set_pinned_url(&tab, url),
             Action::ClearUnpinned { window } => self.clear_unpinned(&window).map(|_| ()),
+            Action::CloseDuplicateTabs { window } => self.close_duplicate_tabs(&window).map(|_| ()),
+            Action::ArrangeTabs { window, tabs } => self.arrange_tabs(&window, &tabs),
+            Action::CleanUpTabs { tabs } => {
+                self.clean_up_tabs(&tabs);
+                Ok(())
+            }
             Action::UndoClear { window } => self.undo_clear(&window).map(|_| ()),
+            Action::TidyTabs { window, profile } => self.tidy_tabs(&window, profile.as_ref()),
+            Action::TidyPins { window } => {
+                self.tidy_in(&window, None, crate::tidy::TidyScope::Pins)
+            }
+            Action::UntidyTabs { tidied } => self.untidy_tabs(&tidied),
             Action::CreateGroup { tabs, name } => self.create_group(&tabs, &name).map(|_| ()),
             Action::UpdateGroup { group, patch } => self.update_group(group, patch),
             Action::AddToGroup { group, tabs } => self.add_to_group(group, tabs),
             Action::RemoveFromGroups { tabs } => self.remove_from_groups(tabs),
             Action::Ungroup { group } => self.ungroup(group),
             Action::CloseGroup { group } => self.close_group(&group),
+            Action::DeleteGroup { group } => self.delete_group(&group),
+            Action::DuplicateGroup { group } => self.duplicate_group(&group).map(|_| ()),
+            Action::NewNestedGroup { parent } => self.new_nested_group(&parent).map(|_| ()),
+            Action::MoveGroupToWindow { group, window } => {
+                self.move_group_to_window(&group, &window)
+            }
             Action::SplitTabs { tabs, orientation } => {
                 self.split_tabs(&tabs, orientation).map(|_| ())
             }
@@ -460,13 +532,35 @@ impl<'a> Tx<'a> {
             Action::Unsplit { split } => self.unsplit(split),
             Action::SwapPanes { a, b } => self.swap_panes(a, b),
             Action::ResizeSplit { split, sizes } => self.resize_split(split, sizes),
+            Action::RestackSplit { split, stack_sizes } => self.restack_split(split, stack_sizes),
             Action::FlipSplit { split } => self.flip_split(split),
             Action::FocusPane { window, delta } => self.focus_pane(&window, delta),
             Action::MovePane { tab, direction } => self.move_pane(&tab, direction),
+            Action::MoveGroup {
+                group,
+                before,
+                pinned,
+                parent,
+            } => self.move_group(&group, before.as_ref(), pinned, parent.as_ref()),
+            Action::AddToTileFolder { tabs, onto, before } => {
+                self.add_to_tile_folder(&tabs, &onto, before.as_ref())
+            }
+            Action::LeaveTileFolder { tabs } => self.leave_tile_folder(&tabs),
+            Action::RenameTileFolder {
+                window,
+                folder,
+                name,
+            } => self.rename_tile_folder(&window, &folder, &name),
+            Action::DropIntoSplit { tab, anchor, side } => {
+                self.drop_into_split(&tab, &anchor, side)
+            }
+            Action::ReplaceSplitPane { pane, tab } => self.replace_split_pane(&pane, &tab),
+            Action::RemoveEmptySplitPane { tab } => self.remove_empty_split_pane(&tab),
             Action::CreateProfile { name, color, icon } => {
                 self.create_profile(&name, color, icon).map(|_| ())
             }
             Action::UpdateProfile { profile, patch } => self.update_profile(&profile, patch),
+            Action::ShareProfileData { profile, with } => self.share_profile_data(&profile, &with),
             Action::DeleteProfile { profile } => self.delete_profile(&profile),
             Action::ReorderProfiles { order } => self.reorder_profiles(order),
             Action::UpdateSettings { patch, from_sync } => {
@@ -489,6 +583,14 @@ impl<'a> Tx<'a> {
                 url,
                 source,
             } => self.open_peek(&window, &url, source).map(|_| ()),
+            Action::OpenPeekAt {
+                window,
+                url,
+                source,
+                click_px,
+            } => self
+                .open_peek_at(&window, &url, source, click_px)
+                .map(|_| ()),
             Action::ClosePeek { window } => self.close_peek(&window),
             Action::PromotePeek { window } => self.promote_peek(&window).map(|_| ()),
             Action::PushToast { window, toast } => self.push_toast(window, toast),
@@ -503,6 +605,15 @@ impl<'a> Tx<'a> {
                 favicon,
             } => self.record_visit(profile, url, title, favicon),
             Action::RemoveHistory { profile, url } => self.remove_history(profile, url),
+            Action::RemoveHistoryPages { profile, urls } => {
+                self.remove_history_pages(profile, urls)
+            }
+            Action::ClearHistory {
+                profile,
+                since,
+                until,
+            } => self.clear_history(profile, since, until),
+            Action::ReplaceHistory { profile, entries } => self.replace_history(profile, entries),
             Action::AddBookmark {
                 profile,
                 parent,
@@ -517,6 +628,38 @@ impl<'a> Tx<'a> {
                 index,
             } => self.move_bookmark(profile, id, parent, index),
             Action::SetAirTraffic { config } => self.set_air_traffic(config),
+            Action::RenameBookmark { profile, id, title } => {
+                self.rename_bookmark(profile, id, title)
+            }
+            Action::UpdateBookmark {
+                profile,
+                id,
+                title,
+                url,
+            } => self.update_bookmark(profile, id, title, url),
+            Action::AddBookmarkFolder {
+                profile,
+                parent,
+                title,
+                index,
+            } => self.add_bookmark_folder(profile, parent, title, index),
+            Action::AddBookmarkAt {
+                profile,
+                parent,
+                index,
+                title,
+                url,
+            } => self.add_bookmark_at(profile, parent, index, title, url),
+            Action::MoveBookmarks {
+                profile,
+                ids,
+                parent,
+                index,
+            } => self.move_bookmarks(profile, ids, parent, index),
+            Action::RemoveBookmarks { profile, ids } => self.remove_bookmarks(profile, ids),
+            Action::RestoreBookmarks { profile, removed } => {
+                self.restore_bookmarks(profile, removed)
+            }
         }
     }
 }
@@ -533,7 +676,24 @@ impl BrowserState {
         tx.run(action)?;
         tx.settle_groups();
         tx.settle_windows();
-        let out = std::mem::take(&mut tx.out);
+        tx.mirror_pins(self);
+        tx.pages_into_splits(self);
+        tx.mirror_tabs(self);
+        tx.unshare_tabs(self);
+        let mut out = std::mem::take(&mut tx.out);
+        if let Some(groups) = crate::shown_tabs::settle_shown_tabs(&next, self) {
+            next.groups = Arc::new(groups);
+            out.changes.note(Topics::GROUPS, false);
+        }
+        if let Some(settled) = crate::pin_share::settle_shared_pins(&next, self) {
+            out.changes.note_settled(&next, &settled);
+            next = settled;
+        }
+        if let Some(settled) = peek::settle_stranded_peeks(&next) {
+            out.changes.note_settled(&next, &settled);
+            next = settled;
+        }
+        crate::closed::fingerprint_fresh_clears(&mut next, self);
         Ok((next, out))
     }
 

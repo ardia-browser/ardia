@@ -208,6 +208,10 @@ impl IdGen {
         GroupId::from(self.next("g"))
     }
 
+    pub fn tile_folder(&self) -> String {
+        self.next("tf")
+    }
+
     pub fn split(&self) -> SplitId {
         SplitId::from(self.next("split"))
     }

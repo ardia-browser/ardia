@@ -1,12 +1,34 @@
 use std::time::{Duration, Instant};
 
-use ardia_theme::motion::{ease_in_out_cubic, ease_out_cubic};
+use ardia_theme::motion::{CubicBezier, ease_in_out_cubic, ease_out_cubic};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Curve {
     EaseOut,
     EaseInOut,
+    EaseInQuad,
+    EaseInOutQuad,
+    DockSlide,
     Linear,
+}
+
+pub const DOCK_SLIDE_MS: u64 = 200;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DockMove {
+    Jump,
+    ArcHide,
+    Slide,
+}
+
+pub fn dock_move(open: bool, animated: bool, arc: bool, peek_out: bool) -> DockMove {
+    if !animated || (arc && open && peek_out) {
+        DockMove::Jump
+    } else if arc && !open {
+        DockMove::ArcHide
+    } else {
+        DockMove::Slide
+    }
 }
 
 impl Curve {
@@ -15,6 +37,15 @@ impl Curve {
         match self {
             Curve::EaseOut => ease_out_cubic(f64::from(t)) as f32,
             Curve::EaseInOut => ease_in_out_cubic(f64::from(t)) as f32,
+            Curve::EaseInQuad => t * t,
+            Curve::EaseInOutQuad => {
+                if t < 0.5 {
+                    2.0 * t * t
+                } else {
+                    1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+                }
+            }
+            Curve::DockSlide => CubicBezier::EASE_IN_OUT.ease(f64::from(t)) as f32,
             Curve::Linear => t,
         }
     }
@@ -111,6 +142,25 @@ mod tests {
         peek.snap(1.0);
         assert_eq!(peek.target(), 1.0);
         assert!(!peek.running(start));
+    }
+
+    #[test]
+    fn quad_curves_match_react_natives_easings() {
+        assert_eq!(Curve::EaseInQuad.apply(0.5), 0.25);
+        assert_eq!(Curve::EaseInOutQuad.apply(0.25), 0.125);
+        assert_eq!(Curve::EaseInOutQuad.apply(0.75), 0.875);
+        assert_eq!(Curve::EaseInOutQuad.apply(1.0), 1.0);
+    }
+
+    #[test]
+    fn the_dock_jumps_hides_or_slides_like_the_old_sidebar() {
+        assert_eq!(dock_move(true, false, false, false), DockMove::Jump);
+        assert_eq!(dock_move(true, true, true, true), DockMove::Jump);
+        assert_eq!(dock_move(false, true, true, false), DockMove::ArcHide);
+        assert_eq!(dock_move(false, true, false, false), DockMove::Slide);
+        assert_eq!(dock_move(true, true, true, false), DockMove::Slide);
+        assert!((Curve::DockSlide.apply(0.5) - 0.5).abs() < 1e-4);
+        assert!(Curve::DockSlide.apply(0.25) < 0.25);
     }
 
     #[test]

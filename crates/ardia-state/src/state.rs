@@ -58,6 +58,7 @@ pub struct BrowserState {
     pub bookmarks: Arc<IndexMap<String, Arc<BookmarkTree>>>,
     pub air_traffic: Arc<AirTrafficConfig>,
     pub cleared: Arc<IndexMap<WindowId, ClearedTabs>>,
+    pub private_site_mutes: Arc<IndexMap<WindowId, IndexMap<String, bool>>>,
     pub persisted: Arc<Persisted>,
 }
 
@@ -174,10 +175,8 @@ impl BrowserState {
                 discarded += 1;
                 continue;
             };
-            w.active_tab_ids.retain(|p, t| {
-                tabs.get(t)
-                    .is_some_and(|tab| &tab.profile_id == p && tab.window_id == w.id)
-            });
+            w.active_tab_ids
+                .retain(|p, t| tab_ids.contains(t) && &tabs[&*t].profile_id == p);
             if !tab_ids.iter().any(|t| tabs[t].profile_id == w.profile_id) {
                 w.profile_id = tabs[first].profile_id.clone();
             }
@@ -357,6 +356,21 @@ impl BrowserState {
         self.splits.get(id)
     }
 
+    pub fn is_empty_card_tab(&self, tab: &Tab) -> bool {
+        tab.pin.is_none()
+            && tab.url.is_empty()
+            && !tab.page.has_page()
+            && self.split_of(tab.id.as_str()).is_none()
+    }
+
+    pub fn new_tab_opens_bar(&self) -> bool {
+        self.settings.new_tab_opens() == crate::settings::NewTabOpens::CommandBar
+    }
+
+    pub fn hidden_empty_card(&self, tab: &Tab) -> bool {
+        self.new_tab_opens_bar() && self.is_empty_card_tab(tab)
+    }
+
     pub fn view_tabs(&self, window: &str, profile: Option<&ProfileId>) -> Vec<&Arc<Tab>> {
         let Some(w) = self.windows.get(window) else {
             return Vec::new();
@@ -385,6 +399,24 @@ impl BrowserState {
         (source_shown && self.tabs.get(&peek.tab_id).is_some_and(|t| t.live.peek)).then_some(peek)
     }
 
+    pub fn fullscreen_tab(&self, window: &str) -> Option<&Arc<Tab>> {
+        let full = |id: &str| self.tabs.get(id).filter(|t| t.live.fullscreen);
+        if let Some(peek) = self.shown_peek(window)
+            && let Some(tab) = full(peek.tab_id.as_str())
+        {
+            return Some(tab);
+        }
+        let active = self.windows.get(window)?.active_tab()?;
+        if let Some(split) = self.split_of(active.as_str()) {
+            for pane in split.tab_ids() {
+                if let Some(tab) = full(pane.as_str()) {
+                    return Some(tab);
+                }
+            }
+        }
+        full(active.as_str())
+    }
+
     pub fn split_of(&self, tab: &str) -> Option<&Arc<SplitView>> {
         self.splits.values().find(|s| s.contains(tab))
     }
@@ -410,11 +442,27 @@ impl BrowserState {
             .unwrap_or(self.settings.tab_layout)
     }
 
+    pub fn minimalism_in(&self, window: &str) -> bool {
+        self.settings.minimalism_mode
+            && self
+                .windows
+                .get(window)
+                .is_none_or(|w| w.kind != WindowKind::LittleArdia)
+    }
+
     pub fn effective_layout(&self, window: &str) -> EffectiveLayout {
         EffectiveLayout::of(
             self.tab_layout(window),
-            self.settings.address_bar == AddressBar::Sidebar,
+            self.settings.address_bar == AddressBar::Sidebar || self.minimalism_in(window),
         )
+    }
+
+    pub fn page_frame_inset_in(&self, window: &str, full_screen: bool) -> f32 {
+        let mut rules = self
+            .settings
+            .frame_rules(full_screen, self.auto_hides_tabs(window));
+        rules.borderless_mode |= self.minimalism_in(window);
+        ardia_theme::layout::page_frame_inset(self.settings.page_frame as f32, rules)
     }
 
     pub fn auto_hides_tabs(&self, window: &str) -> bool {
@@ -450,9 +498,7 @@ impl BrowserState {
         drawn_window_radius: f32,
     ) -> PageFrame {
         let full_screen = self.windows.get(window).is_some_and(|w| w.is_full_screen());
-        let inset = self
-            .settings
-            .page_frame_inset(full_screen, self.auto_hides_tabs(window));
+        let inset = self.page_frame_inset_in(window, full_screen);
         PageFrame::concentric(inset, window_radius, drawn_window_radius)
     }
 
@@ -585,9 +631,19 @@ impl BrowserState {
         self.bookmarks.get(&self.engine_profile(profile))
     }
 
+    pub fn suggestion_history(&self, profile: &ProfileId) -> Option<&Arc<History>> {
+        self.history_of(profile)
+            .filter(|_| self.settings.command_bar_history)
+    }
+
+    pub fn suggestion_bookmarks(&self, profile: &ProfileId) -> Option<&Arc<BookmarkTree>> {
+        self.bookmarks_of(profile)
+            .filter(|_| self.settings.show_bookmarks)
+    }
+
     pub fn suggestion_index(&self, profile: &ProfileId) -> SuggestionIndex {
-        let history = self.history_of(profile);
-        let bookmarks = self.bookmarks_of(profile);
+        let history = self.suggestion_history(profile);
+        let bookmarks = self.suggestion_bookmarks(profile);
         SuggestionIndex::build(
             history.into_iter().flat_map(|h| h.rows()),
             bookmarks.into_iter().flat_map(|b| b.rows()),

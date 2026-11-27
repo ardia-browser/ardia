@@ -149,7 +149,7 @@ fn private_and_little_windows_never_become_the_link_profile() {
         .profile
         .unwrap();
     w.act(Action::SwitchProfile {
-        window: main.clone(),
+        window: main,
         profile: work.clone(),
     });
     w.act(Action::OpenWindow {

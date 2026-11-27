@@ -1,0 +1,8 @@
+id: chain-top
+language: rust
+rule:
+  kind: call_expression
+  not:
+    inside:
+      kind: field_expression
+      field: value

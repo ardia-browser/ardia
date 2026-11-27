@@ -73,9 +73,9 @@ fn build(inputs: &Inputs) -> (Value, BTreeMap<String, Vec<u8>>) {
             .map(|scope| (scope.clone(), json!(keys.scope_tag(scope))))
             .collect();
         chains.insert(
-            name.clone(),
+            name,
             json!({
-                "phrase": phrase::phrase(&entropy.clone().try_into().unwrap()).as_str(),
+                "phrase": phrase::phrase(&entropy.try_into().unwrap()).as_str(),
                 "chainTag": keys.chain_tag(),
                 "scopeTags": scope_tags,
             }),
@@ -317,7 +317,7 @@ fn the_vault_reads_the_exact_inventory() {
             let mut pending = read.pending.clone();
             pending.sort();
             assert_eq!(pending, ids(&entries("pending", &entropy, &scope)));
-            let mut present = read.present.clone();
+            let mut present = read.present;
             present.sort();
             let mut all = [
                 files,

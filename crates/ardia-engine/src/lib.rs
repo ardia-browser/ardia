@@ -18,6 +18,7 @@ pub mod macos;
 #[cfg(target_os = "windows")]
 pub mod windows;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -30,6 +31,7 @@ pub use commands::{
 pub use error::{EngineError, EngineResult};
 pub use events::{
     DEFAULT_EVENT_CAPACITY, EngineEvent, EventBus, EventSubscription, OPEN_PROMPT_LIMIT, PromptKey,
+    UrlSender,
 };
 pub use launch::{LaunchOptions, is_background, merge_feature_lists};
 pub use mock::MockBrowserEngine;
@@ -176,7 +178,19 @@ pub trait BrowserEngine {
     fn side_panel_url(&self, tab: EngineTabId, extension_id: &str) -> EngineResult<Option<String>>;
     fn evaluate_js(&self, tab: EngineTabId, code: &str) -> Reply<Option<Value>>;
     fn ask_before_leaving(&self, tab: EngineTabId) -> Reply<bool>;
+    fn choose_files_to_open(&self, window: Option<EngineWindowId>) -> Reply<Vec<PathBuf>> {
+        let _ = window;
+        Reply::err(EngineError::Unsupported("choose files on this platform"))
+    }
     fn enter_pip(&self, tab: EngineTabId, click_time: f64) -> Reply<PipEntry>;
+    fn cover_page(&self, tab: EngineTabId) -> Reply<bool> {
+        let _ = tab;
+        Reply::err(EngineError::Unsupported("cover pages on this platform"))
+    }
+    fn uncover_page(&self, tab: EngineTabId, fade: bool) -> EngineResult<()> {
+        let _ = (tab, fade);
+        Err(EngineError::Unsupported("cover pages on this platform"))
+    }
     fn devtools_call(
         &self,
         tab: EngineTabId,

@@ -524,7 +524,7 @@ fn overlapping_or_relative_folders_are_refused() {
     };
     let cased = Layout {
         webui_data: scratch.0.join("LOCAL").join("ARDIA"),
-        ..base.clone()
+        ..base
     };
     for layout in [inside, user_data, config, parent, relative, dotted, cased] {
         let report = run(&layout, &sealer, &FakeVault::empty());

@@ -1,24 +1,24 @@
 use crate::{
-    BoolExt, MacDisplay, MetalFrames, NSRange, NSStringExt, TISCopyCurrentKeyboardInputSource,
-    TISGetInputSourceProperty, WindowFrameSource, events::platform_input_from_native,
-    kTISPropertyInputSourceIsASCIICapable, kTISPropertyInputSourceType, kTISTypeKeyboardInputMode,
-    ns_string, renderer,
+    BoolExt, InputKind, LatencySink, MacDisplay, MetalFrameSource, MetalFrames, NSRange,
+    NSStringExt, TISCopyCurrentKeyboardInputSource, TISGetInputSourceProperty, WindowFrameSource,
+    events::platform_input_from_native, kTISPropertyInputSourceIsASCIICapable,
+    kTISPropertyInputSourceType, kTISTypeKeyboardInputMode, ns_string, renderer,
 };
 use anyhow::Result;
 use block2::RcBlock;
-use dispatch2::DispatchQueue;
+use dispatch2::{
+    _dispatch_source_type_data_add, DispatchObject, DispatchQueue, DispatchRetained, DispatchSource,
+};
 use gpui::{
     AnyWindowHandle, BackdropLayerSpec, BackgroundExecutor, Bounds, Capslock, CursorStyle,
-    ExternalDragPayload, ExternalPaths, FileDropEvent, ForegroundExecutor, FrameRequestSource,
-    KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas, PlatformDisplay, PlatformFrameSignal,
-    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel,
-    RequestFrameOptions, SharedString, Size, SystemWindowTab, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind, WindowParams,
-    WindowVisibility, point, px, size,
+    DevicePixels, ExternalDragPayload, FileDropEvent, ForegroundExecutor, FrameRequestSource,
+    InputLatencySample, KeyDownEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformAtlas, PlatformDisplay,
+    PlatformFrameSignal, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton,
+    PromptLevel, RequestFrameOptions, ScrollPhase, SharedString, Size, SystemWindowTab,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind,
+    WindowParams, WindowVisibility, point, px, size,
 };
-#[cfg(any(test, feature = "test-support"))]
-use image::RgbaImage;
 
 use core_foundation::base::{CFRelease, CFTypeRef};
 use core_foundation_sys::base::CFEqual;
@@ -26,7 +26,6 @@ use core_foundation_sys::number::{CFBooleanGetValue, CFBooleanRef};
 use core_graphics::display::CGDirectDisplayID;
 use ctor::ctor;
 use futures::channel::oneshot;
-use gpui_apple::display_link::MetalFrameSource;
 use gpui_util::ResultExt;
 use objc2::{
     AnyThread, MainThreadMarker, Message, class, msg_send,
@@ -34,11 +33,6 @@ use objc2::{
     runtime::{AnyClass, AnyObject, AnyProtocol, Bool, ClassBuilder, ProtocolObject, Sel},
     sel,
 };
-#[expect(
-    deprecated,
-    reason = "File-drop decoding expects a property-list array of paths; replacing NSFilenamesPboardType requires migrating both registration and decoding to file URLs"
-)]
-use objc2_app_kit::NSFilenamesPboardType;
 use objc2_app_kit::{
     NSAlert, NSAlertStyle, NSAppearance, NSAutoresizingMaskOptions, NSBackingStoreType, NSBeep,
     NSButton, NSColor, NSDragOperation, NSDraggingContext, NSDraggingImageComponent,
@@ -54,17 +48,15 @@ use objc2_foundation::{
     NSArray, NSInteger, NSNotFound, NSOperatingSystemVersion, NSPoint, NSProcessInfo, NSRect,
     NSSize, NSString, NSUInteger, NSURL,
 };
-use objc2_uniform_type_identifiers::{UTType, UTTypeData, UTTypeFolder};
+use objc2_uniform_type_identifiers::{UTType, UTTypeData, UTTypeFolder, UTTypePlainText};
 use parking_lot::Mutex;
 use raw_window_handle as rwh;
-use smallvec::SmallVec;
 use std::{
     cell::Cell,
     ffi::{CStr, CString, c_void},
     mem,
     ops::Range,
     os::unix::ffi::OsStrExt,
-    path::PathBuf,
     ptr::{self, NonNull},
     rc::{Rc, Weak},
     sync::{
@@ -75,9 +67,17 @@ use std::{
 };
 
 mod backdrop;
+mod drawable_parking;
+mod external_drop;
+mod frame_drawable;
+pub(crate) mod gesture_forwarding;
+mod gesture_present;
 pub(crate) mod hosted;
+pub(crate) mod key_appearance;
 mod liquid_glass;
 mod native_views;
+mod snapshot;
+mod visual_effect;
 
 const WINDOW_STATE_IVAR: &CStr = c"windowState";
 
@@ -276,6 +276,7 @@ unsafe fn build_classes() {
                 character_index_for_point as extern "C" fn(_, Sel, NSPoint) -> NSUInteger,
             );
             native_views::add_view_methods(&mut decl);
+            external_drop::add_view_methods(&mut decl);
             decl.register()
         };
         BLURRED_VIEW_CLASS = {
@@ -413,6 +414,7 @@ unsafe fn build_window_class(name: &CStr, superclass: &AnyClass) -> *const AnyCl
         decl.add_ivar::<*mut c_void>(WINDOW_STATE_IVAR);
         decl.add_method(sel!(dealloc), dealloc_window as extern "C" fn(_, Sel));
         native_views::add_window_methods(&mut decl);
+        key_appearance::add_window_methods(&mut decl, superclass);
 
         decl.add_method(
             sel!(canBecomeMainWindow),
@@ -663,7 +665,11 @@ struct MacWindowState {
     cursor_visible: Arc<AtomicBool>,
     frame_source: FrameSource,
     renderer: renderer::Renderer,
+    instance_buffer_pool: renderer::Context,
+    drawable_parking: drawable_parking::DrawableParking,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
+    input_latency_callback: Option<Box<dyn FnMut(InputLatencySample)>>,
+    input_latency_delivery: Option<InputLatencyDelivery>,
     event_callback: Option<Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>>,
     activate_callback: Option<Box<dyn FnMut(bool)>>,
     visibility_callback: Option<Box<dyn FnMut(WindowVisibility)>>,
@@ -686,7 +692,7 @@ struct MacWindowState {
     pre_fullscreen_traffic_light_frames: Option<TrafficLightFrames>,
     transparent_titlebar: bool,
     previous_modifiers_changed_event: Option<PlatformInput>,
-    keystroke_for_do_command: Option<Keystroke>,
+    keystroke_for_do_command: DoCommandKeystroke,
     do_command_handled: Option<bool>,
     external_files_dragged: bool,
     // Whether the next left-mouse click is also the focusing click.
@@ -712,7 +718,9 @@ struct MacWindowState {
     native_views: native_views::NativeViews,
     backdrop: Option<backdrop::Backdrop>,
     backdrop_spec: Option<BackdropLayerSpec>,
+    backdrop_gradients: gpui::BackdropGradients,
     liquid_glass: Option<liquid_glass::GlassHost>,
+    visual_effects: Option<visual_effect::EffectHost>,
     host: Option<hosted::Host>,
 }
 
@@ -952,6 +960,43 @@ impl MacWindowState {
         }
     }
 
+    fn is_occlusion_visible(&self) -> bool {
+        self.native_window()
+            .occlusionState()
+            .contains(NSWindowOcclusionState::Visible)
+    }
+
+    fn park_drawables(&mut self) {
+        drawable_parking::park_layer(
+            &mut self.drawable_parking,
+            &mut self.renderer,
+            &self.instance_buffer_pool,
+        );
+    }
+
+    fn unpark_drawables(&mut self) -> bool {
+        drawable_parking::unpark_layer(&mut self.drawable_parking, &mut self.renderer)
+    }
+
+    /// Whether a frame should skip the GPU while the drawables are parked. A
+    /// window that became visible before AppKit said so is unparked here.
+    fn keeps_drawables_parked(&mut self) -> bool {
+        if !self.drawable_parking.is_parked() {
+            return false;
+        }
+        if self.is_occlusion_visible() {
+            self.unpark_drawables();
+            return false;
+        }
+        true
+    }
+
+    fn set_drawable_size(&mut self, drawable_size: Size<DevicePixels>) {
+        if let Some(drawable_size) = self.drawable_parking.resize(drawable_size) {
+            self.renderer.update_drawable_size(drawable_size);
+        }
+    }
+
     fn stop_display_link(&mut self) {
         match &mut self.frame_source {
             FrameSource::Metal(metal_frames) => {
@@ -1097,7 +1142,7 @@ impl MacWindow {
             {
                 anyhow::bail!("this NSWindow already hosts a GPUI window");
             }
-            let renderer = renderer::new_renderer(renderer_context, false, use_display_p3)?;
+            let renderer = renderer::new_renderer(renderer_context.clone(), false, use_display_p3)?;
             let allows_automatic_window_tabbing =
                 host_window.is_none() && tabbing_identifier.is_some();
             if host_window.is_none() {
@@ -1180,14 +1225,9 @@ impl MacWindow {
                         screen: target_screen.as_deref()
                     ];
                     assert!(!native_window.is_null());
-                    #[expect(
-                        deprecated,
-                        reason = "File-drop decoding expects a property-list array of paths; replacing NSFilenamesPboardType requires migrating both registration and decoding to file URLs"
-                    )]
                     let () = msg_send![
                         native_window,
-                        registerForDraggedTypes:
-                            &*NSArray::from_slice(&[NSFilenamesPboardType])
+                        registerForDraggedTypes: &*external_drop::dragged_types()
                     ];
                     let () = msg_send![
                         native_window,
@@ -1207,7 +1247,8 @@ impl MacWindow {
             let native_view: *mut AnyObject = msg_send![native_view, initWithFrame: content_bounds];
             assert!(!native_view.is_null());
 
-            let metal_frames = MetalFrameSource::is_available().then(Rc::<MetalFrames>::default);
+            let metal_frames =
+                MetalFrameSource::is_available().then(|| Rc::new(MetalFrames::from_env()));
             let state = Rc::new(Mutex::new(MacWindowState {
                 handle,
                 foreground_executor,
@@ -1223,7 +1264,11 @@ impl MacWindow {
                     None => FrameSource::DisplayLink(None),
                 },
                 renderer,
+                instance_buffer_pool: renderer_context,
+                drawable_parking: drawable_parking::DrawableParking::from_env(),
                 request_frame_callback: None,
+                input_latency_callback: None,
+                input_latency_delivery: None,
                 event_callback: None,
                 activate_callback: None,
                 visibility_callback: None,
@@ -1249,7 +1294,7 @@ impl MacWindow {
                         .as_ref()
                         .is_none_or(|titlebar| titlebar.appears_transparent),
                 previous_modifiers_changed_event: None,
-                keystroke_for_do_command: None,
+                keystroke_for_do_command: DoCommandKeystroke::Idle,
                 do_command_handled: None,
                 external_files_dragged: false,
                 first_mouse: false,
@@ -1269,7 +1314,9 @@ impl MacWindow {
                 native_views: native_views::NativeViews::default(),
                 backdrop: None,
                 backdrop_spec: None,
+                backdrop_gradients: gpui::BackdropGradients::default(),
                 liquid_glass: Some(liquid_glass::GlassHost::default()),
+                visual_effects: Some(visual_effect::EffectHost::default()),
                 host: None,
             }));
             let mut window = Self(state, marker, metal_frames);
@@ -1277,6 +1324,10 @@ impl MacWindow {
             if host_window.is_some() {
                 let host = hosted::Host::attach(&window.0, native_window, native_view);
                 window.0.lock().host = Some(host);
+                let () = msg_send![
+                    native_view,
+                    registerForDraggedTypes: &*external_drop::dragged_types()
+                ];
             } else {
                 (*native_window)
                     .class()
@@ -1524,15 +1575,22 @@ impl Drop for MacWindow {
         // renderer's command queue are actually released with the window.
         drop(this.accesskit_adapter.take());
         let glass = this.liquid_glass.take();
+        let effects = this.visual_effects.take();
         let backdrop = this.backdrop.take();
         let native_views = this.native_views.detach_all();
         this.renderer.destroy();
+        key_appearance::forget(this.native_window());
         let window = this.native_window;
         let sheet_parent = this.sheet_parent.take();
         match &mut this.frame_source {
-            FrameSource::Metal(metal_frames) => metal_frames.replace(None),
+            FrameSource::Metal(metal_frames) => {
+                metal_frames.replace(None);
+                metal_frames.set_latency_sink(None);
+            }
             FrameSource::DisplayLink(frame_source) => drop(frame_source.take()),
         }
+        drop(this.input_latency_delivery.take());
+        this.input_latency_callback = None;
         let detached = this.host.as_mut().and_then(hosted::Host::detach);
         if this.host.is_none() {
             unsafe {
@@ -1564,6 +1622,9 @@ impl Drop for MacWindow {
                     if let Some(glass) = glass {
                         glass.remove();
                     }
+                    if let Some(effects) = effects {
+                        effects.remove();
+                    }
                     if let Some(backdrop) = backdrop {
                         backdrop.remove();
                     }
@@ -1571,7 +1632,7 @@ impl Drop for MacWindow {
                 .detach();
             return;
         }
-        drop((glass, backdrop, native_views));
+        drop((glass, effects, backdrop, native_views));
         this.foreground_executor
             .spawn(async move {
                 unsafe {
@@ -2191,6 +2252,25 @@ impl PlatformWindow for MacWindow {
         self.0.as_ref().lock().request_frame_callback = Some(callback);
     }
 
+    fn on_input_latency(&self, callback: Option<Box<dyn FnMut(InputLatencySample)>>) {
+        let mut lock = self.0.lock();
+        let FrameSource::Metal(metal_frames) = &lock.frame_source else {
+            lock.input_latency_callback = callback;
+            return;
+        };
+        let metal_frames = metal_frames.clone();
+        if callback.is_some() {
+            let delivery = lock
+                .input_latency_delivery
+                .get_or_insert_with(|| InputLatencyDelivery::new(Rc::downgrade(&self.0)));
+            metal_frames.set_latency_sink(Some(delivery.sink.clone()));
+        } else {
+            metal_frames.set_latency_sink(None);
+            lock.input_latency_delivery = None;
+        }
+        lock.input_latency_callback = callback;
+    }
+
     fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
         self.0.as_ref().lock().event_callback = Some(callback);
     }
@@ -2291,11 +2371,21 @@ impl PlatformWindow for MacWindow {
     }
 
     fn draw(&self, scene: &gpui::Scene) {
+        if self.0.lock().keeps_drawables_parked() {
+            let mut this = self.0.lock();
+            let native_view_layout = native_views::plan_layout(&this, scene);
+            native_views::update_background(&mut this, scene);
+            native_views::scene_drawn(&mut this, scene);
+            drop(this);
+            native_views::apply_layout(&self.0, native_view_layout);
+            return;
+        }
+        let drawable = frame_drawable::next_drawable(&self.0);
         let mut this = self.0.lock();
         if this.backdrop.is_some() {
             let size = this.host_view().map(|host| host.bounds().size);
             let scale_factor = f64::from(this.scale_factor());
-            let is_key = this.native_window().isKeyWindow();
+            let is_key = backdrop_looks_key_window(this.native_window());
             if let (Some(size), Some(backdrop)) = (size, &mut this.backdrop) {
                 backdrop.relayout(size, scale_factor, is_key);
             }
@@ -2303,7 +2393,17 @@ impl PlatformWindow for MacWindow {
         let native_view_layout = native_views::plan_layout(&this, scene);
         native_views::update_background(&mut this, scene);
         native_views::scene_drawn(&mut this, scene);
-        this.renderer.draw(scene);
+        match drawable {
+            frame_drawable::FrameDrawable::Acquired(drawable)
+                if !this.renderer.is_display_link_attached() =>
+            {
+                frame_drawable::draw_into(&mut this.renderer, drawable, scene)
+            }
+            frame_drawable::FrameDrawable::Unavailable => {
+                log::warn!("skipped a frame: the layer had no drawable to give")
+            }
+            _ => this.renderer.draw(scene),
+        }
         drop(this);
         native_views::apply_layout(&self.0, native_view_layout);
     }
@@ -2345,9 +2445,31 @@ impl PlatformWindow for MacWindow {
         true
     }
 
+    fn composites_visual_effects(&self) -> bool {
+        true
+    }
+
     fn set_backdrop_layer(&self, spec: Option<BackdropLayerSpec>) {
         self.0.lock().backdrop_spec = spec.map(BackdropLayerSpec::sanitized);
         update_backdrop(&self.0);
+    }
+
+    fn set_backdrop_gradients(&self, gradients: gpui::BackdropGradients) {
+        self.0.lock().backdrop_gradients = gradients.sanitized();
+        update_backdrop(&self.0);
+    }
+
+    fn set_keeps_key_appearance(&self, keeps: bool) {
+        let this = self.0.lock();
+        let window = this.native_window();
+        if keeps && this.host.is_some() && !key_appearance::patch_hosted_class(window) {
+            log::warn!("hosted window can't keep its key appearance");
+            return;
+        }
+        key_appearance::set_keeps(window, keeps);
+        if let Some(backdrop) = &this.backdrop {
+            backdrop.set_key(backdrop_looks_key_window(window));
+        }
     }
 
     fn set_traffic_light_origin(&self, origin: Point<Pixels>) {
@@ -2535,9 +2657,12 @@ impl PlatformWindow for MacWindow {
     }
 
     fn start_external_drag(&self, payload: &ExternalDragPayload) -> bool {
-        let ExternalDragPayload::Files(paths) = payload;
-        if paths.entries().is_empty() {
-            log::warn!("start_external_drag declined: no paths");
+        let is_empty = match payload {
+            ExternalDragPayload::Files(paths) => paths.entries().is_empty(),
+            ExternalDragPayload::Text(text) => text.is_empty(),
+        };
+        if is_empty {
+            log::warn!("start_external_drag declined: empty payload");
             return false;
         }
 
@@ -2571,60 +2696,60 @@ impl PlatformWindow for MacWindow {
                 NSSize::new(32., 32.),
             );
 
-            for (path, is_directory) in paths.entries() {
-                // Preserve non-UTF-8 paths
-                let Ok(path_bytes) = CString::new(path.as_os_str().as_bytes()) else {
-                    log::warn!("start_external_drag skipped path containing an interior nul byte");
-                    continue;
-                };
+            match payload {
+                ExternalDragPayload::Files(paths) => {
+                    for (path, is_directory) in paths.entries() {
+                        // Preserve non-UTF-8 paths
+                        let Ok(path_bytes) = CString::new(path.as_os_str().as_bytes()) else {
+                            log::warn!(
+                                "start_external_drag skipped path containing an interior nul byte"
+                            );
+                            continue;
+                        };
 
-                let path_bytes = NonNull::new_unchecked(path_bytes.as_ptr().cast_mut());
-                let url = NSURL::fileURLWithFileSystemRepresentation_isDirectory_relativeToURL(
-                    path_bytes,
-                    *is_directory,
-                    None,
-                );
+                        let path_bytes = NonNull::new_unchecked(path_bytes.as_ptr().cast_mut());
+                        let url =
+                            NSURL::fileURLWithFileSystemRepresentation_isDirectory_relativeToURL(
+                                path_bytes,
+                                *is_directory,
+                                None,
+                            );
 
-                let pasteboard_writer = ProtocolObject::<dyn NSPasteboardWriting>::from_ref(&*url);
-                let item = NSDraggingItem::initWithPasteboardWriter(
-                    NSDraggingItem::alloc(),
-                    pasteboard_writer,
-                );
-
-                // Resolve drag images lazily via `imageComponentsProvider` (Apple's
-                // recommendation for large item counts), and by file *type* rather than
-                // `iconForFile:`, which can synchronously hit LaunchServices, network
-                // mounts, or iCloud for every selected path and beachball drag startup.
-                let is_directory = *is_directory;
-                let extension = path
-                    .extension()
-                    .and_then(|extension| extension.to_str())
-                    .map(String::from);
-                let provider = RcBlock::new(move || {
-                    let component = NSDraggingImageComponent::draggingImageComponentWithKey(
-                        NSDraggingImageComponentIconKey,
-                    );
-                    let workspace = NSWorkspace::sharedWorkspace();
-                    let content_type = if is_directory {
-                        UTTypeFolder.retain()
-                    } else {
-                        extension
-                            .as_ref()
-                            .and_then(|extension| {
-                                UTType::typeWithFilenameExtension(&NSString::from_str(extension))
-                            })
-                            .unwrap_or_else(|| UTTypeData.retain())
-                    };
-                    let icon = workspace.iconForContentType(&content_type);
-                    component.setContents(Some(&icon));
-                    // Component frames are relative to the item's dragging frame.
-                    component.setFrame(NSRect::new(NSPoint::new(0., 0.), NSSize::new(32., 32.)));
-                    let components = NSArray::from_slice(&[&*component]);
-                    NonNull::new_unchecked(Retained::autorelease_return(components))
-                });
-                item.setDraggingFrame(frame);
-                item.setImageComponentsProvider(Some(&provider));
-                let _: () = msg_send![dragging_items, addObject: Retained::as_ptr(&item)];
+                        // Resolve drag images lazily via `imageComponentsProvider` (Apple's
+                        // recommendation for large item counts), and by file *type* rather than
+                        // `iconForFile:`, which can synchronously hit LaunchServices, network
+                        // mounts, or iCloud for every selected path and beachball drag startup.
+                        let is_directory = *is_directory;
+                        let extension = path
+                            .extension()
+                            .and_then(|extension| extension.to_str())
+                            .map(String::from);
+                        add_dragging_item(
+                            dragging_items,
+                            ProtocolObject::from_ref(&*url),
+                            frame,
+                            move || {
+                                if is_directory {
+                                    UTTypeFolder.retain()
+                                } else {
+                                    extension
+                                        .as_ref()
+                                        .and_then(|extension| {
+                                            UTType::typeWithFilenameExtension(&NSString::from_str(
+                                                extension,
+                                            ))
+                                        })
+                                        .unwrap_or_else(|| UTTypeData.retain())
+                                }
+                            },
+                        );
+                    }
+                }
+                ExternalDragPayload::Text(text) => {
+                    add_dragging_item(dragging_items, &text_drag_writer(text), frame, || {
+                        UTTypePlainText.retain()
+                    });
+                }
             }
 
             let count: NSUInteger = msg_send![dragging_items, count];
@@ -2657,10 +2782,14 @@ impl PlatformWindow for MacWindow {
         NSBeep()
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, scene: &gpui::Scene) -> Result<RgbaImage> {
+    fn render_to_image(&self, scene: &gpui::Scene, scale: f32) -> Result<image::RgbaImage> {
         let mut this = self.0.lock();
-        this.renderer.render_to_image(scene)
+        let was_parked = this.unpark_drawables();
+        let image = snapshot::render_scene_to_image(&mut this.renderer, scene, scale);
+        if was_parked {
+            this.park_drawables();
+        }
+        image
     }
 
     fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
@@ -2742,22 +2871,27 @@ impl rwh::HasDisplayHandle for MacWindow {
     }
 }
 
+fn backdrop_looks_key_window(window: &NSWindow) -> bool {
+    window.isKeyWindow() || key_appearance::forces(window)
+}
+
 fn update_backdrop(window_state: &Mutex<MacWindowState>) {
-    let (host, backdrop, spec, scale_factor, is_key) = {
+    let (host, backdrop, spec, gradients, scale_factor, is_key) = {
         let mut lock = window_state.lock();
         let liquid = lock.background_appearance == WindowBackgroundAppearance::LiquidGlass;
         (
             lock.host_view().filter(|_| liquid),
             lock.backdrop.take(),
             lock.backdrop_spec,
+            lock.backdrop_gradients,
             f64::from(lock.scale_factor()),
-            lock.native_window().isKeyWindow(),
+            backdrop_looks_key_window(lock.native_window()),
         )
     };
     let backdrop = match host {
         Some(host) => {
             let mut backdrop = backdrop.unwrap_or_else(|| backdrop::Backdrop::new(&host));
-            backdrop.update(&host, spec.as_ref(), scale_factor, is_key);
+            backdrop.update(&host, spec.as_ref(), &gradients, scale_factor, is_key);
             Some(backdrop)
         }
         None => {
@@ -3179,7 +3313,8 @@ extern "C" fn handle_key_event(
             {
                 {
                     let mut lock = window_state.as_ref().lock();
-                    lock.keystroke_for_do_command = Some(key_down_event.keystroke.clone());
+                    lock.keystroke_for_do_command =
+                        DoCommandKeystroke::Pending(key_down_event.keystroke.clone());
                     lock.do_command_handled.take();
                     drop(lock);
                 }
@@ -3192,7 +3327,7 @@ extern "C" fn handle_key_event(
                         msg_send![input_context, handleEvent: native_event]
                     }
                 };
-                window_state.as_ref().lock().keystroke_for_do_command.take();
+                window_state.as_ref().lock().keystroke_for_do_command = DoCommandKeystroke::Idle;
                 if let Some(handled) = window_state.as_ref().lock().do_command_handled.take() {
                     return handled.to_objc();
                 } else if handled == Bool::YES {
@@ -3266,6 +3401,9 @@ extern "C" fn handle_view_event(this: &AnyObject, _: Sel, native_event: *mut Any
         _ => {}
     }
     let event = unsafe { platform_input_from_native(native_event, Some(view_frame)) };
+    if let FrameSource::Metal(metal_frames) = &lock.frame_source {
+        record_latency_input(metal_frames, native_event, event.as_ref());
+    }
 
     if let Some(mut event) = event {
         // AppKit unhides the cursor on the next mouse movement; mirror that here.
@@ -3399,10 +3537,17 @@ extern "C" fn handle_view_event(this: &AnyObject, _: Sel, native_event: *mut Any
             _ => {}
         }
 
+        let gesture_phase = gesture_present::gesture_phase(native_event);
+        if gesture_phase.is_some() {
+            gesture_present::before_dispatch(&lock);
+        }
         if let Some(mut callback) = lock.event_callback.take() {
             drop(lock);
             callback(event);
             window_state.lock().event_callback = Some(callback);
+        }
+        if let Some(gesture_phase) = gesture_phase {
+            gesture_present::after_dispatch(&window_state, gesture_phase);
         }
     }
 }
@@ -3454,20 +3599,45 @@ fn report_visibility(window_state: &Rc<Mutex<MacWindowState>>) {
 extern "C" fn window_did_change_occlusion_state(this: &AnyObject, _: Sel, _: *mut AnyObject) {
     let window_state = unsafe { get_window_state(this) };
     let mut lock = window_state.lock();
-    if lock
-        .native_window()
-        .occlusionState()
-        .contains(NSWindowOcclusionState::Visible)
-    {
+    if lock.is_occlusion_visible() {
         lock.move_traffic_light();
+        if lock.unpark_drawables() {
+            drop(lock);
+            present_unparked_frame(&window_state);
+            lock = window_state.lock();
+        }
         lock.start_display_link(&window_state);
     } else {
         lock.stop_display_link();
+        lock.park_drawables();
     }
     drop(lock);
     // The only visibility source: AppKit posts this for covering, minimizing,
     // hiding, Space switches, and display sleep alike.
     report_visibility(&window_state);
+}
+
+/// Draws a frame at the restored drawable size and presents it with the
+/// current Core Animation transaction, so the frame and the size change reach
+/// the screen together instead of showing a stretched or empty layer.
+fn present_unparked_frame(window_state: &Rc<Mutex<MacWindowState>>) {
+    let signal_at = PlatformFrameSignal::capture(scheduler::Instant::now);
+    let mut lock = window_state.lock();
+    let Some(mut callback) = lock.request_frame_callback.take() else {
+        return;
+    };
+    lock.stop_display_link();
+    lock.renderer.set_presents_with_transaction(true);
+    drop(lock);
+    callback(RequestFrameOptions {
+        require_presentation: true,
+        signal_at,
+        signal_source: FrameRequestSource::NativeCallback,
+        ..Default::default()
+    });
+    let mut lock = window_state.lock();
+    lock.request_frame_callback = Some(callback);
+    lock.renderer.set_presents_with_transaction(false);
 }
 
 extern "C" fn window_did_resize(this: &AnyObject, _: Sel, _: *mut AnyObject) {
@@ -3563,7 +3733,7 @@ fn update_window_scale_factor(window_state: &Rc<Mutex<MacWindowState>>) {
         }
     }
 
-    lock.renderer.update_drawable_size(drawable_size);
+    lock.set_drawable_size(drawable_size);
 
     if let Some(mut callback) = lock.resize_callback.take() {
         let content_size = lock.content_size();
@@ -3630,7 +3800,7 @@ extern "C" fn window_did_change_key_status(this: &AnyObject, selector: Sel, _: *
 
     let executor = lock.foreground_executor.clone();
     if let Some(backdrop) = &lock.backdrop {
-        backdrop.set_key(is_active);
+        backdrop.set_key(backdrop_looks_key_window(lock.native_window()));
     }
     drop(lock);
 
@@ -3767,7 +3937,7 @@ extern "C" fn set_frame_size(this: &AnyObject, _: Sel, size: NSSize) {
 
     let scale_factor = lock.scale_factor();
     let drawable_size = new_size.to_device_pixels(scale_factor);
-    lock.renderer.update_drawable_size(drawable_size);
+    lock.set_drawable_size(drawable_size);
 
     if let Some(mut callback) = lock.resize_callback.take() {
         let content_size = lock.content_size();
@@ -3801,6 +3971,85 @@ extern "C" fn display_layer(this: &AnyObject, _: Sel, _: *mut AnyObject) {
     }
 }
 
+/// Brings presentations of inputs from the presented handlers' system thread
+/// to the main thread, where the window's latency callback receives them.
+struct InputLatencyDelivery {
+    source: DispatchRetained<DispatchSource>,
+    sink: Arc<LatencySink>,
+    window_state: *const Mutex<MacWindowState>,
+}
+
+impl InputLatencyDelivery {
+    fn new(window_state: Weak<Mutex<MacWindowState>>) -> Self {
+        let window_state = Weak::into_raw(window_state);
+        let source = unsafe {
+            let source = DispatchSource::new(
+                &raw const _dispatch_source_type_data_add as *mut _,
+                0,
+                0,
+                Some(DispatchQueue::main()),
+            );
+            source.set_context(window_state as *mut c_void);
+            source.set_event_handler_f(deliver_input_latency);
+            // Resume before this source can ever be dropped: destroying a
+            // suspended dispatch source is undefined behavior (#50875).
+            source.resume();
+            source
+        };
+        let sink = Arc::new(LatencySink::new({
+            let source = source.clone();
+            move || source.merge_data(1)
+        }));
+        Self {
+            source,
+            sink,
+            window_state,
+        }
+    }
+}
+
+impl Drop for InputLatencyDelivery {
+    fn drop(&mut self) {
+        // The event handler only runs on the main queue, and cancelling here,
+        // also on the main thread, guarantees it never runs again, so its
+        // context can be released. Handlers still holding the sink merge into
+        // the cancelled source harmlessly.
+        self.source.cancel();
+        drop(unsafe { Weak::from_raw(self.window_state) });
+    }
+}
+
+extern "C" fn deliver_input_latency(context: *mut c_void) {
+    let window_state =
+        mem::ManuallyDrop::new(unsafe { Weak::from_raw(context as *const Mutex<MacWindowState>) });
+    let Some(window_state) = window_state.upgrade() else {
+        return;
+    };
+    let mut lock = window_state.lock();
+    let Some(sink) = lock
+        .input_latency_delivery
+        .as_ref()
+        .map(|delivery| delivery.sink.clone())
+    else {
+        return;
+    };
+    let presented = sink.take();
+    let Some(mut callback) = lock.input_latency_callback.take() else {
+        return;
+    };
+    drop(lock);
+    let (now_seconds, now) = crate::display_link::host_time_now();
+    for presented in presented {
+        if let Some(sample) = presented.sample(now_seconds, now) {
+            callback(sample);
+        }
+    }
+    let mut lock = window_state.lock();
+    if lock.input_latency_callback.is_none() && lock.input_latency_delivery.is_some() {
+        lock.input_latency_callback = Some(callback);
+    }
+}
+
 extern "C" fn step(view: *mut c_void) {
     let view = view as *mut AnyObject;
     let window_state = unsafe { get_window_state(&*view) };
@@ -3826,6 +4075,23 @@ extern "C" fn step(view: *mut c_void) {
     }
 }
 
+fn record_latency_input(
+    metal_frames: &MetalFrames,
+    native_event: *mut AnyObject,
+    event: Option<&PlatformInput>,
+) {
+    let kind = match event {
+        Some(PlatformInput::Scroll(scroll)) if scroll.momentum_phase != ScrollPhase::None => {
+            InputKind::Momentum
+        }
+        Some(PlatformInput::Scroll(_)) => InputKind::Scroll,
+        Some(PlatformInput::Pinch(_)) => InputKind::Magnify,
+        _ => return,
+    };
+    let timestamp: f64 = unsafe { msg_send![native_event, timestamp] };
+    metal_frames.record_input(kind, timestamp);
+}
+
 fn metal_frame(
     window_state: &Rc<Mutex<MacWindowState>>,
     update: &objc2_quartz_core::CAMetalDisplayLinkUpdate,
@@ -3839,12 +4105,16 @@ fn metal_frame(
     let Some(mut callback) = lock.request_frame_callback.take() else {
         return;
     };
+    metal_frames.watch_presentation(update);
     lock.renderer.set_frame_drawable(Some(update.drawable()));
     drop(lock);
     metal_frames.begin_frame();
     callback(RequestFrameOptions {
         signal_at,
         signal_source: FrameRequestSource::NativeCallback,
+        target_presented_at: crate::display_link::host_time_instant(
+            update.targetPresentationTimestamp(),
+        ),
         ..Default::default()
     });
     let mut lock = window_state.lock();
@@ -4006,25 +4276,69 @@ extern "C" fn attributed_substring_for_proposed_range(
     .unwrap_or(ptr::null_mut::<AnyObject>())
 }
 
-// We ignore which selector it asks us to do because the user may have
-// bound the shortcut to something else.
-extern "C" fn do_command_by_selector(this: &AnyObject, _: Sel, _: Sel) {
+extern "C" fn do_command_by_selector(this: &AnyObject, _: Sel, selector: Sel) {
     let state = unsafe { get_window_state(this) };
+    let keystroke = mem::take(&mut state.as_ref().lock().keystroke_for_do_command);
+    let selector = selector.name().to_string_lossy();
+
+    let (keystroke, handled) = resolve_do_command(
+        &selector,
+        keystroke,
+        |selector| {
+            with_input_handler(this, |input_handler| {
+                input_handler.do_command_by_selector(selector)
+            })
+            .unwrap_or(false)
+        },
+        |keystroke| {
+            let mut event_callback = state.as_ref().lock().event_callback.take()?;
+            let result = event_callback(PlatformInput::KeyDown(KeyDownEvent {
+                keystroke,
+                is_held: false,
+                prefer_character_input: false,
+            }));
+            state.as_ref().lock().event_callback = Some(event_callback);
+            Some(!result.propagate)
+        },
+    );
     let mut lock = state.as_ref().lock();
-    let keystroke = lock.keystroke_for_do_command.take();
-    let mut event_callback = lock.event_callback.take();
-    drop(lock);
-
-    if let Some((keystroke, callback)) = keystroke.zip(event_callback.as_mut()) {
-        let handled = (callback)(PlatformInput::KeyDown(KeyDownEvent {
-            keystroke,
-            is_held: false,
-            prefer_character_input: false,
-        }));
-        state.as_ref().lock().do_command_handled = Some(!handled.propagate);
+    lock.keystroke_for_do_command = keystroke;
+    if let Some(handled) = handled {
+        lock.do_command_handled = Some(handled);
     }
+}
 
-    state.as_ref().lock().event_callback = event_callback;
+#[derive(Debug, Default, PartialEq)]
+enum DoCommandKeystroke {
+    #[default]
+    Idle,
+    Pending(Keystroke),
+    Dispatched,
+}
+
+fn resolve_do_command(
+    selector: &str,
+    keystroke: DoCommandKeystroke,
+    offer_to_input_handler: impl FnOnce(&str) -> bool,
+    dispatch_keystroke: impl FnOnce(Keystroke) -> Option<bool>,
+) -> (DoCommandKeystroke, Option<bool>) {
+    match keystroke {
+        DoCommandKeystroke::Dispatched => (DoCommandKeystroke::Dispatched, None),
+        DoCommandKeystroke::Idle => {
+            offer_to_input_handler(selector);
+            (DoCommandKeystroke::Idle, None)
+        }
+        DoCommandKeystroke::Pending(keystroke) => {
+            if offer_to_input_handler(selector) {
+                (DoCommandKeystroke::Idle, Some(true))
+            } else {
+                (
+                    DoCommandKeystroke::Dispatched,
+                    dispatch_keystroke(keystroke),
+                )
+            }
+        }
+    }
 }
 
 extern "C" fn view_did_change_effective_appearance(this: &AnyObject, _: Sel) {
@@ -4091,7 +4405,10 @@ fn screen_point_to_gpui_point(this: &AnyObject, position: NSPoint) -> Point<Pixe
 
 fn is_drag_from_this_window(this: &AnyObject, dragging_info: *mut AnyObject) -> bool {
     let source: *mut AnyObject = unsafe { msg_send![dragging_info, draggingSource] };
+    let native_window =
+        unsafe { window_state_if_set(this) }.map(|state| state.lock().native_window);
     std::ptr::eq(source as *const AnyObject, this as *const AnyObject)
+        || native_window.is_some_and(|window| std::ptr::eq(source, window))
 }
 
 extern "C" fn dragging_entered(
@@ -4102,8 +4419,16 @@ extern "C" fn dragging_entered(
     let is_source_window = is_drag_from_this_window(this, dragging_info);
     let window_state = unsafe { get_window_state(this) };
     let position = drag_event_position(&window_state, dragging_info);
-    let paths = external_paths_from_event(dragging_info);
-    if let Some(event) = paths.map(|paths| FileDropEvent::Entered { position, paths })
+    let event =
+        external_drop::payload_from_dragging_info(dragging_info).map(|payload| match payload {
+            external_drop::DroppedPayload::Paths(paths) => {
+                FileDropEvent::Entered { position, paths }
+            }
+            external_drop::DroppedPayload::Items(items) => {
+                FileDropEvent::ItemsEntered { position, items }
+            }
+        });
+    if let Some(event) = event
         && send_file_drop_event(window_state, event)
     {
         if is_source_window {
@@ -4148,29 +4473,6 @@ extern "C" fn perform_drag_operation(
     send_file_drop_event(window_state, FileDropEvent::Submit { position }).to_objc()
 }
 
-fn external_paths_from_event(dragging_info: *mut AnyObject) -> Option<ExternalPaths> {
-    let mut paths = SmallVec::new();
-    let pasteboard: *mut AnyObject = unsafe { msg_send![dragging_info, draggingPasteboard] };
-    if pasteboard.is_null() {
-        return None;
-    }
-    #[expect(
-        deprecated,
-        reason = "File-drop decoding expects a property-list array of paths; replacing NSFilenamesPboardType requires migrating both registration and decoding to file URLs"
-    )]
-    let filenames: *mut NSArray<NSString> =
-        unsafe { msg_send![pasteboard, propertyListForType: NSFilenamesPboardType] };
-    let filenames = unsafe { filenames.as_ref() }?;
-    for file in filenames {
-        let path = unsafe {
-            let f = file.UTF8String();
-            CStr::from_ptr(f).to_string_lossy().into_owned()
-        };
-        paths.push(PathBuf::from(path))
-    }
-    Some(ExternalPaths(paths))
-}
-
 extern "C" fn conclude_drag_operation(this: &AnyObject, _: Sel, _: *mut AnyObject) {
     let window_state = unsafe { get_window_state(this) };
     send_file_drop_event(window_state, FileDropEvent::Exited);
@@ -4212,6 +4514,35 @@ extern "C" fn dragging_session_ended(
         lock.last_left_mouse_down_event = None;
     }
     send_file_drop_event(window_state, FileDropEvent::Ended);
+}
+
+fn text_drag_writer(text: &str) -> Retained<ProtocolObject<dyn NSPasteboardWriting>> {
+    ProtocolObject::from_retained(NSString::from_str(text))
+}
+
+unsafe fn add_dragging_item(
+    dragging_items: *mut AnyObject,
+    writer: &ProtocolObject<dyn NSPasteboardWriting>,
+    frame: NSRect,
+    content_type: impl Fn() -> Retained<UTType> + 'static,
+) {
+    let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), writer);
+    let provider = RcBlock::new(move || {
+        let component = NSDraggingImageComponent::draggingImageComponentWithKey(unsafe {
+            NSDraggingImageComponentIconKey
+        });
+        let icon = NSWorkspace::sharedWorkspace().iconForContentType(&content_type());
+        unsafe { component.setContents(Some(&icon)) };
+        // Component frames are relative to the item's dragging frame.
+        component.setFrame(NSRect::new(NSPoint::new(0., 0.), NSSize::new(32., 32.)));
+        let components = NSArray::from_slice(&[&*component]);
+        unsafe { NonNull::new_unchecked(Retained::autorelease_return(components)) }
+    });
+    item.setDraggingFrame(frame);
+    unsafe {
+        item.setImageComponentsProvider(Some(&provider));
+        let _: () = msg_send![dragging_items, addObject: Retained::as_ptr(&item)];
+    }
 }
 
 fn synthetic_drag_button_is_pressed(button: Option<MouseButton>, pressed: NSUInteger) -> bool {
@@ -4263,7 +4594,7 @@ fn send_file_drop_event(
     file_drop_event: FileDropEvent,
 ) -> bool {
     let external_files_dragged = match file_drop_event {
-        FileDropEvent::Entered { .. } => Some(true),
+        FileDropEvent::Entered { .. } | FileDropEvent::ItemsEntered { .. } => Some(true),
         FileDropEvent::Exited | FileDropEvent::Ended => Some(false),
         _ => None,
     };
@@ -4496,6 +4827,102 @@ extern "C" fn toggle_tab_bar(this: &AnyObject, _sel: Sel, _id: *mut AnyObject) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+
+    #[test]
+    fn text_drag_writes_a_plain_string_item() {
+        autoreleasepool(|_| {
+            let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+            pasteboard.clearContents();
+            let text = "dragged héllo 🦀";
+            let writer = text_drag_writer(text);
+            assert!(pasteboard.writeObjects(&NSArray::from_slice(&[&*writer])));
+            let string = pasteboard
+                .stringForType(unsafe { NSPasteboardTypeString })
+                .expect("a plain-text item");
+            assert_eq!(string.to_string(), text);
+            let utf8 = pasteboard
+                .stringForType(&NSString::from_str("public.utf8-plain-text"))
+                .expect("a UTF-8 plain-text item");
+            assert_eq!(utf8.to_string(), text);
+            let _: () = unsafe { msg_send![&*pasteboard, releaseGlobally] };
+        });
+    }
+
+    fn keystroke(key: &'static str) -> Keystroke {
+        Keystroke::parse(key).unwrap()
+    }
+
+    #[test]
+    fn a_handled_text_command_suppresses_the_keystroke_fallback() {
+        let mut offered = Vec::new();
+        let (state, handled) = resolve_do_command(
+            "moveWordLeft:",
+            DoCommandKeystroke::Pending(keystroke("alt-left")),
+            |selector| {
+                offered.push(selector.to_string());
+                true
+            },
+            |_| panic!("the keystroke must not be dispatched after the handler took the command"),
+        );
+        assert_eq!(offered, ["moveWordLeft:"]);
+        assert_eq!(state, DoCommandKeystroke::Idle);
+        assert_eq!(handled, Some(true));
+    }
+
+    #[test]
+    fn a_declined_text_command_falls_back_to_the_keystroke_once() {
+        let mut dispatched = Vec::new();
+        let (state, handled) = resolve_do_command(
+            "moveLeft:",
+            DoCommandKeystroke::Pending(keystroke("left")),
+            |_| false,
+            |keystroke| {
+                dispatched.push(keystroke);
+                Some(true)
+            },
+        );
+        assert_eq!(dispatched, [keystroke("left")]);
+        assert_eq!(state, DoCommandKeystroke::Dispatched);
+        assert_eq!(handled, Some(true));
+
+        let (state, handled) = resolve_do_command(
+            "moveLeftAndModifySelection:",
+            state,
+            |_| panic!("a key that fell back to its keystroke offers no more commands"),
+            |_| panic!("a keystroke is dispatched at most once"),
+        );
+        assert_eq!(state, DoCommandKeystroke::Dispatched);
+        assert_eq!(handled, None);
+
+        let (_, handled) = resolve_do_command(
+            "insertNewline:",
+            DoCommandKeystroke::Pending(keystroke("enter")),
+            |_| false,
+            |_| Some(false),
+        );
+        assert_eq!(handled, Some(false));
+    }
+
+    #[test]
+    fn commands_for_keys_gpui_already_dispatched_only_reach_the_input_handler() {
+        let mut offered = Vec::new();
+        let mut state = DoCommandKeystroke::Idle;
+        for selector in ["deleteWordBackward:", "moveWordRight:"] {
+            let (next, handled) = resolve_do_command(
+                selector,
+                state,
+                |selector| {
+                    offered.push(selector.to_string());
+                    false
+                },
+                |_| panic!("GPUI's bindings already saw this key"),
+            );
+            assert_eq!(handled, None);
+            state = next;
+        }
+        assert_eq!(offered, ["deleteWordBackward:", "moveWordRight:"]);
+    }
 
     #[test]
     fn display_id_for_screen_handles_missing_metadata() {

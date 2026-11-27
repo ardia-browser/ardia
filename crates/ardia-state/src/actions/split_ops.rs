@@ -98,6 +98,106 @@ impl Tx<'_> {
         Ok(tab)
     }
 
+    pub(super) fn drop_into_split(
+        &mut self,
+        tab: &TabId,
+        anchor: &TabId,
+        side: SplitSide,
+    ) -> Result<(), ActionError> {
+        if tab == anchor {
+            return Err(ActionError::Invalid("a tab can't split with itself"));
+        }
+        let moving = self.require_listed_tab(tab)?;
+        let target = self.require_listed_tab(anchor)?;
+        if moving.window_id != target.window_id || moving.profile_id != target.profile_id {
+            return Err(ActionError::Invalid(
+                "split tabs must share a window and profile",
+            ));
+        }
+        let window = target.window_id.clone();
+        let existing = self.s.split_of(anchor.as_str()).cloned();
+        if let Some(split) = existing
+            .as_ref()
+            .filter(|split| split.contains(tab.as_str()))
+        {
+            let moved = split
+                .moved_pane(tab, anchor, side)
+                .ok_or(ActionError::Invalid("that pane can't move"))?;
+            self.replace_split(&split.id, Some(moved));
+            self.reorder_window(&window);
+            self.activate(tab);
+            return Ok(());
+        }
+        if !SplitView::can_insert(existing.as_deref(), anchor.as_str(), side) {
+            return Err(ActionError::Invalid("this split is full"));
+        }
+        if let Some(own) = self.s.split_of(tab.as_str()).cloned() {
+            let rest = own.without_panes(&HashSet::from([tab.clone()]));
+            self.replace_split(&own.id, Some(rest));
+        }
+        self.join_lane(anchor, std::slice::from_ref(tab));
+        let view = match &existing {
+            Some(split) => split
+                .inserted(anchor, tab, side)
+                .ok_or(ActionError::Invalid("this split is full"))?,
+            None => SplitView::paired(self.ids.split(), window.clone(), anchor, tab, side),
+        };
+        let id = view.id.clone();
+        self.replace_split(&id, Some(view));
+        self.out.split = Some(id);
+        self.reorder_window(&window);
+        self.activate(tab);
+        Ok(())
+    }
+
+    pub(super) fn replace_split_pane(
+        &mut self,
+        pane: &TabId,
+        tab: &TabId,
+    ) -> Result<(), ActionError> {
+        let split = self
+            .s
+            .split_of(pane.as_str())
+            .cloned()
+            .ok_or(ActionError::Invalid("the pane isn't split"))?;
+        let held = self.require_tab(pane)?;
+        let incoming = self.require_listed_tab(tab)?;
+        if split.contains(tab.as_str())
+            || incoming.window_id != held.window_id
+            || incoming.profile_id != held.profile_id
+        {
+            return Err(ActionError::Invalid("that tab can't take this pane"));
+        }
+        if let Some(own) = self.s.split_of(tab.as_str()).cloned() {
+            let rest = own.without_panes(&HashSet::from([tab.clone()]));
+            self.replace_split(&own.id, Some(rest));
+        }
+        self.join_lane(pane, std::slice::from_ref(tab));
+        let current = self.require_split(&split.id)?;
+        let ids: Vec<TabId> = current
+            .tab_ids()
+            .into_iter()
+            .map(|id| if id == *pane { tab.clone() } else { id })
+            .collect();
+        self.replace_split(&split.id, Some(current.with_pane_ids(&ids)));
+        self.close_tabs(std::slice::from_ref(pane), false);
+        self.reorder_window(&held.window_id);
+        self.activate(tab);
+        Ok(())
+    }
+
+    pub(super) fn remove_empty_split_pane(&mut self, tab: &TabId) -> Result<(), ActionError> {
+        let held = self.require_tab(tab)?;
+        let empty = held.url.is_empty() || held.url.starts_with("ardia://newtab");
+        if !empty || self.s.split_of(tab.as_str()).is_none() {
+            return Err(ActionError::Invalid(
+                "only an empty split pane closes this way",
+            ));
+        }
+        self.close_tabs(std::slice::from_ref(tab), false);
+        Ok(())
+    }
+
     pub(super) fn replace_split(&mut self, split: &SplitId, view: Option<SplitView>) {
         push_unique(&mut self.out.changes.splits, split);
         let splits = self.splits_mut();
@@ -220,6 +320,19 @@ impl Tx<'_> {
             .resized(&sizes)
             .ok_or(ActionError::Invalid("sizes must be positive, one per slot"))?;
         self.replace_split(&split, Some(resized));
+        Ok(())
+    }
+
+    pub(super) fn restack_split(
+        &mut self,
+        split: SplitId,
+        stack_sizes: [f64; 2],
+    ) -> Result<(), ActionError> {
+        let view = self.require_split(&split)?;
+        let restacked = view.restacked(stack_sizes).ok_or(ActionError::Invalid(
+            "stack sizes must be positive and the split must hold a stack",
+        ))?;
+        self.replace_split(&split, Some(restacked));
         Ok(())
     }
 

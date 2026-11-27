@@ -406,12 +406,13 @@ impl Interactivity {
     }
 
     /// Bind the given callback to pinch gesture events during the bubble phase.
+    /// A pinch over a [`crate::NativeView`] reaches the elements that hold it.
     ///
     /// See [`Context::listener`](crate::Context::listener) to get access to a view's state from this callback.
     pub fn on_pinch(&mut self, listener: impl Fn(&PinchEvent, &mut Window, &mut App) + 'static) {
         self.pinch_listeners
             .push(Box::new(move |event, phase, hitbox, window, cx| {
-                if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) {
+                if phase == DispatchPhase::Bubble && hitbox.should_handle_pinch(window) {
                     (listener)(event, window, cx);
                 }
             }));
@@ -1235,6 +1236,10 @@ pub trait InteractiveElement: Sized {
     }
 
     /// Apply the given style when the given data type is dragged over this element
+    ///
+    /// Refinements that change layout or the transform, such as
+    /// [`Styled::scale`], need the element to have an id. Without one, only
+    /// the paint-only properties of the style, such as colors, apply.
     fn drag_over<S: 'static>(
         mut self,
         f: impl 'static + Fn(StyleRefinement, &S, &mut Window, &mut App) -> StyleRefinement,
@@ -1854,6 +1859,7 @@ pub fn div() -> Div {
         prepaint_listener: None,
         image_cache: None,
         prepaint_order_fn: None,
+        prepainted_children: SmallVec::new(),
     }
 }
 
@@ -1910,6 +1916,9 @@ pub struct Div {
     prepaint_listener: Option<Box<dyn Fn(Vec<Bounds<Pixels>>, &mut Window, &mut App) + 'static>>,
     image_cache: Option<Box<dyn ImageCacheProvider>>,
     prepaint_order_fn: Option<Box<dyn Fn(&mut Window, &mut App) -> SmallVec<[usize; 8]>>>,
+    /// Which children were prepainted this frame. Hover styles are resolved again at paint,
+    /// so a child skipped at prepaint must not be painted even if it would show by then.
+    prepainted_children: SmallVec<[bool; 2]>,
 }
 
 impl Div {
@@ -2122,6 +2131,8 @@ impl Element for Div {
             window,
             cx,
             |style, scroll_offset, hitbox, window, cx| {
+                self.prepainted_children.clear();
+                self.prepainted_children.resize(self.children.len(), false);
                 // skip children
                 if style.display == Display::None {
                     return hitbox;
@@ -2132,14 +2143,18 @@ impl Element for Div {
                         if let Some(order_fn) = &self.prepaint_order_fn {
                             let order = order_fn(window, cx);
                             for idx in order {
-                                if let Some(child) = self.children.get_mut(idx) {
+                                if let Some(child) = self.children.get_mut(idx)
+                                    && !self.prepainted_children[idx]
+                                {
                                     child.prepaint(window, cx);
+                                    self.prepainted_children[idx] = true;
                                 }
                             }
                         } else {
                             for child in &mut self.children {
                                 child.prepaint(window, cx);
                             }
+                            self.prepainted_children.fill(true);
                         }
                     });
 
@@ -2183,8 +2198,12 @@ impl Element for Div {
                         return;
                     }
 
-                    for child in &mut self.children {
-                        child.paint(window, cx);
+                    for (child, prepainted) in
+                        self.children.iter_mut().zip(&self.prepainted_children)
+                    {
+                        if *prepainted {
+                            child.paint(window, cx);
+                        }
                     }
                 },
             )
@@ -2253,6 +2272,10 @@ pub struct Interactivity {
         Box<dyn Fn(&dyn Any, &mut Window, &mut App) -> StyleRefinement>,
     )>,
     pub(crate) group_drag_over_styles: Vec<(TypeId, GroupStyle)>,
+    /// The scale and turn prepaint drew and hit-tested the element with,
+    /// which paint keeps even when a hover or drag over changes the style
+    /// in between.
+    pub(crate) prepainted_transform: (Option<(f32, f32)>, Option<crate::Radians>),
     pub(crate) mouse_down_listeners: Vec<MouseDownListener>,
     pub(crate) mouse_up_listeners: Vec<MouseUpListener>,
     pub(crate) mouse_pressure_listeners: Vec<MousePressureListener>,
@@ -2459,6 +2482,15 @@ impl Interactivity {
                             .hover_state
                             .get_or_insert_with(Default::default);
                     }
+                    if !self.drag_over_styles.is_empty() || !self.group_drag_over_styles.is_empty()
+                    {
+                        let drag_over_state = element_state
+                            .drag_over_state
+                            .get_or_insert_with(Default::default);
+                        if !cx.has_active_drag() {
+                            drag_over_state.set(DragOverState::default());
+                        }
+                    }
                     if let Some(active_tooltip) = element_state.active_tooltip.as_ref() {
                         if self.tooltip_builder.is_some() {
                             self.tooltip_id = set_tooltip_on_window(active_tooltip, window);
@@ -2474,7 +2506,10 @@ impl Interactivity {
                     }
                 }
 
-                window.with_text_style(style.text_style().cloned(), |window| {
+                let scale = style.scale_per_axis();
+                self.prepainted_transform = (Some(scale), style.rotation);
+                let transform = window.push_transform(bounds.center(), scale, style.rotation);
+                let output = window.with_text_style(style.text_style().cloned(), |window| {
                     window.with_content_mask(
                         style.overflow_mask(bounds, window.rem_size()),
                         |window| {
@@ -2492,7 +2527,9 @@ impl Interactivity {
                             (result, element_state)
                         },
                     )
-                })
+                });
+                window.pop_transform(transform);
+                output
             },
         )
     }
@@ -2643,6 +2680,9 @@ impl Interactivity {
                     tab_group = self.tab_index;
                 }
 
+                let (scale, rotation) = self.prepainted_transform;
+                let transform =
+                    window.push_transform(bounds.center(), scale.unwrap_or((1., 1.)), rotation);
                 window.with_element_opacity(style.opacity, |window| {
                     style.paint(bounds, window, cx, |window: &mut Window, cx: &mut App| {
                         window.with_text_style(style.text_style().cloned(), |window| {
@@ -2734,6 +2774,7 @@ impl Interactivity {
                         });
                     });
                 });
+                window.pop_transform(transform);
 
                 ((), element_state)
             },
@@ -2999,6 +3040,50 @@ impl Interactivity {
                     }
                 });
             }
+        }
+
+        if let Some(drag_over_state) = element_state
+            .as_ref()
+            .and_then(|state| state.drag_over_state.clone())
+            .filter(|_| cx.active_drag.is_some())
+        {
+            let hitbox = hitbox.clone();
+            let element_types = self
+                .drag_over_styles
+                .iter()
+                .map(|(state_type, _)| *state_type)
+                .collect::<SmallVec<[TypeId; 1]>>();
+            let groups = self
+                .group_drag_over_styles
+                .iter()
+                .map(|(state_type, group_style)| {
+                    (*state_type, GroupHitboxes::get(&group_style.group, cx))
+                })
+                .collect::<SmallVec<[(TypeId, Option<HitboxId>); 1]>>();
+            let current_view = window.current_view();
+            window.on_mouse_event(move |_: &MouseMoveEvent, phase, window, cx| {
+                if phase != DispatchPhase::Capture {
+                    return;
+                }
+                let Some(drag) = cx.active_drag.as_ref() else {
+                    return;
+                };
+                let dragged_type = drag.value.as_ref().type_id();
+                let mut next = DragOverState {
+                    element: element_types.contains(&dragged_type) && hitbox.is_hovered(window),
+                    groups: 0,
+                };
+                for (index, (state_type, group_hitbox_id)) in groups.iter().enumerate() {
+                    if *state_type == dragged_type
+                        && group_hitbox_id.is_some_and(|id| id.is_hovered(window))
+                    {
+                        next.add_group(index);
+                    }
+                }
+                if drag_over_state.replace(next) != next {
+                    cx.notify(current_view);
+                }
+            });
         }
 
         let drag_cursor_style = self.base_style.as_ref().mouse_cursor;
@@ -3584,35 +3669,48 @@ impl Interactivity {
             }
         }
 
-        if let Some(hitbox) = hitbox {
-            if let Some(drag) = cx.active_drag.take() {
-                let mut can_drop = true;
-                if let Some(can_drop_predicate) = &self.can_drop_predicate {
-                    can_drop = can_drop_predicate(drag.value.as_ref(), window, cx);
-                }
-
-                if can_drop {
-                    for (state_type, group_drag_style) in &self.group_drag_over_styles {
-                        if let Some(group_hitbox_id) =
-                            GroupHitboxes::get(&group_drag_style.group, cx)
-                            && *state_type == drag.value.as_ref().type_id()
-                            && group_hitbox_id.is_hovered(window)
-                        {
-                            style.refine(&group_drag_style.style);
-                        }
-                    }
-
-                    for (state_type, build_drag_over_style) in &self.drag_over_styles {
-                        if *state_type == drag.value.as_ref().type_id() && hitbox.is_hovered(window)
-                        {
-                            style.refine(&build_drag_over_style(drag.value.as_ref(), window, cx));
-                        }
-                    }
-                }
-
-                style.mouse_cursor = drag.cursor_style;
-                cx.active_drag = Some(drag);
+        let recorded_drag_over = element_state
+            .as_ref()
+            .and_then(|state| state.drag_over_state.as_ref())
+            .map(|state| state.get())
+            .filter(|_| hitbox.is_none());
+        if (hitbox.is_some() || recorded_drag_over.is_some())
+            && let Some(drag) = cx.active_drag.take()
+        {
+            let mut can_drop = true;
+            if let Some(can_drop_predicate) = &self.can_drop_predicate {
+                can_drop = can_drop_predicate(drag.value.as_ref(), window, cx);
             }
+
+            if can_drop {
+                for (index, (state_type, group_drag_style)) in
+                    self.group_drag_over_styles.iter().enumerate()
+                {
+                    let is_group_dragged_over = match recorded_drag_over {
+                        Some(recorded) => recorded.has_group(index),
+                        None => GroupHitboxes::get(&group_drag_style.group, cx)
+                            .is_some_and(|group_hitbox_id| group_hitbox_id.is_hovered(window)),
+                    };
+                    if *state_type == drag.value.as_ref().type_id() && is_group_dragged_over {
+                        style.refine(&group_drag_style.style);
+                    }
+                }
+
+                for (state_type, build_drag_over_style) in &self.drag_over_styles {
+                    let is_dragged_over = match recorded_drag_over {
+                        Some(recorded) => recorded.element,
+                        None => hitbox.is_some_and(|hitbox| hitbox.is_hovered(window)),
+                    };
+                    if *state_type == drag.value.as_ref().type_id() && is_dragged_over {
+                        style.refine(&build_drag_over_style(drag.value.as_ref(), window, cx));
+                    }
+                }
+            }
+
+            if hitbox.is_some() {
+                style.mouse_cursor = drag.cursor_style;
+            }
+            cx.active_drag = Some(drag);
         }
 
         if let Some(element_state) = element_state {
@@ -3733,6 +3831,28 @@ pub struct InteractiveElementState {
     ongoing_scroll: Option<Rc<RefCell<OngoingScroll>>>,
     pub(crate) active_tooltip: Option<Rc<RefCell<Option<ActiveTooltip>>>>,
     long_press_tooltip_active: Option<Rc<Cell<bool>>>,
+    drag_over_state: Option<Rc<Cell<DragOverState>>>,
+}
+
+/// Whether the drag in progress was over the element, and over which of its
+/// drag-over groups, when the mouse last moved. Prepaint has no hitbox to
+/// test yet, so it styles the element from this, as it does for hover.
+#[derive(Copy, Clone, Default, PartialEq, Eq)]
+struct DragOverState {
+    element: bool,
+    groups: u64,
+}
+
+impl DragOverState {
+    fn has_group(self, index: usize) -> bool {
+        index < 64 && self.groups & (1 << index) != 0
+    }
+
+    fn add_group(&mut self, index: usize) {
+        if index < 64 {
+            self.groups |= 1 << index;
+        }
+    }
 }
 
 /// Whether or not the element or a group that contains it is clicked by the mouse.
@@ -4665,6 +4785,72 @@ mod tests {
                         hover_transitions.borrow_mut().push(*is_hovered);
                     }),
             )
+        }
+    }
+
+    struct RevealedOnHoverButton;
+
+    impl Render for RevealedOnHoverButton {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div().id("button").size(px(10.)).on_click(|_, _, _| {})
+        }
+    }
+
+    struct DisplayOnHoverTestView {
+        target_left: Pixels,
+        button: Entity<RevealedOnHoverButton>,
+    }
+
+    impl Render for DisplayOnHoverTestView {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div().relative().size_full().child(
+                div()
+                    .id("row")
+                    .group("row")
+                    .absolute()
+                    .left(self.target_left)
+                    .top_0()
+                    .size(px(20.))
+                    .child(
+                        div()
+                            .id("shown-on-hover")
+                            .size_full()
+                            .hidden()
+                            .hover(|style| style.flex())
+                            .child(self.button.clone()),
+                    )
+                    .child(
+                        div()
+                            .size_full()
+                            .hidden()
+                            .group_hover("row", |style| style.flex())
+                            .child(self.button.clone()),
+                    ),
+            )
+        }
+    }
+
+    #[gpui::test]
+    fn children_hidden_at_prepaint_are_not_painted_when_hover_shows_them(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, cx| DisplayOnHoverTestView {
+            target_left: px(40.),
+            button: cx.new(|_| RevealedOnHoverButton),
+        });
+        let any_window = AnyWindowHandle::from(window);
+        cx.update_window(any_window, |_, window, cx| {
+            window.draw(cx).clear(cx);
+            window.simulate_mouse_move(point(px(10.), px(10.)), cx);
+        })
+        .unwrap();
+        for left in [px(0.), px(40.), px(0.)] {
+            window
+                .update(cx, |view, _, cx| {
+                    view.target_left = left;
+                    cx.notify();
+                })
+                .unwrap();
+            cx.update_window(any_window, |_, window, cx| window.draw(cx).clear(cx))
+                .unwrap();
         }
     }
 

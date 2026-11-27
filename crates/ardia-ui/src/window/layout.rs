@@ -2,9 +2,10 @@ use ardia_state::model::EffectiveLayout;
 use ardia_theme::layout::{PageFrame, lights, sidebar, tab_strip, toolbar};
 
 pub const ARC_FIELD_ROW: f32 = 34.0;
-pub const ARC_FIELD_GAP: f32 = 8.0;
+pub const ARC_FIELD_GAP: f32 = 6.0;
 pub const PEEK_OVERRUN: f32 = 16.0;
 pub const RESIZE_HANDLE: f32 = 8.0;
+pub const WINDOW_CORNER_RADIUS: f32 = 17.5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Rect {
@@ -44,7 +45,9 @@ pub struct LayoutInput {
     pub peek: f32,
     pub compact: bool,
     pub full_screen: bool,
+    pub page_full_screen: bool,
     pub has_sidebar: bool,
+    pub field_hidden: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -56,6 +59,7 @@ pub struct ChromeLayout {
     pub sidebar: Option<Rect>,
     pub sidebar_width: f32,
     pub trailing: bool,
+    pub sidebar_field: bool,
     pub header: f32,
     pub first_row_top: f32,
     pub card: Rect,
@@ -87,22 +91,44 @@ fn ease(value: f32) -> f32 {
 }
 
 pub fn chrome_layout(input: LayoutInput) -> ChromeLayout {
+    if !input.page_full_screen {
+        return docked_layout(input);
+    }
+    let mut out = docked_layout(LayoutInput {
+        inset: 0.0,
+        dock: 0.0,
+        page_full_screen: false,
+        ..input
+    });
+    out.card = Rect::new(0.0, 0.0, out.width, out.height);
+    out.toolbar = 0.0;
+    out.strip = None;
+    out.sidebar = None;
+    out.resize = None;
+    out.lights = None;
+    out
+}
+
+fn docked_layout(input: LayoutInput) -> ChromeLayout {
     let width = input.width.max(1.0);
     let height = input.height.max(1.0);
-    let frame = PageFrame::scaled(input.inset);
+    let frame = PageFrame::concentric(input.inset, WINDOW_CORNER_RADIUS, WINDOW_CORNER_RADIUS);
     let inset = frame.inset;
     let row = toolbar::row(input.compact);
     let sidebar_width = input.sidebar_width.max(0.0);
     let arc = input.layout == EffectiveLayout::ArcSidebar;
+    let sidebar_field = arc && !input.field_hidden;
     let lights_y = lights::center(inset, input.compact)[1];
     let header = if arc {
         sidebar::HEADER
     } else {
         sidebar::header_of(false, lights_y)
     };
-    let first_row_top = if arc {
+    let first_row_top = if sidebar_field {
         sidebar::first_row_top(true, lights_y) + ARC_FIELD_ROW + ARC_FIELD_GAP
             - (sidebar::PINNED_TOP - sidebar::HEADER)
+    } else if arc {
+        sidebar::first_row_top(true, lights_y)
     } else {
         sidebar::first_row_top(false, lights_y)
     };
@@ -123,6 +149,7 @@ pub fn chrome_layout(input: LayoutInput) -> ChromeLayout {
             sidebar: None,
             sidebar_width,
             trailing: false,
+            sidebar_field,
             header,
             first_row_top,
             card,
@@ -220,6 +247,7 @@ pub fn chrome_layout(input: LayoutInput) -> ChromeLayout {
         sidebar: sidebar_rect,
         sidebar_width,
         trailing: input.trailing,
+        sidebar_field,
         header,
         first_row_top,
         card,
@@ -261,7 +289,9 @@ mod tests {
             peek: 0.0,
             compact: false,
             full_screen: false,
+            page_full_screen: false,
             has_sidebar: true,
+            field_hidden: false,
         }
     }
 
@@ -269,9 +299,11 @@ mod tests {
     fn the_docked_card_matches_the_measured_frames() {
         for (inset, left, radius) in [
             (0.0, 190.0, 0.0),
-            (5.0, 190.0, 5.5),
-            (9.0, 190.0, 10.0),
-            (12.0, 193.0, 10.0),
+            (4.0, 190.0, 13.5),
+            (5.0, 190.0, 12.5),
+            (9.0, 190.0, 8.5),
+            (12.0, 193.0, 5.5),
+            (18.0, 199.0, 2.0),
         ] {
             let layout = chrome_layout(input(EffectiveLayout::Sidebar, inset));
             assert_eq!(layout.card.x, left, "{inset}");
@@ -323,6 +355,26 @@ mod tests {
         assert_eq!(arc.card.y, 9.0);
         assert!(arc.first_row_top > arc.header + ARC_FIELD_ROW);
         assert!(arc.sidebar_shows_address());
+        assert!(arc.sidebar_field);
+    }
+
+    #[test]
+    fn a_minimal_arc_sidebar_keeps_the_header_but_drops_the_field_row() {
+        let minimal = chrome_layout(LayoutInput {
+            field_hidden: true,
+            ..input(EffectiveLayout::ArcSidebar, 0.0)
+        });
+        assert!(minimal.sidebar_shows_address());
+        assert!(!minimal.sidebar_field);
+        assert_eq!(minimal.toolbar, 0.0);
+        assert_eq!(minimal.header, sidebar::HEADER);
+        assert_eq!(minimal.first_row_top, sidebar::PINNED_TOP);
+        assert_eq!(minimal.card.x, 190.0);
+        let docked = chrome_layout(LayoutInput {
+            field_hidden: true,
+            ..input(EffectiveLayout::Sidebar, 9.0)
+        });
+        assert!(!docked.sidebar_field);
     }
 
     #[test]
@@ -336,6 +388,35 @@ mod tests {
         assert_eq!(layout.lights, Some([1441.0, 30.0]));
         let zoom_center = 1441.0 + 2.0 * lights::SPACING;
         assert_eq!(zoom_center, 1512.0 - 25.0);
+    }
+
+    #[test]
+    fn a_full_screen_page_fills_the_window_and_hides_the_chrome() {
+        for layout in [
+            EffectiveLayout::Sidebar,
+            EffectiveLayout::ArcSidebar,
+            EffectiveLayout::TopStrip,
+        ] {
+            let mut page = input(layout, 8.0);
+            page.page_full_screen = true;
+            let out = chrome_layout(page);
+            assert_eq!(out.card, Rect::new(0.0, 0.0, 1512.0, 949.0));
+            assert_eq!(out.page(), out.card);
+            assert_eq!(out.toolbar, 0.0);
+            assert_eq!(out.frame.radius, 0.0);
+            assert!(out.sidebar.is_none() && out.strip.is_none() && out.resize.is_none());
+            assert!(out.lights.is_none());
+        }
+    }
+
+    #[test]
+    fn the_sidebar_still_peeks_over_a_full_screen_page() {
+        let mut page = input(EffectiveLayout::Sidebar, 8.0);
+        page.page_full_screen = true;
+        page.peek = 1.0;
+        let out = chrome_layout(page);
+        assert!(out.peek.is_some());
+        assert_eq!(out.card, Rect::new(0.0, 0.0, 1512.0, 949.0));
     }
 
     #[test]

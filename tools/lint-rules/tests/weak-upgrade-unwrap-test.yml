@@ -1,0 +1,9 @@
+id: weak-upgrade-unwrap
+valid:
+  - "fn f(weak: WeakEntity<V>) { if let Some(view) = weak.upgrade() { drop(view); } }"
+  - |
+    #[test]
+    fn alive() { let v = weak.upgrade().unwrap(); }
+invalid:
+  - "fn f(weak: WeakEntity<V>) { let view = weak.upgrade().unwrap(); }"
+  - "fn f(weak: WeakEntity<V>) { let view = weak.upgrade().expect(\"alive\"); }"

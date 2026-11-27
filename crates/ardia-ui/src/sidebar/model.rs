@@ -55,6 +55,7 @@ pub struct Sections {
     pub tiles: Vec<Arc<Tab>>,
     pub pinned: Vec<Entry>,
     pub unpinned: Vec<Entry>,
+    pub generation: u64,
 }
 
 impl Sections {
@@ -174,10 +175,92 @@ fn build(state: &BrowserState, tabs: &[Arc<Tab>]) -> Vec<Entry> {
 }
 
 pub fn sections(state: &BrowserState, window: &str) -> Sections {
+    sections_for(state, window, None)
+}
+
+struct SectionsMemo {
+    windows: Arc<ardia_state::state::WindowMap>,
+    tabs: Arc<ardia_state::state::TabMap>,
+    groups: Arc<ardia_state::groups::Groups>,
+    splits: Arc<ardia_state::state::SplitMap>,
+    hides_empty_cards: bool,
+    sections: std::rc::Rc<Sections>,
+}
+
+type SectionsKey = (String, Option<ardia_state::ProfileId>);
+
+thread_local! {
+    static SECTIONS: std::cell::RefCell<std::collections::HashMap<SectionsKey, SectionsMemo>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub fn sections_for(
+    state: &BrowserState,
+    window: &str,
+    profile: Option<&ardia_state::ProfileId>,
+) -> Sections {
+    (*shared_sections_for(state, window, profile)).clone()
+}
+
+pub fn shared_sections(state: &BrowserState, window: &str) -> std::rc::Rc<Sections> {
+    shared_sections_for(state, window, None)
+}
+
+pub fn shared_sections_for(
+    state: &BrowserState,
+    window: &str,
+    profile: Option<&ardia_state::ProfileId>,
+) -> std::rc::Rc<Sections> {
+    let key = (window.to_owned(), profile.cloned());
+    let cached = SECTIONS.with(|memo| {
+        memo.borrow().get(&key).and_then(|m| {
+            (Arc::ptr_eq(&m.windows, &state.windows)
+                && Arc::ptr_eq(&m.tabs, &state.tabs)
+                && Arc::ptr_eq(&m.groups, &state.groups)
+                && Arc::ptr_eq(&m.splits, &state.splits)
+                && m.hides_empty_cards == state.new_tab_opens_bar())
+            .then(|| m.sections.clone())
+        })
+    });
+    if let Some(sections) = cached {
+        return sections;
+    }
+    let generation = GENERATION.with(|g| {
+        g.set(g.get() + 1);
+        g.get()
+    });
+    let sections = std::rc::Rc::new(Sections {
+        generation,
+        ..build_sections(state, window, profile)
+    });
+    SECTIONS.with(|memo| {
+        let mut memo = memo.borrow_mut();
+        memo.retain(|_, m| Arc::ptr_eq(&m.tabs, &state.tabs));
+        memo.insert(
+            key,
+            SectionsMemo {
+                windows: Arc::clone(&state.windows),
+                tabs: Arc::clone(&state.tabs),
+                groups: Arc::clone(&state.groups),
+                splits: Arc::clone(&state.splits),
+                hides_empty_cards: state.new_tab_opens_bar(),
+                sections: sections.clone(),
+            },
+        );
+    });
+    sections
+}
+
+fn build_sections(
+    state: &BrowserState,
+    window: &str,
+    profile: Option<&ardia_state::ProfileId>,
+) -> Sections {
     let tabs: Vec<Arc<Tab>> = state
-        .view_tabs(window, None)
+        .view_tabs(window, profile)
         .into_iter()
-        .filter(|t| !t.live.peek)
+        .filter(|t| !t.live.peek && !state.hidden_empty_card(t))
         .cloned()
         .collect();
     let pinned_members = groups::pinned_group_members(&state.groups);
@@ -196,6 +279,7 @@ pub fn sections(state: &BrowserState, window: &str) -> Sections {
         pinned: build(state, &pinned),
         unpinned: build(state, &unpinned),
         tiles,
+        generation: 0,
     }
 }
 
@@ -212,6 +296,115 @@ pub fn clearable_in(sections: &Sections, state: &BrowserState, window: &str) -> 
         .filter(|id| Some(id) != active.as_ref())
         .filter(|id| state.tab(id.as_str()).is_some_and(|t| !t.live.audible))
         .collect()
+}
+
+pub fn entry_holds(entry: &Entry, tab: &TabId) -> bool {
+    match entry {
+        Entry::Tab { tab: t, .. } => &t.id == tab,
+        Entry::Split { tabs, .. } => tabs.iter().any(|t| &t.id == tab),
+        Entry::Group { group, .. } => group.tab_ids.contains(tab),
+    }
+}
+
+fn page_active(state: &BrowserState, window: &str, group: &TabGroup) -> Option<TabId> {
+    state
+        .window(window)?
+        .active_tab_ids
+        .get(&group.profile_id)
+        .cloned()
+}
+
+pub fn kept_children(
+    state: &BrowserState,
+    window: &str,
+    group: &TabGroup,
+    children: &[Entry],
+) -> Vec<bool> {
+    let mut held: Vec<TabId> = page_active(state, window, group).into_iter().collect();
+    held.extend(group.shown_tab_ids.iter().flatten().cloned());
+    children
+        .iter()
+        .map(|child| held.iter().any(|id| entry_holds(child, id)))
+        .collect()
+}
+
+pub fn shows_extra_tabs(
+    state: &BrowserState,
+    window: &str,
+    group: &TabGroup,
+    children: &[Entry],
+) -> bool {
+    let active = page_active(state, window, group);
+    let kept = kept_children(state, window, group, children);
+    children
+        .iter()
+        .zip(kept)
+        .filter(|(_, kept)| *kept)
+        .any(|(child, _)| match active.as_ref() {
+            Some(active) if entry_holds(child, active) => matches!(
+                child,
+                Entry::Group { group: inner, children: inner_children, .. }
+                    if inner.collapsed && shows_extra_tabs(state, window, inner, inner_children)
+            ),
+            _ => true,
+        })
+}
+
+pub fn head_gap(first: Option<&Entry>) -> f32 {
+    if matches!(first, Some(Entry::Group { .. })) {
+        ardia_theme::layout::sidebar::row_gap()
+    } else {
+        0.0
+    }
+}
+
+pub fn members_pad_bottom(shown: usize) -> f32 {
+    use ardia_theme::layout::sidebar;
+    if shown > 0 {
+        sidebar::GROUP_INSET - sidebar::GROUP_BORDER
+    } else {
+        0.0
+    }
+}
+
+pub fn stack_height(heights: &[f32], first: Option<&Entry>) -> f32 {
+    if heights.is_empty() {
+        return 0.0;
+    }
+    let gap = ardia_theme::layout::sidebar::row_gap();
+    head_gap(first)
+        + heights.iter().sum::<f32>()
+        + gap * (heights.len() - 1) as f32
+        + members_pad_bottom(heights.len())
+}
+
+pub fn entry_height(state: &BrowserState, window: &str, entry: &Entry) -> f32 {
+    use ardia_theme::layout::sidebar;
+    match entry {
+        Entry::Tab { .. } | Entry::Split { .. } => sidebar::row_height(),
+        Entry::Group {
+            group, children, ..
+        } => {
+            let shown: Vec<&Entry> = if group.collapsed {
+                let kept = kept_children(state, window, group, children);
+                children
+                    .iter()
+                    .zip(kept)
+                    .filter(|(_, k)| *k)
+                    .map(|(c, _)| c)
+                    .collect()
+            } else {
+                children.iter().collect()
+            };
+            let heights: Vec<f32> = shown
+                .iter()
+                .map(|c| entry_height(state, window, c))
+                .collect();
+            sidebar::GROUP_BORDER * 2.0
+                + sidebar::row_height()
+                + stack_height(&heights, shown.first().copied())
+        }
+    }
 }
 
 pub fn grid_columns(count: usize, inner_width: f32) -> (usize, f32) {
@@ -264,6 +457,52 @@ mod tests {
             })
             .tab
             .expect("a tab")
+    }
+
+    #[test]
+    fn empty_cards_leave_the_sidebar_and_strip_when_new_tab_opens_the_bar() {
+        let mut world = World::new();
+        let window = world
+            .act(Action::OpenWindow {
+                kind: WindowKind::Main,
+                profile: None,
+                url: Some("https://a.example".into()),
+                frame: None,
+            })
+            .window
+            .expect("a window");
+        let card = tab(&mut world, &window, "");
+        let listed = |w: &World| {
+            let in_rows = shared_sections(&w.state, window.as_str())
+                .unpinned
+                .iter()
+                .flat_map(Entry::tab_ids)
+                .any(|id| id == card);
+            let in_strip = crate::sidebar::strip_layout::strip_entries(&w.state, window.as_str())
+                .into_iter()
+                .flat_map(|e| match e {
+                    crate::sidebar::strip_layout::Entry::Dock(ids) => ids,
+                    crate::sidebar::strip_layout::Entry::Group { members, .. } => {
+                        members.iter().flat_map(|m| m.tabs()).collect()
+                    }
+                    crate::sidebar::strip_layout::Entry::Member(m) => m.tabs(),
+                })
+                .any(|id| id == card);
+            (in_rows, in_strip)
+        };
+        let setting = |w: &mut World, key: &str, value: serde_json::Value| {
+            w.act(Action::UpdateSettings {
+                patch: ardia_state::settings::SettingsPatch::new().set(key, value),
+                from_sync: false,
+            });
+        };
+        setting(&mut world, "newTabOpens", "page".into());
+        assert_eq!(listed(&world), (true, true));
+        setting(&mut world, "newTabOpens", "commandBar".into());
+        assert_eq!(listed(&world), (false, false));
+        setting(&mut world, "newTabOpens", "page".into());
+        setting(&mut world, "minimalismMode", true.into());
+        assert_eq!(listed(&world), (false, false));
     }
 
     #[test]

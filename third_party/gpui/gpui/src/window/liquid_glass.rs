@@ -15,6 +15,8 @@ pub struct PaintLiquidGlass {
     pub tint: Option<Rgba>,
     pub style: LiquidGlassStyle,
     pub group_id: Option<u64>,
+    /// The native glass view's alpha, from 0 to 1. Non-finite values mean 1.
+    pub alpha: f32,
 }
 
 #[allow(missing_docs)]
@@ -31,7 +33,8 @@ impl Window {
     pub fn paint_liquid_glass(&mut self, glass: PaintLiquidGlass) {
         self.invalidator.debug_assert_paint();
         let opacity = self.element_opacity();
-        if opacity.is_nan() || opacity <= 0. || glass.bounds.is_empty() {
+        let alpha = native_glass_alpha(glass.alpha);
+        if opacity.is_nan() || opacity <= 0. || alpha <= 0. || glass.bounds.is_empty() {
             return;
         }
         let corner_radius = glass
@@ -39,7 +42,9 @@ impl Window {
             .max(Pixels::ZERO)
             .min(glass.bounds.size.width.min(glass.bounds.size.height) / 2.);
         if opacity < 1. || !self.composites_liquid_glass() {
-            self.paint_frosted_glass(&glass, corner_radius);
+            self.with_element_opacity(Some(alpha), |window| {
+                window.paint_frosted_glass(&glass, corner_radius)
+            });
             return;
         }
         let id = match glass.id {
@@ -59,6 +64,7 @@ impl Window {
             tint: glass.tint,
             style: glass.style,
             group_id: glass.group_id,
+            alpha,
         };
         self.next_frame.scene.insert_liquid_glass(region);
     }
@@ -107,6 +113,14 @@ impl Window {
                 ),
             );
         }
+    }
+}
+
+fn native_glass_alpha(alpha: f32) -> f32 {
+    if alpha.is_finite() {
+        alpha.clamp(0., 1.)
+    } else {
+        1.
     }
 }
 

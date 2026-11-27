@@ -161,7 +161,7 @@ fn boot_opens_a_window_with_a_live_active_tab() {
     );
     let effects = h.effects();
     assert!(effects.contains(&ShellEffect::OpenBrowserWindow {
-        window: window.clone(),
+        window,
         kind: WindowKind::Main,
         host: None
     }));
@@ -188,7 +188,7 @@ fn boot_opens_a_window_with_a_live_active_tab() {
 }
 
 #[test]
-fn inactive_tabs_stay_unloaded_until_shown() {
+fn background_tabs_load_hidden_right_away() {
     let h = Harness::new();
     let window = h.window();
     let shown = h.active(&window);
@@ -206,21 +206,20 @@ fn inactive_tabs_stay_unloaded_until_shown() {
         .tab
         .unwrap();
     h.pump();
-    assert!(
-        h.app.engine_tab(&background).is_none(),
-        "a background tab has no page yet"
-    );
-    assert_eq!(h.active(&window), shown);
-    h.app.dispatch(Action::ActivateTab {
-        tab: background.clone(),
-    });
-    h.pump();
     let engine_tab = h.live(&background);
     assert_eq!(
         h.engine.tab_info(engine_tab).unwrap().url,
         "https://later.example"
     );
+    assert_eq!(h.active(&window), shown);
     let engine_window = h.app.engine_window(&window).unwrap();
+    assert_ne!(h.engine.active_tab(engine_window), Some(engine_tab));
+    assert!(h.calls().contains(&MockCall::Tab(
+        engine_tab,
+        TabCommand::NoteShown { shown: false }
+    )));
+    h.app.dispatch(Action::ActivateTab { tab: background });
+    h.pump();
     assert_eq!(h.engine.active_tab(engine_window), Some(engine_tab));
     let hidden = h.live(&shown);
     assert!(h.calls().contains(&MockCall::Tab(
@@ -243,7 +242,7 @@ fn a_tab_opens_navigates_reports_progress_and_closes() {
     assert_eq!(listed.live.progress, 1.0);
     assert!(!listed.live.loading);
     h.app
-        .navigate(window.clone(), tab.clone(), "https://example.org/b".into());
+        .navigate(window, tab.clone(), "https://example.org/b".into());
     h.pump();
     assert!(h.calls().contains(&MockCall::Tab(
         engine_tab,
@@ -373,7 +372,11 @@ fn switching_profiles_loads_the_profile_and_shows_its_tabs() {
     h.pump();
     let engine_profile = h.app.engine_profile(&profile).expect("the profile loaded");
     let info = h.engine.profile_info(engine_profile).unwrap();
-    assert_eq!(info.name, h.state().engine_profile(&profile));
+    assert_eq!(
+        info.name,
+        format!("Profile {}", h.state().engine_profile(&profile)),
+        "non-default profiles live in Chromium's \"Profile <id>\" folder, as in the old app"
+    );
     let engine_window = h.app.engine_window(&window).unwrap();
     assert!(h.calls().contains(&MockCall::Window(
         engine_window,
@@ -472,6 +475,7 @@ fn links_follow_air_traffic_and_the_little_ardia_setting() {
     );
     h.engine.emit(EngineEvent::OpenUrls {
         urls: vec!["https://apple-event.example".into()],
+        sender: None,
     });
     h.pump();
     assert!(
@@ -534,6 +538,14 @@ fn menu_commands_reach_the_state_the_engine_and_the_shell() {
     assert_eq!(
         h.state().window(window.as_str()).unwrap().chrome.popover,
         Some(Popover::Custom("command:renameTab".into()))
+    );
+    assert_eq!(
+        h.app.run_command("focusCommandBar", None),
+        Ok(ardia_app::menu_bridge::CommandOutcome::ForUi)
+    );
+    assert_eq!(
+        h.state().window(window.as_str()).unwrap().chrome.popover,
+        Some(Popover::Custom("command:focusCommandBar".into()))
     );
     assert!(h.app.run_command("selectTab:1", None).is_ok());
     assert!(h.app.run_command("bogus", None).is_err());
@@ -725,7 +737,8 @@ fn engine_events_update_downloads_audio_find_and_fullscreen() {
     }));
     h.pump();
     let state = h.state();
-    assert!(state.window(window.as_str()).unwrap().is_full_screen());
+    assert!(state.tab(tab.as_str()).unwrap().live.fullscreen);
+    assert!(!state.window(window.as_str()).unwrap().is_full_screen());
     assert!(state.downloads.get("d1").is_none());
 }
 
@@ -840,15 +853,8 @@ fn shutting_down_flushes_the_session_and_keeps_its_windows() {
 }
 
 #[test]
-fn imports_send_bookmark_ops_to_the_engine() {
-    let applied = Arc::new(parking_lot::Mutex::new(Vec::<Value>::new()));
-    let seen = applied.clone();
-    let h = Harness::with_engine(move |engine| {
-        engine.set_service_handler("ac_bookmarks_apply", move |_, args| {
-            seen.lock().push(args.clone());
-            Ok(json!({"applied": 1, "skipped": 0, "invalid": []}))
-        });
-    });
+fn imports_land_in_ardias_bookmarks() {
+    let h = Harness::new();
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("b.html");
     std::fs::write(
@@ -861,25 +867,20 @@ fn imports_send_bookmark_ops_to_the_engine() {
         ProfileId::default_profile(),
     );
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while applied.lock().is_empty() && std::time::Instant::now() < deadline {
+    while !h.app.import_progress().is_some_and(|p| p.finished)
+        && std::time::Instant::now() < deadline
+    {
         h.pump();
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
-    let ops = applied.lock().clone();
-    assert_eq!(ops.len(), 1);
-    let list = ops[0]["ops"].as_array().unwrap();
-    assert!(list.iter().any(|op| op["u"] == "https://imported.example/"));
-    h.pump();
-    let window = h.window();
-    let toast = h
-        .state()
-        .window(window.as_str())
-        .unwrap()
-        .chrome
-        .toasts
-        .back()
-        .cloned();
-    assert!(toast.is_some_and(|toast| toast.message.contains("Imported 1 bookmarks")));
+    let state = h.state();
+    let tree = state
+        .bookmarks_of(&ProfileId::default_profile())
+        .expect("a bookmark tree");
+    assert!(
+        tree.rows()
+            .any(|row| row.url == "https://imported.example/")
+    );
 }
 
 #[cfg(unix)]
@@ -890,7 +891,7 @@ fn the_control_socket_speaks_json_lines() {
 
     let h = Harness::new();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ardia.sock");
+    let path = dir.path().join("ArdiaControl.sock");
     let server = ardia_app::ipc::socket::ControlServer::start(path.clone(), &h.app).unwrap();
     let mode = std::fs::metadata(&path).unwrap();
     assert_eq!(
@@ -955,11 +956,11 @@ fn the_control_socket_speaks_json_lines() {
     assert_eq!(row["canGoBack"], true);
     assert_eq!(row["live"], true);
     assert_eq!(replies[4]["result"]["ran"], true);
-    assert_eq!(replies[5]["error"]["code"], "not_found");
+    assert_eq!(replies[5]["error"]["code"], "no_window");
     assert_eq!(replies[6]["error"]["code"], "unknown_method");
-    assert_eq!(replies[7]["error"]["code"], "bad_json");
-    assert_eq!(replies[8]["error"]["code"], "bad_params");
-    assert_eq!(replies[9]["error"]["code"], "bad_params");
+    assert_eq!(replies[7]["error"]["code"], "bad_request");
+    assert_eq!(replies[8]["error"]["code"], "bad_request");
+    assert_eq!(replies[9]["error"]["code"], "bad_request");
     assert_eq!(replies[10]["result"]["closed"], json!(tab));
     assert_eq!(replies[11]["result"]["quitting"], true);
     assert!(h.app.is_shutting_down());
@@ -1237,7 +1238,7 @@ fn a_second_launch_hands_its_links_to_the_running_one() {
         ardia_app::instance::Claim::Ours(lock) => lock,
         ardia_app::instance::Claim::Taken { .. } => panic!("the folder starts free"),
     };
-    let socket = dir.path().join("ardia.sock");
+    let socket = dir.path().join("ArdiaControl.sock");
     let _server = ardia_app::ipc::socket::ControlServer::start(socket.clone(), &h.app).unwrap();
     let pid = match ardia_app::instance::claim(dir.path()).unwrap() {
         ardia_app::instance::Claim::Taken { pid } => pid,
@@ -1282,7 +1283,7 @@ fn a_navigation_made_while_a_restore_is_pending_wins() {
         drop(task);
     }
     h.app.dispatch(Action::CloseTabs {
-        tabs: vec![tab.clone()],
+        tabs: vec![tab],
         last_closes_window: false,
     });
     h.pump();
@@ -1293,11 +1294,8 @@ fn a_navigation_made_while_a_restore_is_pending_wins() {
         h.app.engine_tab(&reopened).is_none(),
         "the restore is still pending"
     );
-    h.app.navigate(
-        window.clone(),
-        reopened.clone(),
-        "https://new.example/".into(),
-    );
+    h.app
+        .navigate(window, reopened.clone(), "https://new.example/".into());
     h.pump();
     let tasks: Vec<_> = parked.borrow_mut().drain(..).collect();
     for mut task in tasks {
@@ -1322,7 +1320,7 @@ fn a_navigation_made_while_a_restore_is_pending_wins() {
 fn the_control_socket_never_deletes_a_regular_file_or_hangs_on_drop() {
     let h = Harness::new();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ardia.sock");
+    let path = dir.path().join("ArdiaControl.sock");
     std::fs::write(&path, b"keep me").unwrap();
     assert!(ardia_app::ipc::socket::ControlServer::start(path.clone(), &h.app).is_err());
     assert_eq!(std::fs::read(&path).unwrap(), b"keep me");
@@ -1347,7 +1345,7 @@ fn the_control_socket_never_deletes_a_regular_file_or_hangs_on_drop() {
 fn a_second_launch_waits_for_a_first_one_that_is_still_starting() {
     let h = Harness::new();
     let dir = tempfile::tempdir().unwrap();
-    let socket = dir.path().join("ardia.sock");
+    let socket = dir.path().join("ArdiaControl.sock");
     let target = socket.clone();
     let urls = vec!["https://early.example/".to_owned()];
     let forwarding = std::thread::spawn(move || {
@@ -1379,7 +1377,7 @@ fn a_second_launch_waits_for_a_first_one_that_is_still_starting() {
 fn the_control_socket_leaves_a_file_that_replaced_it() {
     let h = Harness::new();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ardia.sock");
+    let path = dir.path().join("ArdiaControl.sock");
     let server = ardia_app::ipc::socket::ControlServer::start(path.clone(), &h.app).unwrap();
     std::fs::remove_file(&path).unwrap();
     std::fs::write(&path, b"not a socket").unwrap();
@@ -1455,7 +1453,7 @@ fn the_control_socket_doesnt_act_on_a_private_window_in_front() {
         .app
         .answer_control("eval_command", &json!({"command": "copyUrlAsMarkdown"}))
         .unwrap_err();
-    assert_eq!(refused.code, "private");
+    assert_eq!(refused.code, "refused");
     assert!(
         !h.app
             .take_effects()
@@ -1577,7 +1575,7 @@ fn an_engine_private_window_belongs_to_the_profile_that_owns_its_folder() {
 fn the_control_socket_stops_listening_even_after_its_file_is_gone() {
     let h = Harness::new();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("ardia.sock");
+    let path = dir.path().join("ArdiaControl.sock");
     let other_name = dir.path().join("still-here.sock");
     let server = ardia_app::ipc::socket::ControlServer::start(path.clone(), &h.app).unwrap();
     std::fs::hard_link(&path, &other_name).unwrap();
@@ -1681,6 +1679,72 @@ fn a_title_is_remembered_under_the_page_it_belongs_to() {
 }
 
 #[test]
+fn a_new_tab_on_the_engines_blank_page_never_takes_about_blank_as_its_title() {
+    let h = Harness::new();
+    let window = h.window();
+    let tab = h.open(&window, "");
+    let engine_tab = h.live(&tab);
+    h.engine.emit(EngineEvent::TitleChanged {
+        tab: engine_tab,
+        title: "about:blank".into(),
+    });
+    for url in ["about:blank", ""] {
+        h.engine.emit(EngineEvent::ShownTitleChanged {
+            tab: engine_tab,
+            title: "about:blank".into(),
+            url: url.into(),
+        });
+    }
+    h.pump();
+    let state = h.state();
+    let shown = state.tab(tab.as_str()).unwrap();
+    assert_ne!(shown.title, "about:blank");
+    assert_eq!(shown.display_title(), "New Tab");
+}
+
+#[test]
+fn an_untitled_page_shows_its_address_title_without_counting_a_visit() {
+    let h = Harness::new();
+    let window = h.window();
+    let tab = h.open(&window, "http://127.0.0.1:9418/a.html");
+    let engine_tab = h.live(&tab);
+    h.engine.emit(EngineEvent::TitleChanged {
+        tab: engine_tab,
+        title: "Source".into(),
+    });
+    h.pump();
+    let visits = |h: &Harness, url: &str| {
+        h.state()
+            .history_of(&ProfileId::default_profile())
+            .and_then(|history| history.get(url).map(|entry| entry.visits))
+            .unwrap_or(0)
+    };
+    let before = visits(&h, "http://127.0.0.1:9418/a.html");
+    h.engine.emit(EngineEvent::UrlChanged {
+        tab: engine_tab,
+        url: "http://127.0.0.1:9418/b.html".into(),
+    });
+    h.engine.emit(EngineEvent::ShownTitleChanged {
+        tab: engine_tab,
+        title: String::new(),
+        url: "http://127.0.0.1:9418/b.html".into(),
+    });
+    h.pump();
+    assert_eq!(h.state().tab(tab.as_str()).unwrap().title, "");
+    h.engine.emit(EngineEvent::ShownTitleChanged {
+        tab: engine_tab,
+        title: "127.0.0.1:9418/b.html".into(),
+        url: "http://127.0.0.1:9418/b.html".into(),
+    });
+    h.pump();
+    let state = h.state();
+    let shown = state.tab(tab.as_str()).unwrap();
+    assert_eq!(shown.title, "127.0.0.1:9418/b.html");
+    assert_eq!(visits(&h, "http://127.0.0.1:9418/b.html"), 0);
+    assert_eq!(visits(&h, "http://127.0.0.1:9418/a.html"), before);
+}
+
+#[test]
 fn the_control_socket_wont_open_tabs_in_a_named_private_window() {
     let (h, private, _) = private_harness();
     let refused = h
@@ -1690,7 +1754,7 @@ fn the_control_socket_wont_open_tabs_in_a_named_private_window() {
             &json!({"window": private.as_str(), "url": "https://sneak.example/"}),
         )
         .unwrap_err();
-    assert_eq!(refused.code, "private");
+    assert_eq!(refused.code, "refused");
     assert!(
         !h.state()
             .tabs
@@ -1710,11 +1774,8 @@ fn closing_a_pinned_tab_lets_go_of_its_page() {
         h.state().tab(tab.as_str()).unwrap().is_pinned(),
         "the tab is pinned"
     );
-    h.app.navigate(
-        window.clone(),
-        tab.clone(),
-        "https://pin.example/away".into(),
-    );
+    h.app
+        .navigate(window, tab.clone(), "https://pin.example/away".into());
     h.pump();
     let old_page = h.live(&tab);
     assert_eq!(
@@ -1901,4 +1962,70 @@ fn a_page_never_borrows_the_previous_pages_icon_in_history() {
         Some(icon.as_str())
     );
     assert_eq!(history.get("https://plain.example/").unwrap().favicon, None);
+}
+
+#[test]
+fn video_upscaling_follows_its_setting_into_the_engine() {
+    let h = Harness::new();
+    let enabled = |h: &Harness| {
+        h.engine
+            .query(ardia_engine::EngineQuery::VideoUpscalingState)
+            .unwrap()["enabled"]
+            .as_bool()
+    };
+    assert_eq!(enabled(&h), Some(true));
+    h.app.dispatch(Action::UpdateSettings {
+        patch: SettingsPatch::new().set("videoUpscaling", false),
+        from_sync: false,
+    });
+    h.pump();
+    assert_eq!(enabled(&h), Some(false));
+    h.app.dispatch(Action::UpdateSettings {
+        patch: SettingsPatch::new().set("videoUpscaling", true),
+        from_sync: false,
+    });
+    h.pump();
+    assert_eq!(enabled(&h), Some(true));
+}
+
+#[test]
+fn little_ardia_and_full_screen_hooks_never_touch_mock_windows() {
+    use ardia_ui::UiHost;
+    let h = Harness::new();
+    h.window();
+    h.app.dispatch(Action::OpenWindow {
+        kind: WindowKind::LittleArdia,
+        profile: None,
+        url: Some("https://little.example".into()),
+        frame: None,
+    });
+    h.pump();
+    let little = h.windows(WindowKind::LittleArdia)[0].clone();
+    assert_eq!(h.app.window_transitions(&little), 0);
+    h.app.act_window_full_screen(little.clone(), true);
+    h.app.move_window_to_display(
+        little.clone(),
+        "37D8832A-2D66-02CA-B9F7-8F30A301B230".into(),
+    );
+    h.app.act_window_full_screen(little.clone(), false);
+    h.pump();
+    assert_eq!(h.windows(WindowKind::LittleArdia), vec![little]);
+}
+
+#[test]
+fn a_launch_with_urls_opens_them_without_touching_native_windows() {
+    let h = Harness::new();
+    h.window();
+    h.app
+        .queue_urls(vec!["https://launched.example/".to_owned()]);
+    for _ in 0..5 {
+        h.pump();
+    }
+    assert!(
+        h.state()
+            .tabs
+            .values()
+            .any(|t| t.url == "https://launched.example/"),
+        "the launch link opened"
+    );
 }

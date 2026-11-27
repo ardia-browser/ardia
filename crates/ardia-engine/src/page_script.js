@@ -1897,7 +1897,7 @@
     if (config.fieldProvider !== undefined) handlers.fieldProvider(config.fieldProvider);
   };
   send("hello", { top: isTop, url: location.href });
-  const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));
+  const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement), pointerLock: !!document.pointerLockElement }));
   document.addEventListener("pointerlockchange", tellExclusive);
   document.addEventListener("fullscreenchange", tellExclusive);
 

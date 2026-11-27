@@ -2,7 +2,7 @@ use gpui::{
     Capslock, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, ModifiersChangedEvent, MouseButton,
     MouseDownEvent, MouseExitEvent, MouseMoveEvent, MousePressureEvent, MouseUpEvent,
     NavigationDirection, PinchEvent, PlatformInput, PressureStage, ScrollDelta, ScrollEvent,
-    ScrollSource, TouchPhase, point, px,
+    ScrollPhase, ScrollSource, TouchPhase, point, px,
 };
 
 use crate::{
@@ -26,7 +26,7 @@ use objc2_app_kit::{
     NSUpArrowFunctionKey,
 };
 use objc2_foundation::NSRect;
-use std::{borrow::Cow, ffi::c_void};
+use std::{borrow::Cow, ffi::c_void, time::Duration};
 
 pub(crate) const ESCAPE_KEY: u16 = 0x1b;
 
@@ -114,6 +114,28 @@ fn read_modifiers(native_event: &NSEvent) -> Modifiers {
         platform: command,
         function,
     }
+}
+
+fn scroll_phase(phase: NSEventPhase) -> ScrollPhase {
+    if phase.contains(NSEventPhase::Cancelled) {
+        ScrollPhase::Cancelled
+    } else if phase.contains(NSEventPhase::Ended) {
+        ScrollPhase::Ended
+    } else if phase.contains(NSEventPhase::Began) {
+        ScrollPhase::Began
+    } else if phase.contains(NSEventPhase::Changed) {
+        ScrollPhase::Changed
+    } else if phase.contains(NSEventPhase::Stationary) {
+        ScrollPhase::Stationary
+    } else if phase.contains(NSEventPhase::MayBegin) {
+        ScrollPhase::MayBegin
+    } else {
+        ScrollPhase::None
+    }
+}
+
+fn timestamp_from_secs(seconds: f64) -> Option<Duration> {
+    Duration::try_from_secs_f64(seconds).ok()
 }
 
 pub(crate) unsafe fn platform_input_from_native(
@@ -261,6 +283,7 @@ pub(crate) unsafe fn platform_input_from_native(
                     delta: magnification,
                     modifiers: read_modifiers(native_event),
                     phase,
+                    timestamp: timestamp_from_secs(native_event.timestamp()),
                 })
             }),
             NSEventType::ScrollWheel => view_frame.map(|view_frame| {
@@ -287,6 +310,10 @@ pub(crate) unsafe fn platform_input_from_native(
                     touch_phase: phase,
                     modifiers: read_modifiers(native_event),
                     source: ScrollSource::Pointer,
+                    gesture_phase: scroll_phase(native_event.phase()),
+                    momentum_phase: scroll_phase(native_event.momentumPhase()),
+                    direction_inverted_from_device: native_event.isDirectionInvertedFromDevice(),
+                    timestamp: timestamp_from_secs(native_event.timestamp()),
                 })
             }),
             NSEventType::LeftMouseDragged
@@ -564,4 +591,197 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
         let _: () = msg_send![keyboard, release];
     }
     String::from_utf16(&buffer[..buffer_size]).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use objc2::{class, rc::autoreleasepool};
+    use objc2_foundation::{NSPoint, NSSize};
+
+    const SCROLL_EVENT_UNIT_PIXEL: u32 = 0;
+
+    #[repr(C)]
+    struct CGEvent {
+        _private: [u8; 0],
+    }
+
+    unsafe impl objc2::encode::RefEncode for CGEvent {
+        const ENCODING_REF: objc2::encode::Encoding =
+            objc2::encode::Encoding::Pointer(&objc2::encode::Encoding::Struct("__CGEvent", &[]));
+    }
+    const SCROLL_WHEEL_EVENT_SCROLL_PHASE: u32 = 99;
+    const SCROLL_WHEEL_EVENT_MOMENTUM_PHASE: u32 = 123;
+    const SCROLL_WHEEL_EVENT_DIRECTION_INVERTED: u32 = 137;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGEventCreateScrollWheelEvent2(
+            source: *const c_void,
+            units: u32,
+            wheel_count: u32,
+            wheel1: i32,
+            wheel2: i32,
+            wheel3: i32,
+        ) -> *mut CGEvent;
+        fn CGEventSetIntegerValueField(event: *mut CGEvent, field: u32, value: i64);
+        fn CGEventCreate(source: *const c_void) -> *mut CGEvent;
+        fn CGEventSetType(event: *mut CGEvent, event_type: u32);
+        fn CGEventSetTimestamp(event: *mut CGEvent, timestamp: u64);
+        fn CFRelease(object: *const c_void);
+    }
+
+    const MAGNIFY_EVENT_TYPE: u32 = 30;
+
+    unsafe fn native_input(event: *mut CGEvent, timestamp: u64) -> (f64, Option<PlatformInput>) {
+        unsafe {
+            CGEventSetTimestamp(event, timestamp);
+            let native: *mut AnyObject = msg_send![class!(NSEvent), eventWithCGEvent: event];
+            CFRelease(event.cast());
+            assert!(!native.is_null());
+            let native_timestamp: f64 = msg_send![native, timestamp];
+            let view_frame = NSRect::new(NSPoint::new(0., 0.), NSSize::new(800., 600.));
+            (
+                native_timestamp,
+                platform_input_from_native(native, Some(view_frame)),
+            )
+        }
+    }
+
+    fn assert_matches_native(timestamp: Option<Duration>, native_timestamp: f64) {
+        let timestamp = timestamp.expect("event has a timestamp");
+        assert!(native_timestamp > 0.);
+        assert!(
+            (timestamp.as_secs_f64() - native_timestamp).abs() < 1e-6,
+            "{timestamp:?} != {native_timestamp}"
+        );
+    }
+
+    #[test]
+    fn scroll_carries_the_native_timestamp() {
+        let read = |timestamp| {
+            autoreleasepool(|_| unsafe {
+                let event = CGEventCreateScrollWheelEvent2(
+                    std::ptr::null(),
+                    SCROLL_EVENT_UNIT_PIXEL,
+                    1,
+                    -3,
+                    0,
+                    0,
+                );
+                assert!(!event.is_null());
+                match native_input(event, timestamp) {
+                    (native, Some(PlatformInput::Scroll(event))) => (event.timestamp, native),
+                    (_, other) => panic!("expected a scroll, got {other:?}"),
+                }
+            })
+        };
+        let (first, first_native) = read(7_000_000_000);
+        let (second, second_native) = read(7_008_333_333);
+        assert_matches_native(first, first_native);
+        assert_matches_native(second, second_native);
+        assert!(second > first);
+        let interval = second.unwrap() - first.unwrap();
+        assert!(interval.abs_diff(Duration::from_nanos(8_333_333)) < Duration::from_micros(1));
+    }
+
+    #[test]
+    fn magnify_carries_the_native_timestamp() {
+        let read = |timestamp| {
+            autoreleasepool(|_| unsafe {
+                let event = CGEventCreate(std::ptr::null());
+                assert!(!event.is_null());
+                CGEventSetType(event, MAGNIFY_EVENT_TYPE);
+                match native_input(event, timestamp) {
+                    (native, Some(PlatformInput::Pinch(event))) => (event.timestamp, native),
+                    (_, other) => panic!("expected a pinch, got {other:?}"),
+                }
+            })
+        };
+        let (first, first_native) = read(9_000_000_000);
+        let (second, second_native) = read(9_016_000_000);
+        assert_matches_native(first, first_native);
+        assert_matches_native(second, second_native);
+        assert!(second > first);
+    }
+
+    #[test]
+    fn invalid_native_timestamps_become_none() {
+        assert_eq!(timestamp_from_secs(-1.), None);
+        assert_eq!(timestamp_from_secs(f64::NAN), None);
+        assert_eq!(timestamp_from_secs(f64::INFINITY), None);
+        assert_eq!(timestamp_from_secs(1.5), Some(Duration::from_millis(1500)));
+    }
+
+    fn scroll(scroll_phase: i64, momentum_phase: i64, inverted: bool) -> ScrollEvent {
+        autoreleasepool(|_| unsafe {
+            let event = CGEventCreateScrollWheelEvent2(
+                std::ptr::null(),
+                SCROLL_EVENT_UNIT_PIXEL,
+                2,
+                -3,
+                4,
+                0,
+            );
+            assert!(!event.is_null());
+            CGEventSetIntegerValueField(event, SCROLL_WHEEL_EVENT_SCROLL_PHASE, scroll_phase);
+            CGEventSetIntegerValueField(event, SCROLL_WHEEL_EVENT_MOMENTUM_PHASE, momentum_phase);
+            CGEventSetIntegerValueField(
+                event,
+                SCROLL_WHEEL_EVENT_DIRECTION_INVERTED,
+                inverted as i64,
+            );
+            let native: *mut AnyObject = msg_send![class!(NSEvent), eventWithCGEvent: event];
+            CFRelease(event.cast());
+            let view_frame = NSRect::new(NSPoint::new(0., 0.), NSSize::new(800., 600.));
+            match platform_input_from_native(native, Some(view_frame)) {
+                Some(PlatformInput::Scroll(event)) => event,
+                other => panic!("expected a scroll, got {other:?}"),
+            }
+        })
+    }
+
+    #[test]
+    fn maps_gesture_and_momentum_phases() {
+        let event = scroll(1, 0, false);
+        assert_eq!(event.gesture_phase, ScrollPhase::Began);
+        assert_eq!(event.momentum_phase, ScrollPhase::None);
+        assert_eq!(event.touch_phase, TouchPhase::Started);
+        assert!(!event.direction_inverted_from_device);
+
+        assert_eq!(scroll(128, 0, false).gesture_phase, ScrollPhase::MayBegin);
+        assert_eq!(scroll(2, 0, false).gesture_phase, ScrollPhase::Changed);
+        assert_eq!(scroll(4, 0, false).gesture_phase, ScrollPhase::Ended);
+        assert_eq!(scroll(8, 0, false).gesture_phase, ScrollPhase::Cancelled);
+
+        for (momentum, expected) in [
+            (1, ScrollPhase::Began),
+            (2, ScrollPhase::Changed),
+            (3, ScrollPhase::Ended),
+        ] {
+            let event = scroll(0, momentum, false);
+            assert_eq!(event.gesture_phase, ScrollPhase::None);
+            assert_eq!(event.momentum_phase, expected);
+        }
+    }
+
+    #[test]
+    fn maps_direction_inversion() {
+        let event = scroll(2, 0, true);
+        assert!(event.direction_inverted_from_device);
+        assert!(matches!(event.delta, ScrollDelta::Pixels(_)));
+    }
+
+    #[test]
+    fn phase_flags_map_to_one_phase() {
+        assert_eq!(scroll_phase(NSEventPhase::empty()), ScrollPhase::None);
+        assert_eq!(
+            scroll_phase(NSEventPhase::Stationary),
+            ScrollPhase::Stationary
+        );
+        assert_eq!(
+            scroll_phase(NSEventPhase::Began | NSEventPhase::Changed),
+            ScrollPhase::Began
+        );
+    }
 }

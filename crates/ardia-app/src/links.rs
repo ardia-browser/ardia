@@ -17,6 +17,22 @@ pub enum LinkPlan {
 
 pub fn plan_link(state: &BrowserState, url: &str, source: &LinkSource) -> LinkPlan {
     let decision = state.route_link(url, source);
+    match decision.by {
+        Some(ardia_state::air_traffic::RoutedBy::Rule(_)) => {
+            ardia_telemetry::counts::count("air_traffic_rule_links")
+        }
+        Some(ardia_state::air_traffic::RoutedBy::Fallback) => {
+            ardia_telemetry::counts::count("air_traffic_fallback_links")
+        }
+        None => {}
+    }
+    let setting_on = state.settings.open_links_in_little_ardia;
+    ardia_telemetry::counts::count(match (decision.open == OpenAs::LittleArdia, setting_on) {
+        (true, true) => "external_links_little_setting_on",
+        (true, false) => "external_links_little_setting_off",
+        (false, true) => "external_links_tab_setting_on",
+        (false, false) => "external_links_tab_setting_off",
+    });
     let profile = decision.profile_id;
     match decision.open {
         OpenAs::Window => LinkPlan::NewWindow {
@@ -60,6 +76,39 @@ pub fn plan_link(state: &BrowserState, url: &str, source: &LinkSource) -> LinkPl
             }
         }
     }
+}
+
+pub fn runs_javascript(url: &str) -> bool {
+    let trimmed = url.trim_start_matches(|c: char| c.is_whitespace() || c.is_control());
+    let scheme: String = trimmed
+        .chars()
+        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
+        .take(11)
+        .collect();
+    scheme.eq_ignore_ascii_case("javascript:")
+}
+
+pub fn app_link_index(
+    state: &BrowserState,
+    window: &WindowId,
+    profile: &ProfileId,
+    batch_index: usize,
+) -> Option<usize> {
+    if !state.settings.app_links_first {
+        return None;
+    }
+    let w = state.window(window.as_str())?;
+    let first = w
+        .tab_ids
+        .iter()
+        .position(|id| {
+            state
+                .tab(id.as_str())
+                .is_some_and(|t| t.profile_id == *profile)
+                && !state.in_pinned_container(id.as_str())
+        })
+        .unwrap_or(w.tab_ids.len());
+    Some((first + batch_index).min(w.tab_ids.len()))
 }
 
 pub fn is_openable(url: &str) -> bool {
@@ -183,5 +232,50 @@ mod tests {
         assert!(
             is_openable(" https://x\n") && !is_openable(" ") && !is_openable("https://x\u{7}y")
         );
+    }
+
+    #[test]
+    fn javascript_links_are_spotted_through_case_and_spaces() {
+        assert!(runs_javascript("javascript:alert(1)"));
+        assert!(runs_javascript("  JavaScript:void 0"));
+        assert!(!runs_javascript("https://javascript.info"));
+        assert!(!runs_javascript("java"));
+        assert!(runs_javascript("java\tscript:alert(1)"));
+        assert!(runs_javascript("\u{1}j\na\rvascript:alert(1)"));
+        assert!(!runs_javascript("java script:alert(1)"));
+    }
+
+    #[test]
+    fn app_links_land_first_among_regular_tabs_when_asked() {
+        let mut s = state();
+        let window = act(
+            &mut s,
+            Action::OpenWindow {
+                kind: WindowKind::Main,
+                profile: None,
+                url: Some("https://a.example".into()),
+                frame: None,
+            },
+        )
+        .window
+        .unwrap();
+        let profile = ProfileId::default_profile();
+        assert_eq!(app_link_index(&s, &window, &profile, 0), None);
+        act(
+            &mut s,
+            Action::UpdateSettings {
+                patch: ardia_state::settings::SettingsPatch::new().set("appLinksFirst", true),
+                from_sync: false,
+            },
+        );
+        let first = s
+            .window(window.as_str())
+            .unwrap()
+            .tab_ids
+            .iter()
+            .position(|t| !s.in_pinned_container(t.as_str()))
+            .unwrap();
+        assert_eq!(app_link_index(&s, &window, &profile, 0), Some(first));
+        assert_eq!(app_link_index(&s, &window, &profile, 1), Some(first + 1));
     }
 }

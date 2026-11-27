@@ -1,0 +1,7 @@
+id: unwrap-entity-in-async
+valid:
+  - "fn f(cx: &mut App) { cx.spawn(async move |cx| { this.update(cx, |v, cx| cx.notify())?; Ok(()) }).detach(); }"
+  - "fn f(cx: &mut App) { let n = view.update(cx, |v, _| v.items.first().copied()).unwrap_or(0); }"
+invalid:
+  - "fn f(cx: &mut App) { cx.spawn(async move |cx| { this.update(cx, |v, cx| cx.notify()).unwrap(); }).detach(); }"
+  - "fn f(cx: &mut App) { cx.spawn(async move |cx| { let n = this.read_with(cx, |v, _| v.n).expect(\"alive\"); }).detach(); }"

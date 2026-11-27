@@ -686,6 +686,15 @@ impl TestAppContext {
         test_window(&self.app, window)
     }
 
+    /// Returns the native view that mouse input at `position` in `window` reaches, if any.
+    pub fn hit_test_native_view(
+        &self,
+        window: AnyWindowHandle,
+        position: Point<Pixels>,
+    ) -> Option<crate::NativeViewId> {
+        self.test_window(window).hit_test_native_view(position)
+    }
+
     /// Returns a stream of notifications whenever the Entity is updated.
     pub fn notifications<T: 'static>(
         &mut self,

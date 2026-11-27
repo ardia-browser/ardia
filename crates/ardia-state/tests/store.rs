@@ -147,7 +147,7 @@ fn listeners_hear_only_what_they_asked_for() {
     );
     store
         .dispatch(Action::UpdatePage {
-            tab: first.clone(),
+            tab: first,
             update: progress,
         })
         .unwrap();

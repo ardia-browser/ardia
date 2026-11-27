@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ardia_state::BrowserState;
 use ardia_state::profiles::Profile;
-use ardia_state::settings::Settings;
+use ardia_state::settings::{Appearance, Settings};
 use ardia_theme::tokens::{self, DiaTokens};
 use ardia_theme::{
     ColorRoles, FieldSurface, RgbaColor, SidebarTextSize, Theme, WindowTreatment,
@@ -10,9 +10,35 @@ use ardia_theme::{
 };
 use gpui::{BackdropLayerSpec, Hsla, WindowAppearance};
 
-use crate::primitives::theme_bridge::{backdrop_spec, hsla};
+use crate::primitives::glass::{GlassLook, panel_glass_tint};
+use crate::primitives::theme_bridge::{backdrop_spec, backdrop_spec_sized, hsla};
 
 pub const UI_FONT: &str = ".SystemUIFont";
+
+thread_local! {
+    static LIQUID_GLASS_AVAILABLE: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+pub fn note_liquid_glass_available(available: bool) {
+    LIQUID_GLASS_AVAILABLE.with(|cell| cell.set(available));
+}
+
+pub fn note_window_glass(window: &gpui::Window) {
+    note_liquid_glass_available(window.liquid_glass_available());
+}
+
+pub fn liquid_glass_available() -> bool {
+    LIQUID_GLASS_AVAILABLE.with(std::cell::Cell::get)
+}
+
+pub fn glass_shown(settings: &Settings, available: bool) -> bool {
+    available && settings.liquid_glass_enabled()
+}
+pub const POPOVER_SHADOW_DARK: f32 = 0.45;
+pub const POPOVER_SHADOW_LIGHT: f32 = 0.16;
+pub const CARD_SHADOW_SHARE: f32 = 0.8;
+pub const TOOLTIP_SHADOW_DARK: f32 = 0.15;
+pub const TOOLTIP_SHADOW_LIGHT: f32 = 0.08;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
@@ -28,6 +54,7 @@ pub struct Palette {
     pub tab_pressed: Hsla,
     pub tab_selected: Hsla,
     pub tab_selected_border: Hsla,
+    pub tab_selected_border_bottom: Hsla,
     pub tab_secondary: Hsla,
     pub pinned_resting: Hsla,
     pub pinned_resting_stroke: Hsla,
@@ -59,10 +86,26 @@ pub struct Palette {
     pub chip_border: Hsla,
     pub chip_text: Hsla,
     pub chip_fill: Hsla,
+    pub favicon_tile: Hsla,
+    pub dark: bool,
     pub go: Hsla,
     pub go_hover: Hsla,
     pub go_pressed: Hsla,
     pub on_go: Hsla,
+    pub toggle_off: Hsla,
+    pub ring_radio_fill: Hsla,
+    pub ring_radio_border: Hsla,
+    pub ring_radio_on: Hsla,
+    pub group_fill: Hsla,
+    pub group_border: Hsla,
+    pub panel: Hsla,
+    pub panel_border: Hsla,
+    pub card_shadow: Hsla,
+    pub form_accent_pressed: Hsla,
+    pub hud_close_fill: Hsla,
+    pub hud_close_hover: Hsla,
+    pub hud_close_border: Hsla,
+    pub hud_close_glyph: Hsla,
     pub accent: Hsla,
     pub form_accent: Hsla,
     pub on_accent: Hsla,
@@ -98,6 +141,9 @@ pub struct Palette {
     pub mark: Hsla,
     pub shadow: Hsla,
     pub profile_name: Hsla,
+    pub popover_shadow: Hsla,
+    pub tooltip_shadow: Hsla,
+    pub glass_panel_tint: Hsla,
 }
 
 impl Palette {
@@ -118,6 +164,7 @@ impl Palette {
             tab_pressed: c(roles.tab_pressed),
             tab_selected: c(roles.tab_selected),
             tab_selected_border: c(roles.tab_selected_border[0]),
+            tab_selected_border_bottom: c(roles.tab_selected_border[1]),
             tab_secondary: c(dia.tab_background_selected_secondary),
             pinned_resting: c(roles.pinned_resting),
             pinned_resting_stroke: c(roles.pinned_resting_stroke),
@@ -149,10 +196,28 @@ impl Palette {
             chip_border: c(roles.chip_border),
             chip_text: c(roles.chip_text),
             chip_fill: c(roles.chip_fill),
+            favicon_tile: c(roles.favicon_tile),
+            dark: roles.dark,
             go: c(roles.go_button),
             go_hover: c(roles.go_button_hover),
             go_pressed: c(roles.go_button_pressed),
             on_go: c(roles.on_primary),
+            toggle_off: c(roles.toggle_off),
+            ring_radio_fill: c(roles.ring_radio_fill),
+            ring_radio_border: c(roles.ring_radio_border),
+            ring_radio_on: c(roles.ring_radio_on),
+            group_fill: c(roles.group_fill),
+            group_border: c(roles.group_border),
+            panel: c(roles.panel),
+            panel_border: c(roles.panel_border),
+            card_shadow: c(RgbaColor::black(
+                roles.panel_shadow_opacity * CARD_SHADOW_SHARE,
+            )),
+            form_accent_pressed: c(roles.form_accent_pressed),
+            hud_close_fill: c(roles.hud_close_fill),
+            hud_close_hover: c(roles.hud_close_hover),
+            hud_close_border: c(roles.hud_close_border),
+            hud_close_glyph: c(roles.hud_close_glyph),
             accent: c(roles.accent),
             form_accent: c(roles.form_accent),
             on_accent: c(roles.on_accent),
@@ -188,6 +253,17 @@ impl Palette {
             mark: c(roles.mark),
             shadow: c(RgbaColor::black(if roles.dark { 0.35 } else { 0.12 })),
             profile_name: c(profile_name),
+            popover_shadow: c(RgbaColor::black(if roles.dark {
+                POPOVER_SHADOW_DARK
+            } else {
+                POPOVER_SHADOW_LIGHT
+            })),
+            glass_panel_tint: c(panel_glass_tint(theme, roles.panel, 0.0)),
+            tooltip_shadow: c(RgbaColor::black(if roles.dark {
+                TOOLTIP_SHADOW_DARK
+            } else {
+                TOOLTIP_SHADOW_LIGHT
+            })),
         }
     }
 }
@@ -233,8 +309,17 @@ pub struct Look {
     pub p: Palette,
     pub dark: bool,
     pub glass: bool,
+    pub glass_tint: f32,
     pub text_size: SidebarTextSize,
     pub high_contrast: bool,
+}
+
+pub fn app_appearance(setting: Appearance) -> Option<WindowAppearance> {
+    match setting {
+        Appearance::Auto => None,
+        Appearance::Light => Some(WindowAppearance::Light),
+        Appearance::Dark => Some(WindowAppearance::Dark),
+    }
 }
 
 pub fn system_dark(appearance: WindowAppearance) -> bool {
@@ -271,15 +356,21 @@ impl Look {
                 profile_name_color(profile.look(), dark)
             }
         });
-        let p = Palette::new(&theme, &treatment, name);
+        let mut p = Palette::new(&theme, &treatment, name);
+        if !state.settings.element_outlines {
+            p.pinned_resting_stroke = gpui::transparent_black();
+        }
+        let glass_tint = GlassLook::of(&state.settings).tint;
+        p.glass_panel_tint = hsla(panel_glass_tint(&theme, theme.roles.panel, glass_tint));
         Look {
+            glass_tint,
             key,
             high_contrast: theme.high_contrast_text,
             theme,
             treatment,
             p,
             dark,
-            glass: state.settings.liquid_glass_enabled(),
+            glass: glass_shown(&state.settings, liquid_glass_available()),
             text_size: state.settings.sidebar_text_size,
         }
     }
@@ -308,6 +399,14 @@ impl Look {
 
     pub fn backdrop(&self, active: bool) -> BackdropLayerSpec {
         backdrop_spec(&self.treatment, active)
+    }
+
+    pub fn backdrop_gradients(&self, size: [f32; 2]) -> gpui::BackdropGradients {
+        crate::primitives::theme_bridge::backdrop_gradients(&self.treatment, size)
+    }
+
+    pub fn backdrop_in(&self, active: bool, size: [f32; 2], focus: [f32; 2]) -> BackdropLayerSpec {
+        backdrop_spec_sized(&self.treatment, active, size, focus)
     }
 
     pub fn points(&self, value: f32) -> f32 {
@@ -339,6 +438,36 @@ mod tests {
         assert!(!light.dark);
         assert_ne!(dark.p.text, light.p.text);
         assert!(dark.glass);
+    }
+
+    #[test]
+    fn glass_falls_back_to_classic_where_liquid_glass_is_unavailable() {
+        let mut settings = Settings::default();
+        settings.interface_style = ardia_state::settings::InterfaceStyle::Glass;
+        assert!(glass_shown(&settings, true));
+        assert!(!glass_shown(&settings, false));
+        settings.interface_style = ardia_state::settings::InterfaceStyle::Classic;
+        assert!(!glass_shown(&settings, true));
+        let state = state();
+        note_liquid_glass_available(false);
+        let classic = Look::new(&state, "missing", WindowAppearance::Dark);
+        assert!(!classic.glass);
+        assert!(!crate::primitives::glass::GlassLook::of(&state.settings).controls);
+        note_liquid_glass_available(true);
+        assert!(Look::new(&state, "missing", WindowAppearance::Dark).glass);
+    }
+
+    #[test]
+    fn the_appearance_setting_forces_the_app_appearance_pages_follow() {
+        assert_eq!(app_appearance(Appearance::Auto), None);
+        assert_eq!(
+            app_appearance(Appearance::Light),
+            Some(WindowAppearance::Light)
+        );
+        assert_eq!(
+            app_appearance(Appearance::Dark),
+            Some(WindowAppearance::Dark)
+        );
     }
 
     #[test]

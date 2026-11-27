@@ -316,6 +316,7 @@ pub fn dia_menu_bar(context: &MenuContext) -> MenuBar {
             command("Close All Tabs", "closeAllTabs")
                 .key("k", SHIFT | CMD)
                 .item(),
+            command("Close Duplicate Tabs", "closeDuplicateTabs").item(),
             command("Clean Up Tabs", "cleanUpTabs")
                 .key("k", OPT | CMD)
                 .item(),
@@ -604,6 +605,14 @@ pub fn dia_menu_bar(context: &MenuContext) -> MenuBar {
             .item(),
         command("Search Tabs…", "searchTabs")
             .key("a", SHIFT | CMD)
+            .item(),
+        command("Sort Tabs by Site", "sortTabs")
+            .arg("site")
+            .hidden()
+            .item(),
+        command("Sort Tabs by Title", "sortTabs")
+            .arg("title")
+            .hidden()
             .item(),
         command("Tab Switcher (forward)", "tabSwitcher")
             .arg("forward")

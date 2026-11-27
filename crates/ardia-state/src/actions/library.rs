@@ -46,6 +46,41 @@ impl Tx<'_> {
         Ok(())
     }
 
+    pub(super) fn remove_history_pages(
+        &mut self,
+        profile: ProfileId,
+        urls: Vec<String>,
+    ) -> Result<(), ActionError> {
+        let history = self.history_mut(&profile);
+        for url in &urls {
+            history.remove(url);
+        }
+        Ok(())
+    }
+
+    pub(super) fn replace_history(
+        &mut self,
+        profile: ProfileId,
+        entries: Vec<crate::history::HistoryEntry>,
+    ) -> Result<(), ActionError> {
+        if profile.is_incognito() {
+            return Ok(());
+        }
+        *self.history_mut(&profile) = crate::history::History::from_entries(entries);
+        Ok(())
+    }
+
+    pub(super) fn clear_history(
+        &mut self,
+        profile: ProfileId,
+        since: Option<Millis>,
+        until: Millis,
+    ) -> Result<(), ActionError> {
+        self.history_mut(&profile)
+            .remove_between(since.unwrap_or(Millis::MIN), until.saturating_add(1));
+        Ok(())
+    }
+
     pub(super) fn add_bookmark(
         &mut self,
         profile: ProfileId,

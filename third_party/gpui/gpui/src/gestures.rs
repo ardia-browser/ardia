@@ -1078,6 +1078,7 @@ fn scroll_event(
         modifiers: Modifiers::default(),
         touch_phase,
         source: ScrollSource::Touch,
+        ..Default::default()
     }
 }
 

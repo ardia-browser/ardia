@@ -6,8 +6,15 @@ usage() {
 Usage: scripts/build-gpui-macos.sh [options]
 
 Builds the GPUI Ardia (crates/ardia-app) and packages it as a macOS app:
-  <out>/Ardia.app/Contents/{MacOS/ardia, Frameworks/Chromium Framework.framework,
-                            Resources/AppIcon.icns, Info.plist, PkgInfo}
+  <out>/Ardia.app/Contents/{MacOS/ardia, Helpers/ardia-plugin-host,
+                            Frameworks/Chromium Framework.framework,
+                            Resources/{AppIcon.icns, Ardia.sdef, Extensions/ublock,
+                                       Extensions/ublock-lite-settings, ContentRules, HSTS},
+                            Info.plist, PkgInfo}
+uBlock Origin is downloaded once at the pinned version, checked against its SHA-256 and
+patched (crates/ardia-app/resources/ubo.sh); without network the app is built without it.
+The WebKit content rules (uBOL, crates/ardia-app/resources/ubol-webkit.sh) and Chromium's
+HSTS preload list (crates/ardia-app/resources/hsts-preload.sh) are built the same way.
 The Chromium Framework is cloned (copy-on-write) into the bundle, never changed in
 place, and the bundle is signed ad hoc so macOS launches it.
 
@@ -83,12 +90,13 @@ crate="$repo/crates/ardia-app"
 target_dir="${CARGO_TARGET_DIR:-$repo/target}"
 [[ "$target_dir" == /* ]] || target_dir="$repo/$target_dir"
 profile="debug"
-cargo_flags=(build -p ardia-app)
+cargo_flags=(build -p ardia-app -p ardia-plugin-host)
 if [[ $release -eq 1 ]]; then
   profile="release"
   cargo_flags+=(--release)
 fi
 binary="$target_dir/$profile/ardia"
+plugin_host="$target_dir/$profile/ardia-plugin-host"
 out="${out:-$repo/target/gpui-app}"
 [[ "$out" == /* ]] || out="$PWD/$out"
 out="${out%/}"
@@ -116,8 +124,12 @@ fi
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$repo/Cargo.toml" | head -n 1)"
 version="${version:-0.0.0}"
 build_number="$(git -C "$repo" rev-list --count HEAD 2>/dev/null || echo 1)"
-icon_source="$repo/apps/browser/macos/Ardia-macOS/Assets.xcassets/AppIcon.appiconset"
+icon_source="$crate/resources/AppIcon.appiconset"
 icon_cache="$target_dir/gpui-app-icon/AppIcon.icns"
+ubo_vendor="$target_dir/gpui-ubo"
+ubol_vendor="$target_dir/gpui-ubol-webkit"
+hsts_vendor="$target_dir/gpui-hsts-preload"
+ubo_settings="$crate/resources/extensions/ublock-lite-settings"
 
 run() {
   if [[ $dry -eq 1 ]]; then
@@ -160,6 +172,9 @@ fi
 if [[ $dry -eq 0 && ! -x "$binary" ]]; then
   fail "$binary isn't built; drop --skip-build"
 fi
+if [[ $dry -eq 0 && ! -x "$plugin_host" ]]; then
+  fail "$plugin_host isn't built; drop --skip-build"
+fi
 
 cleanup() {
   [[ $dry -eq 1 ]] && return 0
@@ -192,14 +207,39 @@ else
 fi
 staging="$staging_root/Ardia.app"
 contents="$staging/Contents"
-run mkdir -p "$contents/MacOS" "$contents/Frameworks" "$contents/Resources"
+run mkdir -p "$contents/MacOS" "$contents/Frameworks" "$contents/Resources" "$contents/Helpers"
 run cp "$binary" "$contents/MacOS/ardia"
+run cp "$plugin_host" "$contents/Helpers/ardia-plugin-host"
+embed_webkit_rules() {
+  if ! UBOL_VENDOR_DIR="$ubol_vendor" bash "$crate/resources/ubol-webkit.sh"; then
+    printf 'build-gpui-macos: warning: the WebKit content rules could not be built; WebKit tabs have no ad blocking\n' >&2
+  elif [[ -f "$ubol_vendor/rules/rulesets.json" ]]; then
+    rsync -a --delete "$ubol_vendor/rules/" "$contents/Resources/ContentRules/"
+  fi
+  if ! HSTS_VENDOR_DIR="$hsts_vendor" bash "$crate/resources/hsts-preload.sh"; then
+    printf 'build-gpui-macos: warning: the HSTS preload list could not be built; WebKit tabs upgrade only known hosts\n' >&2
+  elif [[ -d "$hsts_vendor/hosts" ]]; then
+    rsync -a --delete "$hsts_vendor/hosts/" "$contents/Resources/HSTS/"
+  fi
+}
+if [[ $dry -eq 1 ]]; then
+  run env UBOL_VENDOR_DIR="$ubol_vendor" bash "$crate/resources/ubol-webkit.sh"
+  run rsync -a --delete "$ubol_vendor/rules/" "$contents/Resources/ContentRules/"
+  run env HSTS_VENDOR_DIR="$hsts_vendor" bash "$crate/resources/hsts-preload.sh"
+  run rsync -a --delete "$hsts_vendor/hosts/" "$contents/Resources/HSTS/"
+else
+  embed_webkit_rules
+fi
 if [[ $dry -eq 1 ]]; then
   run sed -e "s/@VERSION@/$version/" -e "s/@BUILD@/$build_number/" "$crate/resources/Info.plist"
 else
   sed -e "s/@VERSION@/$version/" -e "s/@BUILD@/$build_number/" "$crate/resources/Info.plist" >"$contents/Info.plist"
   plutil -lint "$contents/Info.plist" >/dev/null
   printf 'APPL????' >"$contents/PkgInfo"
+fi
+run cp "$crate/resources/Ardia.sdef" "$contents/Resources/Ardia.sdef"
+if [[ $dry -eq 0 ]]; then
+  xmllint --noout "$contents/Resources/Ardia.sdef"
 fi
 if [[ -d "$icon_source" ]]; then
   if [[ $dry -eq 1 ]]; then
@@ -208,6 +248,27 @@ if [[ -d "$icon_source" ]]; then
     build_icon
   fi
   run cp "$icon_cache" "$contents/Resources/AppIcon.icns"
+fi
+
+embed_ublock() {
+  local extensions="$contents/Resources/Extensions"
+  if ! UBO_VENDOR_DIR="$ubo_vendor" bash "$crate/resources/ubo.sh"; then
+    printf 'build-gpui-macos: warning: uBlock Origin could not be prepared; the app has no content blocker\n' >&2
+    return 0
+  fi
+  [[ -f "$ubo_vendor/ubo/ext/manifest.json" ]] || return 0
+  mkdir -p "$extensions"
+  rsync -a --delete "$ubo_vendor/ubo/ext/" "$extensions/ublock/"
+  (cd "$extensions/ublock" && find . -type f ! -path './_metadata/*' -print0 | LC_ALL=C sort -z \
+    | xargs -0 shasum -a 256 | shasum -a 256 | cut -d' ' -f1) >"$extensions/ublock.fingerprint"
+  rsync -a --delete "$ubo_settings/" "$extensions/ublock-lite-settings/"
+}
+
+if [[ $dry -eq 1 ]]; then
+  run env UBO_VENDOR_DIR="$ubo_vendor" bash "$crate/resources/ubo.sh"
+  run rsync -a --delete "$ubo_vendor/ubo/ext/" "$contents/Resources/Extensions/ublock/"
+else
+  embed_ublock
 fi
 
 if [[ $bundle_framework -eq 1 ]]; then

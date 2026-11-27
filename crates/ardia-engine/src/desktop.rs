@@ -17,8 +17,9 @@ use crate::abi::{
 use crate::commands::*;
 use crate::error::{EngineError, EngineResult};
 use crate::events::{EngineEvent, EventBus, PromptKey};
+use crate::loader::EngineLibrary;
 use crate::policy::{DefaultPolicy, HostPolicy};
-use crate::reply::Reply;
+use crate::reply::{Finally, Reply};
 use crate::services::{SecretValue, ServiceArgs, ServiceName};
 use crate::types::*;
 
@@ -47,6 +48,15 @@ pub struct ArdiaEngineApi {
 }
 
 pub type Done = Box<dyn FnOnce(EngineResult<Value>) + Send>;
+
+pub fn standalone_api_entry(library: &EngineLibrary) -> EngineResult<ApiEntry> {
+    library.api_entry().ok_or_else(|| {
+        EngineError::NotLoaded(format!(
+            "{} has no {API_ENTRY_SYMBOL}; its service-only calls need Chromium's own UI thread, so a standalone app can't drive it",
+            library.path().display()
+        ))
+    })
+}
 pub type Sink = Arc<dyn Fn(&str, &str) + Send + Sync>;
 
 pub trait DesktopTransport: Send + Sync + 'static {
@@ -62,11 +72,13 @@ pub trait DesktopTransport: Send + Sync + 'static {
     ) -> Reply<SecretValue>;
     fn install_sink(&self, sink: Sink) -> EngineResult<()>;
     fn remove_sink(&self) {}
+    fn abandon_host_calls(&self);
 }
 
 static ATTACHMENT: Mutex<Option<(u64, Sink)>> = Mutex::new(None);
 static NEXT_ATTACHMENT: AtomicU64 = AtomicU64::new(1);
 static NEXT_TAB_KEY: AtomicU64 = AtomicU64::new(1);
+static NEXT_TRANSPORT: AtomicU64 = AtomicU64::new(1);
 
 fn fresh_tab_key() -> String {
     format!("t{}", NEXT_TAB_KEY.fetch_add(1, Ordering::Relaxed))
@@ -158,6 +170,47 @@ pub struct ApiTransport {
     api: &'static ArdiaEngineApi,
     backend: EngineBackend,
     link: NativeLink,
+    instance: u64,
+}
+
+fn close_late_open(host_call: HostCallFn, owner: ThreadId, args: &Value, window: u64) -> Done {
+    let key = args.get("key").and_then(Value::as_str).map(str::to_owned);
+    let adopt = args.get("adopt").and_then(Value::as_str).map(str::to_owned);
+    Box::new(move |answer| {
+        if matches!(answer, Err(EngineError::Cancelled)) {
+            return;
+        }
+        if std::thread::current().id() != owner {
+            log::warn!("a tab opened after teardown answered off the main thread and stays open");
+            return;
+        }
+        let mut calls = Vec::new();
+        if let Some(key) = key {
+            calls.push(("tab.close", json!({ "key": key }), window));
+        }
+        if answer.is_err()
+            && let Some(adopt) = adopt
+        {
+            calls.push(("tab.discard", json!({ "adopt": adopt }), 0));
+        }
+        for (verb, args, window) in calls {
+            let (Ok(verb), Ok(args)) = (
+                c_string(verb, "the host verb"),
+                c_string(&args.to_string(), "the host arguments"),
+            ) else {
+                continue;
+            };
+            unsafe {
+                host_call(
+                    verb.as_ptr(),
+                    args.as_ptr(),
+                    window,
+                    abi::ignore_reply,
+                    std::ptr::null_mut(),
+                )
+            };
+        }
+    })
 }
 
 impl ApiTransport {
@@ -193,6 +246,7 @@ impl ApiTransport {
             api,
             backend,
             link: NativeLink::here(set_sink),
+            instance: NEXT_TRANSPORT.fetch_add(1, Ordering::Relaxed),
         })
     }
 
@@ -206,6 +260,7 @@ impl ApiTransport {
 impl Drop for ApiTransport {
     fn drop(&mut self) {
         self.link.detach();
+        abi::abandon_host_calls(self.instance);
     }
 }
 
@@ -233,9 +288,17 @@ impl DesktopTransport for ApiTransport {
             (Ok(verb), Ok(args)) => (verb, args),
             (Err(error), _) | (_, Err(error)) => return done(Err(error)),
         };
-        abi::call_with_callback(verb, done, |reply, context| unsafe {
-            host_call(verb_c.as_ptr(), args_c.as_ptr(), window, reply, context)
-        });
+        let if_abandoned = (verb == "tab.create")
+            .then(|| close_late_open(host_call, self.link.owner, args, window));
+        abi::call_owned(
+            self.instance,
+            verb,
+            done,
+            if_abandoned,
+            |reply, context| unsafe {
+                host_call(verb_c.as_ptr(), args_c.as_ptr(), window, reply, context)
+            },
+        );
     }
 
     fn engine_call(&self, name: &ServiceName, profile: &str, args: ServiceArgs) -> Reply<Value> {
@@ -281,6 +344,10 @@ impl DesktopTransport for ApiTransport {
 
     fn remove_sink(&self) {
         self.link.detach();
+    }
+
+    fn abandon_host_calls(&self) {
+        abi::abandon_host_calls(self.instance);
     }
 }
 
@@ -352,6 +419,8 @@ impl DesktopTransport for ServiceTransport {
     fn remove_sink(&self) {
         self.link.detach();
     }
+
+    fn abandon_host_calls(&self) {}
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -968,7 +1037,10 @@ pub struct DesktopEngine<T: DesktopTransport> {
 
 impl<T: DesktopTransport> Drop for DesktopEngine<T> {
     fn drop(&mut self) {
+        let _closed = Finally::new(|| self.shared.bus.close());
+        let _abandoned = Finally::new(|| self.transport.abandon_host_calls());
         if self.on_owner().is_ok() {
+            let _detached = Finally::new(|| self.transport.remove_sink());
             let open: Vec<(String, u64)> = {
                 let mut state = self.shared.state.lock();
                 state.keys.clear();
@@ -991,9 +1063,7 @@ impl<T: DesktopTransport> Drop for DesktopEngine<T> {
                     Box::new(quietly("tab.close")),
                 );
             }
-            self.transport.remove_sink();
         }
-        self.shared.bus.close();
     }
 }
 
@@ -1151,6 +1221,9 @@ impl<T: DesktopTransport> DesktopEngine<T> {
             &args,
             native,
             Box::new(move |answer| {
+                if matches!(answer, Err(EngineError::Cancelled)) {
+                    return;
+                }
                 let failed = answer.is_err();
                 let shared = weak.upgrade();
                 let settled = match &shared {
@@ -2103,6 +2176,8 @@ mod tests {
             *self.0.sink.lock() = Some(sink);
             Ok(())
         }
+
+        fn abandon_host_calls(&self) {}
     }
 
     fn desktop() -> (
@@ -2885,6 +2960,130 @@ mod tests {
     }
 
     static TABLE_CALLS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+    static ATTACHING: Mutex<()> = Mutex::new(());
+    static HELD_CALLS: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+    static HELD_OPENS: LazyLock<Mutex<Vec<(usize, AcEngineReply)>>> =
+        LazyLock::new(|| Mutex::new(Vec::new()));
+
+    unsafe extern "C" fn held_sink(_: Option<AcEngineEvent>, _: *mut c_void) {}
+
+    unsafe extern "C" fn held_host(
+        verb: *const c_char,
+        args: *const c_char,
+        window: u64,
+        reply: AcEngineReply,
+        context: *mut c_void,
+    ) {
+        let verb = text_of(verb).unwrap();
+        HELD_CALLS
+            .lock()
+            .push(format!("{verb} {} {window}", text_of(args).unwrap()));
+        if verb == "tab.create" {
+            HELD_OPENS.lock().push((context as usize, reply));
+            return;
+        }
+        let answer = CString::new("{\"ok\":true}").unwrap();
+        unsafe { reply(context, answer.as_ptr()) };
+    }
+
+    const LEGACY_ENGINE: &str = r#"
+#include <stdlib.h>
+void ac_engine_set_event_sink(void *sink, void *context) { abort(); }
+void ac_engine_call(const char *name, const char *profile, const char *args, void *reply, void *context) { abort(); }
+"#;
+
+    fn legacy_only_library() -> &'static EngineLibrary {
+        let dir = std::env::temp_dir().join(format!("ardia-legacy-engine-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("legacy.c");
+        let library = dir.join(if cfg!(target_os = "macos") {
+            "liblegacy.dylib"
+        } else {
+            "liblegacy.so"
+        });
+        std::fs::write(&source, LEGACY_ENGINE).unwrap();
+        let built = std::process::Command::new("cc")
+            .args(["-shared", "-fPIC", "-o"])
+            .arg(&library)
+            .arg(&source)
+            .status()
+            .expect("a C compiler builds the stand-in engine");
+        assert!(built.success());
+        unsafe { EngineLibrary::open(&library) }.unwrap()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_services_only_engine_is_refused_before_its_sink_is_touched() {
+        let library = legacy_only_library();
+        assert!(library.dispatcher().is_some() && library.set_event_sink().is_some());
+        match standalone_api_entry(library) {
+            Err(EngineError::NotLoaded(problem)) => assert!(problem.contains(API_ENTRY_SYMBOL)),
+            other => panic!(
+                "a services-only engine was accepted: {:?}",
+                other.map(|_| ())
+            ),
+        }
+    }
+
+    #[test]
+    fn teardown_drains_unanswered_host_calls_and_closes_late_opens() {
+        let _attached = ATTACHING.lock();
+        let table = Box::leak(Box::new(ArdiaEngineApi {
+            version: ARDIA_ENGINE_API_VERSION,
+            size: std::mem::size_of::<ArdiaEngineApi>() as u32,
+            set_event_sink: Some(held_sink),
+            host_call: Some(held_host),
+            engine_call: Some(table_engine),
+            test_gate_refusal: None,
+        }));
+        let transport = unsafe { ApiTransport::new(table, EngineBackend::Linux) }.unwrap();
+        let engine = DesktopEngine::new(transport).unwrap();
+        let owner = engine.transport.instance;
+        engine.run_with_args(&[]).unwrap();
+        let window = engine
+            .attach_window(NativeWindowHandle(0x91 as *mut c_void))
+            .unwrap();
+        let profile = engine.default_profile().unwrap();
+        let tab = engine
+            .open_tab(
+                window,
+                OpenTab {
+                    url: "https://late.test/".into(),
+                    profile,
+                    foreground: true,
+                },
+            )
+            .unwrap();
+        let key = engine.shared.state.lock().tab(tab).unwrap().key.clone();
+        assert_eq!(abi::HOST_REPLIES.count(owner, false), 1);
+        let transport = Arc::downgrade(&engine.transport);
+        drop(engine);
+        assert_eq!(abi::HOST_REPLIES.count(owner, false), 0);
+        assert_eq!(abi::HOST_REPLIES.count(owner, true), 1);
+        assert!(
+            transport.upgrade().is_none(),
+            "an unanswered open no longer keeps the transport alive"
+        );
+        let close = format!("tab.close {} 145", json!({ "key": key }));
+        let closes = |calls: &[String]| calls.iter().filter(|c| **c == close).count();
+        assert_eq!(
+            closes(&HELD_CALLS.lock()),
+            1,
+            "teardown closes the key once"
+        );
+        let (context, reply) = HELD_OPENS.lock().pop().unwrap();
+        let answer = CString::new("{\"tab\":9}").unwrap();
+        unsafe { reply(context as *mut c_void, answer.as_ptr()) };
+        assert_eq!(
+            closes(&HELD_CALLS.lock()),
+            2,
+            "the open that landed after teardown is closed natively"
+        );
+        assert_eq!(abi::HOST_REPLIES.count(owner, true), 0);
+        unsafe { reply(context as *mut c_void, answer.as_ptr()) };
+        assert_eq!(closes(&HELD_CALLS.lock()), 2);
+    }
     static TABLE_SINK: LazyLock<Mutex<Option<(AcEngineEvent, usize)>>> =
         LazyLock::new(|| Mutex::new(None));
 
@@ -2951,6 +3150,7 @@ mod tests {
 
     #[test]
     fn api_tables_are_checked_attached_once_and_driven() {
+        let _attached = ATTACHING.lock();
         let size = std::mem::size_of::<ArdiaEngineApi>() as u32;
         assert!(
             unsafe { ApiTransport::new(table(9, size, Some(table_host)), EngineBackend::Windows) }

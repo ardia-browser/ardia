@@ -689,7 +689,9 @@ impl WaylandClientStatePtr {
             return false;
         };
 
-        let ExternalDragPayload::Files(paths) = payload;
+        let ExternalDragPayload::Files(paths) = payload else {
+            return false;
+        };
         let uri_list = file_uri_list(paths);
         if uri_list.is_empty() {
             return false;
@@ -2706,6 +2708,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WaylandClientStatePtr {
                                 modifiers: state.modifiers,
                                 touch_phase: TouchPhase::Moved,
                                 source: ScrollSource::Pointer,
+                                ..Default::default()
                             });
                             drop(state);
                             window.handle_input(input);
@@ -2719,6 +2722,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WaylandClientStatePtr {
                             modifiers: state.modifiers,
                             touch_phase: TouchPhase::Moved,
                             source: ScrollSource::Pointer,
+                            ..Default::default()
                         });
                         drop(state);
                         window.handle_input(input);
@@ -2766,7 +2770,7 @@ impl Dispatch<zwp_pointer_gesture_pinch_v1::ZwpPointerGesturePinchV1, ()>
         match event {
             zwp_pointer_gesture_pinch_v1::Event::Begin {
                 serial: _,
-                time: _,
+                time,
                 surface: _,
                 fingers: _,
             } => {
@@ -2776,11 +2780,12 @@ impl Dispatch<zwp_pointer_gesture_pinch_v1::ZwpPointerGesturePinchV1, ()>
                     delta: 0.0,
                     modifiers: state.modifiers,
                     phase: TouchPhase::Started,
+                    timestamp: Some(Duration::from_millis(time.into())),
                 });
                 drop(state);
                 window.handle_input(input);
             }
-            zwp_pointer_gesture_pinch_v1::Event::Update { time: _, scale, .. } => {
+            zwp_pointer_gesture_pinch_v1::Event::Update { time, scale, .. } => {
                 let new_absolute_scale = scale as f32;
                 let previous_scale = state.pinch_scale;
                 let zoom_delta = new_absolute_scale - previous_scale;
@@ -2791,13 +2796,14 @@ impl Dispatch<zwp_pointer_gesture_pinch_v1::ZwpPointerGesturePinchV1, ()>
                     delta: zoom_delta,
                     modifiers: state.modifiers,
                     phase: TouchPhase::Moved,
+                    timestamp: Some(Duration::from_millis(time.into())),
                 });
                 drop(state);
                 window.handle_input(input);
             }
             zwp_pointer_gesture_pinch_v1::Event::End {
                 serial: _,
-                time: _,
+                time,
                 cancelled: _,
             } => {
                 state.pinch_scale = 1.0;
@@ -2806,6 +2812,7 @@ impl Dispatch<zwp_pointer_gesture_pinch_v1::ZwpPointerGesturePinchV1, ()>
                     delta: 0.0,
                     modifiers: state.modifiers,
                     phase: TouchPhase::Ended,
+                    timestamp: Some(Duration::from_millis(time.into())),
                 });
                 drop(state);
                 window.handle_input(input);

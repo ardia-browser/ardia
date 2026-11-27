@@ -453,6 +453,21 @@ mod macos {
         }
     }
 
+    const ACTIVATION_DEADLINE: f64 = 3.0;
+    const MAIN_QUEUE_STEP: f64 = 0.05;
+
+    fn run_main_queue_until(deadline: f64, done: impl Fn() -> bool) -> bool {
+        let mut waited = 0.0;
+        while waited < deadline {
+            if done() {
+                return true;
+            }
+            run_main_queue(MAIN_QUEUE_STEP);
+            waited += MAIN_QUEUE_STEP;
+        }
+        done()
+    }
+
     fn run_main_queue(seconds: f64) {
         unsafe {
             let run_loop: *mut AnyObject = msg_send![class!(NSRunLoop), currentRunLoop];
@@ -513,16 +528,15 @@ mod macos {
     }
 
     fn page_view(id: u64, bounds: Bounds<ScaledPixels>) -> PaintNativeView {
-        PaintNativeView {
-            order: 0,
-            id: NativeViewId::for_test(id),
-            hitbox_id: HitboxId::placeholder(),
+        PaintNativeView::new(
+            NativeViewId::for_test(id),
+            HitboxId::placeholder(),
             bounds,
-            content_mask: ContentMask {
+            ContentMask {
                 bounds: scaled(0., 0., 1600., 1200.),
             },
-            background: Hsla::default(),
-        }
+            Hsla::default(),
+        )
     }
 
     fn hooks_install_once_and_track_windows() -> Result<(), String> {
@@ -903,12 +917,11 @@ mod macos {
         style_browser_window(&native(&host)).map_err(|e| e.to_string())?;
         let (window, _) = open_hosted(&platform, 91, &host, None)?;
         window.activate();
-        run_main_queue(0.3);
-        let visible: Bool = unsafe { msg_send![&*host, isVisible] };
-        ensure(
-            visible.as_bool(),
-            "activating the hosted window ordered it in",
-        )?;
+        let visible = run_main_queue_until(ACTIVATION_DEADLINE, || {
+            let shown: Bool = unsafe { msg_send![&*host, isVisible] };
+            shown.as_bool()
+        });
+        ensure(visible, "activating the hosted window ordered it in")?;
         let layer = window_server_layer(&host);
         ensure(
             layer.is_some_and(|layer| layer < 0),

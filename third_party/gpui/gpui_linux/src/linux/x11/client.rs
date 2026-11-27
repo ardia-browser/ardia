@@ -811,6 +811,7 @@ impl X11Client {
                         force_render: false,
                         signal_at: PlatformFrameSignal::capture(Instant::now),
                         signal_source: FrameRequestSource::NativeCallback,
+                        target_presented_at: None,
                     });
                 }
             }
@@ -1303,6 +1304,7 @@ impl X11Client {
                                 position,
                                 scroll_delta,
                                 modifiers,
+                                event.time,
                             )));
                         }
                     }
@@ -1393,6 +1395,7 @@ impl X11Client {
                             position,
                             scroll_delta,
                             modifiers,
+                            event.time,
                         )));
                     }
                 }
@@ -1465,6 +1468,7 @@ impl X11Client {
                     delta: 0.0,
                     modifiers,
                     phase: gpui::TouchPhase::Started,
+                    timestamp: Some(Duration::from_millis(event.time.into())),
                 }));
             }
             Event::XinputGesturePinchUpdate(event) => {
@@ -1487,6 +1491,7 @@ impl X11Client {
                     delta: zoom_delta,
                     modifiers,
                     phase: gpui::TouchPhase::Moved,
+                    timestamp: Some(Duration::from_millis(event.time.into())),
                 }));
             }
             Event::XinputGesturePinchEnd(event) => {
@@ -1505,6 +1510,7 @@ impl X11Client {
                     delta: 0.0,
                     modifiers,
                     phase: gpui::TouchPhase::Ended,
+                    timestamp: Some(Duration::from_millis(event.time.into())),
                 }));
             }
             _ => {}
@@ -2074,6 +2080,7 @@ impl X11ClientState {
                                 force_render: false,
                                 signal_at: PlatformFrameSignal::capture(|| instant),
                                 signal_source: FrameRequestSource::LocalSchedule,
+                                target_presented_at: None,
                             });
                         }
                         xcb_connection
@@ -2578,6 +2585,7 @@ fn make_scroll_wheel_event(
     position: Point<Pixels>,
     scroll_delta: Point<f32>,
     modifiers: Modifiers,
+    time: xproto::Timestamp,
 ) -> gpui::ScrollEvent {
     // When shift is held down, vertical scrolling turns into horizontal scrolling.
     let delta = if modifiers.shift {
@@ -2594,6 +2602,8 @@ fn make_scroll_wheel_event(
         modifiers,
         touch_phase: TouchPhase::default(),
         source: gpui::ScrollSource::Pointer,
+        timestamp: Some(Duration::from_millis(time.into())),
+        ..Default::default()
     }
 }
 
@@ -2901,6 +2911,20 @@ fn xkb_state_for_key_event(xkb: &xkbc::State, event_state: xproto::KeyButMask) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scroll_carries_the_server_event_time() {
+        let event = make_scroll_wheel_event(
+            point(px(1.), px(2.)),
+            Point::new(0.0, SCROLL_LINES),
+            Modifiers::default(),
+            u32::MAX,
+        );
+        assert_eq!(
+            event.timestamp,
+            Some(Duration::from_millis(u64::from(u32::MAX)))
+        );
+    }
 
     fn test_keymap(layouts: &str) -> xkbc::Keymap {
         test_keymap_with_variant(layouts, "")

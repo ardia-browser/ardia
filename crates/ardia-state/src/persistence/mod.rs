@@ -95,7 +95,9 @@ impl DataDir {
         self.root.join("config")
     }
 
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn read(&self, name: &str, max_bytes: usize) -> Result<Option<Vec<u8>>, PersistError> {
+        ardia_profile::strict::blocking(ardia_profile::strict::Blocking::File);
         let Some(file) = open_regular(&self.path(name)?)? else {
             return Ok(None);
         };
@@ -107,6 +109,7 @@ impl DataDir {
         Ok(Some(bytes))
     }
 
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn read_json(&self, name: &str, limits: Limits) -> Result<Option<Value>, PersistError> {
         match self.read(name, limits.max_bytes)? {
             Some(bytes) => guard::parse(&bytes, limits)
@@ -120,7 +123,9 @@ impl DataDir {
         self.path(name).is_ok_and(|p| p.exists())
     }
 
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn write_atomic(&self, name: &str, bytes: &[u8]) -> Result<(), PersistError> {
+        ardia_profile::strict::blocking(ardia_profile::strict::Blocking::File);
         let target = self.path(name)?;
         fs::create_dir_all(&self.root)?;
         let temp = self.root.join(format!(
@@ -147,7 +152,9 @@ impl DataDir {
         written.map_err(PersistError::from)
     }
 
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn create_new(&self, name: &str, bytes: &[u8]) -> Result<bool, PersistError> {
+        ardia_profile::strict::blocking(ardia_profile::strict::Blocking::File);
         let target = self.path(name)?;
         fs::create_dir_all(&self.root)?;
         match OpenOptions::new()

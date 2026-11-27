@@ -1,8 +1,9 @@
+use crate::scale::px;
 use ardia_state::omnibox::url::display_url;
 use ardia_state::tabs::Tab;
 use gpui::{
     AnyElement, FontWeight, IntoElement, NativeView, ParentElement, SharedString, Styled, div,
-    prelude::*, px, relative,
+    prelude::*, relative,
 };
 
 use crate::look::Palette;
@@ -87,6 +88,17 @@ pub fn web_slot(
     devtools: Option<NativeView>,
     corners: SlotCorners,
 ) -> AnyElement {
+    if let Some(internal) = crate::pages::InternalPage::of(&tab.url)
+        .and_then(|internal| crate::pages::internal_page(c, tab, &internal))
+    {
+        return div()
+            .size_full()
+            .rounded_t(px(corners.top))
+            .rounded_b(px(corners.bottom))
+            .overflow_hidden()
+            .child(internal)
+            .into_any_element();
+    }
     let Some(page) = page else {
         return placeholder(c, tab, corners);
     };

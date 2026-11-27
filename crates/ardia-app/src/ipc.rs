@@ -2,7 +2,7 @@ use ardia_state::actions::{Action, NewTab};
 use ardia_state::{TabId, WindowId};
 use serde_json::{Value, json};
 
-use crate::coordinator::AppCoordinator;
+use crate::coordinator::{AppCoordinator, ShellEffect};
 use crate::menu_bridge::{CommandOutcome, focused_window};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,17 +20,7 @@ impl ControlError {
     }
 }
 
-pub const METHODS: &[&str] = &[
-    "status",
-    "open_url",
-    "new_tab",
-    "list_tabs",
-    "navigate",
-    "activate_tab",
-    "close_tab",
-    "eval_command",
-    "quit",
-];
+pub use crate::control_protocol::CONTROL_OFF;
 
 pub const COMMANDS_BESIDE_PRIVATE_WINDOWS: &[&str] = &[
     "quit",
@@ -61,16 +51,99 @@ fn text<'a>(params: &'a Value, key: &str) -> Option<&'a str> {
 
 impl AppCoordinator {
     pub fn answer_control(&self, method: &str, params: &Value) -> Result<Value, ControlError> {
+        self.answer_control_from(0, method, params)
+    }
+
+    pub fn answer_control_from(
+        &self,
+        connection: u64,
+        method: &str,
+        params: &Value,
+    ) -> Result<Value, ControlError> {
         if !params.is_null() && !params.is_object() {
-            return Err(ControlError::new("bad_params", "params must be an object"));
+            return Err(ControlError::new(
+                "bad_request",
+                "params must be an object.",
+            ));
         }
+        let _span = ardia_profile::span(ardia_profile::Span::ControlHandler);
         match method {
+            "hello" => {
+                if let Some(problem) = crate::control_protocol::client_protocol_problem(
+                    params,
+                    env!("CARGO_PKG_VERSION"),
+                ) {
+                    return Err(problem);
+                }
+                let caller = params
+                    .get("caller")
+                    .and_then(crate::program_control::parse_control_caller);
+                self.with_program_control(|book| book.hello(connection, caller));
+                Ok(crate::control_protocol::hello(env!("CARGO_PKG_VERSION")))
+            }
+            "caller" => {
+                let known = self.with_program_control(|book| book.note_caller(connection));
+                Ok(json!({ "ok": known }))
+            }
+            "run" => {
+                if !self.program_control_on() {
+                    return Err(ControlError::new("failed", CONTROL_OFF));
+                }
+                if self.config.background {
+                    return Err(ControlError::new(
+                        "refused",
+                        "run isn't available in background instances; use the dedicated methods (apply, tabs.*, windows.*, closed.restore, …).",
+                    ));
+                }
+                let command = text(params, "command")
+                    .ok_or_else(|| ControlError::new("bad_request", "run needs a command"))?;
+                self.with_program_control(|book| book.begin_run(connection));
+                let ran = self.run_command(command, text(params, "arg"));
+                self.with_program_control(|book| book.end_run());
+                match ran {
+                    Ok(_) => Ok(json!({ "ok": true })),
+                    Err(problem) => Err(ControlError::new("refused", problem)),
+                }
+            }
+            "methods" => Ok(crate::control_protocol::catalog()),
+            "profile" => Ok(ardia_profile::snapshot_json()),
             "status" => Ok(self.control_status()),
+            "input" => {
+                if !crate::synthetic_input::enabled() {
+                    return Err(ControlError::new(
+                        "refused",
+                        "input is only available when Ardia starts with ARDIA_TEST_INPUT=1",
+                    ));
+                }
+                let steps = crate::synthetic_input::parse(params)
+                    .map_err(|problem| ControlError::new("bad_request", problem))?;
+                let state = self.store().snapshot();
+                let window = match text(params, "window") {
+                    Some(
+                        special @ (crate::synthetic_input::SETTINGS_WINDOW
+                        | crate::synthetic_input::ONBOARDING_WINDOW
+                        | crate::synthetic_input::RECORDING_PILL_WINDOW),
+                    ) => WindowId::new(special),
+                    Some(id) => state
+                        .window(id)
+                        .map(|w| w.id.clone())
+                        .ok_or_else(|| ControlError::new("no_window", "there is no such window"))?,
+                    None => control_window(&state).ok_or_else(|| {
+                        ControlError::new("no_window", "no browser window is open")
+                    })?,
+                };
+                let count = steps.len();
+                self.effect(ShellEffect::SyntheticInput {
+                    window: window.clone(),
+                    steps,
+                });
+                Ok(json!({ "queued": count, "window": window.as_str() }))
+            }
             "open_url" => {
                 let url = text(params, "url")
-                    .ok_or_else(|| ControlError::new("bad_params", "open_url needs a url"))?;
+                    .ok_or_else(|| ControlError::new("bad_request", "open_url needs a url"))?;
                 if !crate::links::is_openable(url) {
-                    return Err(ControlError::new("bad_params", "that url can't be opened"));
+                    return Err(ControlError::new("bad_request", "that url can't be opened"));
                 }
                 self.open_url(url);
                 Ok(json!({ "opened": true }))
@@ -83,17 +156,17 @@ impl AppCoordinator {
                         let kind = state.window(id.as_str()).map(|w| w.kind);
                         if kind == Some(ardia_state::windows::WindowKind::Incognito) {
                             return Err(ControlError::new(
-                                "private",
+                                "refused",
                                 "the control socket doesn't act on private windows",
                             ));
                         }
                         if kind.is_none_or(|kind| !kind.has_tabs()) {
-                            return Err(ControlError::new("not_found", "there's no such window"));
+                            return Err(ControlError::new("no_window", "there's no such window"));
                         }
                         id
                     }
                     None => control_window(&state)
-                        .ok_or_else(|| ControlError::new("not_found", "there's no window"))?,
+                        .ok_or_else(|| ControlError::new("no_window", "there's no window"))?,
                 };
                 let outcome = self
                     .dispatch_action(Action::NewTab {
@@ -116,7 +189,7 @@ impl AppCoordinator {
             "list_tabs" => Ok(self.control_tabs()),
             "eval_command" => {
                 let command = text(params, "command").ok_or_else(|| {
-                    ControlError::new("bad_params", "eval_command needs a command")
+                    ControlError::new("bad_request", "eval_command needs a command")
                 })?;
                 let state = self.store().snapshot();
                 let private_in_front = focused_window(&state)
@@ -124,7 +197,7 @@ impl AppCoordinator {
                     .is_some_and(|kind| kind == ardia_state::windows::WindowKind::Incognito);
                 if private_in_front && !COMMANDS_BESIDE_PRIVATE_WINDOWS.contains(&command) {
                     return Err(ControlError::new(
-                        "private",
+                        "refused",
                         "a private window is in front, and the control socket doesn't act on private windows",
                     ));
                 }
@@ -137,7 +210,7 @@ impl AppCoordinator {
             "navigate" => {
                 let tab = self.control_tab(params)?;
                 let url = text(params, "url")
-                    .ok_or_else(|| ControlError::new("bad_params", "navigate needs a url"))?;
+                    .ok_or_else(|| ControlError::new("bad_request", "navigate needs a url"))?;
                 self.dispatch_action(Action::Navigate {
                     tab: tab.clone(),
                     input: url.to_owned(),
@@ -167,24 +240,18 @@ impl AppCoordinator {
                 self.request_quit();
                 Ok(json!({ "quitting": true }))
             }
-            _ => Err(ControlError::new(
-                "unknown_method",
-                format!(
-                    "there's no method {method:?}; try one of {}",
-                    METHODS.join(", ")
-                ),
-            )),
+            _ => Err(crate::control_protocol::unknown_method(method)),
         }
     }
 
     fn control_tab(&self, params: &Value) -> Result<TabId, ControlError> {
         let id = text(params, "tab")
-            .ok_or_else(|| ControlError::new("bad_params", "this method needs a tab"))?;
+            .ok_or_else(|| ControlError::new("bad_request", "this method needs a tab"))?;
         let state = self.store().snapshot();
         let tab = state
             .tab(id)
             .filter(|tab| !tab.is_incognito() && !tab.live.peek)
-            .ok_or_else(|| ControlError::new("not_found", "there's no such tab"))?;
+            .ok_or_else(|| ControlError::new("no_window", "there's no such tab"))?;
         Ok(tab.id.clone())
     }
 
@@ -260,6 +327,7 @@ pub mod socket {
     use serde_json::{Value, json};
 
     use super::ControlError;
+    use crate::control_doorbell::{Grant, refusal_line};
     use crate::coordinator::AppCoordinator;
 
     pub const MAX_LINE: usize = 1024 * 1024;
@@ -440,7 +508,7 @@ pub mod socket {
             let _ = writeln!(
                 stream,
                 "{}",
-                json!({"id": null, "error": {"code": "busy", "message": "too many connections"}})
+                crate::control_doorbell::refusal_line(crate::control_doorbell::Outcome::Full)
             );
             return;
         }
@@ -483,71 +551,165 @@ pub mod socket {
     }
 
     pub fn answer_line(line: &[u8], coordinator: &Weak<AppCoordinator>) -> Value {
-        let request: Value = match serde_json::from_slice(line) {
-            Ok(request) => request,
-            Err(problem) => {
-                return reply(
-                    Value::Null,
-                    Err(ControlError::new("bad_json", problem.to_string())),
-                );
-            }
-        };
-        let id = request.get("id").cloned().unwrap_or(Value::Null);
-        let Some(method) = request
-            .get("method")
-            .and_then(Value::as_str)
-            .map(str::to_owned)
-        else {
-            return reply(
-                id,
-                Err(ControlError::new("bad_request", "a request needs a method")),
-            );
-        };
-        let params = request.get("params").cloned().unwrap_or(Value::Null);
+        answer_line_from(0, line, coordinator)
+    }
+
+    pub fn answer_line_from(
+        connection: u64,
+        line: &[u8],
+        coordinator: &Weak<AppCoordinator>,
+    ) -> Value {
+        let crate::control_protocol::Request { id, method, params } =
+            match crate::control_protocol::parse_request(line) {
+                Ok(request) => request,
+                Err((id, problem)) => return reply(id, Err(problem)),
+            };
+        if method == "profile" && (params.is_null() || params.is_object()) {
+            return reply(id, Ok(ardia_profile::snapshot_json()));
+        }
         let Some(coordinator) = coordinator.upgrade() else {
             return reply(
                 id,
-                Err(ControlError::new("stopped", "Ardia is shutting down")),
+                Err(ControlError::new("failed", "Ardia is shutting down.")),
             );
         };
+        let _span = ardia_profile::span(ardia_profile::Span::ControlRequest);
+        let socket_family = socket_call_field(&method);
         let (sender, receiver) = sync_channel(1);
         coordinator.post(move |coordinator| {
-            let _ = sender.send(coordinator.answer_control(&method, &params));
+            let _ = sender.send(coordinator.answer_control_from(connection, &method, &params));
         });
         drop(coordinator);
+        ardia_profile::strict::blocking(ardia_profile::strict::Blocking::Ipc);
         let answer = match receiver.recv_timeout(ANSWER_TIMEOUT) {
             Ok(answer) => answer,
             Err(RecvTimeoutError::Timeout) => Err(ControlError::new(
-                "timeout",
-                "Ardia didn't answer in time; the request may still run",
+                "failed",
+                crate::control_protocol::NO_ANSWER_IN_TIME,
             )),
             Err(RecvTimeoutError::Disconnected) => Err(ControlError::new(
-                "stopped",
-                "Ardia stopped before answering",
+                "failed",
+                "Ardia stopped before answering.",
             )),
         };
+        note_socket_call(socket_family, &answer);
         reply(id, answer)
     }
 
+    fn socket_call_field(method: &str) -> &'static str {
+        match method {
+            "run" => "cli_socket_calls_workspace",
+            _ => "cli_socket_calls_core",
+        }
+    }
+
+    fn note_socket_call(field: &'static str, answer: &Result<Value, ControlError>) {
+        ardia_telemetry::counts::count(field);
+        let failed = match answer {
+            Ok(result) => result.get("ok").and_then(Value::as_bool) == Some(false),
+            Err(_) => true,
+        };
+        if failed {
+            ardia_telemetry::counts::count("cli_socket_call_failures");
+        }
+    }
+
     fn serve(stream: UnixStream, coordinator: &Weak<AppCoordinator>, stop: &AtomicBool) {
-        let _ = stream.set_read_timeout(Some(IDLE_TIMEOUT));
+        static CONNECTIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let connection = CONNECTIONS.fetch_add(1, Ordering::Relaxed);
+        let Some(grant) = admit_peer(connection, &stream, coordinator, stop) else {
+            return;
+        };
+        serve_connection(connection, stream, coordinator, stop, grant);
+        if let Some(coordinator) = coordinator.upgrade() {
+            coordinator.control_closed(connection);
+            coordinator.post(move |coordinator| {
+                coordinator.with_program_control(|book| book.closed(connection));
+            });
+        }
+    }
+
+    fn admit_peer(
+        connection: u64,
+        stream: &UnixStream,
+        coordinator: &Weak<AppCoordinator>,
+        stop: &AtomicBool,
+    ) -> Option<Grant> {
+        let coordinator = coordinator.upgrade()?;
+        match coordinator.admit_control_peer(connection, stream, stop) {
+            Ok(grant) => {
+                coordinator.control_granted(connection, &grant, stream);
+                Some(grant)
+            }
+            Err(outcome) => {
+                if let Some(outcome) = outcome {
+                    let mut writer = stream;
+                    let _ = writeln!(writer, "{}", refusal_line(outcome));
+                }
+                None
+            }
+        }
+    }
+
+    fn still_approved(coordinator: &Weak<AppCoordinator>, grant: &mut Grant) -> bool {
+        grant.until.is_none()
+            || coordinator
+                .upgrade()
+                .is_some_and(|coordinator| coordinator.control_still_approved(grant))
+    }
+
+    fn read_timeout(grant: &Grant) -> Duration {
+        let now = ardia_state::store::now_ms() as f64 / 1000.0;
+        grant
+            .until
+            .map(|until| {
+                Duration::from_secs_f64((until - now).clamp(0.001, IDLE_TIMEOUT.as_secs_f64()))
+            })
+            .unwrap_or(IDLE_TIMEOUT)
+    }
+
+    fn serve_connection(
+        connection: u64,
+        stream: UnixStream,
+        coordinator: &Weak<AppCoordinator>,
+        stop: &AtomicBool,
+        mut grant: Grant,
+    ) {
         let Ok(mut writer) = stream.try_clone() else {
             return;
         };
+        let timeouts = stream.try_clone().ok();
         let mut reader = BufReader::new(stream);
         let mut line = Vec::new();
         loop {
             if stop.load(Ordering::Acquire) {
                 return;
             }
+            if let Some(stream) = &timeouts {
+                let _ = stream.set_read_timeout(Some(read_timeout(&grant)));
+            }
             match read_line(&mut reader, &mut line) {
                 Ok(true) => {}
                 Ok(false) => return,
+                Err(problem)
+                    if matches!(
+                        problem.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                    ) && grant.until.is_some() =>
+                {
+                    let expired = grant
+                        .until
+                        .is_some_and(|until| until <= ardia_state::store::now_ms() as f64 / 1000.0);
+                    if expired && still_approved(coordinator, &mut grant) {
+                        continue;
+                    }
+                    return;
+                }
                 Err(problem) => {
                     if problem.kind() == io::ErrorKind::InvalidData {
                         let answer = reply(
                             Value::Null,
-                            Err(ControlError::new("too_long", problem.to_string())),
+                            Err(ControlError::new("bad_request", problem.to_string())),
                         );
                         let _ = writeln!(writer, "{answer}");
                     }
@@ -558,7 +720,10 @@ pub mod socket {
             if trimmed.is_empty() {
                 continue;
             }
-            let answer = answer_line(trimmed, coordinator);
+            if !still_approved(coordinator, &mut grant) {
+                return;
+            }
+            let answer = answer_line_from(connection, trimmed, coordinator);
             if writeln!(writer, "{answer}")
                 .and_then(|()| writer.flush())
                 .is_err()
@@ -566,5 +731,52 @@ pub mod socket {
                 return;
             }
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod profile_tests {
+    use std::sync::Weak;
+
+    use serde_json::{Value, json};
+
+    #[test]
+    fn profile_answers_numbers_off_the_main_thread_and_changes_nothing() {
+        let line = json!({"id": 7, "method": "profile"}).to_string();
+        let answer = super::socket::answer_line(line.as_bytes(), &Weak::new());
+        assert_eq!(answer["id"], 7);
+        let result = &answer["result"];
+        assert_eq!(result["enabled"], ardia_profile::ENABLED);
+        for key in [
+            "spans",
+            "frames",
+            "main_thread",
+            "hangs",
+            "actions",
+            "trace",
+        ] {
+            assert!(!result[key].is_null(), "{key}");
+        }
+        let query = &result["spans"]["omnibox.query"];
+        for field in ["count", "p50_ms", "p90_ms", "p99_ms", "max_ms"] {
+            assert!(query[field].is_number(), "{field}");
+        }
+        for slot in ["main", "settings", "onboarding", "little"] {
+            let frames = &result["frames"][slot];
+            for field in ["frames", "late", "dropped"] {
+                assert!(frames[field].is_u64(), "{slot}.{field}");
+            }
+            for metric in ["layout", "prepaint", "paint", "frame", "input_to_frame"] {
+                assert!(frames[metric]["p99_ms"].is_number(), "{slot}.{metric}");
+            }
+        }
+        let spec = crate::control_protocol::catalog()
+            .as_array()
+            .and_then(|all| all.iter().find(|m| m["name"] == "profile").cloned())
+            .expect("profile is listed");
+        assert_eq!(spec["mutates"], Value::Bool(false));
+        let refused = json!({"id": 8, "method": "profile", "params": [1]}).to_string();
+        let answer = super::socket::answer_line(refused.as_bytes(), &Weak::new());
+        assert!(answer["error"].is_object());
     }
 }

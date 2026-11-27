@@ -8,6 +8,8 @@ use crate::mock::MockUiHost;
 use crate::window::browser_window::BrowserWindowView;
 use crate::{OpenWindowTarget, UiHost, bind_global_keybindings, open_browser_window};
 
+pub const CLICK_REACH: std::time::Duration = std::time::Duration::from_millis(200);
+
 pub struct Browser {
     pub host: Arc<MockUiHost>,
     pub window: WindowId,
@@ -118,7 +120,49 @@ impl Browser {
         visual.debug_bounds(selector)
     }
 
+    pub fn open_peek_fully(&self, cx: &mut TestAppContext) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while self.view(cx, |view| view.peek_motion.motion().phase())
+            != crate::content::peek_motion::PeekPhase::Open
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(8));
+            self.handle
+                .update(cx, |_, window, _| window.refresh())
+                .expect("open");
+            self.bounds(cx, "peek-overlay");
+        }
+    }
+
+    pub fn settle_rows(&self, cx: &mut TestAppContext) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut last = self.bounds(cx, "new-tab-row");
+        while std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(16));
+            self.handle
+                .update(cx, |_, window, _| window.refresh())
+                .expect("open");
+            let now = self.bounds(cx, "new-tab-row");
+            if now == last {
+                return;
+            }
+            last = now;
+        }
+    }
+
+    pub fn settle_peek(&self, cx: &mut TestAppContext) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while self.bounds(cx, "peek-overlay").is_some() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(8));
+            self.handle
+                .update(cx, |_, window, _| window.refresh())
+                .expect("open");
+        }
+    }
+
     pub fn click(&self, cx: &mut TestAppContext, selector: &'static str) {
+        cx.executor().advance_clock(CLICK_REACH);
+        self.redraw(cx);
         let bounds = self
             .bounds(cx, selector)
             .unwrap_or_else(|| panic!("{selector} is on screen"));

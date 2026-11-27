@@ -1,19 +1,34 @@
+pub mod bookmarks_bar;
 pub mod content;
 pub mod host;
+pub mod host_data;
+pub mod icon_picker;
 pub mod import;
 pub mod keybindings;
 pub mod little_ardia;
+pub mod live;
 pub mod look;
+pub mod media;
 pub mod mock;
 pub mod msg;
 pub mod ntp;
 pub mod omnibox;
 pub mod onboarding;
+pub mod pages;
+pub mod plugins;
 pub mod popovers;
+pub mod press_telemetry;
 pub mod primitives;
+pub mod profiled;
+pub mod profiles;
+pub mod report;
+pub mod scale;
 pub mod settings;
+pub mod site;
 pub mod sidebar;
 pub mod store_link;
+pub mod sync_api;
+pub mod theme_editor;
 pub mod window;
 
 #[cfg(test)]
@@ -25,8 +40,14 @@ use anyhow::Context as _;
 use ardia_state::windows::WindowKind;
 use gpui::{AnyWindowHandle, App, AppContext, px, size};
 
-pub use host::{HostTabView, OpenWindowTarget, UiHost, UtilityWindowKind, bind_global_keybindings};
+pub use host::{
+    AboutInfo, AppIconChoice, ArcThemeChoice, ThemePresetEvent, ClearBrowsingData, Confirmation, DownloadSettings, LoginItemState, PluginRow, ProfileFlagKind, ProfileFlags, HostTabView, NativeMenuItem, TextPrompt, OnboardingRecord, OnboardingSystem,
+    OnboardingSystemChoice, OpenWindowTarget, PageCommand, UiHost, UtilityWindowKind,
+    bind_global_keybindings,
+};
 pub use mock::{HostCall, MockUiHost};
+pub use pages::InternalPage;
+pub use pages::reader::ReaderStatus;
 pub use window::browser_window::BrowserWindowView;
 
 #[cfg(target_os = "macos")]
@@ -50,10 +71,7 @@ pub fn open_browser_window(
         "window {} is not a browser window",
         target.window_id
     );
-    let inset = state.settings.page_frame_inset(
-        browser.is_full_screen(),
-        state.auto_hides_tabs(target.window_id.as_str()),
-    );
+    let inset = state.page_frame_inset_in(target.window_id.as_str(), browser.is_full_screen());
     let lights = primitives::theme_bridge::traffic_light_origin(
         ardia_theme::layout::lights::center(inset, state.settings.compact_toolbar),
     );
@@ -162,6 +180,13 @@ pub fn open_import_window(host: Arc<dyn UiHost>, cx: &mut App) -> anyhow::Result
         cx.new(|cx| import::ImportWindowView::new(host, window, cx))
     })?;
     Ok(handle.into())
+}
+
+pub fn open_intro_window(host: Arc<dyn UiHost>, cx: &mut App) -> anyhow::Result<AnyWindowHandle> {
+    if cx.reduce_motion() {
+        return open_onboarding_window(host, cx);
+    }
+    onboarding::intro_window::open(host, cx)
 }
 
 pub fn open_onboarding_window(

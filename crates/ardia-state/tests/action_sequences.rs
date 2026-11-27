@@ -34,6 +34,8 @@ enum Op {
     CloseGroup(u8),
     PinGroup(u8, bool),
     Split(Vec<u8>, bool),
+    MoveGroup(u8, Option<u8>, bool, Option<u8>),
+    TileFolder(Vec<u8>, u8, Option<u8>),
     SplitPane(u8, u8),
     RemovePane(u8),
     Unsplit(u8),
@@ -80,6 +82,8 @@ fn op() -> impl Strategy<Value = Op> {
         1 => n.prop_map(Op::CloseGroup),
         1 => (n, any::<bool>()).prop_map(|(g, on)| Op::PinGroup(g, on)),
         2 => (proptest::collection::vec(n, 2..5), any::<bool>()).prop_map(|(t, h)| Op::Split(t, h)),
+        2 => (n, proptest::option::of(n), any::<bool>(), proptest::option::of(n)).prop_map(|(g, b, pin, parent)| Op::MoveGroup(g, b, pin, parent)),
+        2 => (proptest::collection::vec(n, 1..3), n, proptest::option::of(n)).prop_map(|(t, onto, b)| Op::TileFolder(t, onto, b)),
         2 => (n, 0u8..4).prop_map(|(w, side)| Op::SplitPane(w, side)),
         1 => n.prop_map(Op::RemovePane),
         1 => n.prop_map(Op::Unsplit),
@@ -209,6 +213,17 @@ fn action(s: &BrowserState, op: &Op) -> Option<Action> {
             tabs: ts.iter().filter_map(tab).collect(),
             name: "G".into(),
         },
+        Op::MoveGroup(g, before, pinned, parent) => Action::MoveGroup {
+            group: pick(&p.groups, *g)?,
+            before: before.as_ref().and_then(tab),
+            pinned: *pinned,
+            parent: parent.and_then(|i| pick(&p.groups, i)),
+        },
+        Op::TileFolder(ts, onto, before) => Action::AddToTileFolder {
+            tabs: ts.iter().filter_map(tab).collect(),
+            onto: tab(onto)?,
+            before: before.as_ref().and_then(tab),
+        },
         Op::AddToGroup(g, t) => Action::AddToGroup {
             group: pick(&p.groups, *g)?,
             tabs: vec![tab(t)?],
@@ -337,4 +352,67 @@ proptest! {
         let twice = reloaded(&once, w.now + 2);
         prop_assert_eq!(once.session_json(), twice.session_json());
     }
+}
+
+fn replay(ops: &[Op]) {
+    let mut w = World::new();
+    w.open();
+    for op in ops {
+        let Some(action) = action(&w.state, op) else {
+            continue;
+        };
+        if w.try_act(action).is_ok() {
+            check_invariants(&w.state);
+        }
+    }
+}
+
+#[test]
+fn unpinning_a_mirrored_tab_keeps_a_split_in_another_window_together() {
+    use Op::*;
+    replay(&[
+        Activate(0),
+        NewTab(0, false, None, false),
+        Duplicate(0),
+        Pin(3, 2),
+        NewTab(0, false, None, false),
+        NewTab(0, false, None, false),
+        Duplicate(0),
+        SplitPane(0, 0),
+        OpenWindow(1, false),
+        NewTab(2, false, None, false),
+        OpenWindow(0, false),
+        Split(vec![99, 192, 35], false),
+        Move(2, 11, 104),
+        Pin(251, 1),
+        SplitPane(53, 0),
+        Split(vec![15, 196, 70], false),
+        Close(vec![18], false),
+        OpenWindow(1, false),
+        Swap(0, 0),
+        RemovePane(6),
+        NewTab(11, false, None, false),
+        NewTab(19, false, None, false),
+        NewTab(19, false, None, false),
+        Peek(82),
+        Clear(70),
+        Pin(111, 0),
+    ]);
+}
+
+#[test]
+fn unpinning_a_mirrored_tab_hands_a_hidden_profile_its_next_tab() {
+    use Op::*;
+    replay(&[
+        CreateProfile,
+        OpenWindow(0, true),
+        NewTab(103, false, None, false),
+        Close(vec![3], false),
+        NewTab(0, false, None, false),
+        Pin(236, 1),
+        Activate(4),
+        Activate(89),
+        SwitchProfile(8, 5),
+        Pin(30, 0),
+    ]);
 }

@@ -128,6 +128,16 @@ pub trait EntityInputHandler: 'static + Sized {
         true
     }
 
+    /// See [`InputHandler::do_command_by_selector`] for details
+    fn do_command_by_selector(
+        &mut self,
+        _selector: &str,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> bool {
+        false
+    }
+
     /// See [`InputHandler::text_input_configuration`] for details
     fn text_input_configuration(
         &mut self,
@@ -299,6 +309,17 @@ impl<V: EntityInputHandler> InputHandler for ElementInputHandler<V> {
             .update(cx, |view, cx| view.accepts_text_input(window, cx))
     }
 
+    fn do_command_by_selector(
+        &mut self,
+        selector: &str,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> bool {
+        self.view.update(cx, |view, cx| {
+            view.do_command_by_selector(selector, window, cx)
+        })
+    }
+
     fn text_input_configuration(
         &mut self,
         window: &mut Window,
@@ -340,6 +361,7 @@ mod tests {
                 focus_handle: cx.focus_handle(),
                 configuration: custom,
                 accepts_text_input: true,
+                performed_commands: Vec::new(),
             }
         });
         let view = window.root(cx).unwrap();
@@ -423,6 +445,7 @@ mod tests {
             focus_handle: cx.focus_handle(),
             configuration: TextInputConfiguration::default(),
             accepts_text_input: true,
+            performed_commands: Vec::new(),
         });
         let view = window.root(cx).unwrap();
         let mut test_window = cx.test_window(window.into());
@@ -502,10 +525,38 @@ mod tests {
         );
     }
 
+    #[gpui::test]
+    fn platform_text_commands_reach_the_focused_input(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, cx| ConfigurationTestView {
+            focus_handle: cx.focus_handle(),
+            configuration: TextInputConfiguration::default(),
+            accepts_text_input: true,
+            performed_commands: Vec::new(),
+        });
+        let view = window.root(cx).unwrap();
+        let mut test_window = cx.test_window(window.into());
+        let focus_handle = view.read_with(cx, |view, _| view.focus_handle.clone());
+        cx.update_window(window.into(), |_, window, cx| {
+            window.focus(&focus_handle, cx);
+            window.draw(cx).clear(cx);
+        })
+        .unwrap();
+
+        use crate::PlatformWindow as _;
+        let mut installed_handler = test_window.take_input_handler().unwrap();
+        assert!(installed_handler.do_command_by_selector("moveWordLeft:"));
+        assert!(!installed_handler.do_command_by_selector("insertNewline:"));
+        assert_eq!(
+            view.read_with(cx, |view, _| view.performed_commands.clone()),
+            ["moveWordLeft:", "insertNewline:"]
+        );
+    }
+
     struct ConfigurationTestView {
         focus_handle: FocusHandle,
         configuration: TextInputConfiguration,
         accepts_text_input: bool,
+        performed_commands: Vec<String>,
     }
 
     impl Render for ConfigurationTestView {
@@ -598,6 +649,16 @@ mod tests {
             _cx: &mut Context<Self>,
         ) -> Option<usize> {
             None
+        }
+
+        fn do_command_by_selector(
+            &mut self,
+            selector: &str,
+            _window: &mut Window,
+            _cx: &mut Context<Self>,
+        ) -> bool {
+            self.performed_commands.push(selector.to_string());
+            selector == "moveWordLeft:"
         }
 
         fn text_input_configuration(

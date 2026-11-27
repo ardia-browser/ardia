@@ -1,0 +1,19 @@
+id: list-outside-virtual-list
+language: rust
+severity: error
+message: "lists and grids go through the shared helper in crates/ardia-ui/src/primitives/virtual_list.rs"
+note: "One virtualizer keeps overscan, keyed scroll memory and grid layout the same everywhere (docs/gpui-virtual-list.md)."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - crates/ardia-ui/src/primitives/virtual_list.rs
+  - third_party/**
+rule:
+  any:
+    - pattern: uniform_list($$$)
+    - pattern: gpui::uniform_list($$$)
+    - pattern: ListState::new($$$)
+    - pattern: gpui::ListState::new($$$)

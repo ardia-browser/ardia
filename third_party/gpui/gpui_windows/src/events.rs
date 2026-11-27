@@ -1,4 +1,4 @@
-use std::{cell::Cell, rc::Rc, sync::atomic::Ordering};
+use std::{cell::Cell, rc::Rc, sync::atomic::Ordering, time::Duration};
 
 use anyhow::Context as _;
 use gpui_util::ResultExt;
@@ -6,7 +6,7 @@ use windows::{
     Win32::{
         Foundation::*,
         Graphics::Gdi::*,
-        System::SystemServices::*,
+        System::{SystemInformation::GetTickCount64, SystemServices::*},
         UI::{
             Controls::*,
             HiDpi::*,
@@ -598,6 +598,8 @@ impl WindowsWindowInner {
             modifiers,
             touch_phase: TouchPhase::Moved,
             source: ScrollSource::Pointer,
+            timestamp: Some(current_message_timestamp()),
+            ..Default::default()
         });
         let handled = !func(input).propagate;
         self.state.callbacks.input.set(Some(func));
@@ -637,6 +639,8 @@ impl WindowsWindowInner {
             modifiers: current_modifiers(),
             touch_phase: TouchPhase::Moved,
             source: ScrollSource::Pointer,
+            timestamp: Some(current_message_timestamp()),
+            ..Default::default()
         });
         let handled = !func(event).propagate;
         self.state.callbacks.input.set(Some(func));
@@ -1415,6 +1419,7 @@ impl WindowsWindowInner {
             force_render,
             signal_at,
             signal_source,
+            target_presented_at: None,
         });
 
         self.state.callbacks.request_frame.set(Some(request_frame));
@@ -1811,6 +1816,16 @@ pub(crate) fn current_modifiers() -> Modifiers {
     }
 }
 
+fn current_message_timestamp() -> Duration {
+    let (message_time, tick_count) = unsafe { (GetMessageTime(), GetTickCount64()) };
+    message_time_since_boot(message_time, tick_count)
+}
+
+fn message_time_since_boot(message_time: i32, tick_count: u64) -> Duration {
+    let age = (tick_count as u32).wrapping_sub(message_time as u32);
+    Duration::from_millis(tick_count.saturating_sub(u64::from(age)))
+}
+
 #[inline]
 pub(crate) fn current_capslock() -> Capslock {
     let on = unsafe { GetKeyState(VK_CAPITAL.0 as i32) & 1 } > 0;
@@ -1853,5 +1868,29 @@ fn notify_frame_changed(handle: HWND) {
                 | SWP_NOZORDER,
         )
         .log_err();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::message_time_since_boot;
+    use std::time::Duration;
+
+    #[test]
+    fn message_time_extends_to_the_64_bit_tick_count() {
+        assert_eq!(
+            message_time_since_boot(1_000, 1_016),
+            Duration::from_millis(1_000)
+        );
+        let after_wrap = (1u64 << 32) + 5;
+        assert_eq!(
+            message_time_since_boot(-11, after_wrap),
+            Duration::from_millis((1u64 << 32) - 11)
+        );
+        assert_eq!(
+            message_time_since_boot(3, after_wrap),
+            Duration::from_millis((1u64 << 32) + 3)
+        );
+        assert_eq!(message_time_since_boot(40, 20), Duration::ZERO);
     }
 }

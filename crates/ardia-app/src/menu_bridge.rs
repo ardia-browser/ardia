@@ -7,7 +7,8 @@ use ardia_state::windows::{
     CommandBarPlacementState, CommandBarState, NewTabTarget, Popover, WindowKind,
 };
 use ardia_state::{BrowserState, EntryId, ProfileId, TabId, WindowId};
-use ardia_ui::{UiHost, UtilityWindowKind};
+use ardia_ui::pages::PageKind;
+use ardia_ui::{PageCommand, UiHost, UtilityWindowKind};
 use serde_json::Value;
 
 use crate::coordinator::{AppCoordinator, ShellEffect};
@@ -31,15 +32,14 @@ pub enum CommandOutcome {
 
 pub const UI_COMMANDS: &[&str] = &[
     "about",
+    "closeDuplicateTabs",
+    "sortTabs",
     "checkForUpdates",
-    "openFile",
     "renameTab",
     "changeTabIcon",
     "bookmarkPage",
     "bookmarkAllTabs",
-    "manageBookmarks",
     "exportBookmarks",
-    "clearBrowsingData",
     "clearRecentlyClosed",
     "manageExtensions",
     "addExtension",
@@ -63,11 +63,77 @@ pub const UI_COMMANDS: &[&str] = &[
     "jumpToSelection",
     "hideElement",
     "showHiddenElements",
-    "toggleReader",
     "togglePageEngine",
     "moveTabToProfile",
     "togglePinnedFold",
 ];
+
+pub const RECENTLY_CLOSED_SHOWN: usize = 10;
+
+pub fn closed_window_title(tabs: usize) -> String {
+    match tabs {
+        0 => "Window (Pinned Tabs)".to_owned(),
+        1 => "Window (1 Tab)".to_owned(),
+        count => format!("Window ({count} Tabs)"),
+    }
+}
+
+pub fn recently_closed_in(
+    state: &BrowserState,
+    window: Option<&WindowId>,
+) -> Vec<(EntryId, String)> {
+    let target = window.and_then(|id| state.window(id.as_str()));
+    let every_profile =
+        target.is_none_or(|w| w.kind == WindowKind::Incognito || w.profile_id.is_incognito());
+    let default_profile = ProfileId::new(&state.settings.default_profile_id);
+    let listed = |profile: Option<&ProfileId>| {
+        if every_profile {
+            return true;
+        }
+        let owner = profile
+            .filter(|profile| state.profile(profile.as_str()).is_some())
+            .unwrap_or(&default_profile);
+        target.is_some_and(|w| &w.profile_id == owner)
+    };
+    let mut entries: Vec<(ardia_state::Millis, EntryId, String)> = Vec::new();
+    for closed in state.closed.tabs.iter() {
+        let profile = &closed.tab.profile_id;
+        if profile.is_incognito() || !listed(Some(profile)) {
+            continue;
+        }
+        let title = if closed.tab.title.is_empty() {
+            let mut shown = ardia_state::tabs::Tab::new(
+                TabId::new(closed.id.as_str()),
+                closed.window_id.clone(),
+                profile.clone(),
+                &closed.tab.url,
+                0,
+            );
+            shown.custom_title = closed.tab.custom_title.clone();
+            shown.label()
+        } else {
+            closed.tab.title.clone()
+        };
+        entries.push((closed.closed_at, closed.id.clone(), title));
+    }
+    for closed in state.closed.windows.iter() {
+        let profile = closed.window.profile_id.as_ref();
+        if profile.is_some_and(ProfileId::is_incognito) || !listed(profile) {
+            continue;
+        }
+        entries.push((
+            closed.closed_at,
+            closed.id.clone(),
+            closed_window_title(closed.tabs.len()),
+        ));
+    }
+    entries.sort_by_key(|(at, _, _)| std::cmp::Reverse(*at));
+    entries
+        .into_iter()
+        .take(RECENTLY_CLOSED_SHOWN)
+        .map(|(_, id, title)| (id, title))
+        .collect()
+}
 
 pub fn focused_window(state: &BrowserState) -> Option<WindowId> {
     state
@@ -210,7 +276,11 @@ impl AppCoordinator {
         };
         match command {
             "quit" | "std:quit:" => {
-                self.request_quit();
+                self.request_quit_from_user();
+                ran
+            }
+            "undo" => {
+                self.undo_or_reopen_closed_tab();
                 ran
             }
             "openSettings" => {
@@ -294,10 +364,13 @@ impl AppCoordinator {
             }
             "reopenClosedTab" => act(Action::ReopenClosed { window }),
             "reopenClosedWindow" => {
+                let offered = recently_closed_in(&state, window.as_ref());
                 let entry = state
                     .closed
                     .windows
-                    .last()
+                    .iter()
+                    .rev()
+                    .find(|closed| offered.iter().any(|(id, _)| id == &closed.id))
                     .map(|closed| closed.id.clone())
                     .ok_or("no window was closed")?;
                 act(Action::RestoreClosed {
@@ -305,26 +378,28 @@ impl AppCoordinator {
                     window: None,
                 })
             }
-            "restoreClosed" => act(Action::RestoreClosed {
-                id: EntryId::new(arg.ok_or("which entry?")?),
-                window,
-            }),
-            "focusCommandBar" => act(Action::SetCommandBar {
-                window: need_window()?,
-                state: CommandBarState {
-                    open: true,
-                    ..CommandBarState::default()
-                },
-            }),
+            "restoreClosed" => {
+                let id = EntryId::new(arg.ok_or("which entry?")?);
+                let offered = recently_closed_in(&state, window.as_ref())
+                    .iter()
+                    .any(|(entry, _)| entry == &id);
+                if !offered {
+                    return Err("that entry can't be reopened in this window".into());
+                }
+                act(Action::RestoreClosed { id, window })
+            }
+            "focusCommandBar" => self.for_ui(command, arg),
             "toggleSidebar" => act(Action::ToggleSidebar {
                 window: need_window()?,
             }),
             "cleanUpTabs" => act(Action::ClearUnpinned {
                 window: need_window()?,
             }),
-            "undoClearTabs" => act(Action::UndoClear {
-                window: need_window()?,
-            }),
+            "undoClearTabs" => {
+                let window = need_window()?;
+                ardia_ui::sidebar::overflow_menu::note_clear_undone();
+                act(Action::UndoClear { window })
+            }
             "nextTab" => act(Action::CycleTab {
                 window: need_window()?,
                 delta: 1,
@@ -347,6 +422,19 @@ impl AppCoordinator {
                 window: need_window()?,
                 index: None,
             }),
+            "togglePin" if arg == Some("tile") => {
+                let tab = need_tab()?;
+                let pinned_row = state
+                    .tab(tab.as_str())
+                    .is_some_and(|t| t.pin.as_ref().is_some_and(|pin| !pin.is_tile()));
+                if !pinned_row {
+                    return ran;
+                }
+                act(Action::SetPin {
+                    tab,
+                    pin: Some(TabPin::TILE),
+                })
+            }
             "togglePin" | "togglePinnedRow" => {
                 let tab = need_tab()?;
                 let current = state.tab(tab.as_str()).and_then(|t| t.pin.clone());
@@ -381,22 +469,7 @@ impl AppCoordinator {
                     .ok_or("the tab isn't in a group")?;
                 act(Action::CloseGroup { group })
             }
-            "returnToPinnedUrl" => {
-                let tab = need_tab()?;
-                act(Action::ReturnToPinnedUrl { tab: tab.clone() })?;
-                let url = self
-                    .store()
-                    .snapshot()
-                    .tab(tab.as_str())
-                    .map(|t| t.url.clone())
-                    .unwrap_or_default();
-                if let (Some(engine), Some(engine_tab)) = (self.engine(), self.engine_tab(&tab))
-                    && !url.is_empty()
-                {
-                    let _ = engine.load_url(engine_tab, &url, true);
-                }
-                ran
-            }
+            "returnToPinnedUrl" => act(Action::ReturnToPinnedUrl { tab: need_tab()? }),
             "moveTabDown" | "moveTabUp" => {
                 let window = need_window()?;
                 let tab = need_tab()?;
@@ -550,11 +623,52 @@ impl AppCoordinator {
             }
             "toggleMute" => {
                 let tab = need_tab()?;
-                let muted = state.tab(tab.as_str()).is_some_and(|t| t.muted);
-                act(Action::SetMuted { tab, muted: !muted })
+                for action in ardia_state::mute::toggle(&state, &tab, arg == Some("site")) {
+                    act(action)?;
+                }
+                ran
             }
             "downloads" => self.toggle_popover(need_window()?, Popover::Downloads),
-            "showHistory" => self.toggle_popover(need_window()?, Popover::History),
+            "showHistory" => self
+                .open_internal_page(&need_window()?, PageKind::History)
+                .map(|()| CommandOutcome::Ran),
+            "manageBookmarks" => self
+                .open_internal_page(&need_window()?, PageKind::Bookmarks)
+                .map(|()| CommandOutcome::Ran),
+            "clearBrowsingData" => {
+                let window = need_window()?;
+                self.open_internal_page(&window, PageKind::History)?;
+                ardia_ui::pages::history::request_clear_data(&window);
+                self.touch(window);
+                self.wake();
+                ran
+            }
+            "toggleReader" => {
+                self.toggle_reader_in(&need_tab()?);
+                ran
+            }
+            "openFile" => {
+                if let Some(window) = window.clone() {
+                    if state.shown_peek(window.as_str()).is_some() {
+                        let animates = state
+                            .window(window.as_str())
+                            .is_some_and(|w| w.kind == WindowKind::Main)
+                            && self.gpui_window(&window).is_some();
+                        if animates {
+                            return self.for_ui(command, arg);
+                        }
+                        return act(Action::PromotePeek { window });
+                    }
+                    let little = state
+                        .window(window.as_str())
+                        .is_some_and(|w| w.kind == WindowKind::LittleArdia);
+                    if little {
+                        return act(Action::PromoteLittleArdia { window });
+                    }
+                }
+                self.choose_files_to_open(window)
+                    .map(|()| CommandOutcome::Ran)
+            }
             "reload" => {
                 self.reload(need_tab()?, false);
                 ran
@@ -625,9 +739,15 @@ impl AppCoordinator {
                 ran
             }
             "viewSource" => self.chrome_command(IDC_VIEW_SOURCE),
-            "print" => self.chrome_command(IDC_PRINT),
-            "printWithSystemDialog" => self.chrome_command(IDC_BASIC_PRINT),
-            "savePage" => self.chrome_command(IDC_SAVE_PAGE),
+            "print" | "printWithSystemDialog" | "savePage" => {
+                let page_command = match command {
+                    "print" => PageCommand::Print,
+                    "printWithSystemDialog" => PageCommand::PrintWithSystemDialog,
+                    _ => PageCommand::SavePage,
+                };
+                self.run_page_command(&need_tab()?, page_command)
+                    .map(|()| CommandOutcome::Ran)
+            }
             "emailPageLocation" => self.chrome_command(IDC_EMAIL_PAGE_LOCATION),
             "taskManager" => self.chrome_command(IDC_TASK_MANAGER),
             "caretBrowsing" => self.chrome_command(IDC_CARET_BROWSING_TOGGLE),
@@ -666,6 +786,9 @@ impl AppCoordinator {
                 ran
             }
             "reportProblem" => {
+                if crate::report::hub().is_some() {
+                    return self.for_ui(command, arg);
+                }
                 self.open_in_tab(REPORT_PROBLEM_URL)?;
                 ran
             }
@@ -738,22 +861,7 @@ impl AppCoordinator {
 
     pub fn recently_closed(&self) -> Vec<(EntryId, String)> {
         let state = self.store().snapshot();
-        let mut out = Vec::new();
-        for tab in state.closed.tabs.iter().rev().take(10) {
-            let title = if tab.tab.title.is_empty() {
-                tab.tab.url.clone()
-            } else {
-                tab.tab.title.clone()
-            };
-            out.push((tab.id.clone(), title));
-        }
-        for window in state.closed.windows.iter().rev().take(5) {
-            out.push((
-                window.id.clone(),
-                format!("Window with {} tabs", window.tabs.len()),
-            ));
-        }
-        out
+        recently_closed_in(&state, focused_window(&state).as_ref())
     }
 }
 
@@ -830,6 +938,103 @@ pub mod native {
             entry.current.hash(&mut hasher);
         }
         hasher.finish()
+    }
+
+    pub fn titled_signature(context: &MenuContext, titles: &[(&str, &str)]) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        signature(context).hash(&mut hasher);
+        titles.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    pub const TILE_PIN_TITLE: &str = "Move Pinned Tab to Top Apps";
+
+    pub fn add_tile_pin_item(bar: &mut MenuBar, shown: bool) {
+        use ardia_engine::macos::menu::MenuItem;
+        fn walk(items: &mut Vec<MenuItem>, shown: bool) -> bool {
+            let at = items.iter().position(|item| {
+                matches!(item, MenuItem::Command(command) if command.command == "togglePin" && command.arg.is_none())
+            });
+            if let Some(at) = at {
+                if let MenuItem::Command(command) = &items[at] {
+                    let mut tile = command.clone();
+                    tile.title = TILE_PIN_TITLE.to_owned();
+                    tile.arg = Some("tile".to_owned());
+                    tile.shortcut = None;
+                    tile.hidden = !shown;
+                    tile.enabled = shown;
+                    items.insert(at + 1, MenuItem::Command(tile));
+                }
+                return true;
+            }
+            items.iter_mut().any(|item| match item {
+                MenuItem::Submenu(menu) => walk(&mut menu.items, shown),
+                _ => false,
+            })
+        }
+        for menu in &mut bar.menus {
+            if walk(&mut menu.items, shown) {
+                return;
+            }
+        }
+    }
+
+    pub fn route_undo(bar: &mut MenuBar) {
+        use ardia_engine::macos::menu::{CommandItem, MenuItem};
+        fn walk(items: &mut [MenuItem]) -> bool {
+            for item in items {
+                match item {
+                    MenuItem::Standard(standard) if standard.action == "undo:" => {
+                        *item = MenuItem::Command(CommandItem {
+                            title: standard.title.clone(),
+                            command: "undo".to_owned(),
+                            arg: None,
+                            shortcut: standard.shortcut.clone(),
+                            hidden: standard.hidden,
+                            alternate: standard.alternate,
+                            enabled: true,
+                            checked: false,
+                        });
+                        return true;
+                    }
+                    MenuItem::Submenu(menu) => {
+                        if walk(&mut menu.items) {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            false
+        }
+        for menu in &mut bar.menus {
+            if walk(&mut menu.items) {
+                return;
+            }
+        }
+    }
+
+    pub fn retitle(bar: &mut MenuBar, titles: &[(&str, &str)]) {
+        fn walk(items: &mut [ardia_engine::macos::menu::MenuItem], titles: &[(&str, &str)]) {
+            for item in items {
+                match item {
+                    ardia_engine::macos::menu::MenuItem::Command(command) => {
+                        if let Some((_, title)) =
+                            titles.iter().find(|(id, _)| *id == command.command)
+                        {
+                            command.title = (*title).to_owned();
+                        }
+                    }
+                    ardia_engine::macos::menu::MenuItem::Submenu(menu) => {
+                        walk(&mut menu.items, titles)
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for menu in &mut bar.menus {
+            walk(&mut menu.items, titles);
+        }
     }
 
     pub fn menu_bar(context: &MenuContext) -> MenuBar {
@@ -975,6 +1180,10 @@ mod tests {
             "toggleMute",
             "downloads",
             "showHistory",
+            "clearBrowsingData",
+            "manageBookmarks",
+            "toggleReader",
+            "openFile",
             "reload",
             "forceReload",
             "stop",
@@ -1024,6 +1233,46 @@ mod tests {
             missing.is_empty(),
             "menu commands without a route: {missing:?}"
         );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_tile_pin_item_sits_under_move_to_top_apps_and_hides_when_disabled() {
+        use ardia_engine::macos::menu::{MenuContext, MenuItem};
+        type Listed = Vec<(String, Option<String>, bool)>;
+        fn find(items: &[MenuItem]) -> Option<(usize, Listed)> {
+            for item in items {
+                if let MenuItem::Submenu(menu) = item
+                    && let Some(found) = find(&menu.items)
+                {
+                    return Some(found);
+                }
+            }
+            let listed: Listed = items
+                .iter()
+                .filter_map(|item| match item {
+                    MenuItem::Command(c) => Some((c.command.clone(), c.arg.clone(), c.hidden)),
+                    _ => None,
+                })
+                .collect();
+            listed
+                .iter()
+                .position(|(command, arg, _)| command == "togglePin" && arg.is_none())
+                .map(|at| (at, listed))
+        }
+        for shown in [false, true] {
+            let mut bar = native::menu_bar(&MenuContext::default());
+            native::add_tile_pin_item(&mut bar, shown);
+            let (at, listed) = bar
+                .menus
+                .iter()
+                .find_map(|menu| find(&menu.items))
+                .expect("Move to Top Apps is in the menu bar");
+            assert_eq!(
+                listed[at + 1],
+                ("togglePin".to_owned(), Some("tile".to_owned()), !shown)
+            );
+        }
     }
 
     #[cfg(target_os = "macos")]

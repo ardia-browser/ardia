@@ -1,11 +1,17 @@
+use std::sync::{Arc, LazyLock};
+
+use crate::scale::px;
 use gpui::{
-    App, Bounds, ContentMask, Element, ElementId, FontWeight, GlobalElementId, Hsla,
-    InspectorElementId, LayoutId, Length, Pixels, ShapedLine, SharedString, Style, TextAlign,
-    TextRun, Window, px,
+    App, Bounds, ContentMask, Element, ElementId, FadeEdge, FadeMask, FontFeatures, FontWeight,
+    GlobalElementId, Hsla, InspectorElementId, LayoutId, Length, Pixels, ShapedLine, SharedString,
+    Style, TextAlign, TextRun, Window,
 };
-use smallvec::SmallVec;
 
 pub const TITLE_FADE: f32 = 24.0;
+pub const LABEL_CELL_INSET: f32 = 2.0;
+
+static TABULAR_DIGITS: LazyLock<FontFeatures> =
+    LazyLock::new(|| FontFeatures(Arc::new(vec![("tnum".into(), 1)])));
 
 pub struct FadeLabel {
     text: SharedString,
@@ -15,6 +21,7 @@ pub struct FadeLabel {
     weight: FontWeight,
     fade: Pixels,
     grow: bool,
+    text_inset: Pixels,
 }
 
 pub fn fade_label(
@@ -30,6 +37,7 @@ pub fn fade_label(
         weight: FontWeight::NORMAL,
         fade: px(TITLE_FADE),
         grow: true,
+        text_inset: gpui::px(0.),
     }
 }
 
@@ -49,6 +57,11 @@ impl FadeLabel {
         self
     }
 
+    pub fn cell_inset(mut self) -> Self {
+        self.text_inset = px(LABEL_CELL_INSET);
+        self
+    }
+
     pub fn hug(mut self) -> Self {
         self.grow = false;
         self
@@ -56,65 +69,42 @@ impl FadeLabel {
 }
 
 pub fn single_line(text: SharedString) -> SharedString {
-    if text.contains(['\n', '\r']) {
-        SharedString::from(text.replace(['\n', '\r'], " "))
-    } else {
-        text
+    if !text.contains([
+        '\n', '\r', '\u{2028}', '\u{2029}', '\u{85}', '\u{0B}', '\u{0C}',
+    ]) {
+        return text;
     }
+    let parts: Vec<&str> = text
+        .split([
+            '\n', '\r', '\u{2028}', '\u{2029}', '\u{85}', '\u{0B}', '\u{0C}',
+        ])
+        .map(|part| part.trim_matches([' ', '\t']))
+        .filter(|part| !part.is_empty())
+        .collect();
+    SharedString::from(parts.join(" "))
 }
 
-pub fn fade_factor(center_x: f32, width: f32, fade: f32) -> f32 {
-    if fade <= 0.0 {
-        return if center_x <= width { 1.0 } else { 0.0 };
-    }
-    ((width - center_x) / fade).clamp(0.0, 1.0)
+pub fn ceil_to_pixel_grid(width: Pixels, scale: f32) -> Pixels {
+    let scale = if scale > 0.0 { scale } else { 1.0 };
+    gpui::px((f32::from(width) * scale).ceil() / scale)
 }
 
-pub fn fading_runs(
-    text: &str,
-    template: &TextRun,
-    width: f32,
-    fade: f32,
-    x_for_index: impl Fn(usize) -> f32,
-) -> SmallVec<[TextRun; 16]> {
-    let mut runs: SmallVec<[TextRun; 16]> = SmallVec::new();
-    let fade_start = width - fade;
-    let mut solid_len = 0;
-    let mut indices = text.char_indices().peekable();
-    while let Some((start, _)) = indices.next() {
-        let end = indices.peek().map_or(text.len(), |(next, _)| *next);
-        let left = x_for_index(start);
-        let right = x_for_index(end);
-        if right <= fade_start {
-            solid_len += end - start;
-            continue;
-        }
-        if solid_len > 0 {
-            runs.push(TextRun {
-                len: solid_len,
-                ..template.clone()
-            });
-            solid_len = 0;
-        }
-        let factor = fade_factor((left + right) / 2.0, width, fade);
-        runs.push(TextRun {
-            len: end - start,
-            color: template.color.opacity(factor),
-            ..template.clone()
-        });
-    }
-    if solid_len > 0 {
-        runs.push(TextRun {
-            len: solid_len,
-            ..template.clone()
-        });
-    }
-    runs
+pub fn overflows(line_width: f32, room: f32) -> bool {
+    line_width > room + 0.5
+}
+
+pub fn fade_length(room: f32, fade: f32) -> f32 {
+    fade.min(room).max(0.0)
+}
+
+pub struct ShapedLabel {
+    line: ShapedLine,
+    fades: bool,
 }
 
 impl Element for FadeLabel {
     type RequestLayoutState = ();
-    type PrepaintState = Option<ShapedLine>;
+    type PrepaintState = Option<ShapedLabel>;
 
     fn id(&self) -> Option<ElementId> {
         None
@@ -139,8 +129,10 @@ impl Element for FadeLabel {
             style.flex_shrink = 1.0;
             style.flex_basis = Length::Definite(px(0.).into());
         } else {
-            let measured = self.shape(None, window).map_or(px(0.), |line| line.width);
-            style.size.width = measured.ceil().into();
+            let measured = self
+                .shape(None, window)
+                .map_or(px(0.), |label| label.line.width);
+            style.size.width = ceil_to_pixel_grid(measured, window.scale_factor()).into();
             style.flex_shrink = 1.0;
         }
         (window.request_layout(style, [], cx), ())
@@ -155,7 +147,7 @@ impl Element for FadeLabel {
         window: &mut Window,
         _cx: &mut App,
     ) -> Self::PrepaintState {
-        self.shape(Some(bounds.size.width), window)
+        self.shape(Some(bounds.size.width - self.text_inset * 2.), window)
     }
 
     fn paint(
@@ -168,22 +160,39 @@ impl Element for FadeLabel {
         window: &mut Window,
         cx: &mut App,
     ) {
-        let Some(line) = line.take() else {
+        let Some(ShapedLabel { line, fades }) = line.take() else {
             return;
         };
-        window.with_content_mask(Some(ContentMask { bounds }), |window| {
-            let painted = line.paint(
-                bounds.origin,
-                self.line_height,
-                TextAlign::Left,
-                None,
-                window,
-                cx,
-            );
-            if let Err(error) = painted {
-                log::debug!("label failed to paint: {error}");
-            }
-        });
+        let line_height = self.line_height;
+        let text_inset = self.text_inset;
+        let draw = |window: &mut Window, cx: &mut App| {
+            window.with_content_mask(Some(ContentMask { bounds }), |window| {
+                let painted = line.paint(
+                    bounds.origin + gpui::point(text_inset, gpui::px(0.)),
+                    line_height,
+                    TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
+                if let Err(error) = painted {
+                    log::debug!("label failed to paint: {error}");
+                }
+            });
+        };
+        if fades {
+            let mask = FadeMask {
+                bounds,
+                edge: FadeEdge::Trailing,
+                length: px(fade_length(
+                    f32::from(bounds.size.width),
+                    f32::from(self.fade),
+                )),
+            };
+            window.with_fade_mask(mask, |window| draw(window, cx));
+        } else {
+            draw(window, cx);
+        }
     }
 }
 
@@ -191,6 +200,7 @@ impl FadeLabel {
     fn template(&self, window: &Window) -> TextRun {
         let mut font = window.text_style().font();
         font.weight = self.weight;
+        font.features = TABULAR_DIGITS.clone();
         TextRun {
             len: self.text.len(),
             font,
@@ -201,7 +211,7 @@ impl FadeLabel {
         }
     }
 
-    fn shape(&self, width: Option<Pixels>, window: &mut Window) -> Option<ShapedLine> {
+    fn shape(&self, width: Option<Pixels>, window: &mut Window) -> Option<ShapedLabel> {
         if self.text.is_empty() {
             return None;
         }
@@ -212,77 +222,52 @@ impl FadeLabel {
             std::slice::from_ref(&template),
             None,
         );
-        let Some(width) = width else {
-            return Some(line);
-        };
-        if line.width <= width + px(0.5) {
-            return Some(line);
-        }
-        let runs = fading_runs(
-            &self.text,
-            &template,
-            f32::from(width),
-            f32::from(self.fade),
-            |index| f32::from(line.x_for_index(index)),
-        );
-        Some(
-            window
-                .text_system()
-                .shape_line(self.text.clone(), self.font_size, &runs, None),
-        )
+        let fades = width.is_some_and(|room| overflows(f32::from(line.width), f32::from(room)));
+        Some(ShapedLabel { line, fades })
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn hugged_labels_round_up_to_the_pixel_grid_like_yoga() {
+        assert_eq!(ceil_to_pixel_grid(gpui::px(36.2), 2.0), gpui::px(36.5));
+        assert_eq!(ceil_to_pixel_grid(gpui::px(36.5), 2.0), gpui::px(36.5));
+        assert_eq!(ceil_to_pixel_grid(gpui::px(36.2), 1.0), gpui::px(37.0));
+        assert_eq!(ceil_to_pixel_grid(gpui::px(36.2), 0.0), gpui::px(37.0));
+    }
+
     use super::*;
-    use gpui::{Font, black};
 
-    fn template(len: usize) -> TextRun {
-        TextRun {
-            len,
-            font: Font::default(),
-            color: black(),
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        }
+    #[test]
+    fn the_cell_inset_is_the_two_points_an_appkit_label_draws_its_text_in() {
+        assert_eq!(LABEL_CELL_INSET, 2.0);
     }
 
     #[test]
-    fn the_fade_ramps_from_opaque_to_clear_at_the_trailing_edge() {
-        assert_eq!(fade_factor(10.0, 100.0, 24.0), 1.0);
-        assert_eq!(fade_factor(100.0, 100.0, 24.0), 0.0);
-        assert!((fade_factor(88.0, 100.0, 24.0) - 0.5).abs() < 1e-6);
-        assert_eq!(fade_factor(140.0, 100.0, 24.0), 0.0);
+    fn only_text_wider_than_the_room_by_half_a_point_fades() {
+        assert!(!overflows(100.0, 100.0));
+        assert!(!overflows(100.5, 100.0));
+        assert!(overflows(100.6, 100.0));
     }
 
     #[test]
-    fn runs_keep_every_byte_and_only_split_the_fading_tail() {
-        let text = "Hello wörld, this is long";
-        let runs = fading_runs(text, &template(text.len()), 60.0, 20.0, |index| {
-            text[..index].chars().count() as f32 * 6.0
-        });
-        assert_eq!(runs.iter().map(|run| run.len).sum::<usize>(), text.len());
-        assert_eq!(runs[0].color.a, 1.0);
-        assert!(runs[0].len >= 6);
-        let last = runs.last().map(|run| run.color.a).unwrap_or(1.0);
-        assert_eq!(last, 0.0);
-        let alphas: Vec<f32> = runs.iter().map(|run| run.color.a).collect();
-        assert!(alphas.windows(2).all(|pair| pair[1] <= pair[0] + 1e-6));
+    fn the_fade_spans_the_last_twenty_four_points_or_the_whole_label() {
+        assert_eq!(TITLE_FADE, 24.0);
+        assert_eq!(fade_length(200.0, TITLE_FADE), 24.0);
+        assert_eq!(fade_length(10.0, TITLE_FADE), 10.0);
+        assert_eq!(fade_length(-4.0, TITLE_FADE), 0.0);
     }
 
     #[test]
     fn labels_are_always_one_line() {
         assert_eq!(single_line("Work\nReading".into()), "Work Reading");
+        assert_eq!(
+            single_line("  Work \r\n\n  Reading  ".into()),
+            "Work Reading"
+        );
+        assert_eq!(single_line("Line\u{2028}Two".into()), "Line Two");
         assert_eq!(single_line("Plain".into()), "Plain");
-    }
-
-    #[test]
-    fn short_text_stays_one_solid_run() {
-        let text = "Tab";
-        let runs = fading_runs(text, &template(3), 200.0, 24.0, |index| index as f32 * 7.0);
-        assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].len, 3);
     }
 }

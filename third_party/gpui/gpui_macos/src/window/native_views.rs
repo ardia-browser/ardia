@@ -11,13 +11,15 @@
 
 use super::{
     MacWindowState, convert_mouse_position, current_capslock, current_modifiers,
+    gesture_forwarding::GestureMonitor,
     liquid_glass::{GlassLayout, new_layer, set_layer_color, with_disabled_actions},
+    visual_effect::EffectLayout,
     window_state_if_set, with_input_handler,
 };
 use crate::events::platform_input_from_native;
 use gpui::{
-    Bounds, DrawOrder, KeyDownEvent, ModifiersChangedEvent, NativeViewId, Pixels, PlatformInput,
-    Point, Rgba, ScaledPixels, Scene, WindowBackgroundAppearance,
+    Bounds, DrawOrder, KeyDownEvent, ModifiersChangedEvent, NativeViewId, PaintNativeView, Pixels,
+    PlatformInput, Point, Rgba, ScaledPixels, Scene, WindowBackgroundAppearance,
 };
 use objc2::{
     class, msg_send,
@@ -91,37 +93,49 @@ struct AttachedView {
     container: Retained<NSView>,
     /// Where the view was last placed, or `None` while it is hidden.
     placement: Option<Placement>,
+    /// Whether the last placement was applied while the view was outside its
+    /// container, which leaves the view itself to be placed once it returns.
+    placed_while_away: bool,
     corner_radii: [f64; 4],
     corners: CornerShape,
+    /// Keeps gestures over attached views reaching GPUI while any view is attached.
+    _gesture_monitor: Option<Rc<GestureMonitor>>,
 }
 
 /// Where a native view is shown, as `[x, y, width, height]` frames in points.
+///
+/// A scaled view is scaled through its container's bounds, along each axis,
+/// which AppKit accounts for when it converts points and hit-tests, so the
+/// view keeps its frame and lays nothing out again as the scale changes.
+/// GPUI never turns a native view, so the container's frame is always where
+/// GPUI hit-tests the view and where the renderer erases for it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Placement {
     /// The visible part of the view, in the window's content view.
     container: [f64; 4],
-    /// The whole view, in its container.
+    /// The size of the container's bounds: its frame's size, divided by the
+    /// view's scale along each axis.
+    bounds: [f64; 2],
+    /// The whole view, in its container's bounds.
     view: [f64; 4],
+    /// The container's alpha value.
+    alpha: f64,
 }
 
 impl Placement {
-    /// Places a view with the given bounds and clip, both in device pixels
-    /// from the top left of the GPUI view, whose frame is `gpui_frame`.
-    /// Returns `None` if the clip leaves none of the view visible.
-    fn new(
-        bounds: Bounds<ScaledPixels>,
-        content_mask: Bounds<ScaledPixels>,
-        scale_factor: f64,
-        gpui_frame: [f64; 4],
-    ) -> Option<Self> {
-        let visible = bounds.intersect(&content_mask);
+    /// Places a view with the bounds and clip of `native_view`, both in
+    /// device pixels from the top left of the GPUI view, whose frame is
+    /// `gpui_frame`. Returns `None` if the clip leaves none of the view visible.
+    fn new(native_view: &PaintNativeView, scale_factor: f64, gpui_frame: [f64; 4]) -> Option<Self> {
+        let bounds = native_view.bounds;
+        let visible = bounds.intersect(&native_view.content_mask.bounds);
         if visible.is_empty() {
             return None;
         }
+        let to_points = |value: ScaledPixels| f64::from(value) / scale_factor;
         // AppKit measures from the bottom left of the enclosing view.
         let to_frame = |bounds: Bounds<ScaledPixels>| {
             let [gpui_x, gpui_y, _, gpui_height] = gpui_frame;
-            let to_points = |value: ScaledPixels| f64::from(value) / scale_factor;
             let height = to_points(bounds.size.height);
             [
                 gpui_x + to_points(bounds.origin.x),
@@ -132,10 +146,59 @@ impl Placement {
         };
         let container = to_frame(visible);
         let [x, y, width, height] = to_frame(bounds);
+        let alpha = f64::from(native_view.opacity).clamp(0., 1.);
+        let alpha = if alpha.is_nan() { 1. } else { alpha };
+        if !native_view.is_transformed() {
+            return Some(Self {
+                container,
+                bounds: [container[2], container[3]],
+                view: [x - container[0], y - container[1], width, height],
+                alpha,
+            });
+        }
+        let positive_or_one = |scale: f32| {
+            let scale = f64::from(scale);
+            if scale.is_finite() && scale > 0. {
+                scale
+            } else {
+                1.
+            }
+        };
+        let scales = native_view.scales();
+        let (scale_x, scale_y) = (positive_or_one(scales.x), positive_or_one(scales.y));
+        let layout = native_view.layout_size;
+        let (layout_width, layout_height) = (to_points(layout.width), to_points(layout.height));
+        let center = [
+            x + width / 2. - container[0],
+            y + height / 2. - container[1],
+        ];
         Some(Self {
             container,
-            view: [x - container[0], y - container[1], width, height],
+            bounds: [container[2] / scale_x, container[3] / scale_y],
+            view: [
+                center[0] / scale_x - layout_width / 2.,
+                center[1] / scale_y - layout_height / 2.,
+                layout_width,
+                layout_height,
+            ],
+            alpha,
         })
+    }
+
+    /// Scales the container's bounds and fades it, or resets both to exactly
+    /// none.
+    fn transform_container(&self, container: &NSView) {
+        let [width, height] = self.bounds;
+        let bounds = container.bounds();
+        if bounds.size.width != width || bounds.size.height != height {
+            container.setBoundsSize(NSSize::new(width, height));
+        }
+        if bounds.origin.x != 0. || bounds.origin.y != 0. {
+            container.setBoundsOrigin(NSPoint::new(0., 0.));
+        }
+        if container.alphaValue() != self.alpha {
+            container.setAlphaValue(self.alpha);
+        }
     }
 }
 
@@ -149,10 +212,12 @@ impl NativeViews {
             .collect()
     }
 
+    /// The view with `id` if it is on screen in this window, which is where
+    /// input and focus can reach it.
     fn shown(&self, id: NativeViewId) -> Option<&AttachedView> {
-        self.views
-            .iter()
-            .find(|attached| attached.id == id && attached.placement.is_some())
+        self.views.iter().find(|attached| {
+            attached.id == id && attached.placement.is_some() && attached.is_in_container()
+        })
     }
 
     fn focused(&self) -> Option<FocusedNativeView> {
@@ -166,7 +231,7 @@ impl NativeViews {
     fn is_showing_any(&self) -> bool {
         self.views
             .iter()
-            .any(|attached| attached.placement.is_some())
+            .any(|attached| attached.placement.is_some() && attached.is_in_container())
     }
 
     fn note_button_pressed_in_view(&mut self, button: isize) {
@@ -255,8 +320,7 @@ impl Drop for Attachment {
         unsafe {
             // AppKit would otherwise hand first responder to the window itself.
             give_up_first_responder(native_window, gpui_view, &attached.view);
-            attached.container.removeFromSuperview();
-            attached.view.removeFromSuperview();
+            detach_view(&attached.container, &attached.view);
         }
     }
 }
@@ -297,8 +361,10 @@ pub(super) unsafe fn attach(
         view,
         container,
         placement: None,
+        placed_while_away: false,
         corner_radii: [0.; 4],
         corners: CornerShape::Square,
+        _gesture_monitor: GestureMonitor::acquire(),
     });
     Some(Box::new(Attachment {
         window_state: Rc::downgrade(window_state),
@@ -380,6 +446,7 @@ pub(super) struct Layout {
     placements: Vec<(NativeViewId, Option<Placement>)>,
     shown: Vec<(DrawOrder, NativeViewId)>,
     glass: GlassLayout,
+    effects: EffectLayout,
     idle: bool,
 }
 
@@ -396,14 +463,7 @@ pub(super) fn plan_layout(state: &MacWindowState, scene: &Scene) -> Layout {
     ];
     let glass = GlassLayout::new(
         &scene.liquid_glass_regions,
-        scene.attached_native_views().map(|native_view| {
-            (
-                native_view.order,
-                native_view
-                    .bounds
-                    .intersect(&native_view.content_mask.bounds),
-            )
-        }),
+        glass_occluders(scene),
         scale_factor,
         gpui_frame,
         state.glass_appearance(),
@@ -412,7 +472,17 @@ pub(super) fn plan_layout(state: &MacWindowState, scene: &Scene) -> Layout {
         .liquid_glass
         .as_ref()
         .is_none_or(|glass| glass.is_idle());
-    if state.native_views.views.is_empty() && glass.is_empty() && glass_idle {
+    let effects = EffectLayout::new(&scene.visual_effect_regions, scale_factor, gpui_frame);
+    let effects_idle = state
+        .visual_effects
+        .as_ref()
+        .is_none_or(|effects| effects.is_idle());
+    if state.native_views.views.is_empty()
+        && glass.is_empty()
+        && glass_idle
+        && effects.is_empty()
+        && effects_idle
+    {
         return Layout {
             idle: true,
             ..Layout::default()
@@ -421,6 +491,7 @@ pub(super) fn plan_layout(state: &MacWindowState, scene: &Scene) -> Layout {
     if state.native_views.views.is_empty() {
         return Layout {
             glass,
+            effects,
             ..Layout::default()
         };
     }
@@ -430,15 +501,8 @@ pub(super) fn plan_layout(state: &MacWindowState, scene: &Scene) -> Layout {
         let placement = scene
             .attached_native_views()
             .find(|native_view| native_view.id == attached.id)
-            .and_then(|native_view| {
-                Placement::new(
-                    native_view.bounds,
-                    native_view.content_mask.bounds,
-                    scale_factor,
-                    gpui_frame,
-                )
-            });
-        if attached.placement != placement {
+            .and_then(|native_view| Placement::new(native_view, scale_factor, gpui_frame));
+        if attached.needs_placement(placement) {
             placements.push((attached.id, placement));
         }
     }
@@ -455,8 +519,31 @@ pub(super) fn plan_layout(state: &MacWindowState, scene: &Scene) -> Layout {
         placements,
         shown,
         glass,
+        effects,
         idle: false,
     }
+}
+
+fn glass_occluders(scene: &Scene) -> Vec<(DrawOrder, Bounds<ScaledPixels>)> {
+    let mut occluders = scene
+        .attached_native_views()
+        .map(|native_view| {
+            (
+                native_view.order,
+                native_view
+                    .bounds
+                    .intersect(&native_view.content_mask.bounds),
+            )
+        })
+        .chain(
+            scene
+                .visual_effect_regions
+                .iter()
+                .map(|region| (region.order, region.visible_bounds())),
+        )
+        .collect::<Vec<_>>();
+    occluders.sort_by_key(|(order, _)| *order);
+    occluders
 }
 
 /// Applies a planned layout. The window state must be unlocked, because AppKit
@@ -465,7 +552,7 @@ pub(super) fn apply_layout(window_state: &Rc<Mutex<MacWindowState>>, layout: Lay
     if layout.idle {
         return;
     }
-    let (native_window, gpui_view, placements, shown, glass) = {
+    let (native_window, gpui_view, placements, shown, glass, effects) = {
         let mut lock = window_state.lock();
         let mut placements = Vec::new();
         for (id, placement) in layout.placements {
@@ -476,6 +563,7 @@ pub(super) fn apply_layout(window_state: &Rc<Mutex<MacWindowState>>, layout: Lay
                 .find(|attached| attached.id == id)
             {
                 attached.placement = placement;
+                attached.placed_while_away = !attached.is_in_container();
                 let corners = placement
                     .map(|placement| CornerShape::new(&placement, attached.corner_radii))
                     .filter(|corners| *corners != attached.corners);
@@ -504,17 +592,14 @@ pub(super) fn apply_layout(window_state: &Rc<Mutex<MacWindowState>>, layout: Lay
             placements,
             shown,
             lock.liquid_glass.take(),
+            lock.visual_effects.take(),
         )
     };
     let placed_any = !placements.is_empty();
-    let to_rect = |[x, y, width, height]: [f64; 4]| {
-        NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
-    };
     for (view, container, placement, corners) in placements {
         match placement {
             Some(placement) => {
-                container.setFrame(to_rect(placement.container));
-                view.setFrame(to_rect(placement.view));
+                place_view(&view, &container, &placement);
                 if let Some(corners) = corners {
                     with_disabled_actions(|| corners.apply(&container));
                 }
@@ -551,6 +636,21 @@ pub(super) fn apply_layout(window_state: &Rc<Mutex<MacWindowState>>, layout: Lay
             Vec::new()
         }
     };
+    let effect_units = match (unsafe { gpui_ns_view.superview() }, effects) {
+        (Some(host), Some(mut effects)) if !(layout.effects.is_empty() && effects.is_idle()) => {
+            let units =
+                with_disabled_actions(|| effects.sync(&layout.effects, &host, gpui_ns_view));
+            window_state.lock().visual_effects = Some(effects);
+            units
+        }
+        (_, effects) => {
+            if effects.is_some() {
+                window_state.lock().visual_effects = effects;
+            }
+            Vec::new()
+        }
+    };
+    let glass_units = merge_units(effect_units, glass_units);
     let stacked = merge_by_order(glass_units, shown)
         .iter()
         .map(Retained::as_ptr)
@@ -567,6 +667,9 @@ pub(super) fn apply_layout(window_state: &Rc<Mutex<MacWindowState>>, layout: Lay
                 .collect::<Vec<_>>();
             if let Some(glass) = &lock.liquid_glass {
                 attached.extend(glass.owned_views().map(Retained::as_ptr));
+            }
+            if let Some(effects) = &lock.visual_effects {
+                attached.extend(effects.owned_views().map(Retained::as_ptr));
             }
             Stacking {
                 gpui_view: gpui_view.cast_const().cast(),
@@ -603,6 +706,55 @@ pub(super) fn apply_layout(window_state: &Rc<Mutex<MacWindowState>>, layout: Lay
     if placed_any || restacked {
         reconcile_first_responder(window_state);
     }
+}
+
+fn is_in_container(view: &NSView, container: &NSView) -> bool {
+    // SAFETY: The view is live, and views are only read on the main thread.
+    unsafe { view.superview() }.is_some_and(|superview| ptr::eq(&*superview, container))
+}
+
+/// Places `container`, and `view` inside it if it is still there, returning
+/// whether it was. A view another window has taken keeps the frame that
+/// window gave it, and whatever was left in its place, such as WebKit's
+/// full screen placeholder, is given the view's frame, so that the view comes
+/// back at the size GPUI has since laid out.
+fn place_view(view: &NSView, container: &NSView, placement: &Placement) -> bool {
+    let to_rect = |[x, y, width, height]: [f64; 4]| {
+        NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
+    };
+    container.setFrame(to_rect(placement.container));
+    placement.transform_container(container);
+    let frame = to_rect(placement.view);
+    if is_in_container(view, container) {
+        view.setFrame(frame);
+        return true;
+    }
+    for placeholder in container.subviews().iter() {
+        if placeholder.frame() != frame {
+            placeholder.setFrame(frame);
+        }
+    }
+    false
+}
+
+/// Takes `container` out of the window, with `view` if it is still inside.
+///
+/// A view another window has taken, such as for HTML full screen, is left
+/// where it is: GPUI only lets go of it, and whatever owns that window decides
+/// where it goes next.
+fn detach_view(container: &NSView, view: &NSView) {
+    let in_container = is_in_container(view, container);
+    container.removeFromSuperview();
+    if in_container {
+        view.removeFromSuperview();
+    }
+}
+
+fn merge_units<V>(first: Vec<(DrawOrder, V)>, second: Vec<(DrawOrder, V)>) -> Vec<(DrawOrder, V)> {
+    let mut merged = first;
+    merged.extend(second);
+    merged.sort_by_key(|(order, _)| *order);
+    merged
 }
 
 fn merge_by_order<V>(glass: Vec<(DrawOrder, V)>, native: Vec<(DrawOrder, V)>) -> Vec<V> {
@@ -657,15 +809,21 @@ impl CornerShape {
                 radius = radius.max(corner_radius);
             }
         }
+        // A scaled view's frame is worked out from its scaled bounds, so it
+        // can be a rounding error away from filling its container.
+        let fills = |position: f64, length: f64, container: f64| {
+            position.abs() < 1e-6 && (length - container).abs() < 1e-6
+        };
+        let [bounds_width, bounds_height] = placement.bounds;
         if radius <= 0. {
             Self::Square
         } else if radii.iter().any(|corner| *corner > 0. && *corner != radius) {
             Self::Shaped {
-                container: [placement.container[2], placement.container[3]],
+                container: placement.bounds,
                 frame: placement.view,
                 radii,
             }
-        } else if x == 0. && y == 0. && [width, height] == placement.container[2..] {
+        } else if fills(x, width, bounds_width) && fills(y, height, bounds_height) {
             Self::Rounded { radius, corners }
         } else {
             Self::Masked {
@@ -730,7 +888,7 @@ fn clamped_radii(radii: [f64; 4], width: f64, height: f64) -> [f64; 4] {
     radii.map(|radius| radius.max(0.).min(limit))
 }
 
-unsafe fn set_rounded_path(
+pub(super) unsafe fn set_rounded_path(
     mask: &AnyObject,
     [left, bottom, width, height]: [f64; 4],
     [top_left, top_right, bottom_right, bottom_left]: [f64; 4],
@@ -807,6 +965,17 @@ fn rounded_rect_contains([width, height]: [f64; 2], radii: [f64; 4], [x, y]: [f6
 }
 
 impl AttachedView {
+    /// Whether the view is still inside its container. WebKit and Chromium
+    /// move a page's view into their own window for HTML full screen, leaving
+    /// a placeholder in the container, and put it back when full screen ends.
+    fn is_in_container(&self) -> bool {
+        is_in_container(&self.view, &self.container)
+    }
+
+    fn needs_placement(&self, placement: Option<Placement>) -> bool {
+        self.placement != placement || (self.placed_while_away && self.is_in_container())
+    }
+
     fn covers(&self, position_in_window: NSPoint) -> bool {
         let Some(placement) = self.placement else {
             return false;
@@ -1137,7 +1306,7 @@ fn window_superclass(this: &AnyObject) -> &'static AnyClass {
 }
 
 /// Asks GPUI which native view, if any, a point in window coordinates reaches.
-fn hit_test_native_view(
+pub(super) fn hit_test_native_view(
     window_state: &Rc<Mutex<MacWindowState>>,
     position_in_window: NSPoint,
 ) -> Option<NativeViewId> {
@@ -1159,6 +1328,56 @@ fn hit_test_native_view(
     })
 }
 
+/// The view inside `container` that a point in the container's superview
+/// reaches. GPUI's unsnapped bounds can take in an edge that AppKit leaves out,
+/// so a miss is tried again just inside the container, and only then given to
+/// the native view itself.
+fn hit_test_container(container: &NSView, view: &NSView, point: NSPoint) -> *mut AnyObject {
+    // SAFETY: The container is a live view.
+    let hit: *mut AnyObject = unsafe { msg_send![container, hitTest: point] };
+    if !hit.is_null() {
+        return hit;
+    }
+    let frame = container.frame();
+    let inside = |value: f64, origin: f64, length: f64| {
+        if length.is_nan() || length <= 0. || !value.is_finite() {
+            return origin;
+        }
+        let margin = (length / 2.).min(1. / 1024.);
+        value.clamp(origin + margin, origin + length - margin)
+    };
+    let inner = NSPoint::new(
+        inside(point.x, frame.origin.x, frame.size.width),
+        inside(point.y, frame.origin.y, frame.size.height),
+    );
+    // SAFETY: The container is a live view.
+    let hit: *mut AnyObject = unsafe { msg_send![container, hitTest: inner] };
+    if hit.is_null() {
+        view as *const NSView as *mut AnyObject
+    } else {
+        hit
+    }
+}
+
+/// The container of the native view GPUI routes a point in window coordinates
+/// to, with the view inside it that the point reaches.
+pub(super) fn native_view_hit_at(
+    window_state: &Rc<Mutex<MacWindowState>>,
+    position_in_window: NSPoint,
+) -> Option<(Retained<NSView>, Retained<NSView>)> {
+    let id = hit_test_native_view(window_state, position_in_window)?;
+    let (container, view) = {
+        let lock = window_state.try_lock()?;
+        let attached = lock.native_views.shown(id)?;
+        (attached.container.clone(), attached.view.clone())
+    };
+    let superview = unsafe { container.superview() }?;
+    let point = superview.convertPoint_fromView(position_in_window, None);
+    let hit = hit_test_container(&container, &view, point);
+    let hit = unsafe { Retained::retain(hit.cast::<NSView>()) }?;
+    Some((container, hit))
+}
+
 /// Lets mouse events that GPUI routes to a native view fall through to it.
 extern "C" fn hit_test(this: &AnyObject, _: Sel, point: NSPoint) -> *mut AnyObject {
     // SAFETY: `this` is the live GPUI view, whose state outlives it.
@@ -1171,8 +1390,17 @@ extern "C" fn hit_test(this: &AnyObject, _: Sel, point: NSPoint) -> *mut AnyObje
         {
             let position_in_window: NSPoint =
                 msg_send![superview, convertPoint: point, toView: ptr::null::<AnyObject>()];
-            if hit_test_native_view(&window_state, position_in_window).is_some() {
-                return ptr::null_mut();
+            if let Some(id) = hit_test_native_view(&window_state, position_in_window) {
+                // AppKit would pass the point to the frontmost sibling, which
+                // takes it even where its rounded corners show the view behind.
+                let shown = window_state.try_lock().and_then(|lock| {
+                    lock.native_views
+                        .shown(id)
+                        .map(|attached| (attached.container.clone(), attached.view.clone()))
+                });
+                return shown.map_or(ptr::null_mut(), |(container, view)| {
+                    hit_test_container(&container, &view, point)
+                });
             }
         }
         msg_send![super(this, class!(NSView)), hitTest: point]
@@ -1311,7 +1539,7 @@ pub(super) unsafe fn route_send_event(
 ///
 /// `window` must be a live GPUI window, and the window state must be unlocked,
 /// because hit-testing calls back into the GPUI view.
-unsafe fn native_view_under_press(
+pub(super) unsafe fn native_view_under_press(
     window_state: &Rc<Mutex<MacWindowState>>,
     window: &AnyObject,
     position_in_window: NSPoint,
@@ -1866,28 +2094,33 @@ mod tests {
         // bottom of the content view.
         let gpui_frame = [0., 10., 400., 300.];
         let bounds = scaled(100., 40., 200., 400.);
+        let place = |mask| Placement::new(&native_view(bounds, mask), 2., gpui_frame);
 
-        let unclipped = Placement::new(bounds, scaled(0., 0., 800., 600.), 2., gpui_frame);
+        let unclipped = place(scaled(0., 0., 800., 600.));
         assert_eq!(
             unclipped,
             Some(Placement {
                 container: [50., 90., 100., 200.],
+                bounds: [100., 200.],
                 view: [0., 0., 100., 200.],
+                alpha: 1.,
             })
         );
 
         // Clipping the top 60 and left 20 pixels shrinks the container, and the
         // view keeps its size and stays where it was in the window.
-        let clipped = Placement::new(bounds, scaled(120., 100., 800., 600.), 2., gpui_frame);
+        let clipped = place(scaled(120., 100., 800., 600.));
         assert_eq!(
             clipped,
             Some(Placement {
                 container: [60., 90., 90., 170.],
+                bounds: [90., 170.],
                 view: [-10., 0., 100., 200.],
+                alpha: 1.,
             })
         );
 
-        let hidden = Placement::new(bounds, scaled(0., 500., 800., 100.), 2., gpui_frame);
+        let hidden = place(scaled(0., 500., 800., 100.));
         assert_eq!(hidden, None);
     }
 
@@ -2059,6 +2292,17 @@ mod tests {
     }
 
     #[test]
+    fn visual_effects_stack_with_glass_and_native_views_in_paint_order() {
+        let effects = vec![(2, "sidebar material"), (5, "hud")];
+        let glass = vec![(1, "tile"), (4, "popover")];
+        let native = vec![(3, "page")];
+        assert_eq!(
+            merge_by_order(merge_units(effects, glass), native),
+            ["tile", "sidebar material", "page", "popover", "hud"]
+        );
+    }
+
+    #[test]
     fn glass_and_native_views_stack_in_paint_order() {
         let glass = vec![(1, "sidebar tile"), (4, "popover"), (6, "peek")];
         let native = vec![(1, "page"), (4, "devtools"), (5, "pip")];
@@ -2069,11 +2313,81 @@ mod tests {
         assert_eq!(merge_by_order(Vec::<(u32, u8)>::new(), vec![(2, 7)]), [7]);
     }
 
+    fn glass_and_material_scene(material_x: f32) -> Scene {
+        let rect = |x: f32| Bounds {
+            origin: point(ScaledPixels(x), ScaledPixels(40.)),
+            size: size(ScaledPixels(100.), ScaledPixels(60.)),
+        };
+        let window = Bounds {
+            origin: point(ScaledPixels(0.), ScaledPixels(0.)),
+            size: size(ScaledPixels(800.), ScaledPixels(600.)),
+        };
+        let glass = |id, order, x| gpui::LiquidGlassRegion {
+            id,
+            order,
+            bounds: rect(x),
+            content_mask: window,
+            corner_radius: ScaledPixels(20.),
+            tint: None,
+            style: gpui::LiquidGlassStyle::Regular,
+            group_id: Some(9),
+            alpha: 1.,
+        };
+        let mut scene = Scene::default();
+        scene.liquid_glass_regions = vec![glass(1, 1, 0.), glass(2, 3, 400.)];
+        scene.visual_effect_regions = vec![gpui::VisualEffectRegion {
+            id: 1,
+            order: 2,
+            bounds: rect(material_x),
+            content_mask: window,
+            corner_radii: gpui::Corners::default(),
+            material: gpui::VisualEffectMaterial::HudWindow,
+            blending: gpui::VisualEffectBlending::WithinWindow,
+            state: gpui::VisualEffectState::Active,
+            emphasized: false,
+        }];
+        scene
+    }
+
+    fn stack_glass_over_material(scene: &Scene) -> Vec<&'static str> {
+        let layout = GlassLayout::with_groups(
+            &scene.liquid_glass_regions,
+            glass_occluders(scene),
+            2.,
+            [0., 0., 800., 600.],
+            None,
+            true,
+        );
+        let glass = layout.units(&["glass a", "glass b"], &["first group", "second group"]);
+        merge_by_order(merge_units(vec![(2, "material")], glass), Vec::new())
+    }
+
+    #[test]
+    fn a_material_painted_over_grouped_glass_splits_the_group_beneath_it() {
+        let scene = glass_and_material_scene(0.);
+        assert_eq!(
+            stack_glass_over_material(&scene),
+            ["first group", "material", "second group"]
+        );
+    }
+
+    #[test]
+    fn a_material_painted_between_grouped_glass_without_overlapping_it_keeps_the_group_like_a_native_view()
+     {
+        let scene = glass_and_material_scene(200.);
+        assert_eq!(
+            stack_glass_over_material(&scene),
+            ["material", "first group"]
+        );
+    }
+
     #[test]
     fn corner_shape_rounds_whole_views_and_masks_clipped_ones() {
         let whole = Placement {
             container: [50., 90., 100., 200.],
+            bounds: [100., 200.],
             view: [0., 0., 100., 200.],
+            alpha: 1.,
         };
         assert_eq!(
             CornerShape::new(&whole, [10.; 4]),
@@ -2100,7 +2414,9 @@ mod tests {
 
         let clipped = Placement {
             container: [60., 90., 90., 170.],
+            bounds: [90., 170.],
             view: [-10., 0., 100., 200.],
+            alpha: 1.,
         };
         assert_eq!(
             CornerShape::new(&clipped, [10., 10., 0., 0.]),
@@ -2122,6 +2438,70 @@ mod tests {
     }
 
     #[test]
+    fn a_press_gpui_routes_beneath_a_rounded_view_reaches_the_view_beneath() {
+        unsafe {
+            let make = |x: f64, y: f64, size: f64| -> (Retained<NSView>, Retained<NSView>) {
+                let container: Retained<NSView> = msg_send![container_class(), new];
+                let frame = NSRect::new(NSPoint::new(x, y), NSSize::new(size, size));
+                let _: () = msg_send![&*container, setFrame: frame];
+                let inner: Retained<NSView> = msg_send![class!(NSView), new];
+                let bounds = NSRect::new(NSPoint::new(0., 0.), NSSize::new(size, size));
+                let _: () = msg_send![&*inner, setFrame: bounds];
+                container.addSubview(&inner);
+                (container, inner)
+            };
+            let renderer: Retained<NSView> = msg_send![class!(NSView), new];
+            let content: Retained<NSView> = msg_send![class!(NSView), new];
+            let frame = NSRect::new(NSPoint::new(0., 0.), NSSize::new(200., 200.));
+            let _: () = msg_send![&*content, setFrame: frame];
+            let (lower, lower_inner) = make(0., 0., 100.);
+            let (upper, upper_inner) = make(60., 60., 40.);
+            CornerShape::new(
+                &Placement {
+                    container: [60., 60., 40., 40.],
+                    bounds: [40., 40.],
+                    view: [0., 0., 40., 40.],
+                    alpha: 1.,
+                },
+                [20.; 4],
+            )
+            .apply(&upper);
+            let whole = NSRect::new(NSPoint::new(0., 0.), NSSize::new(100., 100.));
+            let _: () = msg_send![&*renderer, setFrame: whole];
+            lower_inner.addSubview(&renderer);
+            content.addSubview(&lower);
+            content.addSubview(&upper);
+            let corner = NSPoint::new(61., 99.);
+            let appkit: *mut AnyObject = msg_send![&*content, hitTest: corner];
+            assert_eq!(
+                appkit,
+                Retained::as_ptr(&upper_inner) as *mut AnyObject,
+                "AppKit ignores the rounded mask"
+            );
+            let renderer_view = Retained::as_ptr(&renderer) as *mut AnyObject;
+            assert_eq!(
+                hit_test_container(&lower, &lower_inner, corner),
+                renderer_view
+            );
+            let mut missed = 0;
+            for edge in [
+                NSPoint::new(100., 99.),
+                NSPoint::new(40., 100.),
+                NSPoint::new(40., 0.),
+            ] {
+                let lower_edge: *mut AnyObject = msg_send![&*lower, hitTest: edge];
+                missed += usize::from(lower_edge.is_null());
+                assert_eq!(
+                    hit_test_container(&lower, &lower_inner, edge),
+                    renderer_view,
+                    "a press on the edge reaches the interactive view inside"
+                );
+            }
+            assert!(missed >= 2, "AppKit leaves out the far edges");
+        }
+    }
+
+    #[test]
     fn rounded_corners_are_left_out_of_hit_testing() {
         let size = [100., 200.];
         let radii = [4., 24., 0., 400.];
@@ -2136,6 +2516,373 @@ mod tests {
         assert!(!rounded_rect_contains(size, radii, [-1., 100.]));
         assert!(!rounded_rect_contains(size, radii, [50., 200.5]));
         assert!(rounded_rect_contains(size, [0.; 4], [0., 0.]));
+    }
+
+    fn native_view(bounds: Bounds<ScaledPixels>, mask: Bounds<ScaledPixels>) -> PaintNativeView {
+        PaintNativeView::new(
+            id(1),
+            gpui::HitboxId::placeholder(),
+            bounds,
+            gpui::ContentMask { bounds: mask },
+            gpui::Hsla::default(),
+        )
+    }
+
+    #[test]
+    fn placement_scales_a_view_through_its_container_at_its_layout_size() {
+        let scaled = |x: f32, y: f32, width: f32, height: f32| Bounds {
+            origin: point(ScaledPixels(x), ScaledPixels(y)),
+            size: size(ScaledPixels(width), ScaledPixels(height)),
+        };
+        // A 100 by 200 point view at twice the scale, shown at half size
+        // about the center of where it is laid out, and faded.
+        let mut half = native_view(scaled(150., 140., 100., 200.), scaled(0., 0., 800., 600.));
+        half.layout_size = size(ScaledPixels(200.), ScaledPixels(400.));
+        half.scale = 0.5;
+        half.opacity = 0.4;
+        let gpui_frame = [0., 10., 400., 300.];
+        assert_eq!(
+            Placement::new(&half, 2., gpui_frame),
+            Some(Placement {
+                container: [75., 140., 50., 100.],
+                bounds: [100., 200.],
+                view: [0., 0., 100., 200.],
+                alpha: f64::from(0.4f32),
+            })
+        );
+
+        // Clipped, the view stays at its layout size and the container's
+        // bounds take in only what shows.
+        half.content_mask.bounds = scaled(0., 0., 800., 240.);
+        assert_eq!(
+            Placement::new(&half, 2., gpui_frame),
+            Some(Placement {
+                container: [75., 190., 50., 50.],
+                bounds: [100., 100.],
+                view: [0., -100., 100., 200.],
+                alpha: f64::from(0.4f32),
+            })
+        );
+    }
+
+    #[test]
+    fn placement_scales_a_view_along_each_axis_through_its_container_bounds() {
+        let scaled = |x: f32, y: f32, width: f32, height: f32| Bounds {
+            origin: point(ScaledPixels(x), ScaledPixels(y)),
+            size: size(ScaledPixels(width), ScaledPixels(height)),
+        };
+        // A 100 point square at twice the scale, shown half as wide and
+        // twice as tall about the center of where it is laid out.
+        let mut stretched = native_view(scaled(150., 0., 100., 400.), scaled(0., 0., 800., 800.));
+        stretched.layout_size = size(ScaledPixels(200.), ScaledPixels(200.));
+        stretched.axis_scale = point(0.5, 2.);
+        let gpui_frame = [0., 0., 400., 400.];
+        assert_eq!(
+            Placement::new(&stretched, 2., gpui_frame),
+            Some(Placement {
+                container: [75., 200., 50., 200.],
+                bounds: [100., 100.],
+                view: [0., 0., 100., 100.],
+                alpha: 1.,
+            })
+        );
+
+        // Along with a uniform scale, the axis scales multiply it.
+        stretched.scale = 0.5;
+        stretched.axis_scale = point(1., 4.);
+        let placement = Placement::new(&stretched, 2., gpui_frame).unwrap();
+        assert_eq!(placement.bounds, [100., 100.]);
+    }
+
+    #[test]
+    fn an_upright_view_from_a_sheared_transform_fills_the_frame_gpui_hits() {
+        let scaled = |x: f32, y: f32, width: f32, height: f32| Bounds {
+            origin: point(ScaledPixels(x), ScaledPixels(y)),
+            size: size(ScaledPixels(width), ScaledPixels(height)),
+        };
+        // What GPUI paints for a 200 by 100 point view centered on (200, 150)
+        // inside `scale_xy(2., 1.)` and then `rotate` by an eighth of a turn:
+        // upright, both axes stretched by the square root of 2.5, at twice
+        // the scale in a 400 by 300 point GPUI view.
+        let scale = 2.5f32.sqrt();
+        let (width, height) = (200. * scale, 100. * scale);
+        let bounds = scaled(
+            2. * (200. - width / 2.),
+            2. * (150. - height / 2.),
+            2. * width,
+            2. * height,
+        );
+        let mut upright = native_view(bounds, scaled(0., 0., 800., 600.));
+        upright.layout_size = size(ScaledPixels(400.), ScaledPixels(200.));
+        upright.scale = scale;
+        let gpui_frame = [0., 0., 400., 300.];
+        let placement = Placement::new(&upright, 2., gpui_frame).unwrap();
+        let near = |actual: [f64; 4], expected: [f64; 4]| {
+            actual
+                .iter()
+                .zip(expected)
+                .all(|(actual, expected)| (actual - expected).abs() < 1e-3)
+        };
+        let (width, height) = (f64::from(width), f64::from(height));
+        let frame = [200. - width / 2., 150. - height / 2., width, height];
+        assert!(near(placement.container, frame), "{placement:?}");
+        assert!(near(
+            [0., 0., placement.bounds[0], placement.bounds[1]],
+            [0., 0., 200., 100.]
+        ));
+        assert!(near(placement.view, [0., 0., 200., 100.]), "{placement:?}");
+
+        unsafe {
+            let content: Retained<NSView> = msg_send![class!(NSView), new];
+            content.setFrame(NSRect::new(NSPoint::new(0., 0.), NSSize::new(400., 300.)));
+            let container: Retained<NSView> = msg_send![container_class(), new];
+            let page: Retained<NSView> = msg_send![class!(NSView), new];
+            container.addSubview(&page);
+            content.addSubview(&container);
+            place(&container, &page, &placement);
+            let corner =
+                |x: f64, y: f64| page.convertPoint_toView(NSPoint::new(x, y), Some(&content));
+            let (low, high) = (corner(0., 0.), corner(200., 100.));
+            assert!(
+                near([low.x, low.y, high.x - low.x, high.y - low.y], frame),
+                "AppKit shows the page across exactly the frame GPUI hits"
+            );
+            let container_frame = container.frame();
+            assert!(near(
+                [
+                    container_frame.origin.x,
+                    container_frame.origin.y,
+                    container_frame.size.width,
+                    container_frame.size.height
+                ],
+                frame
+            ));
+            let layer: *mut AnyObject = msg_send![&*container, layer];
+            if !layer.is_null() {
+                let sublayer_transform: [f64; 16] = {
+                    let transform: CATransform3DProbe = msg_send![layer, sublayerTransform];
+                    transform.0
+                };
+                assert_eq!(sublayer_transform, CATransform3DProbe::IDENTITY.0);
+            }
+        }
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CATransform3DProbe([f64; 16]);
+
+    impl CATransform3DProbe {
+        const IDENTITY: Self = Self([
+            1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.,
+        ]);
+    }
+
+    // SAFETY: The layout matches `CATransform3D`, sixteen `CGFloat`s.
+    unsafe impl objc2::Encode for CATransform3DProbe {
+        const ENCODING: objc2::Encoding =
+            objc2::Encoding::Struct("CATransform3D", &[f64::ENCODING; 16]);
+    }
+
+    fn place(container: &NSView, page: &NSView, placement: &Placement) {
+        let to_rect = |[x, y, width, height]: [f64; 4]| {
+            NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
+        };
+        container.setFrame(to_rect(placement.container));
+        placement.transform_container(container);
+        page.setFrame(to_rect(placement.view));
+    }
+
+    #[test]
+    fn a_transformed_container_scales_and_fades_its_view_and_resets_exactly() {
+        unsafe {
+            let content: Retained<NSView> = msg_send![class!(NSView), new];
+            content.setFrame(NSRect::new(NSPoint::new(0., 0.), NSSize::new(400., 400.)));
+            content.setWantsLayer(true);
+            let container: Retained<NSView> = msg_send![container_class(), new];
+            let page: Retained<NSView> = msg_send![class!(NSView), new];
+            let renderer: Retained<NSView> = msg_send![class!(NSView), new];
+            renderer.setFrame(NSRect::new(NSPoint::new(50., 0.), NSSize::new(50., 50.)));
+            page.addSubview(&renderer);
+            container.addSubview(&page);
+            content.addSubview(&container);
+
+            // A 100 by 50 point page shown twice as wide and half as tall.
+            let animated = Placement {
+                container: [100., 100., 200., 25.],
+                bounds: [100., 50.],
+                view: [0., 0., 100., 50.],
+                alpha: 0.5,
+            };
+            place(&container, &page, &animated);
+            assert_eq!(container.alphaValue(), 0.5);
+            let bounds = container.bounds();
+            assert!(
+                (bounds.size.width - 100.).abs() < 1e-9 && (bounds.size.height - 50.).abs() < 1e-9,
+                "the container's bounds scale the view"
+            );
+            assert_eq!(page.frame().size, NSSize::new(100., 50.));
+            let corner = page.convertPoint_toView(NSPoint::new(100., 50.), Some(&content));
+            assert!((corner.x - 300.).abs() < 1e-9 && (corner.y - 125.).abs() < 1e-9);
+            let renderer_view = Retained::as_ptr(&renderer) as *mut AnyObject;
+            let page_view = Retained::as_ptr(&page) as *mut AnyObject;
+            assert_eq!(
+                hit_test_container(&container, &page, NSPoint::new(250., 110.)),
+                renderer_view,
+                "a press reaches what shows of the scaled page"
+            );
+            assert_eq!(
+                hit_test_container(&container, &page, NSPoint::new(150., 110.)),
+                page_view
+            );
+
+            let identity = Placement {
+                container: [100., 100., 100., 50.],
+                bounds: [100., 50.],
+                view: [0., 0., 100., 50.],
+                alpha: 1.,
+            };
+            place(&container, &page, &identity);
+            assert_eq!(container.alphaValue(), 1.);
+            assert_eq!(
+                container.bounds(),
+                NSRect::new(NSPoint::new(0., 0.), NSSize::new(100., 50.))
+            );
+            assert_eq!(
+                page.convertPoint_toView(NSPoint::new(100., 50.), Some(&content)),
+                NSPoint::new(200., 150.)
+            );
+        }
+    }
+
+    #[test]
+    fn corner_shape_rounds_a_scaled_view_with_it() {
+        let scaled = Placement {
+            container: [50., 90., 50., 100.],
+            bounds: [100., 200.],
+            view: [0., 0., 100., 200.],
+            alpha: 1.,
+        };
+        assert_eq!(
+            CornerShape::new(&scaled, [10.; 4]),
+            CornerShape::Rounded {
+                radius: 10.,
+                corners: 15
+            },
+            "the container's bounds scale its corners with the view"
+        );
+        let clipped = Placement {
+            view: [0., -20., 100., 200.],
+            ..scaled
+        };
+        assert_eq!(
+            CornerShape::new(&clipped, [10.; 4]),
+            CornerShape::Masked {
+                frame: [0., -20., 100., 200.],
+                radius: 10.,
+                corners: 15,
+            }
+        );
+        assert_eq!(CornerShape::new(&clipped, [0.; 4]), CornerShape::Square);
+    }
+
+    #[test]
+    fn a_view_moved_into_a_full_screen_window_is_left_where_it_is_until_it_returns() {
+        let rect = |[x, y, width, height]: [f64; 4]| {
+            NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
+        };
+        let windowed = Placement {
+            container: [100., 100., 400., 300.],
+            bounds: [400., 300.],
+            view: [0., 0., 400., 300.],
+            alpha: 1.,
+        };
+        let resized = Placement {
+            container: [50., 50., 600., 500.],
+            bounds: [600., 500.],
+            view: [0., 0., 600., 500.],
+            alpha: 1.,
+        };
+        unsafe {
+            let content: Retained<NSView> = msg_send![class!(NSView), new];
+            let full_screen: Retained<NSView> = msg_send![class!(NSView), new];
+            let container: Retained<NSView> = msg_send![container_class(), new];
+            let page: Retained<NSView> = msg_send![class!(NSView), new];
+            container.addSubview(&page);
+            content.addSubview(&container);
+            let mut attached = AttachedView {
+                id: id(1),
+                view: page.clone(),
+                container: container.clone(),
+                placement: None,
+                placed_while_away: false,
+                corner_radii: [0.; 4],
+                corners: CornerShape::Square,
+                _gesture_monitor: None,
+            };
+            assert!(attached.needs_placement(Some(windowed)));
+            attached.placed_while_away = !place_view(&page, &container, &windowed);
+            attached.placement = Some(windowed);
+            assert_eq!(page.frame(), rect(windowed.view));
+
+            // WebKit moves the page into its full-screen window and leaves a
+            // placeholder in its place.
+            page.removeFromSuperview();
+            let placeholder: Retained<NSView> = msg_send![class!(NSView), new];
+            container.addSubview(&placeholder);
+            full_screen.addSubview(&page);
+            page.setFrame(rect([0., 0., 1440., 900.]));
+            let views = NativeViews {
+                views: vec![attached],
+                ..NativeViews::default()
+            };
+            assert!(views.shown(id(1)).is_none(), "nothing routes into it");
+            assert!(!views.is_showing_any());
+            let [mut attached] = <[AttachedView; 1]>::try_from(views.views).ok().unwrap();
+
+            assert!(attached.needs_placement(Some(resized)));
+            attached.placed_while_away = !place_view(&page, &container, &resized);
+            attached.placement = Some(resized);
+            assert!(attached.placed_while_away);
+            assert_eq!(page.frame(), rect([0., 0., 1440., 900.]));
+            assert!(
+                page.superview()
+                    .is_some_and(|superview| superview == full_screen)
+            );
+            assert_eq!(container.frame(), rect(resized.container));
+            assert_eq!(placeholder.frame(), rect(resized.view));
+            assert!(!attached.needs_placement(Some(resized)));
+
+            // WebKit puts the page back at the size it had before full screen.
+            placeholder.removeFromSuperview();
+            page.removeFromSuperview();
+            container.addSubview(&page);
+            page.setFrame(rect(windowed.view));
+            assert!(
+                attached.needs_placement(Some(resized)),
+                "the next sync places it again"
+            );
+            attached.placed_while_away = !place_view(&page, &container, &resized);
+            assert!(!attached.placed_while_away);
+            assert_eq!(page.frame(), rect(resized.view));
+
+            // An attachment dropped while the page is away leaves it with WebKit.
+            page.removeFromSuperview();
+            full_screen.addSubview(&page);
+            detach_view(&container, &page);
+            assert!(container.superview().is_none());
+            assert!(
+                page.superview()
+                    .is_some_and(|superview| superview == full_screen)
+            );
+
+            let home: Retained<NSView> = msg_send![class!(NSView), new];
+            let other: Retained<NSView> = msg_send![class!(NSView), new];
+            home.addSubview(&other);
+            content.addSubview(&home);
+            detach_view(&home, &other);
+            assert!(home.superview().is_none() && other.superview().is_none());
+        }
     }
 
     fn focused(view: u64, shown: bool) -> Option<FocusedNativeView> {

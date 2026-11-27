@@ -1,9 +1,10 @@
 use crate::{
-    BackGestureEvent, Bounds, Capslock, Context, Empty, IntoElement, Keystroke, LongPressEvent,
-    Modifiers, Pixels, Point, Render, TouchDragEvent, Window, point, seal::Sealed,
+    AnyDrag, App, AppContext as _, BackGestureEvent, Bounds, Capslock, Context, Empty, IntoElement,
+    Keystroke, LongPressEvent, Modifiers, Pixels, Point, Render, TouchDragEvent, Window, point,
+    seal::Sealed,
 };
 use smallvec::SmallVec;
-use std::{any::Any, fmt::Debug, ops::Deref, path::PathBuf};
+use std::{any::Any, fmt::Debug, ops::Deref, path::PathBuf, sync::Arc, time::Duration};
 
 /// An event from a platform input source.
 pub trait InputEvent: Sealed + 'static {
@@ -535,6 +536,59 @@ pub struct ScrollEvent {
 
     /// The kind of input that produced this scroll.
     pub source: ScrollSource,
+
+    /// The platform's phase of the gesture while fingers are on the device.
+    /// [`ScrollPhase::None`] for wheel notches, momentum and platforms that
+    /// don't report phases.
+    pub gesture_phase: ScrollPhase,
+
+    /// The platform's phase of the momentum scroll that follows a gesture
+    /// after the fingers lift. [`ScrollPhase::None`] while fingers are down,
+    /// for wheel notches and on platforms that don't report momentum.
+    pub momentum_phase: ScrollPhase,
+
+    /// Whether the user's natural-scrolling setting inverted [`Self::delta`]
+    /// relative to the device's physical motion.
+    pub direction_inverted_from_device: bool,
+
+    /// When the platform generated this event, measured from an arbitrary
+    /// monotonic origin. Compare it only with timestamps of other input
+    /// events from the same platform. Use it instead of the time an event is
+    /// handled when measuring velocity, because events can arrive in bursts.
+    /// `None` when the platform doesn't report one, and for scrolls GPUI
+    /// synthesizes from touch input.
+    pub timestamp: Option<Duration>,
+}
+
+/// A phase of a platform scroll gesture or of its momentum, as reported by
+/// the platform.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ScrollPhase {
+    /// The event is not part of this kind of phased sequence.
+    #[default]
+    None,
+    /// Fingers touched the device and a gesture may follow.
+    MayBegin,
+    /// The sequence began.
+    Began,
+    /// The sequence continued with a change.
+    Changed,
+    /// The sequence continued without a change.
+    Stationary,
+    /// The sequence ended normally.
+    Ended,
+    /// The system cancelled the sequence.
+    Cancelled,
+}
+
+impl ScrollPhase {
+    /// Whether this event belongs to a sequence that has not finished.
+    pub fn is_active(self) -> bool {
+        matches!(
+            self,
+            Self::MayBegin | Self::Began | Self::Changed | Self::Stationary
+        )
+    }
 }
 
 /// The former name of [`ScrollEvent`].
@@ -603,6 +657,11 @@ pub struct PinchEvent {
 
     /// The phase of the pinch gesture.
     pub phase: TouchPhase,
+
+    /// When the platform generated this event, measured from the same
+    /// monotonic origin as [`ScrollEvent::timestamp`]. `None` when the
+    /// platform doesn't report one.
+    pub timestamp: Option<Duration>,
 }
 
 impl Sealed for PinchEvent {}
@@ -721,12 +780,70 @@ impl ExternalPaths {
     }
 }
 
+/// What a drag from outside the window carries when it isn't only files:
+/// web URLs, text, or both, as when a link is dragged out of a browser. Drags
+/// that carry files arrive as [`ExternalPaths`] instead, so elements receive
+/// these with `on_drop::<ExternalItems>`, `drag_over::<ExternalItems>` and
+/// `on_drag_move::<ExternalItems>`.
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
+pub struct ExternalItems {
+    /// Files and directories on disk. Empty for drags GPUI delivers as
+    /// [`ExternalItems`], and kept for platforms that deliver files with URLs.
+    pub paths: Vec<PathBuf>,
+    /// Web URLs, in the order the platform listed them.
+    pub urls: Vec<String>,
+    /// The drag's plain text, if it has any.
+    pub text: Option<String>,
+}
+
+impl ExternalItems {
+    /// The dragged files and directories.
+    pub fn paths(&self) -> &[PathBuf] {
+        &self.paths
+    }
+
+    /// The dragged web URLs.
+    pub fn urls(&self) -> &[String] {
+        &self.urls
+    }
+
+    /// The dragged plain text.
+    pub fn text(&self) -> Option<&str> {
+        self.text.as_deref()
+    }
+
+    /// Whether the drag carries nothing GPUI understands.
+    pub fn is_empty(&self) -> bool {
+        self.paths.is_empty() && self.urls.is_empty() && self.text.is_none()
+    }
+
+    pub(crate) fn into_drag(self, cursor_offset: Point<Pixels>, cx: &mut App) -> AnyDrag {
+        AnyDrag {
+            value: Arc::new(self.clone()),
+            view: cx.new(|_| self).into(),
+            cursor_offset,
+            cursor_style: None,
+            external_payload_source: None,
+        }
+    }
+}
+
+impl Render for ExternalItems {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
+    }
+}
+
 /// Data offered to the platform when an internal drag leaves the window and is
 /// promoted to a native drag session.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ExternalDragPayload {
     /// Real on-disk paths, handed to the platform as an outbound file drag.
     Files(FileDragPaths),
+    /// Plain text, handed to the platform as an outbound text drag (a
+    /// `public.utf8-plain-text` pasteboard item on macOS). Platforms that
+    /// can't drag text out of a window decline it, and the drag stays inside.
+    Text(String),
 }
 
 /// Paths handed to the platform for a native file drag. Directory metadata is
@@ -762,6 +879,15 @@ pub enum FileDropEvent {
         position: Point<Pixels>,
         /// The paths of the files that are being dragged.
         paths: ExternalPaths,
+    },
+    /// A drag from outside the window carrying URLs or text has entered it.
+    /// Drags carrying files send [`FileDropEvent::Entered`] instead; both
+    /// continue with the same `Pending`, `Submit` and `Exited` events.
+    ItemsEntered {
+        /// The position of the mouse relative to the window.
+        position: Point<Pixels>,
+        /// What the drag carries.
+        items: ExternalItems,
     },
     /// The files are being dragged over the window
     Pending {
@@ -900,7 +1026,8 @@ mod test {
 
     use crate::{
         self as gpui, AppContext as _, Context, FocusHandle, InteractiveElement, IntoElement,
-        KeyBinding, Keystroke, Modifiers, ParentElement, Render, TestAppContext, Window, div,
+        KeyBinding, Keystroke, Modifiers, ParentElement, Render, Styled as _, TestAppContext,
+        Window, div,
     };
 
     struct TestView {
@@ -994,5 +1121,151 @@ mod test {
         cx.simulate_modifiers_change(Modifiers::shift());
         cx.simulate_modifiers_change(Modifiers::none());
         assert!(test_view.read_with(cx, |test_view, _| test_view.saw_action));
+    }
+
+    struct DropTarget {
+        drops: std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+        scrolls: std::rc::Rc<std::cell::RefCell<Vec<super::ScrollEvent>>>,
+    }
+
+    impl Render for DropTarget {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let items = self.drops.clone();
+            let paths = self.drops.clone();
+            let scrolls = self.scrolls.clone();
+            div()
+                .id("drop-target")
+                .size_full()
+                .on_drop(move |dropped: &super::ExternalItems, _, _| {
+                    let mut items = items.borrow_mut();
+                    items.extend(dropped.urls().iter().map(|url| format!("url:{url}")));
+                    items.extend(dropped.text().map(|text| format!("text:{text}")));
+                })
+                .on_drop(move |dropped: &super::ExternalPaths, _, _| {
+                    for path in dropped.paths() {
+                        paths.borrow_mut().push(format!("path:{}", path.display()));
+                    }
+                })
+                .on_scroll(move |event, _, _| scrolls.borrow_mut().push(event.clone()))
+        }
+    }
+
+    fn drop_target(
+        cx: &mut TestAppContext,
+    ) -> (
+        std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+        std::rc::Rc<std::cell::RefCell<Vec<super::ScrollEvent>>>,
+        &mut gpui::VisualTestContext,
+    ) {
+        let drops = std::rc::Rc::default();
+        let scrolls = std::rc::Rc::default();
+        let (_, cx) = cx.add_window_view({
+            let drops = std::rc::Rc::clone(&drops);
+            let scrolls = std::rc::Rc::clone(&scrolls);
+            move |_, _| DropTarget { drops, scrolls }
+        });
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+        });
+        (drops, scrolls, cx)
+    }
+
+    fn drop_external(cx: &mut gpui::VisualTestContext, entered: super::FileDropEvent) {
+        let position = crate::point(crate::px(10.), crate::px(10.));
+        cx.simulate_event(entered);
+        cx.simulate_event(super::FileDropEvent::Pending { position });
+        cx.simulate_event(super::FileDropEvent::Submit { position });
+        cx.simulate_event(super::FileDropEvent::Exited);
+    }
+
+    #[gpui::test]
+    fn test_external_items_and_paths_reach_typed_drop_handlers(cx: &mut TestAppContext) {
+        let (drops, _, cx) = drop_target(cx);
+        let position = crate::point(crate::px(10.), crate::px(10.));
+
+        drop_external(
+            cx,
+            super::FileDropEvent::ItemsEntered {
+                position,
+                items: super::ExternalItems {
+                    urls: vec!["https://example.com/".into(), "https://example.org/".into()],
+                    text: Some("Example".into()),
+                    ..Default::default()
+                },
+            },
+        );
+        drop_external(
+            cx,
+            super::FileDropEvent::ItemsEntered {
+                position,
+                items: super::ExternalItems {
+                    text: Some("hello".into()),
+                    ..Default::default()
+                },
+            },
+        );
+        drop_external(
+            cx,
+            super::FileDropEvent::Entered {
+                position,
+                paths: super::ExternalPaths(["/tmp/a.txt".into()].into_iter().collect()),
+            },
+        );
+
+        assert_eq!(
+            *drops.borrow(),
+            [
+                "url:https://example.com/",
+                "url:https://example.org/",
+                "text:Example",
+                "text:hello",
+                "path:/tmp/a.txt",
+            ]
+        );
+        cx.update(|_, cx| assert!(cx.active_drag.is_none()));
+    }
+
+    #[gpui::test]
+    fn test_scroll_momentum_fields_reach_scroll_handlers(cx: &mut TestAppContext) {
+        let (_, scrolls, cx) = drop_target(cx);
+        cx.simulate_event(super::ScrollEvent {
+            position: crate::point(crate::px(10.), crate::px(10.)),
+            delta: super::ScrollDelta::Pixels(crate::point(crate::px(0.), crate::px(-12.))),
+            momentum_phase: super::ScrollPhase::Changed,
+            direction_inverted_from_device: true,
+            ..Default::default()
+        });
+        let scrolls = scrolls.borrow();
+        let [event] = scrolls.as_slice() else {
+            panic!("expected one scroll, got {}", scrolls.len());
+        };
+        assert_eq!(event.gesture_phase, super::ScrollPhase::None);
+        assert_eq!(event.momentum_phase, super::ScrollPhase::Changed);
+        assert!(event.momentum_phase.is_active());
+        assert!(event.direction_inverted_from_device);
+    }
+
+    #[gpui::test]
+    fn test_scroll_timestamp_reaches_scroll_handlers(cx: &mut TestAppContext) {
+        let (_, scrolls, cx) = drop_target(cx);
+        let timestamps = [
+            Some(std::time::Duration::from_micros(5_000_250)),
+            Some(std::time::Duration::from_micros(5_008_500)),
+            None,
+        ];
+        for timestamp in timestamps {
+            cx.simulate_event(super::ScrollEvent {
+                position: crate::point(crate::px(10.), crate::px(10.)),
+                delta: super::ScrollDelta::Pixels(crate::point(crate::px(0.), crate::px(-4.))),
+                timestamp,
+                ..Default::default()
+            });
+        }
+        let received: Vec<_> = scrolls
+            .borrow()
+            .iter()
+            .map(|event| event.timestamp)
+            .collect();
+        assert_eq!(received, timestamps);
     }
 }

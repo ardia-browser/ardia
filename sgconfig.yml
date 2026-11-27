@@ -1,0 +1,7 @@
+ruleDirs:
+  - tools/lint-rules/rules
+utilDirs:
+  - tools/lint-rules/utils
+testConfigs:
+  - testDir: tools/lint-rules/tests
+    snapshotDir: tools/lint-rules/tests/__snapshots__

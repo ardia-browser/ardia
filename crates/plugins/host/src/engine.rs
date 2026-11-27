@@ -45,7 +45,7 @@ unsafe extern "C" fn heap_malloc(opaque: *mut c_void, size: q::size_t) -> *mut c
         heap.exhausted.set(true);
         return block;
     }
-    heap.used.set(heap.used.get() + libc::malloc_usable_size(block));
+    heap.used.set(heap.used.get() + usable_size(block));
     heap.peak.set(heap.peak.get().max(heap.used.get()));
     block
 }
@@ -67,7 +67,7 @@ unsafe extern "C" fn heap_free(opaque: *mut c_void, block: *mut c_void) {
         return;
     }
     let heap = &(*(opaque as *const Governor)).heap;
-    heap.used.set(heap.used.get().saturating_sub(libc::malloc_usable_size(block)));
+    heap.used.set(heap.used.get().saturating_sub(usable_size(block)));
     libc::free(block);
 }
 
@@ -77,7 +77,7 @@ unsafe extern "C" fn heap_realloc(opaque: *mut c_void, block: *mut c_void, size:
         return heap_malloc(opaque, size as q::size_t);
     }
     let heap = &(*(opaque as *const Governor)).heap;
-    let before = libc::malloc_usable_size(block);
+    let before = usable_size(block);
     if heap.limit != 0 && size > before && heap.used.get().saturating_add(size - before) > heap.limit {
         heap.exhausted.set(true);
         return ptr::null_mut();
@@ -91,13 +91,13 @@ unsafe extern "C" fn heap_realloc(opaque: *mut c_void, block: *mut c_void, size:
         }
         return moved;
     }
-    heap.used.set(heap.used.get().saturating_sub(before) + libc::malloc_usable_size(moved));
+    heap.used.set(heap.used.get().saturating_sub(before) + usable_size(moved));
     heap.peak.set(heap.peak.get().max(heap.used.get()));
     moved
 }
 
 unsafe extern "C" fn heap_usable_size(block: *const c_void) -> q::size_t {
-    libc::malloc_usable_size(block as *mut c_void) as q::size_t
+    usable_size(block as *mut c_void) as q::size_t
 }
 
 static MALLOC_FUNCTIONS: q::JSMallocFunctions = q::JSMallocFunctions {
@@ -227,10 +227,31 @@ unsafe extern "C" fn native_atob(ctx: *mut q::JSContext, _this: q::JSValue, argc
     }
 }
 
+#[cfg(target_os = "macos")]
+unsafe fn usable_size(block: *mut c_void) -> usize {
+    unsafe { libc::malloc_size(block.cast_const()) }
+}
+
+#[cfg(not(target_os = "macos"))]
+unsafe fn usable_size(block: *mut c_void) -> usize {
+    unsafe { libc::malloc_usable_size(block) }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn random_bytes(at: *mut c_void, wanted: usize) -> isize {
+    let size = wanted.min(256);
+    if unsafe { libc::getentropy(at, size) } == 0 { size as isize } else { -1 }
+}
+
+#[cfg(not(target_os = "macos"))]
+unsafe fn random_bytes(at: *mut c_void, wanted: usize) -> isize {
+    unsafe { libc::getrandom(at, wanted, 0) }
+}
+
 pub fn random_fill(bytes: &mut [u8]) {
     let mut filled = 0;
     while filled < bytes.len() {
-        let got = unsafe { libc::getrandom(bytes[filled..].as_mut_ptr().cast(), bytes.len() - filled, 0) };
+        let got = unsafe { random_bytes(bytes[filled..].as_mut_ptr().cast(), bytes.len() - filled) };
         if got > 0 {
             filled += got as usize;
         } else if got < 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {

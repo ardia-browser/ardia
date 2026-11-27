@@ -4,8 +4,8 @@ use crate::omnibox::suggest::{PageRow, page_key};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-pub const MAX_ENTRIES: usize = 50_000;
-pub const MAX_VISIT_TIMES: usize = 32;
+pub const MAX_ENTRIES: usize = 100_000;
+pub const MAX_VISIT_TIMES: usize = 50;
 const DAY_MS: i64 = 86_400_000;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn visits_accumulate_per_page_and_keep_recent_times() {
         let mut history = History::default();
-        for i in 0..40 {
+        for i in 0..60 {
             history.record_visit("https://a.example/x#frag", "A", None, NOW - i);
         }
         history.record_visit(
@@ -205,7 +205,7 @@ mod tests {
             NOW + 1,
         );
         let entry = history.get("https://a.example/x").unwrap();
-        assert_eq!(entry.visits, 41);
+        assert_eq!(entry.visits, 61);
         assert_eq!(entry.title, "A");
         assert_eq!(entry.visit_times.len(), MAX_VISIT_TIMES);
         assert_eq!(entry.last_visit, NOW + 1);
@@ -232,10 +232,10 @@ mod tests {
         };
         assert!(fresh.frecency(NOW) > stale.frecency(NOW));
         let mut history = History::from_entries([
-            stale.clone(),
+            stale,
             HistoryEntry {
                 url: "b".into(),
-                ..fresh.clone()
+                ..fresh
             },
         ]);
         assert_eq!(history.top_sites(1, NOW)[0].url, "b");

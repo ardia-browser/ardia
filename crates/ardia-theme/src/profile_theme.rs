@@ -1517,7 +1517,7 @@ mod tests {
                 "an opaque red theme over black is red at {x},{y}"
             );
         }
-        let mut half = treatment.clone();
+        let mut half = treatment;
         half.custom.as_mut().unwrap().opacity = 0.5;
         let out = half.composite(0.5, 0.5, RgbaColor::black(1.0));
         assert!((i32::from(out.to_u8()[0]) - 128).abs() <= 1);
@@ -1615,7 +1615,7 @@ mod tests {
                 x: 0.5,
                 y: 0.5,
             }],
-            ..bright.clone()
+            ..bright
         };
         assert!(deep.readable_dark(true));
         assert!(!deep.readable_dark(false) || deep.luminance(false) < 0.2);
@@ -1692,7 +1692,7 @@ mod tests {
             theme.caret_color(FieldSurface::NtpBarSolid),
             tokens::CARET_DARK
         );
-        let mut odd = theme.clone();
+        let mut odd = theme;
         odd.roles.ntp_bar_solid = RgbaColor::gray(0.97);
         assert_eq!(odd.caret_color(FieldSurface::NtpBarSolid), RgbaColor::BLACK);
         let light = Theme::preset(ThemeFamily::Preset(ProfileColor::Plum), false);

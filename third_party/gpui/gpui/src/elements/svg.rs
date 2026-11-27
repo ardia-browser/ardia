@@ -409,8 +409,12 @@ impl TimedTransformation {
             .to(from.with_rotation(radians(from.rotate.0 + TAU)))
     }
 
-    fn is_animated(&self) -> bool {
+    pub(crate) fn is_animated(&self) -> bool {
         !self.period.is_zero() && self.from != self.to
+    }
+
+    pub(crate) fn start(&self) -> Transformation {
+        self.from
     }
 
     /// Set the transformation at the start of each period.

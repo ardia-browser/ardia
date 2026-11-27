@@ -142,6 +142,18 @@ impl NativeViews {
             .map(|owned| owned.view.focus_handle(cx))
     }
 
+    pub fn holds_focus(&self, window: &Window, cx: &App) -> bool {
+        let Some(owners) = cx.try_global::<NativeOwners>() else {
+            return false;
+        };
+        self.slots.values().any(|pointer| {
+            owners
+                .views
+                .get(pointer)
+                .is_some_and(|owned| owned.view.focus_handle(cx).is_focused(window))
+        })
+    }
+
     pub fn focus(&self, tab: &TabId, window: &mut Window, cx: &mut App) -> bool {
         match self.focus_handle(tab, cx) {
             Some(handle) => {

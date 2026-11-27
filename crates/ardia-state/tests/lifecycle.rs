@@ -5,6 +5,7 @@ use ardia_state::model::{Orientation, PageKind, TabPin};
 use ardia_state::settings::{AfterClosingTab, NewTabPosition, SettingsPatch};
 use ardia_state::splits::SplitSide;
 use ardia_state::windows::WindowKind;
+use ardia_state::{TabId, WindowId};
 use common::{World, check_invariants, reloaded};
 
 #[test]
@@ -30,7 +31,7 @@ fn new_tabs_follow_the_position_setting_and_their_opener() {
     assert_eq!(w.active(&win), b);
     let c1 = w.open_child(&win, &a, "c1.com", true);
     let c2 = w.open_child(&win, &a, "c2.com", true);
-    assert_eq!(w.order(&win)[1..4], [a.clone(), c1.clone(), c2.clone()]);
+    assert_eq!(w.order(&win)[1..4], [a.clone(), c1.clone(), c2]);
     assert_eq!(w.active(&win), b, "background links keep the current tab");
     let front = w.open_child(&win, &a, "front.com", false);
     assert_eq!(
@@ -153,7 +154,7 @@ fn the_last_tab_either_closes_the_window_or_leaves_a_blank_one() {
         tabs: vec![blank],
         last_closes_window: true,
     });
-    assert_eq!(out.closed_windows, vec![win.clone()]);
+    assert_eq!(out.closed_windows, vec![win]);
     assert!(w.state.windows.is_empty());
     assert_eq!(w.state.closed.windows.len(), 1);
     w.act(Action::ReopenClosed { window: None });
@@ -235,13 +236,13 @@ fn closing_a_window_saves_it_and_parks_its_pins_for_the_next_one() {
     let win = w.open();
     let pin = w.open_tab(&win, "pinned.com");
     w.act(Action::SetPin {
-        tab: pin.clone(),
+        tab: pin,
         pin: Some(TabPin::TILE),
     });
     let a = w.open_tab(&win, "a.com");
     let b = w.open_tab(&win, "b.com");
     w.act(Action::CreateGroup {
-        tabs: vec![a.clone(), b.clone()],
+        tabs: vec![a, b],
         name: "Work".into(),
     });
     w.act(Action::CloseWindow {
@@ -266,11 +267,12 @@ fn closing_a_window_saves_it_and_parks_its_pins_for_the_next_one() {
     let adopted = &w.state.tabs[&w.order(&next)[0]];
     assert!(adopted.page.is_asleep());
     assert!(adopted.is_pinned());
-    w.act(Action::ReopenClosed {
-        window: Some(next.clone()),
-    });
+    w.act(Action::ReopenClosed { window: Some(next) });
     let restored = w.state.window_order.last().unwrap().clone();
-    assert_eq!(w.urls(&restored), ["", "https://a.com", "https://b.com"]);
+    assert_eq!(
+        w.urls(&restored),
+        ["https://pinned.com", "", "https://a.com", "https://b.com"]
+    );
     let group = w
         .state
         .groups
@@ -337,7 +339,7 @@ fn splits_hold_two_to_four_panes_and_dissolve_below_two() {
     assert!(w.state.splits.is_empty());
     assert!(matches!(
         w.try_act(Action::SplitTabs {
-            tabs: vec![b.clone()],
+            tabs: vec![b],
             orientation: Orientation::Vertical
         }),
         Err(ActionError::Invalid(_))
@@ -368,13 +370,9 @@ fn groups_gather_tabs_and_come_back_from_recently_closed() {
         tabs: vec![b.clone()],
     });
     assert_eq!(w.state.groups[&group].tab_ids.len(), 3);
-    w.act(Action::RemoveFromGroups {
-        tabs: vec![b.clone()],
-    });
-    assert_eq!(w.state.groups[&group].tab_ids, [a.clone(), c.clone()]);
-    w.act(Action::CloseGroup {
-        group: group.clone(),
-    });
+    w.act(Action::RemoveFromGroups { tabs: vec![b] });
+    assert_eq!(w.state.groups[&group].tab_ids, [a.clone(), c]);
+    w.act(Action::CloseGroup { group });
     assert!(w.state.groups.is_empty());
     assert!(!w.state.tabs.contains_key(&a));
     assert_eq!(w.state.closed.groups.len(), 1);
@@ -435,9 +433,7 @@ fn profiles_switch_per_window_and_deleting_one_moves_windows_away() {
         window: win.clone(),
         profile: work.clone(),
     });
-    w.act(Action::DeleteProfile {
-        profile: work.clone(),
-    });
+    w.act(Action::DeleteProfile { profile: work });
     assert_eq!(w.state.windows[&win].profile_id, default);
     assert!(!w.state.tabs.contains_key(&work_tab));
     assert!(matches!(
@@ -483,12 +479,12 @@ fn clearing_unpinned_tabs_keeps_the_current_and_playing_ones_and_undoes() {
     let win = w.open();
     let pin = w.open_tab(&win, "pinned.com");
     w.act(Action::SetPin {
-        tab: pin.clone(),
+        tab: pin,
         pin: Some(TabPin::Row),
     });
     let music = w.open_tab(&win, "music.com");
     w.act(Action::UpdatePage {
-        tab: music.clone(),
+        tab: music,
         update: PageUpdate {
             audible: Some(true),
             ..PageUpdate::default()
@@ -532,6 +528,37 @@ fn clearing_unpinned_tabs_keeps_the_current_and_playing_ones_and_undoes() {
         Err(ActionError::Invalid(_))
     ));
     check_invariants(&w.state);
+}
+
+#[test]
+fn a_clear_stays_undoable_until_the_window_changes_or_its_entries_go() {
+    let mut w = World::new();
+    let win = w.open();
+    let _a = w.open_tab(&win, "a.com");
+    let _b = w.open_tab(&win, "b.com");
+    let current = w.open_tab(&win, "current.com");
+    w.act(Action::ClearUnpinned {
+        window: win.clone(),
+    });
+    assert!(ardia_state::closed::can_undo_clear(&w.state, &win));
+    w.act(Action::SetPin {
+        tab: current,
+        pin: Some(TabPin::Row),
+    });
+    assert!(
+        !ardia_state::closed::can_undo_clear(&w.state, &win),
+        "pinning a tab after the clear changes the window"
+    );
+    let mut w = World::new();
+    let win = w.open();
+    let _a = w.open_tab(&win, "a.com");
+    let _current = w.open_tab(&win, "current.com");
+    w.act(Action::ClearUnpinned {
+        window: win.clone(),
+    });
+    assert!(ardia_state::closed::can_undo_clear(&w.state, &win));
+    w.act(Action::ClearRecentlyClosed { window: None });
+    assert!(!ardia_state::closed::can_undo_clear(&w.state, &win));
 }
 
 #[test]
@@ -664,7 +691,7 @@ fn incognito_windows_stay_private() {
     assert!(matches!(
         w.try_act(Action::MoveTab {
             tab: tab.clone(),
-            window: main.clone(),
+            window: main,
             index: 0
         }),
         Err(ActionError::Invalid(_))
@@ -761,7 +788,7 @@ fn failed_actions_leave_the_state_untouched() {
             window: ghost_window.clone(),
         },
         Action::NewTab {
-            window: ghost_window.clone(),
+            window: ghost_window,
             tab: NewTab::default(),
         },
         Action::SetZoom {
@@ -773,7 +800,7 @@ fn failed_actions_leave_the_state_untouched() {
             zoom: 9.0,
         },
         Action::SplitTabs {
-            tabs: vec![w.active(&win), ghost.clone()],
+            tabs: vec![w.active(&win), ghost],
             orientation: Orientation::Horizontal,
         },
         Action::SwitchProfile {
@@ -803,7 +830,7 @@ fn reducers_are_deterministic_and_saved_sessions_reload_identically() {
         let a = w.open_tab(&win, "a.com");
         let b = w.open_tab(&win, "b.com");
         w.act(Action::SetPin {
-            tab: a.clone(),
+            tab: a,
             pin: Some(TabPin::TILE),
         });
         w.act(Action::CreateGroup {
@@ -840,21 +867,21 @@ fn closing_a_nested_group_tree_and_reopening_brings_the_tree_back() {
     let d = w.open_tab(&win, "d.com");
     let outer = w
         .act(Action::CreateGroup {
-            tabs: vec![a.clone(), b.clone(), c.clone(), d.clone()],
+            tabs: vec![a, b.clone(), c.clone(), d],
             name: "Outer".into(),
         })
         .group
         .unwrap();
     let inner = w
         .act(Action::CreateGroup {
-            tabs: vec![b.clone(), c.clone()],
+            tabs: vec![b, c],
             name: "Inner".into(),
         })
         .group
         .unwrap();
     assert_eq!(w.state.groups[&inner].parent_id.as_ref(), Some(&outer));
     w.act(Action::UpdateGroup {
-        group: inner.clone(),
+        group: inner,
         patch: ardia_state::actions::GroupPatch {
             collapsed: Some(true),
             ..Default::default()
@@ -902,7 +929,7 @@ fn closing_a_group_that_fills_its_parent_closes_the_parent_too() {
     });
     let inner = w
         .act(Action::CreateGroup {
-            tabs: vec![b.clone(), c.clone()],
+            tabs: vec![b, c],
             name: "Inner".into(),
         })
         .group
@@ -957,7 +984,7 @@ fn deleting_a_profile_forgets_everything_it_closed() {
     });
     let second = w.open_tab(&mixed, "work-two.com");
     w.act(Action::CreateGroup {
-        tabs: vec![second.clone()],
+        tabs: vec![second],
         name: "W".into(),
     });
     w.act(Action::RecordVisit {
@@ -1060,7 +1087,7 @@ fn a_peek_ends_with_its_source_page_but_survives_a_fragment_change() {
         .tab
         .unwrap();
     assert!(w.state.shown_peek(win.as_str()).is_some());
-    w.act(Action::ActivateTab { tab: b.clone() });
+    w.act(Action::ActivateTab { tab: b });
     assert!(
         w.state.shown_peek(win.as_str()).is_none(),
         "a peek shows with its own tab only"
@@ -1164,7 +1191,7 @@ fn a_saved_group_cycle_neither_hangs_nor_survives_loading() {
         .unwrap();
     let two = w
         .act(Action::CreateGroup {
-            tabs: vec![a.clone(), b.clone()],
+            tabs: vec![a, b],
             name: "Two".into(),
         })
         .group
@@ -1187,4 +1214,153 @@ fn a_saved_group_cycle_neither_hangs_nor_survives_loading() {
     let any = looped.state.groups.keys().next().cloned().unwrap();
     looped.act(Action::CloseGroup { group: any });
     check_invariants(&looped.state);
+}
+
+#[test]
+fn only_a_shown_page_holds_its_window_full_screen() {
+    let mut w = World::new();
+    let win = w.open();
+    let video = w.open_tab(&win, "video.com");
+    assert!(w.state.fullscreen_tab(win.as_str()).is_none());
+    w.act(Action::UpdatePage {
+        tab: video.clone(),
+        update: PageUpdate {
+            fullscreen: Some(true),
+            ..PageUpdate::default()
+        },
+    });
+    assert_eq!(
+        w.state.fullscreen_tab(win.as_str()).map(|t| t.id.clone()),
+        Some(video.clone())
+    );
+    let other = w.open_tab(&win, "other.com");
+    assert_eq!(w.active(&win), other);
+    assert!(w.state.fullscreen_tab(win.as_str()).is_none());
+    w.act(Action::UpdatePage {
+        tab: video.clone(),
+        update: PageUpdate {
+            fullscreen: Some(false),
+            ..PageUpdate::default()
+        },
+    });
+    assert!(!w.state.tabs[&video].live.fullscreen);
+}
+
+fn world_with_running_top_app(keep: bool) -> (World, WindowId, TabId) {
+    let mut w = World::new();
+    let win = w.open();
+    let app = w.open_tab(&win, "app.com");
+    w.act(Action::SetPin {
+        tab: app.clone(),
+        pin: Some(TabPin::TILE),
+    });
+    w.act(Action::UpdatePage {
+        tab: app.clone(),
+        update: PageUpdate {
+            url: Some("https://app.com/inbox".into()),
+            ..PageUpdate::default()
+        },
+    });
+    w.act(Action::UpdateSettings {
+        patch: SettingsPatch::new().set("keepTopAppsRunning", keep),
+        from_sync: false,
+    });
+    (w, win, app)
+}
+
+fn blank_of(w: &World, win: &WindowId) -> TabId {
+    w.order(win)
+        .into_iter()
+        .find(|t| w.state.tabs[t].url.is_empty())
+        .unwrap()
+}
+
+#[test]
+fn closing_a_tab_never_lands_on_a_kept_top_app() {
+    for keep in [true, false] {
+        let (mut w, win, app) = world_with_running_top_app(keep);
+        let blank = blank_of(&w, &win);
+        let page = w.open_tab(&win, "page.com");
+        w.close(&[&blank]);
+        w.act(Action::ActivateTab { tab: page.clone() });
+        assert!(w.state.tabs[&app].page.has_page());
+        w.close(&[&page]);
+        let active = w.active(&win);
+        if keep {
+            assert_ne!(active, app, "a kept Top App is never the successor");
+            assert_eq!(w.active_url(&win), "", "a fresh card comes forward instead");
+        } else {
+            assert_eq!(active, app);
+        }
+        check_invariants(&w.state);
+    }
+}
+
+#[test]
+fn closing_the_empty_card_beside_kept_top_apps_closes_the_window() {
+    for keep in [true, false] {
+        let (mut w, win, app) = world_with_running_top_app(keep);
+        let blank = blank_of(&w, &win);
+        w.act(Action::ActivateTab { tab: blank.clone() });
+        w.act(Action::CloseTabs {
+            tabs: vec![blank],
+            last_closes_window: true,
+        });
+        assert_eq!(w.state.windows.contains_key(&win), !keep);
+        if !keep {
+            assert_eq!(w.active(&win), app);
+        }
+        check_invariants(&w.state);
+    }
+}
+
+#[test]
+fn closing_a_real_page_beside_kept_top_apps_keeps_the_window() {
+    let (mut w, win, _) = world_with_running_top_app(true);
+    let blank = blank_of(&w, &win);
+    let page = w.open_tab(&win, "page.com");
+    w.close(&[&blank]);
+    w.act(Action::ActivateTab { tab: page.clone() });
+    w.act(Action::CloseTabs {
+        tabs: vec![page],
+        last_closes_window: true,
+    });
+    assert!(w.state.windows.contains_key(&win));
+    assert_eq!(w.active_url(&win), "");
+    check_invariants(&w.state);
+}
+
+#[test]
+fn unloading_a_kept_top_app_closes_its_page_even_with_top_apps_kept() {
+    let (mut w, win, app) = world_with_running_top_app(true);
+    let other = w.open_tab(&win, "other.com");
+    w.act(Action::ActivateTab { tab: other.clone() });
+    assert!(w.state.tabs[&app].page.has_page());
+    let closed = w.state.closed.tabs.len();
+    w.act(Action::UnloadTopApp { tab: app.clone() });
+    assert_eq!(w.state.tabs[&app].page.kind, PageKind::Asleep);
+    assert!(w.state.tabs[&app].is_pinned(), "the tile stays");
+    assert_eq!(w.state.closed.tabs.len(), closed + 1);
+    assert_eq!(w.active(&win), other);
+    check_invariants(&w.state);
+}
+
+#[test]
+fn forgetting_pages_leaves_loaded_tabs_idle_and_others_alone() {
+    let mut w = World::new();
+    let win = w.open();
+    let loaded = w.open_tab(&win, "loaded.com");
+    let asleep = w.open_tab(&win, "asleep.com");
+    let shown = w.open_tab(&win, "shown.com");
+    w.act(Action::SleepTabs {
+        tabs: vec![asleep.clone()],
+    });
+    assert_eq!(w.state.tabs[&loaded].page.kind, PageKind::Loaded);
+    w.act(Action::ForgetPages {
+        tabs: vec![loaded.clone(), asleep.clone()],
+    });
+    assert_eq!(w.state.tabs[&loaded].page.kind, PageKind::Idle);
+    assert_eq!(w.state.tabs[&asleep].page.kind, PageKind::Asleep);
+    assert_eq!(w.active(&win), shown);
+    check_invariants(&w.state);
 }

@@ -1,0 +1,14 @@
+id: weak-upgrade-unwrap
+language: rust
+severity: error
+message: "upgrade() returns None once the entity is gone; unwrapping it panics"
+note: "Use if let Some(entity) = weak.upgrade(), or weak.update(cx, ..) and handle the Err (gpui-troubleshooting: WeakEntity Upgrade Failure)."
+ignores:
+  - third_party/**
+rule:
+  all:
+    - any:
+        - pattern: $W.upgrade().unwrap()
+        - pattern: $W.upgrade().expect($M)
+    - not:
+        matches: in-test-code

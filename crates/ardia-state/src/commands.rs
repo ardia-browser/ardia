@@ -13,6 +13,7 @@ string_enum!(Command {
     FocusCommandBar = "focusCommandBar",
     CloseTab = "closeTab",
     CloseAllTabs = "closeAllTabs",
+    CloseDuplicateTabs = "closeDuplicateTabs",
     Print = "print",
     CopyUrl = "copyUrl",
     CopyUrlAsMarkdown = "copyUrlAsMarkdown",
@@ -92,6 +93,7 @@ string_enum!(Command {
     NewGroupWithTabs = "newGroupWithTabs",
     CleanUpTabs = "cleanUpTabs",
     TidyPins = "tidyPins",
+    SortTabs = "sortTabs",
     SearchTabs = "searchTabs",
     RenameTab = "renameTab",
     ChangeTabIcon = "changeTabIcon",
@@ -125,11 +127,11 @@ string_enum!(Command {
     OpenProfileMenu = "openProfileMenu",
     OpenPeekAsTab = "openPeekAsTab",
     ClosePeek = "closePeek",
-    TogglePictureInPicture = "togglePictureInPicture",
     UndoClearTabs = "undoClearTabs",
     Quit = "std:quit:",
     Hide = "std:hide:",
     HideOthers = "std:hideOtherApplications:",
+    ShowAll = "std:unhideAllApplications:",
     CloseWindow = "std:closeWindow:",
     Undo = "std:undo:",
     Redo = "std:redo:",
@@ -331,6 +333,11 @@ impl CommandSpec {
     }
 }
 
+pub const SORT_TABS: &[Variant] = &[
+    variant("site", "Sort Tabs by Site"),
+    variant("title", "Sort Tabs by Title"),
+];
+
 const APPEARANCE: &[Variant] = &[
     variant("auto", "Automatic")
         .bar("Use System Appearance")
@@ -408,6 +415,9 @@ pub const COMMANDS: &[CommandSpec] = &[
     spec(Command::CloseAllTabs, "Close All Tabs")
         .symbol("xmark.square")
         .keys(&["⇧⌘K"])
+        .window_off(),
+    spec(Command::CloseDuplicateTabs, "Close Duplicate Tabs")
+        .symbol("square.on.square")
         .window_off(),
     spec(Command::Print, "Print…")
         .symbol("printer")
@@ -663,6 +673,10 @@ pub const COMMANDS: &[CommandSpec] = &[
         .keys(&["⌥⌘K"])
         .window_off(),
     spec(Command::TidyPins, "Tidy Pins").symbol("sparkles"),
+    spec(Command::SortTabs, "Sort Tabs")
+        .symbol("arrow.up.arrow.down")
+        .window_off()
+        .variants(SORT_TABS),
     spec(Command::SearchTabs, "Search Tabs…")
         .symbol("magnifyingglass")
         .keys(&["⇧⌘A"])
@@ -727,13 +741,11 @@ pub const COMMANDS: &[CommandSpec] = &[
         .symbol("arrow.up.left.and.arrow.down.right")
         .window_off(),
     spec(Command::ClosePeek, "Close Peek").window_off(),
-    spec(Command::TogglePictureInPicture, "Picture in Picture")
-        .symbol("pip")
-        .page(),
     spec(Command::UndoClearTabs, "Undo Clear").window_off(),
     spec(Command::Quit, "Quit Ardia").keys(&["⌘Q"]),
     spec(Command::Hide, "Hide Ardia").keys(&["⌘H"]),
     spec(Command::HideOthers, "Hide Others").keys(&["⌥⌘H"]),
+    spec(Command::ShowAll, "Show All"),
     spec(Command::CloseWindow, "Close Window").keys(&["⇧⌘W"]),
     spec(Command::Undo, "Undo").keys(&["⌘Z"]),
     spec(Command::Redo, "Redo").keys(&["⇧⌘Z"]),
@@ -773,6 +785,7 @@ pub const DESKTOP_KEYS: &[(&str, &[&str])] = &[
     ("std:toggleFullScreen:", &["F11"]),
     ("std:hide:", &[]),
     ("std:hideOtherApplications:", &[]),
+    ("std:unhideAllApplications:", &[]),
     ("std:performMiniaturize:", &[]),
     ("std:miniaturizeAll:", &[]),
 ];

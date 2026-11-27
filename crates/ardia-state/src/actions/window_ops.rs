@@ -23,6 +23,7 @@ impl Tx<'_> {
             .iter()
             .filter_map(|t| self.s.tabs.get(t))
             .filter(|t| !self.s.in_pinned_container(t.id.as_str()))
+            .filter(|t| !crate::tab_share::shared_elsewhere(self.s, t))
             .cloned()
             .collect();
         let keeps = keeps_last
@@ -107,6 +108,12 @@ impl Tx<'_> {
     }
 
     pub(crate) fn close_window(&mut self, window: &WindowId, keeps_last: bool) {
+        if self.s.windows.contains_key(window) {
+            let back = crate::pin_share::return_shared_pages(self.s, window);
+            self.out.changes.note_settled(self.s, &back);
+            *self.s = back;
+            self.hand_over_tabs(window);
+        }
         let Some(w) = self.s.windows.get(window).cloned() else {
             return;
         };
@@ -225,7 +232,6 @@ impl Tx<'_> {
             .filter_map(|t| self.s.tabs.get(t))
             .filter(|t| t.is_pinned())
             .map(|t| t.profile_id.clone())
-            .collect::<Vec<_>>()
         {
             if others_hold.contains(&profile)
                 || profile.is_incognito()
@@ -483,7 +489,7 @@ impl Tx<'_> {
         let target = match self.s.main_window_for(profile.as_ref()).cloned() {
             Some(target) => target,
             None => {
-                let created = self.open_window(WindowKind::Main, profile.clone(), None, None)?;
+                let created = self.open_window(WindowKind::Main, profile, None, None)?;
                 let blank: Vec<TabId> = self.s.windows[&created]
                     .tab_ids
                     .iter()

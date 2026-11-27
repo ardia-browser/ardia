@@ -9,10 +9,18 @@ use crate::{
     NativeViewId, Path, PathTiles, Pixels, Point, Radians, Rgba, ScaledPixels, Size,
     TimedTransformation, bounds_tree::BoundsTree, point,
 };
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::{
     collections::VecDeque, fmt::Debug, iter::Peekable, ops::Range, rc::Rc, slice, time::Duration,
 };
+
+mod paint_effects;
+mod visual_effect;
+
+pub use paint_effects::{FadeEdge, FadeMask};
+pub(crate) use paint_effects::{FadeRamp, PaintTransform};
+
+pub use visual_effect::*;
 
 #[expect(missing_docs)]
 pub type DrawOrder = u32;
@@ -65,7 +73,10 @@ pub struct Scene {
     pub surfaces: Vec<PaintSurface>,
     pub native_views: Vec<PaintNativeView>,
     pub liquid_glass_regions: Vec<LiquidGlassRegion>,
+    pub visual_effect_regions: Vec<VisualEffectRegion>,
     animations: Vec<SpriteAnimation>,
+    paint_transform: Option<PaintTransform>,
+    fade_ramps: SmallVec<[FadeRamp; 2]>,
 }
 
 #[expect(missing_docs)]
@@ -85,12 +96,90 @@ impl Scene {
         self.surfaces.clear();
         self.native_views.clear();
         self.liquid_glass_regions.clear();
+        self.visual_effect_regions.clear();
         self.animations.clear();
+        self.paint_transform = None;
+        self.fade_ramps.clear();
+    }
+
+    /// The scale applied to what is inserted now.
+    pub(crate) fn paint_transform(&self) -> Option<PaintTransform> {
+        self.paint_transform
+    }
+
+    /// Replaces the scale applied to what is inserted, returning the last.
+    pub(crate) fn set_paint_transform(
+        &mut self,
+        transform: Option<PaintTransform>,
+    ) -> Option<PaintTransform> {
+        std::mem::replace(&mut self.paint_transform, transform)
+    }
+
+    /// What changes the primitives inserted now, which a replayed range of
+    /// a previous scene must have been inserted under too.
+    pub(crate) fn paint_effects(&self) -> (Option<PaintTransform>, SmallVec<[FadeRamp; 2]>) {
+        (self.paint_transform, self.fade_ramps.clone())
+    }
+
+    /// Fades what is inserted until the matching [`Self::pop_fade_ramp`].
+    pub(crate) fn push_fade_ramp(&mut self, ramp: FadeRamp) {
+        self.fade_ramps.push(ramp);
+    }
+
+    pub(crate) fn pop_fade_ramp(&mut self) {
+        self.fade_ramps.pop();
+    }
+
+    /// Calls `insert` with what `primitive` becomes under the active scale
+    /// and fades.
+    fn apply_paint_effects(&self, primitive: Primitive, mut insert: impl FnMut(Primitive)) {
+        let mut transformed = SmallVec::<[Primitive; 2]>::new();
+        match self.paint_transform {
+            Some(transform) => transform.apply(primitive, &mut |piece| transformed.push(piece)),
+            None => transformed.push(primitive),
+        }
+        for primitive in transformed {
+            let steps = FadeRamp::steps(&self.fade_ramps, &primitive);
+            let mut pieces: SmallVec<[Primitive; 1]> = smallvec![primitive];
+            for (ramp, step) in self.fade_ramps.iter().zip(steps) {
+                let mut faded = SmallVec::new();
+                for piece in pieces {
+                    ramp.apply(piece, step, &mut |piece| faded.push(piece));
+                }
+                pieces = faded;
+            }
+            pieces.into_iter().for_each(&mut insert);
+        }
     }
 
     /// Inserts a sprite that [`Self::advance_animations`] keeps moving. The
     /// sprite's color is taken as its color before the animation's alpha.
     pub(crate) fn insert_animated_sprite(
+        &mut self,
+        mut sprite: MonochromeSprite,
+        animation: SpriteAnimation,
+    ) {
+        if self.paint_transform.is_none() && self.fade_ramps.is_empty() {
+            self.insert_animated_sprite_unaffected(sprite, animation);
+            return;
+        }
+        sprite.animation = SpriteAnimationId(self.animations.len() as u32);
+        let animation = match self.paint_transform {
+            Some(transform) => transform.animation(animation),
+            None => animation,
+        };
+        let mut pieces = SmallVec::<[MonochromeSprite; 1]>::new();
+        self.apply_paint_effects(sprite.into(), |piece| {
+            if let Primitive::MonochromeSprite(sprite) = piece {
+                pieces.push(sprite);
+            }
+        });
+        for piece in pieces {
+            self.insert_animated_sprite_unaffected(piece, animation);
+        }
+    }
+
+    fn insert_animated_sprite_unaffected(
         &mut self,
         mut sprite: MonochromeSprite,
         mut animation: SpriteAnimation,
@@ -125,7 +214,11 @@ impl Scene {
                 continue;
             };
             let pose = animation.transformation.at(elapsed);
-            sprite.transformation = pose.into_matrix(animation.center, animation.scale_factor);
+            let matrix = pose.into_matrix(animation.center, animation.scale_factor);
+            sprite.transformation = match animation.paint_matrix {
+                Some(paint_matrix) => paint_matrix.compose(matrix),
+                None => matrix,
+            };
             sprite.color = animation.base_color.opacity(pose.alpha_factor());
         }
     }
@@ -198,6 +291,11 @@ impl Scene {
                     self.insert_layer_part(std::mem::take(&mut part));
                     self.place_liquid_glass(region);
                 }
+                PaintOperation::VisualEffect(region) => {
+                    let region = *region;
+                    self.insert_layer_part(std::mem::take(&mut part));
+                    self.place_visual_effect(region);
+                }
                 PaintOperation::StartLayer | PaintOperation::EndLayer => {}
             }
         }
@@ -226,7 +324,16 @@ impl Scene {
     }
 
     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
-        self.try_insert_primitive(primitive.into());
+        let primitive = primitive.into();
+        if self.paint_transform.is_none() && self.fade_ramps.is_empty() {
+            self.try_insert_primitive(primitive);
+            return;
+        }
+        let mut pieces = SmallVec::<[Primitive; 1]>::new();
+        self.apply_paint_effects(primitive, |piece| pieces.push(piece));
+        for piece in pieces {
+            self.try_insert_primitive(piece);
+        }
     }
 
     pub fn insert_liquid_glass(&mut self, region: LiquidGlassRegion) {
@@ -261,14 +368,8 @@ impl Scene {
         };
         for bounds in liquid_glass_cutouts(region.bounds, region.corner_radius) {
             if bounds.intersects(&region.content_mask) {
-                self.native_views.push(PaintNativeView {
-                    order: region.order,
-                    id: NativeViewId::LIQUID_GLASS,
-                    hitbox_id: HitboxId::NONE,
-                    bounds,
-                    content_mask,
-                    background: Hsla::transparent_black(),
-                });
+                self.native_views
+                    .push(PaintNativeView::cutout(region.order, bounds, content_mask));
             }
         }
         self.liquid_glass_regions.push(region);
@@ -351,14 +452,15 @@ impl Scene {
                         && let Some(animation) =
                             prev_scene.animations.get(sprite.animation.0 as usize)
                     {
-                        self.insert_animated_sprite(*sprite, *animation);
+                        self.insert_animated_sprite_unaffected(*sprite, *animation);
                     } else {
-                        self.insert_primitive(primitive.clone());
+                        self.try_insert_primitive(primitive.clone());
                     }
                 }
                 PaintOperation::StartLayer => self.push_layer(),
                 PaintOperation::EndLayer => self.pop_layer(),
                 PaintOperation::LiquidGlass(region) => self.insert_liquid_glass(*region),
+                PaintOperation::VisualEffect(region) => self.insert_visual_effect(*region),
             }
         }
     }
@@ -384,6 +486,8 @@ impl Scene {
             .sort_by_key(|native_view| native_view.order);
         self.keep_first_painted_native_views();
         self.liquid_glass_regions.sort_by_key(|region| region.order);
+        self.visual_effect_regions
+            .sort_by_key(|region| region.order);
 
         // Sorting moved the sprites, so animations learn where theirs ended up.
         if !self.animations.is_empty() {
@@ -550,6 +654,7 @@ impl PrimitiveKind {
 pub(crate) enum PaintOperation {
     Primitive(Primitive),
     LiquidGlass(LiquidGlassRegion),
+    VisualEffect(VisualEffectRegion),
     StartLayer,
     EndLayer,
 }
@@ -1165,6 +1270,7 @@ pub(crate) struct SpriteAnimation {
     transformation: TimedTransformation,
     center: Point<Pixels>,
     scale_factor: f32,
+    paint_matrix: Option<TransformationMatrix>,
     base_color: Hsla,
     sprite_index: usize,
 }
@@ -1179,6 +1285,7 @@ impl SpriteAnimation {
             transformation,
             center,
             scale_factor,
+            paint_matrix: None,
             base_color: Hsla::default(),
             sprite_index: usize::MAX,
         }
@@ -1250,7 +1357,9 @@ impl From<PaintSurface> for Primitive {
 ///
 /// The view sits beneath the window's rendered content, so the renderer
 /// erases everything painted earlier within these bounds, and everything
-/// painted later covers the view. The view is therefore treated as opaque.
+/// painted later covers the view. The view is therefore treated as opaque,
+/// and a view with an opacity below 1 blends with what is behind the
+/// window's content rather than with what was painted beneath it.
 #[derive(Clone, Copy, Debug)]
 pub struct PaintNativeView {
     /// The view's position among the scene's other primitives.
@@ -1259,13 +1368,79 @@ pub struct PaintNativeView {
     pub id: NativeViewId,
     /// The hitbox that decides whether a mouse position reaches the view.
     pub hitbox_id: HitboxId,
-    /// Where the view is laid out, before clipping.
+    /// Where the view shows, before clipping: its frame once scaled. A view
+    /// is never turned, so this is also its frame on the platform.
     pub bounds: Bounds<ScaledPixels>,
     /// The clip applied to the view.
     pub content_mask: ContentMask<ScaledPixels>,
     /// The color to show where the view has not caught up with these bounds,
     /// or a transparent color for none.
     pub background: Hsla,
+    /// The size the view is laid out at, before `scale`.
+    pub layout_size: Size<ScaledPixels>,
+    /// How much the view is scaled about the center of `bounds`.
+    pub scale: f32,
+    /// How much more the view is scaled horizontally and vertically, on top
+    /// of `scale`.
+    pub axis_scale: Point<f32>,
+    /// How opaque the view is, from 0 to 1.
+    pub opacity: f32,
+}
+
+impl PaintNativeView {
+    /// A view laid out at `bounds`, neither scaled nor faded.
+    pub fn new(
+        id: NativeViewId,
+        hitbox_id: HitboxId,
+        bounds: Bounds<ScaledPixels>,
+        content_mask: ContentMask<ScaledPixels>,
+        background: Hsla,
+    ) -> Self {
+        Self {
+            order: 0,
+            id,
+            hitbox_id,
+            bounds,
+            content_mask,
+            background,
+            layout_size: bounds.size,
+            scale: 1.,
+            axis_scale: Point { x: 1., y: 1. },
+            opacity: 1.,
+        }
+    }
+
+    /// An opaque region erased for a platform layer that is not an attached
+    /// view.
+    pub(crate) fn cutout(
+        order: DrawOrder,
+        bounds: Bounds<ScaledPixels>,
+        content_mask: ContentMask<ScaledPixels>,
+    ) -> Self {
+        Self {
+            order,
+            ..Self::new(
+                NativeViewId::LIQUID_GLASS,
+                HitboxId::NONE,
+                bounds,
+                content_mask,
+                Hsla::transparent_black(),
+            )
+        }
+    }
+
+    /// How much the view is scaled horizontally and vertically, in all.
+    pub fn scales(&self) -> Point<f32> {
+        Point {
+            x: self.scale * self.axis_scale.x,
+            y: self.scale * self.axis_scale.y,
+        }
+    }
+
+    /// Whether the view is shown scaled.
+    pub fn is_transformed(&self) -> bool {
+        self.scale != 1. || self.axis_scale != (Point { x: 1., y: 1. })
+    }
 }
 
 impl From<PaintNativeView> for Primitive {
@@ -1293,6 +1468,8 @@ pub struct LiquidGlassRegion {
     pub tint: Option<Rgba>,
     pub style: LiquidGlassStyle,
     pub group_id: Option<u64>,
+    /// The native glass view's alpha, from 0 to 1. Regions with different alphas never merge.
+    pub alpha: f32,
 }
 
 #[allow(missing_docs)]
@@ -1408,7 +1585,25 @@ impl PaintedPath {
         content_mask: ContentMask<Pixels>,
         color: Background,
     ) -> Self {
-        let content_mask = content_mask.scale(scale_factor);
+        Self::binned(path, scale_factor, content_mask.scale(scale_factor), color)
+    }
+
+    /// Bins `path`, given in device pixels, into tiles, to be filled with
+    /// `color` within `content_mask`.
+    pub(crate) fn in_device_pixels(
+        path: Path,
+        content_mask: ContentMask<ScaledPixels>,
+        color: Background,
+    ) -> Self {
+        Self::binned(path, 1., content_mask, color)
+    }
+
+    fn binned(
+        path: Path,
+        scale_factor: f32,
+        content_mask: ContentMask<ScaledPixels>,
+        color: Background,
+    ) -> Self {
         let mut tiles = path.bin(scale_factor);
         tiles.retain_visible(content_mask.bounds);
         let paint = PathPaint {
@@ -1496,14 +1691,13 @@ mod tests {
         let mut scene = Scene::default();
         scene.push_layer();
         scene.insert_primitive(quad(0.));
-        scene.insert_primitive(PaintNativeView {
-            order: 0,
-            id: NativeViewId::for_test(1),
-            hitbox_id: HitboxId::placeholder(),
-            bounds: square(0.),
-            content_mask: ContentMask { bounds: square(0.) },
-            background: Hsla::default(),
-        });
+        scene.insert_primitive(PaintNativeView::new(
+            NativeViewId::for_test(1),
+            HitboxId::placeholder(),
+            square(0.),
+            ContentMask { bounds: square(0.) },
+            Hsla::default(),
+        ));
         scene.insert_primitive(quad(0.));
         // A quad beside the view shares nothing with it, so it isn't held back.
         scene.insert_primitive(quad(20.));
@@ -1516,13 +1710,14 @@ mod tests {
 
     #[test]
     fn a_native_view_painted_twice_is_kept_where_it_was_painted_first() {
-        let native_view = |hitbox_id: HitboxId, x: f32| PaintNativeView {
-            order: 0,
-            id: NativeViewId::for_test(1),
-            hitbox_id,
-            bounds: square(x),
-            content_mask: ContentMask { bounds: square(x) },
-            background: Hsla::default(),
+        let native_view = |hitbox_id: HitboxId, x: f32| {
+            PaintNativeView::new(
+                NativeViewId::for_test(1),
+                hitbox_id,
+                square(x),
+                ContentMask { bounds: square(x) },
+                Hsla::default(),
+            )
         };
         let first_hitbox = HitboxId::placeholder();
         let second_hitbox = first_hitbox.next();
@@ -1586,18 +1781,18 @@ mod tests {
             tint: None,
             style: LiquidGlassStyle::Regular,
             group_id: None,
+            alpha: 1.,
         }
     }
 
     fn native_view(id: u64, x: f32) -> PaintNativeView {
-        PaintNativeView {
-            order: 0,
-            id: NativeViewId::for_test(id),
-            hitbox_id: HitboxId::placeholder(),
-            bounds: square(x),
-            content_mask: ContentMask { bounds: square(x) },
-            background: Hsla::default(),
-        }
+        PaintNativeView::new(
+            NativeViewId::for_test(id),
+            HitboxId::placeholder(),
+            square(x),
+            ContentMask { bounds: square(x) },
+            Hsla::default(),
+        )
     }
 
     #[test]

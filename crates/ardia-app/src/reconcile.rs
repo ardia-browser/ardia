@@ -26,6 +26,24 @@ fn frame_rect(window: &BrowserWindow, fallback: Rect) -> Rect {
         })
 }
 
+fn little_ardia_frame(saved: [f64; 2]) -> Rect {
+    let [width, height] = saved;
+    let fallback = ardia_theme::layout::LITTLE_ARDIA_DEFAULT_SIZE;
+    let side = |value: f64, default: f32| {
+        if value.is_finite() && value > 0.0 {
+            value
+        } else {
+            f64::from(default)
+        }
+    };
+    Rect::new(
+        0.0,
+        0.0,
+        side(width, fallback[0]),
+        side(height, fallback[1]),
+    )
+}
+
 fn utility_kind(kind: WindowKind) -> Option<UtilityWindowKind> {
     match kind {
         WindowKind::Settings => Some(UtilityWindowKind::Settings),
@@ -59,6 +77,20 @@ pub fn shown_tabs(state: &BrowserState, window: &BrowserWindow) -> Vec<TabId> {
     shown
 }
 
+pub fn hidden_pages(state: &BrowserState, window: &BrowserWindow, shown: &[TabId]) -> Vec<TabId> {
+    window
+        .tab_ids
+        .iter()
+        .filter(|tab| !shown.contains(tab))
+        .filter(|tab| {
+            state.tab(tab.as_str()).is_some_and(|t| {
+                t.window_id == window.id && crate::tab_lifecycle::keeps_hidden_page(t)
+            })
+        })
+        .cloned()
+        .collect()
+}
+
 impl AppCoordinator {
     pub(crate) fn reconcile(&self) {
         let Some(engine) = self.engine() else {
@@ -73,7 +105,19 @@ impl AppCoordinator {
         self.adopt_moved_tabs(&state, &engine);
         self.close_vanished_tabs(&state, &engine);
         self.close_vanished_windows(&state, &engine);
+        if crate::webkit::page::set_fraud_warnings(state.settings.webkit_fraud_warnings) {
+            log::info!(
+                "WebKit fraud warnings are {}",
+                if state.settings.webkit_fraud_warnings {
+                    "on"
+                } else {
+                    "off"
+                }
+            );
+        }
+        self.reconcile_webkit(&self.store().snapshot());
         let state = self.store().snapshot();
+        self.bridge.lock().lifecycle.begin_pass();
         for window in state
             .window_order
             .iter()
@@ -83,7 +127,14 @@ impl AppCoordinator {
                 self.show_window_tabs(&state, window, &engine);
             }
         }
-        self.apply_tab_settings(&self.store().snapshot(), &engine);
+        self.bridge.lock().lifecycle.end_pass();
+        self.release_closed_hidden_pages();
+        let state = self.store().snapshot();
+        self.apply_tab_settings(&state, &engine);
+        self.apply_auto_pip(state.settings.auto_picture_in_picture, &engine);
+        self.apply_video_upscaling(state.settings.video_upscaling, &engine);
+        self.sync_global_hotkey();
+        self.apply_command_scroll_zoom(state.settings.command_scroll_zoom);
     }
 
     fn open_new_windows(&self, state: &BrowserState, engine: &Arc<dyn BrowserEngine>) {
@@ -112,7 +163,12 @@ impl AppCoordinator {
             if failures >= WINDOW_ATTEMPTS {
                 continue;
             }
-            match engine.create_window(frame_rect(window, self.config.default_frame)) {
+            let fallback = if window.kind == WindowKind::LittleArdia {
+                little_ardia_frame(state.settings.little_ardia_size)
+            } else {
+                self.config.default_frame
+            };
+            match engine.create_window(frame_rect(window, fallback)) {
                 Ok(engine_window) => {
                     self.bridge
                         .lock()
@@ -147,7 +203,22 @@ impl AppCoordinator {
         } else {
             None
         };
+        if kind == WindowKind::LittleArdia
+            && let Some(native) = self.hosted_native_window(engine_window)
+        {
+            crate::acted_full_screen::join_full_screen_spaces(native.handle());
+        }
         self.request_gpui_window(window, kind, host);
+    }
+
+    pub(crate) fn hosted_native_window(
+        &self,
+        engine_window: EngineWindowId,
+    ) -> Option<ardia_engine::NativeWindow> {
+        if !self.config.hosts_native_windows {
+            return None;
+        }
+        self.engine()?.native_window_handle(engine_window).ok()
     }
 
     fn request_gpui_window(&self, window: &WindowId, kind: WindowKind, host: Option<HostedWindow>) {
@@ -314,6 +385,14 @@ impl AppCoordinator {
             .collect();
         for tab in &stale {
             bridge.prompts.forget_tab(tab);
+            bridge.site.forget_tab(tab);
+        }
+        let ended = bridge
+            .translate
+            .forget_missing(|tab| state.tab(tab.as_str()).is_some());
+        drop(bridge);
+        if !ended.is_empty() {
+            self.cancel_translations(ended);
         }
     }
 
@@ -355,6 +434,7 @@ impl AppCoordinator {
             {
                 log::warn!("{window}'s engine window didn't close: {problem}");
             }
+            self.forget_hidden_page_shelf(engine_window);
             self.forget_hosted(engine_window);
             self.effect(ShellEffect::CloseWindow { window });
         }
@@ -416,6 +496,9 @@ impl AppCoordinator {
         let wanted = shown_tabs(state, window);
         let mut live: Vec<(TabId, EngineTabId)> = Vec::new();
         for tab in &wanted {
+            if !self.new_tab_page_ready(state, window, tab) {
+                continue;
+            }
             if let Some(engine_tab) =
                 self.materialize(state, tab, &window.id, engine_window, engine)
             {
@@ -435,6 +518,9 @@ impl AppCoordinator {
                             .lock()
                             .engine_active
                             .insert(window.id.clone(), engine_tab);
+                        if let Some(tab) = window.active_tab() {
+                            self.note_front_tab(&window.id, tab);
+                        }
                     }
                     Err(problem) => log::debug!("{} couldn't show its tab: {problem}", window.id),
                 }
@@ -454,8 +540,25 @@ impl AppCoordinator {
             }
         }
         for tab in before.iter().filter(|tab| !shown_now.contains(tab)) {
+            self.note_tab_left_screen(tab);
             if let Some(engine_tab) = self.engine_tab(tab) {
                 let _ = engine.note_shown(engine_tab, false);
+                let _ =
+                    engine.tab_command(engine_tab, ardia_engine::TabCommand::ExitExclusiveAccess);
+            }
+        }
+        for tab in hidden_pages(state, window, &wanted) {
+            if self.engine_tab(&tab).is_some() {
+                continue;
+            }
+            let first = state
+                .tab(tab.as_str())
+                .is_some_and(|listed| self.strip_is_empty(state, &window.id, &listed.profile_id));
+            if let Some(engine_tab) =
+                self.materialize(state, &tab, &window.id, engine_window, engine)
+            {
+                let _ = engine.note_shown(engine_tab, false);
+                self.park_hidden_page(engine_window, engine_tab, first);
             }
         }
     }
@@ -478,19 +581,20 @@ impl AppCoordinator {
             engine.off_the_record_profile(original)
         } else {
             let folder = self.store().snapshot().engine_profile(profile);
-            if folder.is_empty() {
-                match engine.default_profile() {
-                    Ok(id) => {
-                        self.bridge.lock().profiles.insert(profile.clone(), id);
-                        return Some(id);
-                    }
-                    Err(problem) => {
-                        self.profile_failed(profile, &problem);
-                        return None;
-                    }
-                }
+            let wanted = chromium_profile_folder(&folder);
+            let startup = engine.default_profile().ok().filter(|id| {
+                engine.profile_info(*id).is_ok_and(|info| {
+                    std::path::Path::new(&info.path)
+                        .file_name()
+                        .is_some_and(|name| name == wanted.as_str())
+                })
+            });
+            if let Some(id) = startup {
+                self.bridge.lock().profiles.insert(profile.clone(), id);
+                self.content_blocker_profile_loaded(profile, id);
+                return Some(id);
             }
-            engine.load_profile(&folder)
+            engine.load_profile(&wanted)
         };
         self.bridge.lock().profile_waits.insert(profile.clone());
         let me = self.weak();
@@ -529,7 +633,9 @@ impl AppCoordinator {
         match result {
             Ok(id) => {
                 self.bridge.lock().profiles.insert(profile.clone(), id);
+                self.content_blocker_profile_loaded(profile, id);
                 self.mark_dirty();
+                self.note_profile_loaded(profile);
             }
             Err(problem) => self.profile_failed(profile, &problem),
         }
@@ -554,6 +660,15 @@ impl AppCoordinator {
         engine_window: EngineWindowId,
         engine: &Arc<dyn BrowserEngine>,
     ) -> Option<EngineTabId> {
+        if state
+            .tab(tab.as_str())
+            .is_some_and(|t| matches!(t.page.kind, PageKind::Frozen { .. }))
+        {
+            return None;
+        }
+        if self.materialize_webkit(state, tab) {
+            return None;
+        }
         if let Some(known) = self.engine_tab(tab) {
             return Some(known);
         }
@@ -577,11 +692,20 @@ impl AppCoordinator {
             self.restore_through_engine(tab, &key, &listed.profile_id, engine);
             return None;
         }
+        if self.restore_saved_history(listed, engine) {
+            return None;
+        }
         let url = listed
             .live
             .navigation
             .clone()
             .unwrap_or_else(|| listed.url.clone());
+        let internal = ardia_ui::InternalPage::of(&url);
+        let url = if internal.is_some() {
+            String::new()
+        } else {
+            url
+        };
         match engine.open_tab(
             engine_window,
             OpenTab {
@@ -592,7 +716,11 @@ impl AppCoordinator {
         ) {
             Ok(engine_tab) => {
                 self.bind_tab(tab, engine_tab, window);
+                self.note_page_opened(listed);
                 self.tag_for_restore(tab, engine_tab, &listed.profile_id, engine);
+                if let Some(page) = internal {
+                    self.show_internal_page(tab, &page);
+                }
                 Some(engine_tab)
             }
             Err(problem) => {
@@ -649,6 +777,7 @@ impl AppCoordinator {
             .and_then(|value| value.get("state"))
             .and_then(Value::as_str)
             .filter(|text| !text.is_empty());
+        let into_empty_strip = self.strip_is_empty(&state, &listed.window_id, &listed.profile_id);
         let restored = state_text
             .and_then(|text| {
                 engine
@@ -656,7 +785,12 @@ impl AppCoordinator {
                     .ok()
             })
             .flatten();
+        if let Some(engine_tab) = restored {
+            let _ = engine.tab_command(engine_tab, ardia_engine::TabCommand::LoadIfNeeded);
+        }
         let navigation = listed.live.navigation.clone().filter(|url| !url.is_empty());
+        let internal = ardia_ui::InternalPage::of(navigation.as_deref().unwrap_or(&listed.url));
+        let navigation = navigation.filter(|_| internal.is_none());
         let engine_tab = match restored {
             Some(engine_tab) => {
                 if let Some(url) = navigation.as_deref()
@@ -670,7 +804,10 @@ impl AppCoordinator {
                 .open_tab(
                     engine_window,
                     OpenTab {
-                        url: navigation.unwrap_or_else(|| listed.url.clone()),
+                        url: match internal {
+                            Some(_) => String::new(),
+                            None => navigation.unwrap_or_else(|| listed.url.clone()),
+                        },
                         profile,
                         foreground: false,
                     },
@@ -679,7 +816,21 @@ impl AppCoordinator {
         };
         if let Some(engine_tab) = engine_tab {
             self.bind_tab(tab, engine_tab, &listed.window_id);
+            let hidden = state
+                .window(listed.window_id.as_str())
+                .is_none_or(|window| !shown_tabs(&state, window).contains(tab));
+            if hidden {
+                let _ = engine.note_shown(engine_tab, false);
+                self.park_hidden_page(
+                    engine_window,
+                    engine_tab,
+                    into_empty_strip && restored.is_none(),
+                );
+            }
             self.tag_for_restore(tab, engine_tab, &listed.profile_id, &engine);
+            if let Some(page) = internal.as_ref() {
+                self.show_internal_page(tab, page);
+            }
         }
         self.mark_dirty();
     }
@@ -694,6 +845,11 @@ impl AppCoordinator {
         if profile.is_incognito() {
             return;
         }
+        self.bridge
+            .lock()
+            .lifecycle
+            .history_bound
+            .insert(tab.clone());
         let Ok(info) = engine.tab_info(engine_tab) else {
             return;
         };
@@ -725,6 +881,7 @@ impl AppCoordinator {
             bridge.applied.entry(tab.clone()).or_default();
             bridge.pending_tabs.remove(tab);
         }
+        self.note_tab_had_page(tab);
         self.dispatch_quietly(Action::UpdatePage {
             tab: tab.clone(),
             update: PageUpdate {
@@ -744,6 +901,7 @@ impl AppCoordinator {
             bridge.icon_themes.remove(tab);
             bridge.icon_urls.remove(tab);
             bridge.favicon_pages.remove(tab);
+            bridge.readers.remove(tab);
             bridge.devtools_open.remove(tab);
             bridge.pending_tabs.remove(tab);
             for shown in bridge.shown.values_mut() {
@@ -827,8 +985,9 @@ impl AppCoordinator {
                 continue;
             };
             let mut next = applied;
-            if listed.muted != applied.muted && engine.set_muted(engine_tab, listed.muted).is_ok() {
-                next.muted = listed.muted;
+            let silenced = ardia_state::mute::silenced(state, listed);
+            if silenced != applied.muted && engine.set_muted(engine_tab, silenced).is_ok() {
+                next.muted = silenced;
             }
             if (listed.zoom - applied.zoom).abs() > 1e-6
                 && engine.set_zoom(engine_tab, listed.zoom).is_ok()
@@ -849,14 +1008,43 @@ impl AppCoordinator {
                     next.pinned = pinned;
                 }
             }
-            let asleep = listed.page.kind == PageKind::Asleep && !shown.contains(&tab);
+            let asleep = matches!(listed.page.kind, PageKind::Asleep | PageKind::Frozen { .. })
+                && !shown.contains(&tab);
+            let mut stays_asleep = asleep;
             if asleep && !applied.asleep {
-                let _ = engine.discard(engine_tab);
+                if listed.page.kind == PageKind::Asleep {
+                    stays_asleep = self.sleep_when_asked(listed, engine_tab, engine);
+                } else {
+                    let _ = engine.discard(engine_tab);
+                }
             }
-            next.asleep = asleep;
+            next.asleep = stays_asleep;
             if next != applied {
                 self.bridge.lock().applied.insert(tab, next);
             }
         }
+    }
+}
+
+pub fn chromium_profile_folder(engine_profile: &str) -> String {
+    if engine_profile.is_empty() {
+        "Default".to_owned()
+    } else if engine_profile == "Default" || engine_profile.starts_with("Profile ") {
+        engine_profile.to_owned()
+    } else {
+        format!("Profile {engine_profile}")
+    }
+}
+
+#[cfg(test)]
+mod little_frame_tests {
+    use super::*;
+
+    #[test]
+    fn little_ardia_engine_windows_open_at_the_saved_size() {
+        let frame = little_ardia_frame([900.0, 640.0]);
+        assert_eq!((frame.width, frame.height), (900.0, 640.0));
+        let broken = little_ardia_frame([f64::NAN, -4.0]);
+        assert_eq!((broken.width, broken.height), (900.0, 640.0));
     }
 }

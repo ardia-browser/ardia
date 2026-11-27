@@ -134,6 +134,26 @@ fn command_l_preselects_the_url_and_escape_closes_the_panel(cx: &mut TestAppCont
 }
 
 #[gpui::test]
+fn the_menu_bar_command_bar_item_opens_the_panel_with_the_url_selected(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    browser.act(
+        cx,
+        Action::SetPopover {
+            window: browser.window.clone(),
+            popover: Some(ardia_state::windows::Popover::Custom(
+                "command:focusCommandBar".into(),
+            )),
+        },
+    );
+    assert!(browser.view(cx, |view| view.panel().is_open()));
+    let input = browser.view(cx, |view| view.panel().input.clone());
+    let shown = cx.read(|cx| input.read(cx).text().to_owned());
+    assert_eq!(shown, "https://example.com/docs/start");
+    browser.keys(cx, "escape");
+    assert!(!browser.view(cx, |view| view.panel().is_open()));
+}
+
+#[gpui::test]
 fn suggestions_complete_inline_and_navigate_with_the_keyboard(cx: &mut TestAppContext) {
     let browser = Browser::open(cx);
     let profile = browser
@@ -145,7 +165,7 @@ fn suggestions_complete_inline_and_navigate_with_the_keyboard(cx: &mut TestAppCo
     browser.act(
         cx,
         Action::RecordVisit {
-            profile: profile.clone(),
+            profile,
             url: "https://github.com/ardia-browser/ardia".into(),
             title: "Ardia on GitHub".into(),
             favicon: None,
@@ -190,6 +210,134 @@ fn suggestions_complete_inline_and_navigate_with_the_keyboard(cx: &mut TestAppCo
 }
 
 #[gpui::test]
+fn late_rows_wait_while_the_pointer_is_over_the_list(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    let profile = browser
+        .state()
+        .window(browser.window.as_str())
+        .expect("window")
+        .profile_id
+        .clone();
+    browser.act(
+        cx,
+        Action::RecordVisit {
+            profile,
+            url: "https://github.com/ardia-browser/ardia".into(),
+            title: "Ardia on GitHub".into(),
+            favicon: None,
+        },
+    );
+    browser.keys(cx, "cmd-l");
+    browser.typed(cx, "githu");
+    let keys = |view: &crate::window::browser_window::BrowserWindowView| {
+        view.panel()
+            .result
+            .items
+            .iter()
+            .map(|s| s.key())
+            .collect::<Vec<_>>()
+    };
+    let before = browser.view(cx, keys);
+    assert!(!before.is_empty());
+    let late = |handle: &gpui::WindowHandle<_>, cx: &mut TestAppContext, body: &'static str| {
+        handle
+            .update(
+                cx,
+                |view: &mut crate::window::browser_window::BrowserWindowView, _, cx| {
+                    let state = std::sync::Arc::clone(&view.state);
+                    let window = view.window_id.clone();
+                    let (_, _, key) = view
+                        .panel
+                        .remote_request(&state, &window)
+                        .expect("remote suggestions are asked for");
+                    view.panel.take_remote(&key, body, &state, &window, 0, cx);
+                },
+            )
+            .expect("open");
+    };
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.panel_msg(crate::omnibox::PanelMsg::RowsHovered(true), window, cx)
+        })
+        .expect("open");
+    late(
+        &browser.handle,
+        cx,
+        r#"["githu",["github desktop","github copilot"]]"#,
+    );
+    assert_eq!(
+        browser.view(cx, keys),
+        before,
+        "rows hold under the pointer"
+    );
+    assert!(browser.view(cx, |view| view.panel().rows_held()));
+    browser.keys(cx, "down");
+    let released = browser.view(cx, keys);
+    assert_ne!(released, before, "the first arrow shows the waiting rows");
+    assert_eq!(browser.view(cx, |view| view.panel().selected_index()), 0);
+    late(&browser.handle, cx, r#"["githu",["github desktop"]]"#);
+    assert!(
+        !browser.view(cx, |view| view.panel().rows_held()),
+        "released rows stay free while the pointer rests"
+    );
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.panel_msg(crate::omnibox::PanelMsg::RowsHovered(false), window, cx);
+            view.panel_msg(crate::omnibox::PanelMsg::RowsHovered(true), window, cx)
+        })
+        .expect("open");
+    let shown = browser.view(cx, keys);
+    late(
+        &browser.handle,
+        cx,
+        r#"["githu",["github desktop","github copilot","github status"]]"#,
+    );
+    assert_eq!(browser.view(cx, keys), shown);
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.panel_msg(crate::omnibox::PanelMsg::RowsHovered(false), window, cx)
+        })
+        .expect("open");
+    assert_ne!(
+        browser.view(cx, keys),
+        shown,
+        "leaving the list shows the waiting rows"
+    );
+    assert!(!browser.view(cx, |view| view.panel().rows_held()));
+}
+
+#[gpui::test]
+fn the_folder_title_box_starts_where_the_old_measurer_did(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    let first = browser.new_tab(cx, "https://one.example");
+    let second = browser.new_tab(cx, "https://two.example");
+    browser.act(
+        cx,
+        Action::CreateGroup {
+            tabs: vec![first, second],
+            name: "Kyrra".into(),
+        },
+    );
+    browser.redraw(cx);
+    let header = browser.bounds(cx, "group-header").expect("folder header");
+    let title = browser.bounds(cx, "folder-title").expect("folder title");
+    let from_row = f32::from(title.origin.x - header.origin.x);
+    use ardia_theme::layout::sidebar;
+    assert_eq!(
+        from_row,
+        sidebar::ROW_CONTENT_LEFT + sidebar::ROW_FAVICON + sidebar::ROW_TITLE_GAP
+    );
+    assert_eq!(
+        sidebar::ROW_TITLE_GAP + crate::primitives::fade_label::LABEL_CELL_INSET,
+        sidebar::DIA_ROW_TITLE_GAP,
+        "the ink stays where the old label drew it"
+    );
+}
+
+#[gpui::test]
 fn closing_and_reopening_tabs_from_the_keyboard(cx: &mut TestAppContext) {
     let browser = Browser::open(cx);
     browser.new_tab(cx, "https://one.example");
@@ -217,13 +365,24 @@ fn closing_and_reopening_tabs_from_the_keyboard(cx: &mut TestAppContext) {
             .contains("example.com")
     );
     browser.keys(cx, "ctrl-tab");
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.handle(
+                crate::msg::Msg::command(crate::sidebar::tab_switcher::COMMIT_ID),
+                window,
+                cx,
+            )
+        })
+        .expect("open");
+    cx.run_until_parked();
     assert!(
         browser
             .state()
             .active_tab(browser.window.as_str())
             .expect("active")
             .url
-            .contains("one.example")
+            .contains("two.example")
     );
 }
 
@@ -248,6 +407,9 @@ fn command_s_hides_the_sidebar_and_the_edge_peeks_it_back(cx: &mut TestAppContex
         .handle
         .update(cx, |view, window, cx| {
             view.handle(crate::msg::Msg::EdgeHover(true), window, cx);
+            assert!(!view.sidebar_edge.peek.gate.is_out());
+            view.handle(crate::msg::Msg::EdgeHover(false), window, cx);
+            view.handle(crate::msg::Msg::EdgeHover(true), window, cx);
             view.peek.snap(1.0);
         })
         .expect("open");
@@ -266,6 +428,54 @@ fn command_s_hides_the_sidebar_and_the_edge_peeks_it_back(cx: &mut TestAppContex
     );
     browser.keys(cx, "cmd-s");
     assert!(browser.state().sidebar_shown(browser.window.as_str()));
+}
+
+#[gpui::test]
+fn the_sidebar_peek_closes_two_hundred_ms_after_the_pointer_leaves(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    browser.keys(cx, "cmd-s");
+    browser
+        .handle
+        .update(cx, |view, _, _| view.dock.snap(0.0))
+        .expect("open");
+    browser.redraw(cx);
+    let peeking = || {
+        browser
+            .state()
+            .window(browser.window.as_str())
+            .expect("window")
+            .chrome
+            .sidebar_peeking
+    };
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.handle(crate::msg::Msg::EdgeHover(false), window, cx);
+            view.handle(crate::msg::Msg::EdgeHover(true), window, cx);
+            view.handle(crate::msg::Msg::EdgeHover(false), window, cx);
+        })
+        .expect("open");
+    cx.run_until_parked();
+    assert!(peeking());
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(150));
+    cx.run_until_parked();
+    assert!(peeking());
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.handle(crate::msg::Msg::EdgeHover(true), window, cx);
+            view.handle(crate::msg::Msg::EdgeHover(false), window, cx);
+        })
+        .expect("open");
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(150));
+    cx.run_until_parked();
+    assert!(peeking());
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(60));
+    cx.run_until_parked();
+    assert!(!peeking());
 }
 
 #[gpui::test]
@@ -335,6 +545,10 @@ fn clearing_unpinned_tabs_offers_an_undo_toast(cx: &mut TestAppContext) {
     browser.new_tab(cx, "https://two.example");
     browser.new_tab(cx, "https://three.example");
     assert_eq!(browser.tab_count(), 4);
+    let divider = browser.bounds(cx, "clear-divider").expect("the divider");
+    let mut visual = gpui::VisualTestContext::from_window(browser.handle.into(), cx);
+    visual.simulate_mouse_move(divider.center(), None, gpui::Modifiers::none());
+    visual.run_until_parked();
     browser.click(cx, "clear-unpinned");
     assert_eq!(browser.tab_count(), 1);
     let toasts = browser
@@ -345,7 +559,7 @@ fn clearing_unpinned_tabs_offers_an_undo_toast(cx: &mut TestAppContext) {
         .toasts
         .clone();
     assert_eq!(toasts.len(), 1);
-    assert_eq!(toasts[0].message, "Cleared 3 tabs");
+    assert_eq!(toasts[0].message, "Cleared 3 Tabs");
     assert!(browser.bounds(cx, "toasts").is_some());
     browser.keys(cx, "shift-cmd-k");
     assert_eq!(browser.tab_count(), 1, "nothing left to clear");
@@ -412,6 +626,76 @@ fn toasts_expire_on_their_own(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn a_focused_toast_button_keeps_a_two_button_toast_open(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    let now = ardia_state::store::now_ms();
+    let toast = ardia_state::windows::Toast {
+        id: 4242,
+        kind: ardia_state::windows::ToastKind::Info,
+        message: "“Spinner” is using a lot of power".into(),
+        action: Some("busyTab:4242".into()),
+        icon: Some("bolt.fill".into()),
+        created_at: now,
+        expires_at: Some(now + 20_000),
+    };
+    let window = browser.window.clone();
+    let shown = |browser: &Browser| {
+        browser
+            .state()
+            .window(browser.window.as_str())
+            .expect("window")
+            .chrome
+            .toasts
+            .iter()
+            .any(|t| t.id == 4242)
+    };
+    browser
+        .handle
+        .update(cx, |view, window_ref, cx| {
+            window_ref.focus(&view.focus, cx);
+            view.handle(
+                crate::msg::Msg::Store(ardia_state::actions::Action::PushToast {
+                    window: window.clone(),
+                    toast: toast.clone(),
+                }),
+                window_ref,
+                cx,
+            )
+        })
+        .expect("open");
+    cx.run_until_parked();
+    assert!(shown(&browser));
+    browser.keys(cx, "tab");
+    assert_eq!(
+        browser.view(cx, |view| view.ui().toast_hold.focused),
+        Some(4242),
+        "Tab moves focus onto the toast's first button"
+    );
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(30_000));
+    cx.run_until_parked();
+    assert!(shown(&browser), "a focused button holds the toast open");
+    browser.keys(cx, "tab");
+    assert_eq!(
+        browser.view(cx, |view| view.ui().toast_hold.focused),
+        Some(4242)
+    );
+    browser
+        .handle
+        .update(cx, |view, window_ref, cx| window_ref.focus(&view.focus, cx))
+        .expect("open");
+    cx.run_until_parked();
+    let hold = browser.view(cx, |view| view.ui().toast_hold);
+    assert_eq!(hold.focused, None);
+    assert!(hold.restarted.is_some_and(|(id, _)| id == 4242));
+    assert!(shown(&browser), "leaving restarts the full hold");
+    cx.executor()
+        .advance_clock(std::time::Duration::from_millis(30_000));
+    cx.run_until_parked();
+    assert!(!shown(&browser), "the toast closes once nothing holds it");
+}
+
+#[gpui::test]
 fn pins_groups_and_splits_reshape_the_sidebar(cx: &mut TestAppContext) {
     let browser = Browser::open(cx);
     let first = browser.active();
@@ -456,7 +740,7 @@ fn pins_groups_and_splits_reshape_the_sidebar(cx: &mut TestAppContext) {
     browser.act(
         cx,
         Action::SplitTabs {
-            tabs: vec![second.clone(), third.clone()],
+            tabs: vec![second.clone(), third],
             orientation: ardia_state::model::Orientation::Horizontal,
         },
     );
@@ -547,7 +831,15 @@ fn popovers_open_from_the_toolbar_and_the_sidebar(cx: &mut TestAppContext) {
         command: ardia_engine::DownloadCommand::Pause,
     }));
     browser.keys(cx, "escape");
-    assert!(browser.bounds(cx, "downloads-popover").is_none());
+    assert!(
+        browser
+            .state()
+            .window(browser.window.as_str())
+            .expect("window")
+            .chrome
+            .popover
+            .is_none()
+    );
     browser
         .handle
         .update(cx, |view, window, cx| {
@@ -735,7 +1027,8 @@ fn dragging_the_sidebar_edge_resizes_it_within_limits(cx: &mut TestAppContext) {
     browser
         .handle
         .update(cx, |view, window, cx| {
-            view.handle(crate::msg::Msg::SidebarWidth(260.0), window, cx)
+            view.handle(crate::msg::Msg::SidebarWidth(260.0), window, cx);
+            view.handle(crate::msg::Msg::SidebarResized, window, cx)
         })
         .expect("open");
     cx.run_until_parked();
@@ -747,7 +1040,8 @@ fn dragging_the_sidebar_edge_resizes_it_within_limits(cx: &mut TestAppContext) {
     browser
         .handle
         .update(cx, |view, window, cx| {
-            view.handle(crate::msg::Msg::SidebarWidth(20.0), window, cx)
+            view.handle(crate::msg::Msg::SidebarWidth(20.0), window, cx);
+            view.handle(crate::msg::Msg::SidebarResized, window, cx)
         })
         .expect("open");
     cx.run_until_parked();
@@ -781,6 +1075,7 @@ fn the_peek_card_opens_over_the_page_and_closes_with_escape(cx: &mut TestAppCont
         },
     );
     browser.keys(cx, "cmd-o");
+    browser.settle_peek(cx);
     assert!(browser.bounds(cx, "peek-overlay").is_none());
     assert_eq!(browser.tab_count(), before + 1);
     assert!(
@@ -814,8 +1109,8 @@ fn native_page_views_mount_with_the_frame_radius(cx: &mut TestAppContext) {
         Some(gpui::Corners {
             top_left: px(0.),
             top_right: px(0.),
-            bottom_right: px(10.),
-            bottom_left: px(10.),
+            bottom_right: px(8.5),
+            bottom_left: px(8.5),
         })
     );
     assert!(browser.bounds(cx, "web-placeholder").is_none());
@@ -909,7 +1204,7 @@ fn control_arrows_step_through_profiles(cx: &mut TestAppContext) {
         },
     );
     let order = browser.state().profile_order.clone();
-    browser.keys(cx, "ctrl-right");
+    browser.keys(cx, "alt-cmd-right");
     assert_eq!(
         browser
             .state()
@@ -918,7 +1213,7 @@ fn control_arrows_step_through_profiles(cx: &mut TestAppContext) {
             .profile_id,
         order[1]
     );
-    browser.keys(cx, "ctrl-left");
+    browser.keys(cx, "alt-cmd-left");
     assert_eq!(
         browser
             .state()
@@ -952,6 +1247,20 @@ fn a_click_outside_a_popover_closes_it_and_the_popover_itself_stays_clickable(
         "clicking the panel keeps it open"
     );
     browser.click(cx, "sidebar-empty");
+    assert!(
+        browser
+            .state()
+            .window(browser.window.as_str())
+            .is_some_and(|w| w.chrome.popover.is_none())
+    );
+    assert!(
+        browser.bounds(cx, "site-controls").is_some(),
+        "the closed panel stays on screen while it fades out"
+    );
+    std::thread::sleep(
+        crate::primitives::tokens::duration::FAST + std::time::Duration::from_millis(20),
+    );
+    browser.redraw(cx);
     assert!(browser.bounds(cx, "site-controls").is_none());
     assert_eq!(browser.active(), tab);
 }
@@ -1000,6 +1309,23 @@ fn handle_of(raw: usize) -> ardia_engine::NativeViewHandle {
 }
 
 #[gpui::test]
+fn clicks_on_the_page_reach_its_native_view(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    let tab = browser.active();
+    let raw = std::ptr::NonNull::<u16>::dangling().as_ptr() as usize;
+    browser
+        .host
+        .set_native_views(tab, Some(handle_of(raw)), None);
+    browser.redraw(cx);
+    let page = browser.bounds(cx, "page").expect("the page is laid out");
+    assert!(
+        cx.hit_test_native_view(browser.handle.into(), page.center())
+            .is_some(),
+        "a press on the page goes to its web view, not to GPUI"
+    );
+}
+
+#[gpui::test]
 fn a_native_view_moves_between_windows_without_being_torn_out(cx: &mut TestAppContext) {
     let browser = Browser::open(cx);
     let tab = browser.active();
@@ -1043,7 +1369,7 @@ fn a_native_view_moves_between_windows_without_being_torn_out(cx: &mut TestAppCo
         .store()
         .dispatch(Action::MoveTab {
             tab: tab.clone(),
-            window: other.clone(),
+            window: other,
             index: 0,
         })
         .expect("moves");
@@ -1090,7 +1416,7 @@ fn focusing_a_native_pane_makes_it_the_active_tab(cx: &mut TestAppContext) {
             orientation: ardia_state::model::Orientation::Horizontal,
         },
     );
-    browser.act(cx, Action::ActivateTab { tab: left.clone() });
+    browser.act(cx, Action::ActivateTab { tab: left });
     browser.redraw(cx);
     browser
         .handle
@@ -1165,7 +1491,7 @@ fn dropping_a_grouped_tab_elsewhere_lands_where_it_was_dropped(cx: &mut TestAppC
     browser.act(
         cx,
         Action::CreateGroup {
-            tabs: vec![b.clone(), c.clone()],
+            tabs: vec![b, c.clone()],
             name: "Pair".into(),
         },
     );
@@ -1382,4 +1708,62 @@ fn multiline_names_render_on_one_line(cx: &mut TestAppContext) {
     );
     browser.redraw(cx);
     assert!(browser.bounds(cx, "sidebar").is_some());
+}
+
+#[gpui::test]
+fn tidy_tabs_on_the_divider_groups_by_site_and_undoes(cx: &mut TestAppContext) {
+    let browser = Browser::open(cx);
+    for url in [
+        "https://github.com/a",
+        "https://github.com/b",
+        "https://one.example",
+        "https://two.example",
+        "https://three.example",
+        "https://four.example",
+        "https://five.example",
+    ] {
+        browser.new_tab(cx, url);
+    }
+    assert!(browser.bounds(cx, "tidy-tabs").is_none(), "off by default");
+    browser.act(
+        cx,
+        Action::UpdateSettings {
+            patch: ardia_state::settings::SettingsPatch::new().set("tidyTabs", true),
+            from_sync: false,
+        },
+    );
+    let divider = browser.bounds(cx, "clear-divider").expect("the divider");
+    let mut visual = gpui::VisualTestContext::from_window(browser.handle.into(), cx);
+    visual.simulate_mouse_move(divider.center(), None, gpui::Modifiers::none());
+    visual.run_until_parked();
+    browser.click(cx, "tidy-tabs");
+    let state = browser.state();
+    assert_eq!(state.groups.len(), 1);
+    let toasts = state
+        .window(browser.window.as_str())
+        .expect("window")
+        .chrome
+        .toasts
+        .clone();
+    assert_eq!(toasts.len(), 1);
+    assert_eq!(toasts[0].message, "Tidied 2 Tabs into 1 Group");
+    assert!(
+        browser.bounds(cx, "tidy-tabs").is_none(),
+        "nothing left to tidy"
+    );
+    browser
+        .handle
+        .update(cx, |view, window, cx| {
+            view.handle(
+                crate::msg::Msg::ToastAction {
+                    id: toasts[0].id,
+                    command: toasts[0].action.clone().unwrap_or_default().into(),
+                },
+                window,
+                cx,
+            )
+        })
+        .expect("open");
+    cx.run_until_parked();
+    assert!(browser.state().groups.is_empty());
 }

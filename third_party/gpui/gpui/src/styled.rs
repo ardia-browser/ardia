@@ -748,6 +748,38 @@ pub trait Styled: Sized {
         self
     }
 
+    /// Scales how this element and its children are drawn and hit-tested
+    /// about the element's center, without changing layout.
+    ///
+    /// A scale, `scale_xy` or `rotate` set in a hover, drag-over or other
+    /// interaction style only takes effect on an element with an id, which
+    /// keeps that state between frames so the element is drawn and hit-tested
+    /// alike. Without an id, those styles still paint colors.
+    fn scale(mut self, scale: f32) -> Self {
+        self.style().scale = Some(scale);
+        self
+    }
+
+    /// Scales how this element and its children are drawn and hit-tested
+    /// about the element's center by `x` horizontally and `y` vertically,
+    /// without changing layout. Composes with [`Self::scale`], which scales
+    /// both axes on top. See [`crate::Window::with_transform_xy`] for how
+    /// each kind of primitive stretches.
+    fn scale_xy(mut self, x: f32, y: f32) -> Self {
+        self.style().scale_xy = Some((x, y));
+        self
+    }
+
+    /// Turns how this element and its children are drawn clockwise by
+    /// `angle` about the element's center, after any [`Self::scale`] and
+    /// [`Self::scale_xy`], without changing layout. Images, emoji, shadows,
+    /// surfaces and native views don't turn: they stay upright, scaled about
+    /// where their center moves to. See [`crate::Window::with_transform`].
+    fn rotate(mut self, angle: impl Into<crate::Radians>) -> Self {
+        self.style().rotation = Some(angle.into());
+        self
+    }
+
     /// Sets the grid columns of this element.
     fn grid_cols(mut self, cols: u16) -> Self {
         self.style().grid_cols = Some(GridTemplate {

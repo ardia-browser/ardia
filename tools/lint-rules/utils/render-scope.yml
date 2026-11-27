@@ -1,0 +1,21 @@
+id: render-scope
+language: rust
+rule:
+  any:
+    - inside:
+        stopBy: end
+        kind: function_item
+        has:
+          field: name
+          regex: ^(render|render_root|open_(\w+_)?window(_\w+)?)$
+    - inside:
+        stopBy: end
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: field_expression
+            has:
+              field: field
+              regex: ^open_window$

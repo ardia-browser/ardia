@@ -281,8 +281,11 @@ impl Element for Anchored {
             desired.origin.y = limits.origin.y + edges.top;
         }
 
-        let offset = desired.origin - bounds.origin;
-        let offset = point(offset.x.round(), offset.y.round());
+        let scale_factor = window.scale_factor();
+        let origin = desired
+            .origin
+            .map(|coordinate| round_to_device_pixel(coordinate, scale_factor));
+        let offset = origin - bounds.origin;
 
         window.with_element_offset(offset, |window| {
             for child in &mut self.children {
@@ -305,6 +308,17 @@ impl Element for Anchored {
             child.paint(window, cx);
         }
     }
+}
+
+/// Rounds a window coordinate to the nearest device pixel the way Yoga does, so anchored
+/// elements land where the same layout would in React Native.
+///
+/// Ties go up, toward positive infinity, for negative coordinates too: at scale 2, -0.25
+/// lands on 0 rather than -0.5. Like Yoga, a value within 0.0001 device pixels of a tie
+/// counts as one.
+fn round_to_device_pixel(coordinate: Pixels, scale_factor: f32) -> Pixels {
+    const TIE_EPSILON: f32 = 0.0001;
+    px((coordinate.0 * scale_factor + 0.5 + TIE_EPSILON).floor() / scale_factor)
 }
 
 /// Which side of a box `anchor` is on along `axis`. `Less` is left or top, `Equal` is the
@@ -377,8 +391,8 @@ impl AnchoredPositionMode {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Anchor, Bounds, Context, Pixels, PlatformInput, Point, TestAppContext, Window, deferred,
-        div, point, prelude::*, px, size,
+        Anchor, Bounds, Context, Edges, Pixels, PlatformInput, Point, TestAppContext, Window,
+        deferred, div, point, prelude::*, px, size,
     };
 
     struct AnchoredTestView {
@@ -565,6 +579,117 @@ mod tests {
             assert_eq!(
                 menu_bounds.origin, expected_origin,
                 "target: {target:?}, corner: {corner:?}, anchor: {anchor:?}"
+            );
+        }
+    }
+
+    struct PixelRoundingTestView {
+        position: Point<Pixels>,
+        margin: Edges<Pixels>,
+    }
+
+    impl Render for PixelRoundingTestView {
+        fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+            div().size_full().child(
+                deferred(
+                    super::anchored()
+                        .position(self.position)
+                        .snap_to_window_with_margin(self.margin)
+                        .child(
+                            div()
+                                .debug_selector(|| "MENU".into())
+                                .w(px(200.))
+                                .h(px(300.)),
+                        ),
+                )
+                .with_priority(1),
+            )
+        }
+    }
+
+    fn rounded_menu_origin(
+        cx: &mut TestAppContext,
+        scale_factor: f32,
+        position: Point<Pixels>,
+        margin: Edges<Pixels>,
+    ) -> Point<Pixels> {
+        let window = cx.open_window(size(px(800.), px(600.)), |_, _| PixelRoundingTestView {
+            position,
+            margin,
+        });
+        cx.simulate_window_scale_factor_change(window.into(), scale_factor);
+        cx.run_until_parked();
+
+        window
+            .update(cx, |_, window, _| {
+                assert_eq!(window.scale_factor(), scale_factor);
+                window.rendered_frame.debug_bounds.get("MENU").copied()
+            })
+            .unwrap()
+            .expect("MENU debug bounds not found")
+            .origin
+    }
+
+    fn assert_origin_eq(actual: Point<Pixels>, expected: Point<f32>, context: &str) {
+        assert!(
+            (actual.x.0 - expected.x).abs() < 1e-4 && (actual.y.0 - expected.y).abs() < 1e-4,
+            "{context}: expected {expected:?}, got {actual:?}"
+        );
+    }
+
+    #[gpui::test]
+    fn test_anchored_rounds_to_device_pixels(cx: &mut TestAppContext) {
+        for (scale_factor, position, expected) in [
+            // Retina: half points, not whole points.
+            (2., 241.30, 241.5),
+            (2., 241.20, 241.0),
+            (2., 241.75, 242.0),
+            // A tie between two device pixels goes up, like Yoga.
+            (2., 241.25, 241.5),
+            // At scale 1 a device pixel is a whole point, as before.
+            (1., 241.30, 241.0),
+            (1., 241.50, 242.0),
+            (1., 241.70, 242.0),
+            // At scale 3 positions land on thirds.
+            (3., 241.30, 724. / 3.),
+            (3., 241.50, 725. / 3.),
+            (3., 241.10, 723. / 3.),
+        ] {
+            let origin = rounded_menu_origin(
+                cx,
+                scale_factor,
+                point(px(position), px(position)),
+                Edges::default(),
+            );
+            assert_origin_eq(
+                origin,
+                point(expected, expected),
+                &format!("scale {scale_factor}, position {position}"),
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn test_anchored_rounds_negative_ties_up(cx: &mut TestAppContext) {
+        // A negative margin can leave the element left of or above the window. Ties still go
+        // toward positive infinity there, as in Yoga, rather than away from zero.
+        for (scale_factor, margin, expected) in [
+            (2., -0.25, 0.0),
+            (2., -0.30, -0.5),
+            (2., -0.75, -0.5),
+            (1., -0.50, 0.0),
+            (1., -0.60, -1.0),
+        ] {
+            let origin = rounded_menu_origin(
+                cx,
+                scale_factor,
+                point(px(-50.), px(-50.)),
+                Edges::all(px(margin)),
+            );
+            assert_origin_eq(
+                origin,
+                point(expected, expected),
+                &format!("scale {scale_factor}, margin {margin}"),
             );
         }
     }

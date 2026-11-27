@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::desktop::{
     ApiTransport, ArdiaEngineApi, DesktopEngine, DesktopTransport, Done, ServiceTransport, Sink,
+    standalone_api_entry,
 };
 use crate::error::{EngineError, EngineResult};
 use crate::loader::{EngineLibrary, LoaderEnvironment, Platform, describe_attempts};
@@ -62,6 +63,12 @@ impl DesktopTransport for LinuxTransport {
             Self::Services(services) => services.remove_sink(),
         }
     }
+
+    fn abandon_host_calls(&self) {
+        if let Self::Api(api) = self {
+            api.abandon_host_calls();
+        }
+    }
 }
 
 pub type LinuxEngine = DesktopEngine<LinuxTransport>;
@@ -99,8 +106,14 @@ pub unsafe fn from_library(library: &'static EngineLibrary) -> EngineResult<Linu
     if !on_main_thread() {
         return Err(EngineError::WrongThread);
     }
-    if let Some(entry) = library.api_entry() {
-        return unsafe { from_api(entry()) };
+    let entry = standalone_api_entry(library)?;
+    unsafe { from_api(entry()) }
+}
+
+#[allow(clippy::missing_safety_doc)]
+pub unsafe fn from_embedded_services(library: &'static EngineLibrary) -> EngineResult<LinuxEngine> {
+    if !on_main_thread() {
+        return Err(EngineError::WrongThread);
     }
     let missing =
         |what: &str| EngineError::NotLoaded(format!("{} has no {what}", library.path().display()));

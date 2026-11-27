@@ -55,9 +55,26 @@ impl Tx<'_> {
                 cleared = selected;
             }
         }
+        self.close_undoably(window, cleared, true)
+    }
+
+    pub(super) fn close_duplicate_tabs(&mut self, window: &WindowId) -> Result<usize, ActionError> {
+        self.require_window(window)?;
+        let duplicates = crate::duplicate_tabs::duplicate_tab_ids(self.s, window.as_str());
+        self.close_undoably(window, duplicates, false)
+    }
+
+    fn close_undoably(
+        &mut self,
+        window: &WindowId,
+        cleared: Vec<TabId>,
+        refill: bool,
+    ) -> Result<usize, ActionError> {
         if cleared.is_empty() {
             return Ok(0);
         }
+        let w = self.require_window(window)?;
+        let active = w.active_tab().cloned();
         let groups_before: Vec<TabGroup> = self
             .s
             .groups
@@ -75,14 +92,16 @@ impl Tx<'_> {
         let order_before = w.tab_ids.clone();
         let selected = active.filter(|a| cleared.contains(a));
         let entries = self.remove_tabs(&cleared, true);
-        if self.s.windows.get(window).is_some_and(|w| {
-            !w.tab_ids.iter().any(|t| {
-                self.s
-                    .tabs
-                    .get(t)
-                    .is_some_and(|t| t.profile_id == w.profile_id && !t.page.is_asleep())
+        if refill
+            && self.s.windows.get(window).is_some_and(|w| {
+                !w.tab_ids.iter().any(|t| {
+                    self.s
+                        .tabs
+                        .get(t)
+                        .is_some_and(|t| t.profile_id == w.profile_id && !t.page.is_asleep())
+                })
             })
-        }) {
+        {
             let _ = self.new_tab(window, NewTab::default());
         }
         let snapshot = ClearedTabs {
@@ -643,5 +662,17 @@ impl Tx<'_> {
             Some(ClosedEntry::Group(entry)) => self.restore_group(entry, window).map(|_| ()),
             None => Err(ActionError::Invalid("nothing was closed recently")),
         }
+    }
+
+    pub(super) fn clear_recently_closed(&mut self, window: Option<&WindowId>) -> usize {
+        let gone = crate::closed::recently_closed_to_clear(self.s, window);
+        if gone.is_empty() {
+            return 0;
+        }
+        let closed = self.closed_mut();
+        closed.tabs.retain(|c| !gone.contains(&c.id));
+        closed.windows.retain(|c| !gone.contains(&c.id));
+        closed.groups.retain(|c| !gone.contains(&c.id));
+        gone.len()
     }
 }

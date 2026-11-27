@@ -53,6 +53,7 @@ impl Tx<'_> {
                 .preset_themes
                 .as_ref()
                 .and_then(|p| p.get(color.key()).cloned());
+            profile.theme_cleared &= profile.theme.is_none();
             profile.seen_color = Some(profile.color.clone());
             profile.seen_theme = Some(profile.theme.clone());
         }
@@ -63,6 +64,7 @@ impl Tx<'_> {
             profile.icon = icon;
         }
         if let Some(theme) = patch.theme {
+            profile.theme_cleared = theme.is_none();
             profile.theme = theme;
             if let Some(presets) = profile.preset_themes.as_mut() {
                 match &profile.theme {
@@ -78,6 +80,15 @@ impl Tx<'_> {
         }
         if let Some(collapsed) = patch.pinned_collapsed {
             profile.pinned_collapsed = Some(collapsed);
+        }
+        if let Some(share) = patch.share_top_apps {
+            profile.share_top_apps = share;
+        }
+        if let Some(sync_tabs) = patch.sync_tabs {
+            profile.sync_tabs = sync_tabs;
+        }
+        if let Some(manager) = patch.password_manager {
+            profile.password_manager = manager;
         }
         self.out.changes.note(Topics::PROFILES, false);
         push_unique(&mut self.out.changes.profiles, id);
@@ -241,6 +252,39 @@ impl Tx<'_> {
         Ok(())
     }
 
+    pub(super) fn set_site_muted(&mut self, tab: &TabId, muted: bool) -> Result<(), ActionError> {
+        let tab = self.require_tab(tab)?;
+        let host = crate::omnibox::url::host_of(&tab.url);
+        if host.is_empty() {
+            return Ok(());
+        }
+        if tab.is_incognito() {
+            let windows = Arc::clone(&self.s.windows);
+            let mutes = Arc::make_mut(&mut self.s.private_site_mutes);
+            mutes.retain(|window, _| windows.contains_key(window));
+            let own = mutes.entry(tab.window_id.clone()).or_default();
+            if own.get(&host) == Some(&muted) {
+                return Ok(());
+            }
+            own.insert(host, muted);
+            self.note_tab(&tab.id, Topics::TABS, false);
+            return Ok(());
+        }
+        let mut sites: Vec<String> = self
+            .s
+            .settings
+            .muted_sites
+            .iter()
+            .filter(|h| **h != host)
+            .cloned()
+            .collect();
+        if muted {
+            sites.push(host);
+        }
+        self.update_settings(&SettingsPatch::new().set("mutedSites", sites), false);
+        Ok(())
+    }
+
     pub(super) fn update_settings(&mut self, patch: &SettingsPatch, from_sync: bool) {
         let mut settings = (*self.s.settings).clone();
         let mut meta = (*self.s.settings_meta).clone();
@@ -265,6 +309,34 @@ impl Tx<'_> {
                 }
             }
         }
+    }
+
+    pub(super) fn share_profile_data(
+        &mut self,
+        id: &ProfileId,
+        with: &ProfileId,
+    ) -> Result<(), ActionError> {
+        let source = self
+            .s
+            .profiles
+            .get(with)
+            .ok_or_else(|| ActionError::NoProfile(with.to_string()))?;
+        let data_id = source
+            .data_id
+            .clone()
+            .unwrap_or_else(|| source.id.as_str().to_owned());
+        if id == with {
+            return Ok(());
+        }
+        let profiles = Arc::make_mut(&mut self.s.profiles);
+        let profile = profiles
+            .get_mut(id)
+            .map(Arc::make_mut)
+            .ok_or_else(|| ActionError::NoProfile(id.to_string()))?;
+        profile.data_id = Some(data_id);
+        self.out.changes.note(Topics::PROFILES, false);
+        push_unique(&mut self.out.changes.profiles, id);
+        Ok(())
     }
 
     pub(super) fn reorder_profiles(&mut self, order: Vec<ProfileId>) -> Result<(), ActionError> {

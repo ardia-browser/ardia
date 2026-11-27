@@ -1,0 +1,30 @@
+id: unwrap-entity-in-async
+language: rust
+severity: error
+message: "[gpui-async: Not handling weak entity None] the entity or window can close while this task waits; unwrapping its update panics"
+note: "Use ? on the Result (the task ends quietly) or if let Ok(..) = .."
+metadata:
+  source: gpui-async and gpui-troubleshooting SKILL.md (Not handling weak entity None, WeakEntity Upgrade Failure)
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - any:
+        - pattern: $W.update($$$).unwrap()
+        - pattern: $W.update($$$).expect($M)
+        - pattern: $W.update_in($$$).unwrap()
+        - pattern: $W.update_in($$$).expect($M)
+        - pattern: $W.read_with($$$).unwrap()
+        - pattern: $W.read_with($$$).expect($M)
+        - pattern: $W.update_window($$$).unwrap()
+        - pattern: $W.update_window($$$).expect($M)
+    - inside:
+        stopBy: end
+        any:
+          - kind: async_block
+          - kind: closure_expression
+            regex: ^async
+    - not:
+        matches: in-test-code

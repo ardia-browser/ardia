@@ -301,6 +301,23 @@ pub struct Style {
     /// The opacity of this element
     pub opacity: Option<f32>,
 
+    /// How much this element and its children are scaled about the
+    /// element's center when drawn and hit-tested, leaving layout as is.
+    pub scale: Option<f32>,
+
+    /// How much this element and its children are scaled horizontally and
+    /// vertically about the element's center when drawn and hit-tested,
+    /// composed with [`Self::scale`] and leaving layout as is. See
+    /// [`crate::Window::with_transform_xy`] for how each kind of primitive
+    /// stretches.
+    pub scale_xy: Option<(f32, f32)>,
+
+    /// How far this element and its children are turned clockwise about the
+    /// element's center when drawn, composed after [`Self::scale`] and
+    /// leaving layout as is. See [`crate::Window::with_transform`] for what
+    /// can turn and how a turned element is hit-tested.
+    pub rotation: Option<crate::Radians>,
+
     /// The grid columns of this element
     /// Roughly equivalent to the Tailwind `grid-cols-<number>`
     pub grid_cols: Option<GridTemplate>,
@@ -633,6 +650,14 @@ impl Style {
         }
     }
 
+    /// The horizontal and vertical scales this element is drawn at:
+    /// [`Self::scale`] times [`Self::scale_xy`].
+    pub(crate) fn scale_per_axis(&self) -> (f32, f32) {
+        let scale = self.scale.unwrap_or(1.);
+        let (scale_x, scale_y) = self.scale_xy.unwrap_or((1., 1.));
+        (scale * scale_x, scale * scale_y)
+    }
+
     /// Get the content mask for this element style, based on the given bounds.
     /// If the element does not hide its overflow, this will return `None`.
     pub fn overflow_mask(
@@ -809,6 +834,9 @@ impl Default for Style {
             text: TextStyleRefinement::default(),
             mouse_cursor: None,
             opacity: None,
+            scale: None,
+            scale_xy: None,
+            rotation: None,
             grid_rows: None,
             grid_cols: None,
             grid_location: None,

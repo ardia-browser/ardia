@@ -1,0 +1,6 @@
+id: smol-timer
+valid:
+  - "async fn f(cx: &mut TestAppContext) { cx.background_executor.timer(Duration::from_secs(1)).await; }"
+invalid:
+  - "async fn f() { smol::Timer::after(Duration::from_secs(1)).await; }"
+  - "async fn f() { Timer::after(Duration::from_millis(5)).await; }"

@@ -1,0 +1,18 @@
+[package]
+name = "ardia-profile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["enabled"]
+enabled = []
+
+[dependencies]
+serde_json.workspace = true
+log.workspace = true
+parking_lot.workspace = true
+
+[lints]
+workspace = true

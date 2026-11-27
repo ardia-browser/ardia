@@ -1,5 +1,15 @@
+pub mod auto_hide;
+pub mod developer_bar;
+pub mod drag_card;
 pub mod find_bar;
+pub mod load_fill;
+pub mod nav_buttons;
+pub mod pane_drag;
+pub mod peek_motion;
 pub mod peek_overlay;
+pub mod split_empty;
 pub mod split_view;
 pub mod toolbar;
+pub mod toolbar_extensions;
+pub mod toolbar_menus;
 pub mod web_slot;

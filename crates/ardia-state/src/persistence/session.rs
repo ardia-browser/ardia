@@ -13,10 +13,12 @@ use crate::windows::{BrowserWindow, LEGACY_WINDOW_KEYS};
 use indexmap::IndexMap;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
+use std::collections::HashSet;
 
 pub const SESSION: &str = "session.json";
 pub const DAILY_BACKUP: &str = "session-backup-";
 pub const MIGRATION_BACKUP: &str = "session-premigration-";
+const MAX_BACKUP_SEQ: u64 = 9_999_999_999_999_999;
 pub const DAILY_BACKUPS_KEPT: usize = 7;
 pub const MIGRATION_BACKUPS_KEPT: usize = 3;
 pub const BACKUP_EVERY_MS: Millis = 24 * 60 * 60 * 1000;
@@ -234,7 +236,7 @@ pub fn session_from_doc(mut doc: Map<String, Value>, options: LoadOptions) -> (S
         BrowserWindow::row_is_valid,
         &mut dropped,
     );
-    let mut settings_fields = raw_settings.clone();
+    let mut settings_fields = raw_settings;
     if !settings_fields.contains_key("autoHideTabs") && !raw_windows.is_empty() {
         let all_hidden = raw_windows
             .iter()
@@ -263,11 +265,13 @@ pub fn session_from_doc(mut doc: Map<String, Value>, options: LoadOptions) -> (S
                 .and_then(Value::as_str)
                 .is_some_and(crate::ids::is_own_id)
             && row.get("name").is_some_and(Value::is_string);
+        let cleared = row.get("theme").is_some_and(Value::is_null);
         match serde_json::from_value::<Profile>(row)
             .ok()
             .filter(|_| valid)
         {
-            Some(profile) => {
+            Some(mut profile) => {
+                profile.theme_cleared = cleared;
                 profiles.insert(
                     ProfileId::new(&key),
                     profile
@@ -573,14 +577,21 @@ impl SessionFiles {
         self.keep_aside
     }
 
-    fn next_seq(&self, prefix: &str) -> u64 {
-        self.dir
+    fn next_seq(&self, prefix: &str, tried: &HashSet<u64>) -> u64 {
+        let used: HashSet<u64> = self
+            .dir
             .list(prefix)
             .iter()
             .filter_map(|n| backup_seq(prefix, n))
-            .max()
-            .unwrap_or(0)
-            .saturating_add(1)
+            .chain(tried.iter().copied())
+            .collect();
+        let after_newest = used.iter().max().map_or(1, |m| m.saturating_add(1));
+        if after_newest <= MAX_BACKUP_SEQ {
+            return after_newest;
+        }
+        (1..=MAX_BACKUP_SEQ)
+            .find(|seq| !used.contains(seq))
+            .unwrap_or(after_newest)
     }
 
     fn create_backup(
@@ -590,13 +601,14 @@ impl SessionFiles {
         session: &str,
     ) -> Result<String, PersistError> {
         let body = format!("{{\"backupAt\":{at},\"session\":{session}}}");
-        let mut seq = self.next_seq(prefix);
+        let mut tried = HashSet::new();
         for _ in 0..5 {
+            let seq = self.next_seq(prefix, &tried);
             let name = format!("{prefix}{seq}.json");
             if backup_seq(prefix, &name).is_some() && self.dir.create_new(&name, body.as_bytes())? {
                 return Ok(name);
             }
-            seq = seq.saturating_add(1).max(self.next_seq(prefix));
+            tried.insert(seq);
         }
         Err(PersistError::Io(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
@@ -994,6 +1006,65 @@ mod tests {
             names.contains(&"session-backup-18446744073709551615.json".to_owned()),
             "names outside the numbering are never ours to delete"
         );
+    }
+
+    #[test]
+    fn a_backup_at_the_top_of_the_numbering_never_blocks_saves() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = DataDir::new(dir.path());
+        for name in [
+            "session-premigration-9999999999999999.json",
+            "session-premigration-1.json",
+            "session-backup-9999999999999999.json",
+        ] {
+            put_backup(&data_dir, name, NOW - 3 * BACKUP_EVERY_MS, &sample());
+        }
+        let mut files = SessionFiles::new(data_dir.clone(), SESSION.to_owned());
+        files.premigration = Some(sample().to_string());
+        files
+            .save(&whole(&["https://today.example/"]).to_string(), NOW)
+            .unwrap();
+        let migration = data_dir.list(MIGRATION_BACKUP);
+        assert!(
+            migration.contains(&"session-premigration-2.json".to_owned()),
+            "{migration:?}"
+        );
+        assert!(files.premigration.is_none());
+        let daily = data_dir.list(DAILY_BACKUP);
+        assert!(
+            daily.contains(&"session-backup-1.json".to_owned()),
+            "{daily:?}"
+        );
+        files
+            .save(&whole(&["https://again.example/"]).to_string(), NOW + 1)
+            .unwrap();
+    }
+
+    #[test]
+    fn a_name_taken_outside_the_numbering_moves_on_to_the_next_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = DataDir::new(dir.path());
+        data_dir
+            .write_atomic("session-premigration-1.JSON", b"{}")
+            .unwrap();
+        let mut files = SessionFiles::new(data_dir.clone(), SESSION.to_owned());
+        files.premigration = Some(sample().to_string());
+        files
+            .save(&whole(&["https://today.example/"]).to_string(), NOW)
+            .unwrap();
+        assert!(files.premigration.is_none());
+        let written = data_dir
+            .list(MIGRATION_BACKUP)
+            .into_iter()
+            .filter(|n| backup_seq(MIGRATION_BACKUP, n).is_some())
+            .count();
+        assert_eq!(written, 1);
+        let fresh = SessionFiles::new(
+            DataDir::new(tempfile::tempdir().unwrap().path()),
+            SESSION.to_owned(),
+        );
+        let tried: HashSet<u64> = [1, 2].into();
+        assert_eq!(fresh.next_seq(MIGRATION_BACKUP, &tried), 3);
     }
 
     #[test]

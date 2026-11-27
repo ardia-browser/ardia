@@ -1,14 +1,21 @@
 use std::path::{Path, PathBuf};
 
-use ardia_import_core::{BookmarkNode, NodeType};
+use ardia_import_core::BookmarkNode;
 use ardia_state::ProfileId;
 use ardia_state::import::{BookmarkSource, import_bookmarks_bytes, import_chromium_profile};
-use ardia_state::windows::ToastKind;
 use serde_json::{Value, json};
 
-use crate::coordinator::AppCoordinator;
+use ardia_ui::host_data::{
+    HostTopics, ImportBrowser, ImportBrowserProfile, ImportPlan, ImportProgress, ImportStage,
+    StageState,
+};
 
-pub const MAX_IMPORTED_NODES: usize = 50_000;
+use ardia_state::DataDir;
+use ardia_state::bookmarks::BookmarkTree;
+use ardia_state::persistence::documents;
+
+use crate::bookmark_merge::{ImportedFolder, ImportedFolders, import_into_tree};
+use crate::coordinator::AppCoordinator;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ImportSource {
@@ -99,114 +106,433 @@ pub fn read_source(source: &ImportSource) -> Result<BookmarkNode, String> {
     }
 }
 
-fn web_link(url: &str) -> bool {
-    let lower = url.to_ascii_lowercase();
-    ["http://", "https://", "file://", "ftp://"]
-        .iter()
-        .any(|scheme| lower.starts_with(scheme))
+pub const DATA_LABELS: [(&str, &str); 7] = [
+    ("bookmarks", "Bookmarks"),
+    ("history", "History"),
+    ("passwords", "Passwords"),
+    ("cookies", "Cookies"),
+    ("cards", "Payment Cards"),
+    ("tabs", "Tabs"),
+    ("extensions", "Extensions"),
+];
+
+pub const SUPPORTED_KINDS: [&str; 7] = [
+    "tabs",
+    "bookmarks",
+    "history",
+    "passwords",
+    "cookies",
+    "cards",
+    "extensions",
+];
+pub const CHROMIUM_KINDS: [&str; 5] =
+    ["bookmarks", "history", "passwords", "cookies", "extensions"];
+pub const SAFARI_KINDS: [&str; 3] = ["bookmarks", "history", "tabs"];
+
+pub const NOT_YET: &str = "Not available yet";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImportRequest {
+    pub source: String,
+    pub data: Vec<String>,
 }
 
-pub fn bookmark_ops(root: &BookmarkNode, label: &str) -> (Vec<Value>, usize) {
-    fn walk(node: &BookmarkNode, parent: &str, ops: &mut Vec<Value>, links: &mut usize) {
-        for child in node.children.iter().flatten() {
-            if ops.len() >= MAX_IMPORTED_NODES {
-                return;
-            }
-            let id = uuid::Uuid::new_v4().to_string();
-            match child.node_type {
-                NodeType::Folder => {
-                    ops.push(json!({"op": "add", "id": id, "parent": parent, "k": "f", "t": child.title}));
-                    walk(child, &id, ops, links);
-                }
-                NodeType::Url => {
-                    let Some(url) = child.url.as_deref().filter(|url| web_link(url)) else {
-                        continue;
-                    };
-                    ops.push(json!({"op": "add", "id": id, "parent": parent, "u": url, "t": child.title}));
-                    *links += 1;
-                }
-            }
-        }
+pub fn parse_request(request: &str) -> ImportRequest {
+    let whole = || ImportRequest {
+        source: request.to_owned(),
+        data: vec!["bookmarks".to_owned()],
+    };
+    if request.starts_with("chromium:") || request.starts_with("html:") {
+        return whole();
     }
-    let folder = uuid::Uuid::new_v4().to_string();
-    let mut ops = vec![json!({
-        "op": "add",
-        "id": folder,
-        "parent": "other",
-        "k": "f",
-        "t": format!("Imported from {label}"),
-    })];
-    let mut links = 0;
-    walk(root, &folder, &mut ops, &mut links);
-    (ops, links)
+    match request.split_once(':') {
+        Some((source, data)) => ImportRequest {
+            source: source.to_owned(),
+            data: data
+                .split(',')
+                .map(str::trim)
+                .filter(|key| !key.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        },
+        None => whole(),
+    }
+}
+
+pub fn stages_for(request: &ImportRequest) -> Vec<ImportStage> {
+    let mut stages: Vec<ImportStage> = Vec::new();
+    for key in &request.data {
+        if stages.iter().any(|stage| &stage.key == key) {
+            continue;
+        }
+        let label = DATA_LABELS
+            .iter()
+            .find(|(known, _)| known == key)
+            .map_or(key.as_str(), |(_, label)| label);
+        let mut stage = ImportStage::new(key, label);
+        if !SUPPORTED_KINDS.contains(&key.as_str()) {
+            stage.state = StageState::Failed(NOT_YET.to_owned());
+        }
+        stages.push(stage);
+    }
+    stages
+}
+
+fn source_name(source: &str) -> String {
+    browser_folder(source)
+        .map(|(label, _, _)| label.to_owned())
+        .unwrap_or_else(|| {
+            let mut chars = source.chars();
+            chars
+                .next()
+                .map(|first| first.to_uppercase().chain(chars).collect())
+                .unwrap_or_default()
+        })
+}
+
+pub fn plan_for_request(
+    source: &str,
+    profile: ProfileId,
+    home: Option<&Path>,
+) -> Result<ImportPlan, String> {
+    let request = parse_request(source);
+    let name = source_name(&request.source);
+    if request.source == crate::import_run::SAFARI {
+        return Ok(ImportPlan {
+            source_id: request.source.clone(),
+            source_name: "Safari".into(),
+            kinds: request.data,
+            target: Some(profile),
+            ..ImportPlan::default()
+        });
+    }
+    let plan = match resolve_source(&request.source, home)? {
+        ImportSource::BookmarksFile { path } => ImportPlan {
+            source_id: "html".into(),
+            source_name: ImportSource::BookmarksFile { path: path.clone() }.label(),
+            kinds: vec!["bookmarks".into()],
+            target: Some(profile),
+            file: Some(path.to_string_lossy().into_owned()),
+            ..ImportPlan::default()
+        },
+        ImportSource::ChromiumProfile { label, path } => ImportPlan {
+            source_id: request
+                .source
+                .split(':')
+                .next()
+                .unwrap_or_default()
+                .to_owned(),
+            source_name: if request.source.starts_with("chromium:") {
+                label
+            } else {
+                name
+            },
+            profiles: vec![ImportBrowserProfile {
+                id: path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                path: path.to_string_lossy().into_owned(),
+                is_default: true,
+                ..ImportBrowserProfile::default()
+            }],
+            kinds: request.data,
+            target: Some(profile),
+            file: None,
+        },
+    };
+    Ok(plan)
 }
 
 pub fn start(coordinator: &AppCoordinator, source: String, profile: ProfileId) {
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    let resolved = resolve_source(&source, home.as_deref());
-    let me = coordinator.weak();
-    let spawned = std::thread::Builder::new()
-        .name("ardia-import".into())
-        .spawn(move || {
-            let read = resolved.and_then(|source| read_source(&source).map(|tree| (source, tree)));
-            if let Some(coordinator) = me.upgrade() {
-                coordinator.post(move |coordinator| coordinator.finish_import(profile, read));
-            }
-        });
-    if let Err(problem) = spawned {
-        log::warn!("the import couldn't start: {problem}");
+    match plan_for_request(&source, profile, home.as_deref()) {
+        Ok(plan) => crate::import_run::run_without_unlocking(coordinator, plan),
+        Err(problem) => {
+            let request = parse_request(&source);
+            let run = coordinator.begin_import(&source_name(&request.source), stages_for(&request));
+            coordinator.import_failed(run, problem);
+        }
     }
 }
 
-impl AppCoordinator {
-    pub fn finish_import(
-        &self,
-        profile: ProfileId,
-        read: Result<(ImportSource, BookmarkNode), String>,
-    ) {
-        let (source, tree) = match read {
-            Ok(found) => found,
-            Err(problem) => {
-                self.notify(ToastKind::Error, format!("Nothing was imported: {problem}"));
-                return;
-            }
-        };
-        let label = source.label();
-        let (ops, links) = bookmark_ops(&tree, &label);
-        let (Some(engine), Some(folder)) = (
-            self.engine(),
-            self.resolve_profile(&profile)
-                .and_then(|_| self.service_profile_dir(&profile)),
-        ) else {
-            self.notify(
-                ToastKind::Error,
-                format!("The bookmarks from {label} didn't import: the profile isn't open"),
-            );
-            return;
-        };
-        let reply = engine.call_service(
-            "ac_bookmarks_apply",
-            &folder,
-            &json!({ "ops": ops }).to_string(),
-        );
-        let me = self.weak();
-        self.spawn(async move {
-            let applied = reply.await;
-            let Some(me) = me.upgrade() else {
-                return;
-            };
-            match applied {
-                Ok(_) => me.notify(
-                    ToastKind::Info,
-                    format!("Imported {links} bookmarks from {label}"),
-                ),
-                Err(problem) => me.notify(
-                    ToastKind::Error,
-                    format!("The bookmarks from {label} didn't import: {problem}"),
-                ),
-            }
+pub const BROWSER_ORDER: [&str; 7] = [
+    "arc", "dia", "chrome", "brave", "edge", "vivaldi", "chromium",
+];
+
+fn user_data_dir(home: &Path, id: &str) -> Option<PathBuf> {
+    let (_, mac, linux) = browser_folder(id)?;
+    let relative = if cfg!(target_os = "macos") {
+        Path::new("Library/Application Support").join(mac)
+    } else {
+        PathBuf::from(linux)
+    };
+    home.join(relative).parent().map(Path::to_path_buf)
+}
+
+pub fn browser_profiles(user_data: &Path) -> Vec<ImportBrowserProfile> {
+    let local_state = std::fs::read(user_data.join("Local State"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
+    let mut profiles: Vec<ImportBrowserProfile> = local_state
+        .as_ref()
+        .and_then(|state| state.pointer("/profile/info_cache"))
+        .and_then(Value::as_object)
+        .map(|cache| {
+            cache
+                .iter()
+                .map(|(dir, info)| {
+                    let text = |key: &str| {
+                        info.get(key)
+                            .and_then(Value::as_str)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_owned)
+                    };
+                    ImportBrowserProfile {
+                        id: dir.clone(),
+                        name: text("name").unwrap_or_else(|| dir.clone()),
+                        path: user_data.join(dir).to_string_lossy().into_owned(),
+                        email: text("user_name"),
+                        is_default: dir == "Default",
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if profiles.is_empty() && user_data.join("Default").is_dir() {
+        profiles.push(ImportBrowserProfile {
+            id: "Default".into(),
+            name: "Default".into(),
+            path: user_data.join("Default").to_string_lossy().into_owned(),
+            email: None,
+            is_default: true,
         });
     }
+    profiles.retain(|profile| {
+        let dir = Path::new(&profile.path);
+        ["Bookmarks", "History", "Preferences"]
+            .iter()
+            .any(|file| dir.join(file).is_file())
+    });
+    profiles.sort_by(|a, z| z.is_default.cmp(&a.is_default).then(a.id.cmp(&z.id)));
+    profiles
+}
+
+pub fn detect_browsers(home: &Path) -> Vec<ImportBrowser> {
+    let mut found: Vec<ImportBrowser> = BROWSER_ORDER
+        .iter()
+        .filter_map(|id| {
+            let user_data = user_data_dir(home, id)?;
+            let profiles = browser_profiles(&user_data);
+            (!profiles.is_empty()).then(|| ImportBrowser {
+                id: (*id).to_owned(),
+                name: browser_folder(id)
+                    .map_or_else(|| (*id).to_owned(), |(name, _, _)| name.to_owned()),
+                profiles,
+                kinds: CHROMIUM_KINDS.iter().map(|k| (*k).to_owned()).collect(),
+            })
+        })
+        .collect();
+    if cfg!(target_os = "macos") && home.join("Library/Safari").is_dir() {
+        found.push(ImportBrowser {
+            id: crate::import_run::SAFARI.to_owned(),
+            name: "Safari".to_owned(),
+            profiles: Vec::new(),
+            kinds: SAFARI_KINDS.iter().map(|k| (*k).to_owned()).collect(),
+        });
+    }
+    found
+}
+
+pub fn refresh_browsers(coordinator: &AppCoordinator) {
+    let me = coordinator.weak();
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let spawned = std::thread::Builder::new()
+        .name("ardia-import-browsers".into())
+        .spawn(move || {
+            let found = home.as_deref().map(detect_browsers).unwrap_or_default();
+            if let Some(coordinator) = me.upgrade() {
+                coordinator.post(move |coordinator| {
+                    coordinator.bridge.lock().import_browsers = Some(found);
+                    coordinator.signal.emit(HostTopics::IMPORT);
+                });
+            }
+        });
+    if let Err(problem) = spawned {
+        log::warn!("other browsers couldn't be listed: {problem}");
+        coordinator.bridge.lock().import_browsers = Some(Vec::new());
+        coordinator.signal.emit(HostTopics::IMPORT);
+    }
+}
+
+pub fn run_plan(coordinator: &AppCoordinator, plan: ImportPlan) {
+    crate::import_run::run(coordinator, plan);
+}
+
+impl AppCoordinator {
+    pub fn import_progress(&self) -> Option<ImportProgress> {
+        self.bridge.lock().import.clone()
+    }
+
+    pub(crate) fn begin_import(&self, source: &str, stages: Vec<ImportStage>) -> u64 {
+        let run = {
+            let mut bridge = self.bridge.lock();
+            bridge.import_runs += 1;
+            let run = bridge.import_runs;
+            bridge.import = Some(ImportProgress::new(run, source, stages));
+            run
+        };
+        self.signal.emit(HostTopics::IMPORT);
+        run
+    }
+
+    pub(crate) fn update_import(&self, run: u64, change: impl FnOnce(&mut ImportProgress)) {
+        let changed = {
+            let mut bridge = self.bridge.lock();
+            match bridge.import.as_mut() {
+                Some(progress) if progress.run == run => {
+                    change(progress);
+                    true
+                }
+                _ => false,
+            }
+        };
+        if changed {
+            self.signal.emit(HostTopics::IMPORT);
+        }
+    }
+
+    pub(crate) fn abort_import(&self) {
+        let cancel = self.bridge.lock().import_cancel.take();
+        if let Some(cancel) = cancel {
+            cancel.store(true, std::sync::atomic::Ordering::Release);
+            let run = self
+                .bridge
+                .lock()
+                .import
+                .as_ref()
+                .map(|progress| progress.run);
+            if let Some(run) = run {
+                self.update_import(run, |progress| {
+                    if !progress.finished {
+                        progress.fail("Cancelled".to_owned());
+                    }
+                });
+            }
+        }
+    }
+
+    pub(crate) fn import_failed(&self, run: u64, problem: String) {
+        self.update_import(run, |progress| progress.fail(problem.clone()));
+    }
+
+    fn imported_folders(&self) -> ImportedFolders {
+        if let Some(known) = self.bridge.lock().imported_folders.clone() {
+            return known;
+        }
+        let loaded = self
+            .config
+            .data_dir
+            .as_deref()
+            .map(|dir| read_imported_folders(&DataDir::new(dir)))
+            .unwrap_or_default();
+        self.bridge.lock().imported_folders = Some(loaded.clone());
+        loaded
+    }
+
+    fn keep_imported_folders(&self, folders: ImportedFolders) {
+        if let Some(dir) = self.config.data_dir.as_deref()
+            && let Err(problem) = documents::write_versioned(
+                &DataDir::new(dir),
+                IMPORTED_FOLDERS_DOCUMENT,
+                "version",
+                IMPORTED_FOLDERS_VERSION,
+                imported_folders_value(&folders),
+            )
+        {
+            log::warn!("couldn't save which bookmark folders imports made: {problem}");
+        }
+        self.bridge.lock().imported_folders = Some(folders);
+    }
+
+    pub(crate) fn merge_import(
+        &self,
+        profile: &ProfileId,
+        label: &str,
+        imported: &BookmarkNode,
+    ) -> Option<usize> {
+        let state = self.store.snapshot();
+        state.profile(profile.as_str())?;
+        let key = state.engine_profile(profile);
+        let now = ardia_state::store::now_ms();
+        let mut made = self.imported_folders();
+        let mut next = (*state).clone();
+        let tree = std::sync::Arc::make_mut(
+            std::sync::Arc::make_mut(&mut next.bookmarks)
+                .entry(key.clone())
+                .or_insert_with(|| std::sync::Arc::new(BookmarkTree::new(&key, now))),
+        );
+        let merged = import_into_tree(tree, self.store.ids(), &mut made, imported, label, now);
+        if merged.links > 0 || merged.folders > 0 {
+            self.store.replace(next);
+        }
+        self.keep_imported_folders(made);
+        Some(merged.links)
+    }
+}
+
+pub const IMPORTED_FOLDERS_DOCUMENT: &str = "imported-bookmarks.json";
+pub const IMPORTED_FOLDERS_VERSION: u64 = 1;
+
+pub fn read_imported_folders(dir: &DataDir) -> ImportedFolders {
+    let documents::DocRead::Usable { doc, .. } = documents::read_versioned(
+        dir,
+        IMPORTED_FOLDERS_DOCUMENT,
+        "version",
+        IMPORTED_FOLDERS_VERSION,
+    ) else {
+        return ImportedFolders::new();
+    };
+    doc.get("folders")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(id, saved)| {
+            let text = |key: &str| saved.get(key).and_then(Value::as_str).map(str::to_owned);
+            Some((
+                id.clone(),
+                ImportedFolder {
+                    source: text("source")?,
+                    engine: text("engine")?,
+                    wrapper: saved
+                        .get("wrapper")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                    adopted: saved
+                        .get("adopted")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                },
+            ))
+        })
+        .collect()
+}
+
+pub fn imported_folders_value(folders: &ImportedFolders) -> Value {
+    let entries: serde_json::Map<String, Value> = folders
+        .iter()
+        .map(|(id, folder)| {
+            let mut saved = json!({ "source": folder.source, "engine": folder.engine });
+            if folder.wrapper {
+                saved["wrapper"] = json!(true);
+            }
+            if folder.adopted {
+                saved["adopted"] = json!(true);
+            }
+            (id.clone(), saved)
+        })
+        .collect();
+    json!({ "folders": entries })
 }
 
 #[cfg(test)]
@@ -234,29 +560,29 @@ mod tests {
     }
 
     #[test]
-    fn trees_become_engine_ops_under_one_folder() {
-        let tree = BookmarkNode::folder(
-            "root",
-            vec![
-                BookmarkNode::link("A", "https://a.example", None),
-                BookmarkNode::link("Script", "javascript:alert(1)", None),
-                BookmarkNode::folder(
-                    "Work",
-                    vec![BookmarkNode::link("B", "https://b.example", None)],
-                    None,
-                ),
-            ],
-            None,
+    fn requests_name_the_browser_and_the_data() {
+        assert_eq!(
+            parse_request("chrome:bookmarks,history,,passwords"),
+            ImportRequest {
+                source: "chrome".into(),
+                data: vec!["bookmarks".into(), "history".into(), "passwords".into()],
+            }
         );
-        let (ops, links) = bookmark_ops(&tree, "Chrome");
-        assert_eq!(links, 2, "only web links import");
-        assert_eq!(ops.len(), 4);
-        assert_eq!(ops[0]["parent"], "other");
-        assert_eq!(ops[0]["t"], "Imported from Chrome");
-        let work = ops.iter().find(|op| op["t"] == "Work").unwrap();
-        let b = ops.iter().find(|op| op["t"] == "B").unwrap();
-        assert_eq!(b["parent"], work["id"]);
-        assert!(ops.iter().all(|op| op["op"] == "add"));
+        assert_eq!(
+            parse_request("html:/tmp/a:b.html").source,
+            "html:/tmp/a:b.html"
+        );
+        assert_eq!(parse_request("arc").data, vec!["bookmarks".to_owned()]);
+        let stages = stages_for(&parse_request("dia:history,bookmarks,history"));
+        assert_eq!(stages.len(), 2);
+        assert_eq!(stages[0].state, StageState::Waiting);
+        assert_eq!(stages[1].state, StageState::Waiting);
+        assert_eq!(
+            stages_for(&parse_request("dia:spaces"))[0].state,
+            StageState::Failed(NOT_YET.into())
+        );
+        assert_eq!(source_name("chrome"), "Chrome");
+        assert_eq!(source_name("firefox"), "Firefox");
     }
 
     #[test]

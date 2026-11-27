@@ -6,6 +6,8 @@ members = [
   "crates/ardia-engine",
   "crates/ardia-ui",
   "crates/ardia-app",
+  "crates/ardia-telemetry",
+  "crates/ardia-profile",
   "crates/core/ardia-apple-ffi",
   "crates/core/ardia-crypto",
   "crates/core/ardia-ffi",
@@ -33,17 +35,33 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("boringssl"))'] }
+
+[workspace.lints.clippy]
+perf = { level = "deny", priority = -1 }
+redundant_clone = "deny"
+needless_collect = "deny"
+large_enum_variant = "deny"
+inefficient_to_string = "deny"
+unnecessary_to_owned = "deny"
+manual_memcpy = "deny"
+large_stack_arrays = "deny"
+trivially_copy_pass_by_ref = "warn"
+let_underscore_future = "deny"
+
 [workspace.dependencies]
 ardia-theme = { path = "crates/ardia-theme" }
 ardia-state = { path = "crates/ardia-state" }
 ardia-engine = { path = "crates/ardia-engine" }
 ardia-ui = { path = "crates/ardia-ui" }
+ardia-telemetry = { path = "crates/ardia-telemetry" }
+ardia-profile = { path = "crates/ardia-profile" }
 ardia-crypto = { path = "crates/core/ardia-crypto", default-features = false }
 ardia-sync-core = { path = "crates/core/ardia-sync-core", default-features = false }
 ardia-import-core = { path = "crates/core/ardia-import-core" }
 ardia-update-core = { path = "crates/core/ardia-update-core", default-features = false }
 ardia-shell-migration = { path = "crates/core/ardia-shell-migration" }
-ardia-plugin-host = { path = "crates/plugins/host" }
 gpui = { path = "third_party/gpui/gpui" }
 gpui_macos = { path = "third_party/gpui/gpui_macos" }
 gpui_platform = { path = "third_party/gpui/gpui_platform" }
@@ -66,11 +84,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 url = { version = "2.5", features = ["serde"] }
 smallvec = "1"
 futures = "0.3"
-smol = "2"
 objc2 = "0.6"
-objc2-foundation = "0.3"
-objc2-app-kit = "0.3"
-objc2-quartz-core = "0.3"
 cc = "1"
 
 [patch."https://github.com/zed-industries/zed"]

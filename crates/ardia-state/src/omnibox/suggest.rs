@@ -3,6 +3,11 @@ use crate::model::Millis;
 use crate::omnibox::bangs::{BangMatch, Bangs};
 use crate::omnibox::calc::calculate;
 use crate::omnibox::engines::SearchEngine;
+use crate::omnibox::providers::{
+    ExtensionCandidate, ExtensionOpen, ProviderSection, extension_suggestions,
+    global_provider_rows, provider_scope_rows,
+};
+use crate::omnibox::site_search::{ScopeKind, SearchScope, scoped_search_url};
 use crate::omnibox::url::{display_url, fixup_url, host_of, same_address, spaced_address_guess};
 use std::collections::{HashMap, HashSet};
 
@@ -43,6 +48,20 @@ pub enum Suggestion {
         title: String,
         hint: Option<String>,
     },
+    Extension {
+        id: String,
+        title: String,
+        icon: Option<String>,
+        open: ExtensionOpen,
+    },
+    Provider {
+        provider_id: String,
+        provider: String,
+        title: String,
+        url: String,
+        subtitle: Option<String>,
+        icon: Option<String>,
+    },
 }
 
 impl Suggestion {
@@ -57,6 +76,16 @@ impl Suggestion {
             Suggestion::Search { url, .. } => format!("search:{url}"),
             Suggestion::Calc { expression, .. } => format!("calc:{expression}"),
             Suggestion::Action { id, .. } => format!("action:{id}"),
+            Suggestion::Extension { id, open, .. } => format!(
+                "extension:{}:{id}",
+                match open {
+                    ExtensionOpen::Action => "action",
+                    ExtensionOpen::Options => "options",
+                }
+            ),
+            Suggestion::Provider {
+                provider_id, url, ..
+            } => format!("provider:{provider_id}:{}", page_key(url)),
         }
     }
 
@@ -64,8 +93,9 @@ impl Suggestion {
         match self {
             Suggestion::Page { url, .. }
             | Suggestion::Search { url, .. }
-            | Suggestion::Calc { url, .. } => Some(url),
-            Suggestion::Action { .. } => None,
+            | Suggestion::Calc { url, .. }
+            | Suggestion::Provider { url, .. } => Some(url),
+            Suggestion::Action { .. } | Suggestion::Extension { .. } => None,
         }
     }
 }
@@ -297,6 +327,13 @@ impl SuggestionIndex {
         index
     }
 
+    pub fn hosts(&self) -> impl Iterator<Item = &str> {
+        self.pages
+            .iter()
+            .map(|c| c.host_lower.as_str())
+            .filter(|h| !h.is_empty())
+    }
+
     pub fn len(&self) -> usize {
         self.pages.len()
     }
@@ -320,6 +357,9 @@ pub struct SuggestOptions<'a> {
     pub prevent_inline: bool,
     pub switch_to_open_tab: bool,
     pub bangs: Option<&'a Bangs>,
+    pub scope: Option<&'a SearchScope>,
+    pub extensions: &'a [ExtensionCandidate],
+    pub providers: &'a [ProviderSection],
 }
 
 impl<'a> SuggestOptions<'a> {
@@ -337,6 +377,9 @@ impl<'a> SuggestOptions<'a> {
             prevent_inline: false,
             switch_to_open_tab: true,
             bangs: None,
+            scope: None,
+            extensions: &[],
+            providers: &[],
         }
     }
 }
@@ -614,7 +657,10 @@ pub fn build_suggestions(
     options: &SuggestOptions<'_>,
 ) -> SuggestionResult {
     let query = raw.trim();
-    if query.is_empty() {
+    let provider_scope = options
+        .scope
+        .is_some_and(|scope| scope.kind == ScopeKind::Provider);
+    if query.is_empty() && !provider_scope {
         return SuggestionResult::default();
     }
     let mut out = Output {
@@ -623,6 +669,9 @@ pub fn build_suggestions(
         limit: options.limit,
     };
     let engine = options.engine;
+    if let Some(scope) = options.scope {
+        return scoped_suggestions(query, scope, index, tabs, options);
+    }
     if let Some(found) = options.bangs.and_then(|b| b.find(query)) {
         return bang_suggestions(found, index, tabs, options);
     }
@@ -803,6 +852,8 @@ pub fn build_suggestions(
             .map(|&at| index.pages[at].row(None))
     };
 
+    let (extension_rows, extension_exact) =
+        extension_suggestions(query, options.extensions, EXTENSION_ROWS);
     let first = if let Some((action, _, true)) = action_hits.first() {
         action_row(action)
     } else if let (Some((_, url)), false) = (&target, completion.is_empty()) {
@@ -827,6 +878,8 @@ pub fn build_suggestions(
                 bookmarked: false,
                 visited: false,
             })
+    } else if let Some(row) = extension_rows.first().filter(|_| extension_exact) {
+        row.clone()
     } else if let Some(best) = ranked.first().filter(|b| {
         guessed.is_none()
             && options.website_first
@@ -872,6 +925,9 @@ pub fn build_suggestions(
     for (action, _, _) in &action_hits {
         out.push(action_row(action));
     }
+    for row in &extension_rows {
+        out.push(row.clone());
+    }
     let listed: Vec<&Ranked<'_>> = ranked
         .iter()
         .filter(|r| guessed.as_ref().is_none_or(|g| !same_address(&r.c.url, g)))
@@ -916,6 +972,7 @@ pub fn build_suggestions(
             visited: false,
         }));
     }
+    let provider_at = out.items.len();
     for remote in dedupe_remote(options.remote, query).into_iter().take(4) {
         out.push(Suggestion::Search {
             query: remote.to_owned(),
@@ -925,15 +982,120 @@ pub fn build_suggestions(
             bang: false,
         });
     }
-    for r in listed
+    let trailing: Vec<Suggestion> = listed
         .iter()
         .filter(|r| !lead.iter().any(|l| l.c.key == r.c.key))
+        .map(|r| r.c.row(r.tab.as_ref()))
+        .collect();
+    let provider_rows = if options.providers.is_empty() {
+        Vec::new()
+    } else {
+        let mut shown = out.items.clone();
+        shown.extend(
+            trailing
+                .iter()
+                .filter(|r| {
+                    matches!(
+                        r,
+                        Suggestion::Page {
+                            tab_id: Some(_),
+                            ..
+                        }
+                    )
+                })
+                .cloned(),
+        );
+        global_provider_rows(options.providers, &shown)
+    };
+    let offered: Vec<String> = provider_rows
+        .iter()
+        .filter_map(|r| r.url().map(page_key))
+        .collect();
+    for row in trailing {
+        let tab = matches!(
+            row,
+            Suggestion::Page {
+                tab_id: Some(_),
+                ..
+            }
+        );
+        if tab || row.url().is_none_or(|u| !offered.contains(&page_key(u))) {
+            out.push(row);
+        }
+    }
+    let mut items = out.items;
+    if !provider_rows.is_empty() {
+        let at = provider_at.min(items.len());
+        items.splice(at..at, provider_rows);
+    }
+    SuggestionResult { items, completion }
+}
+
+const SCOPED_PAGE_ROWS: usize = 4;
+const EXTENSION_ROWS: usize = 2;
+const SCOPED_SEARCH_POOL: usize = 64;
+
+fn scoped_suggestions(
+    query: &str,
+    scope: &SearchScope,
+    index: &SuggestionIndex,
+    tabs: &[OpenTabRow<'_>],
+    options: &SuggestOptions<'_>,
+) -> SuggestionResult {
+    if scope.kind == ScopeKind::Provider {
+        return SuggestionResult {
+            items: provider_scope_rows(
+                query,
+                scope.provider_id.as_deref().unwrap_or(""),
+                &scope.name,
+                (!scope.url.is_empty()).then_some(scope.url.as_str()),
+                options.providers,
+                options.limit,
+            ),
+            completion: String::new(),
+        };
+    }
+    let mut out = Output {
+        items: Vec::new(),
+        seen: HashSet::new(),
+        limit: options.limit,
+    };
+    out.push(Suggestion::Search {
+        query: query.to_owned(),
+        url: scoped_search_url(scope, query, options.engine),
+        engine: scope.name.clone(),
+        suggested: false,
+        bang: false,
+    });
+    let unscoped = SuggestOptions {
+        bangs: None,
+        scope: None,
+        remote: &[],
+        remote_sites: &[],
+        actions: &[],
+        prevent_inline: true,
+        limit: SCOPED_SEARCH_POOL,
+        ..*options
+    };
+    let suffix = format!(".{}", scope.host);
+    let pages = build_suggestions(query, index, tabs, &unscoped);
+    for row in pages
+        .items
+        .into_iter()
+        .filter(|row| match row {
+            Suggestion::Page { url, .. } => {
+                let host = host_of(url);
+                host == scope.host || host.ends_with(&suffix)
+            }
+            _ => false,
+        })
+        .take(SCOPED_PAGE_ROWS)
     {
-        out.push(r.c.row(r.tab.as_ref()));
+        out.push(row);
     }
     SuggestionResult {
         items: out.items,
-        completion,
+        completion: String::new(),
     }
 }
 
@@ -951,7 +1113,7 @@ fn bang_suggestions(
     if found.query.is_empty() {
         out.push(Suggestion::Page {
             url: found.bang.home.clone(),
-            title: found.bang.name.clone(),
+            title: found.bang.name,
             favicon: None,
             tab_id: None,
             bookmarked: false,

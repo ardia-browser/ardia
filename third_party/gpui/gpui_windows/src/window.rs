@@ -1047,11 +1047,22 @@ impl PlatformWindow for WindowsWindow {
     }
 
     #[cfg(feature = "test-support")]
-    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
-        self.state
+    fn render_to_image(&self, scene: &Scene, scale: f32) -> anyhow::Result<image::RgbaImage> {
+        let image = self
+            .state
             .renderer
             .borrow_mut()
-            .render_to_image(scene, self.state.background_appearance.get())
+            .render_to_image(scene, self.state.background_appearance.get())?;
+        if scale == 1. {
+            return Ok(image);
+        }
+        let (width, height) = image.dimensions();
+        Ok(image::imageops::resize(
+            &image,
+            ((width as f32 * scale).floor() as u32).max(1),
+            ((height as f32 * scale).floor() as u32).max(1),
+            image::imageops::FilterType::Triangle,
+        ))
     }
 
     fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas> {

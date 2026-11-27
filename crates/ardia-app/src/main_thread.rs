@@ -55,7 +55,7 @@ mod tests {
     fn only_the_owner_thread_reaches_the_value() {
         let cell = Arc::new(MainThread::new(Rc::new(Cell::new(1))));
         assert_eq!(cell.get().map(|v| v.get()), Some(1));
-        let remote = cell.clone();
+        let remote = cell;
         let seen = thread::spawn(move || remote.get().is_some())
             .join()
             .unwrap();

@@ -62,6 +62,21 @@ fn list(event: &Value, field: &str) -> Vec<Value> {
         .unwrap_or_default()
 }
 
+fn url_sender(event: &Value) -> Option<crate::events::UrlSender> {
+    let text = |field: &str| {
+        event
+            .get(field)
+            .and_then(Value::as_str)
+            .filter(|t| !t.is_empty())
+            .map(str::to_owned)
+    };
+    let sender = crate::events::UrlSender {
+        bundle_id: text("bundleId"),
+        app_name: text("appName"),
+    };
+    (sender.bundle_id.is_some() || sender.app_name.is_some()).then_some(sender)
+}
+
 fn view(event: &Value) -> Option<ViewToken> {
     ViewToken::from_raw(event.get("view").and_then(Value::as_u64)?)
 }
@@ -195,6 +210,7 @@ pub fn decode_bridge_event(json: &str) -> Option<EngineEvent> {
                 .iter()
                 .filter_map(|url| url.as_str().map(str::to_owned))
                 .collect(),
+            sender: url_sender(&event),
         },
         "reopen" => EngineEvent::DockReopen {
             has_visible_windows: flag(&event, "visible"),
@@ -216,11 +232,55 @@ pub fn decode_bridge_event(json: &str) -> Option<EngineEvent> {
     })
 }
 
+fn title_of(event: &Value) -> String {
+    match event.get("url").and_then(Value::as_str) {
+        Some(url) => shown_title(&text(event, "title"), url, flag(event, "loading")),
+        None => text(event, "title"),
+    }
+}
+
+fn shown_title(title: &str, url: &str, loading: bool) -> String {
+    if title == "about:blank" && !url.is_empty() && url != "about:blank" {
+        return String::new();
+    }
+    if !loading || title.is_empty() {
+        return title.to_owned();
+    }
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return title.to_owned();
+    };
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return title.to_owned();
+    }
+    let mut shown = rest;
+    if shown
+        .get(..4)
+        .is_some_and(|lead| lead.eq_ignore_ascii_case("www."))
+    {
+        shown = &shown[4..];
+    }
+    let bare_root =
+        !shown.contains(['?', '#']) && shown.find('/') == Some(shown.len().wrapping_sub(1));
+    if bare_root {
+        shown = &shown[..shown.len() - 1];
+    }
+    if title == shown.replace("%20", " ") {
+        String::new()
+    } else {
+        title.to_owned()
+    }
+}
+
 fn decode_tab_event(name: &str, tab: EngineTabId, event: &Value) -> Option<EngineEvent> {
     Some(match name {
         "title" => EngineEvent::TitleChanged {
             tab,
-            title: text(event, "title"),
+            title: title_of(event),
+        },
+        "shownTitle" => EngineEvent::ShownTitleChanged {
+            tab,
+            title: title_of(event),
+            url: text(event, "url"),
         },
         "url" => EngineEvent::UrlChanged {
             tab,
@@ -316,6 +376,12 @@ fn decode_tab_event(name: &str, tab: EngineTabId, event: &Value) -> Option<Engin
         "activation" => EngineEvent::ActivationRequested {
             tab,
             reason: text(event, "reason"),
+            from_other_app: flag(event, "fromOtherApp"),
+        },
+        "pipActivity" => EngineEvent::PipActivity {
+            tab,
+            name: text(event, "name"),
+            payload: object(event, "payload"),
         },
         "pip" => EngineEvent::PipChanged {
             tab,
@@ -378,6 +444,71 @@ mod tests {
 
     fn decoded(value: Value) -> Option<EngineEvent> {
         decode_bridge_event(&value.to_string())
+    }
+
+    #[test]
+    fn titles_follow_the_old_reported_title_rules() {
+        assert_eq!(
+            shown_title(
+                "127.0.0.1:9418/b.html",
+                "http://127.0.0.1:9418/b.html",
+                false
+            ),
+            "127.0.0.1:9418/b.html"
+        );
+        assert_eq!(
+            shown_title(
+                "127.0.0.1:9418/b.html",
+                "http://127.0.0.1:9418/b.html",
+                true
+            ),
+            ""
+        );
+        assert_eq!(
+            shown_title("example.com", "https://www.example.com/", true),
+            ""
+        );
+        assert_eq!(
+            shown_title("example.com/a b", "https://example.com/a%20b", true),
+            ""
+        );
+        assert_eq!(shown_title("Docs", "https://example.com/", true), "Docs");
+        assert_eq!(
+            shown_title("example.com/", "https://example.com/?q", true),
+            "example.com/"
+        );
+        assert_eq!(shown_title("file", "file:///tmp/file", true), "file");
+        assert_eq!(
+            shown_title("about:blank", "https://example.com/", false),
+            ""
+        );
+        assert_eq!(
+            shown_title("about:blank", "about:blank", false),
+            "about:blank"
+        );
+        assert_eq!(shown_title("", "https://example.com/", false), "");
+    }
+
+    #[test]
+    fn a_title_sent_with_its_url_hides_the_address_while_loading() {
+        assert_eq!(
+            decoded(
+                json!({"event": "title", "tab": 1, "title": "a.com/x", "url": "https://a.com/x", "loading": true})
+            ),
+            Some(EngineEvent::TitleChanged {
+                tab: tab(1),
+                title: String::new()
+            })
+        );
+        assert_eq!(
+            decoded(
+                json!({"event": "title", "tab": 1, "title": "a.com/x", "url": "https://a.com/x", "loading": false})
+            ),
+            Some(EngineEvent::TitleChanged {
+                tab: tab(1),
+                title: "a.com/x".into()
+            })
+        );
     }
 
     #[test]
@@ -597,7 +728,20 @@ mod tests {
         assert_eq!(
             decoded(json!({"event": "openUrls", "urls": ["https://a", 3]})),
             Some(EngineEvent::OpenUrls {
-                urls: vec!["https://a".into()]
+                urls: vec!["https://a".into()],
+                sender: None
+            })
+        );
+        assert_eq!(
+            decoded(
+                json!({"event": "openUrls", "urls": ["https://b"], "bundleId": "com.hnc.Discord", "appName": "Discord"})
+            ),
+            Some(EngineEvent::OpenUrls {
+                urls: vec!["https://b".into()],
+                sender: Some(crate::events::UrlSender {
+                    bundle_id: Some("com.hnc.Discord".into()),
+                    app_name: Some("Discord".into())
+                })
             })
         );
     }

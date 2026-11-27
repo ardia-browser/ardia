@@ -11,6 +11,7 @@ pub const MAX_CLOSED_TABS: usize = 50;
 pub const MAX_CLOSED_WINDOWS: usize = 10;
 pub const MAX_CLOSED_GROUPS: usize = 20;
 pub const PURGED_AFTER_MS: Millis = 7 * 86_400_000;
+pub const MAX_CLEANED: usize = 100;
 
 fn tab_kind<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ClosedKind, D::Error> {
     let _ = Value::deserialize(deserializer)?;
@@ -474,6 +475,12 @@ impl ClosedLists {
         self.tabs.drain(..over);
     }
 
+    pub fn push_cleaned(&mut self, entries: impl IntoIterator<Item = ClosedTab>) {
+        self.cleaned_tabs.extend(entries);
+        let over = self.cleaned_tabs.len().saturating_sub(MAX_CLEANED);
+        self.cleaned_tabs.drain(..over);
+    }
+
     pub fn push_window(&mut self, entry: ClosedWindow) {
         self.windows.push(entry);
         let over = self.windows.len().saturating_sub(MAX_CLOSED_WINDOWS);
@@ -634,6 +641,163 @@ pub struct ClearedTabs {
     pub selected: Option<TabId>,
     pub fingerprint: u64,
     pub cleared_at: Millis,
+}
+
+pub fn window_fingerprint(
+    state: &crate::state::BrowserState,
+    window: &WindowId,
+    profile: &ProfileId,
+) -> u64 {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let Some(w) = state.window(window.as_str()) else {
+        return 0;
+    };
+    let in_window = |id: &TabId| {
+        state
+            .tab(id.as_str())
+            .is_some_and(|t| t.window_id == *window && t.profile_id == *profile)
+    };
+    let tabs: Vec<String> = w
+        .tab_ids
+        .iter()
+        .filter(|id| {
+            state
+                .tab(id.as_str())
+                .is_none_or(|t| t.profile_id == *profile)
+        })
+        .map(|id| match state.tab(id.as_str()) {
+            Some(t) => format!("{id} {:?}", t.pin),
+            None => id.to_string(),
+        })
+        .collect();
+    let mut groups: Vec<String> = state
+        .groups
+        .values()
+        .filter(|g| g.window_id == *window && g.profile_id == *profile)
+        .map(|g| {
+            format!(
+                "{} {} {} {:?}",
+                g.id,
+                g.parent_id.as_ref().map_or("", |p| p.as_str()),
+                g.pinned,
+                g.tab_ids
+            )
+        })
+        .collect();
+    groups.sort();
+    let mut splits: Vec<String> = state
+        .splits
+        .values()
+        .filter(|v| v.tab_ids().iter().any(in_window))
+        .map(|v| format!("{} {:?} {:?}", v.id, v.orientation, v.slots))
+        .collect();
+    splits.sort();
+    let mut hasher = DefaultHasher::new();
+    (tabs, groups, splits).hash(&mut hasher);
+    hasher.finish()
+}
+
+pub fn fingerprint_fresh_clears(
+    next: &mut crate::state::BrowserState,
+    prev: &crate::state::BrowserState,
+) {
+    let fresh: Vec<(WindowId, ProfileId)> = next
+        .cleared
+        .iter()
+        .filter(|(window, cleared)| prev.cleared.get(*window) != Some(*cleared))
+        .map(|(window, cleared)| (window.clone(), cleared.profile_id.clone()))
+        .collect();
+    for (window, profile) in fresh {
+        let print = window_fingerprint(next, &window, &profile);
+        if let Some(cleared) = std::sync::Arc::make_mut(&mut next.cleared).get_mut(&window) {
+            cleared.fingerprint = print;
+        }
+    }
+}
+
+pub fn can_undo_clear(state: &crate::state::BrowserState, window: &WindowId) -> bool {
+    state.cleared.get(window).is_some_and(|cleared| {
+        cleared
+            .closed_entry_ids
+            .iter()
+            .all(|id| state.closed.tabs.iter().any(|c| c.id == *id))
+            && window_fingerprint(state, window, &cleared.profile_id) == cleared.fingerprint
+    })
+}
+
+pub const RECENTLY_CLOSED_SHOWN: usize = 10;
+
+pub fn recently_closed_to_clear(
+    state: &crate::state::BrowserState,
+    window: Option<&WindowId>,
+) -> std::collections::HashSet<EntryId> {
+    use crate::windows::WindowKind;
+    let mut gone = std::collections::HashSet::new();
+    let regular = |kind: WindowKind| kind != WindowKind::LittleArdia && kind.has_tabs();
+    let target = window.and_then(|id| state.windows.get(id)).or_else(|| {
+        state
+            .focus_order
+            .iter()
+            .chain(state.window_order.iter())
+            .filter_map(|id| state.windows.get(id))
+            .find(|w| regular(w.kind))
+    });
+    let Some(w) = target.filter(|w| w.kind != WindowKind::Incognito) else {
+        return gone;
+    };
+    let default_profile = ProfileId::new(&state.settings.default_profile_id);
+    let listed = |profile: Option<&ProfileId>| {
+        profile
+            .filter(|p| state.profiles.contains_key(*p))
+            .unwrap_or(&default_profile)
+            == &w.profile_id
+    };
+    let closed = &state.closed;
+    let tabs: Vec<&ClosedTab> = closed
+        .tabs
+        .iter()
+        .filter(|c| !c.tab.profile_id.is_incognito() && listed(Some(&c.tab.profile_id)))
+        .collect();
+    let windows: Vec<&ClosedWindow> = closed
+        .windows
+        .iter()
+        .filter(|c| listed(c.window.profile_id.as_ref()))
+        .collect();
+    let any_regular_open = state
+        .windows
+        .values()
+        .any(|o| matches!(o.kind, WindowKind::Main | WindowKind::Incognito));
+    let reopens_next = closed
+        .windows
+        .last()
+        .filter(|c| c.last_window && !any_regular_open)
+        .map(|c| c.id.clone());
+    let mut newest: Vec<(Millis, &EntryId)> = tabs
+        .iter()
+        .map(|c| (c.closed_at, &c.id))
+        .chain(windows.iter().map(|c| (c.closed_at, &c.id)))
+        .collect();
+    newest.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+    let shown: std::collections::HashSet<&EntryId> = newest
+        .iter()
+        .take(RECENTLY_CLOSED_SHOWN)
+        .map(|(_, id)| *id)
+        .collect();
+    gone.extend(tabs.iter().map(|c| c.id.clone()));
+    gone.extend(
+        windows
+            .iter()
+            .filter(|c| reopens_next.as_ref() != Some(&c.id) || shown.contains(&c.id))
+            .map(|c| c.id.clone()),
+    );
+    gone.extend(
+        closed
+            .groups
+            .iter()
+            .filter(|g| g.tabs.first().is_some_and(|t| t.profile_id == w.profile_id))
+            .map(|g| g.id.clone()),
+    );
+    gone
 }
 
 pub fn group_info(group: &TabGroup) -> ClosedGroupInfo {

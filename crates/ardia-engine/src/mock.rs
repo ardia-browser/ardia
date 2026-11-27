@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -10,7 +11,7 @@ use crate::commands::*;
 use crate::error::{EngineError, EngineResult};
 use crate::events::{EngineEvent, EventBus};
 use crate::policy::{DefaultPolicy, HostPolicy, NewBrowserWindow};
-use crate::reply::Reply;
+use crate::reply::{Reply, Responder};
 use crate::services::{SecretValue, ServiceArgs, ServiceName, parse_service_reply, wipe_value};
 use crate::types::*;
 
@@ -35,6 +36,13 @@ pub enum MockCall {
     Evaluate(EngineTabId, String),
     DevTools(EngineTabId, String, Option<Value>),
     ScrollObserver(bool),
+    ChooseFilesToOpen(Option<EngineWindowId>),
+    ExtensionActionStates(EngineTabId),
+}
+
+enum LeaveAsker {
+    Tab(Responder<bool>),
+    Window(EngineWindowId),
 }
 
 #[derive(Clone, Debug)]
@@ -85,6 +93,11 @@ struct MockState {
     video_upscaling: bool,
     pages_pick_display_media: bool,
     tracing: bool,
+    extension_popups: BTreeMap<String, String>,
+    leave_prompts: BTreeMap<EngineTabId, LeaveAsker>,
+    chosen_files: Vec<PathBuf>,
+    icons: HashMap<String, Vec<u8>>,
+    icon_fetches: Vec<(EngineProfileId, String)>,
 }
 
 impl MockState {
@@ -452,6 +465,68 @@ impl MockBrowserEngine {
             .filter(|(_, t)| !t.info.closed)
             .map(|(id, _)| *id)
             .collect()
+    }
+
+    pub fn set_extension_popup(&self, extension_id: &str, url: Option<&str>) {
+        let mut state = self.state.lock();
+        match url {
+            Some(url) => state
+                .extension_popups
+                .insert(extension_id.to_owned(), url.to_owned()),
+            None => state.extension_popups.remove(extension_id),
+        };
+    }
+
+    pub fn set_asks_before_leaving(&self, tab: EngineTabId, asks: bool) -> EngineResult<()> {
+        self.state.lock().tab(tab)?.info.asks_before_leaving = asks;
+        Ok(())
+    }
+
+    pub fn leave_prompts(&self) -> Vec<EngineTabId> {
+        self.state.lock().leave_prompts.keys().copied().collect()
+    }
+
+    pub fn answer_leave_prompt(&self, tab: EngineTabId, leave: bool) -> bool {
+        let asker = self.state.lock().leave_prompts.remove(&tab);
+        match asker {
+            None => false,
+            Some(LeaveAsker::Tab(responder)) => {
+                responder.send(Ok(leave));
+                true
+            }
+            Some(LeaveAsker::Window(window)) if leave => {
+                if let Ok(entry) = self.state.lock().tab(tab) {
+                    entry.info.asks_before_leaving = false;
+                }
+                let _ = self.window_command(window, WindowCommand::Close);
+                true
+            }
+            Some(LeaveAsker::Window(window)) => {
+                self.bus
+                    .publish(EngineEvent::WindowCloseCancelled { window });
+                true
+            }
+        }
+    }
+
+    pub fn set_icon(&self, url: &str, bytes: Vec<u8>) {
+        self.state.lock().icons.insert(url.to_owned(), bytes);
+    }
+
+    pub fn icon_fetches(&self) -> Vec<(EngineProfileId, String)> {
+        self.state.lock().icon_fetches.clone()
+    }
+
+    pub fn set_page(&self, tab: EngineTabId, url: &str, loading: bool) -> EngineResult<()> {
+        let mut state = self.state.lock();
+        let entry = state.tab(tab)?;
+        entry.info.url = url.to_owned();
+        entry.info.loading = loading;
+        Ok(())
+    }
+
+    pub fn set_chosen_files(&self, paths: impl IntoIterator<Item = PathBuf>) {
+        self.state.lock().chosen_files = paths.into_iter().collect();
     }
 
     pub fn emit(&self, event: EngineEvent) {
@@ -961,8 +1036,13 @@ impl BrowserEngine for MockBrowserEngine {
         url: &str,
         max_bytes: usize,
     ) -> Reply<Option<Vec<u8>>> {
-        if let Err(error) = self.state.lock().profile(profile) {
+        let mut state = self.state.lock();
+        if let Err(error) = state.profile(profile) {
             return Reply::err(error);
+        }
+        state.icon_fetches.push((profile, url.to_owned()));
+        if let Some(icon) = state.icons.get(url) {
+            return Reply::ok((icon.len() <= max_bytes).then(|| icon.clone()));
         }
         let icon: Vec<u8> = b"\x89PNG\r\n\x1a\nmock"
             .iter()
@@ -1075,6 +1155,19 @@ impl BrowserEngine for MockBrowserEngine {
                 WindowCommand::SetAutomation { on } => state.window(window)?.info.automation = *on,
                 WindowCommand::Close => {
                     let tabs = state.window(window)?.tabs.clone();
+                    let asking = tabs.iter().copied().find(|tab| {
+                        state
+                            .tabs
+                            .get(tab)
+                            .is_some_and(|entry| entry.info.asks_before_leaving)
+                    });
+                    if let Some(tab) = asking {
+                        state.leave_prompts.insert(tab, LeaveAsker::Window(window));
+                        state.calls.push(MockCall::Window(window, command.clone()));
+                        drop(state);
+                        self.publish_all(events);
+                        return Ok(());
+                    }
                     for tab in tabs {
                         state.remove_tab(tab, &mut events);
                     }
@@ -1617,7 +1710,9 @@ impl BrowserEngine for MockBrowserEngine {
         tab: EngineTabId,
         extension_ids: &[String],
     ) -> EngineResult<ExtensionActionStates> {
-        self.state.lock().tab(tab)?;
+        let mut state = self.state.lock();
+        state.tab(tab)?;
+        state.calls.push(MockCall::ExtensionActionStates(tab));
         Ok(extension_ids
             .iter()
             .map(|id| {
@@ -1626,6 +1721,7 @@ impl BrowserEngine for MockBrowserEngine {
                     ExtensionActionState {
                         enabled: true,
                         title: id.clone(),
+                        popup: state.extension_popups.get(id).cloned().map(Value::String),
                         ..ExtensionActionState::default()
                     },
                 )
@@ -1655,10 +1751,27 @@ impl BrowserEngine for MockBrowserEngine {
     }
 
     fn ask_before_leaving(&self, tab: EngineTabId) -> Reply<bool> {
-        match self.state.lock().tab(tab) {
-            Ok(entry) => Reply::ok(!entry.info.asks_before_leaving),
+        let mut state = self.state.lock();
+        match state.tab(tab) {
+            Ok(entry) if entry.info.asks_before_leaving => {
+                let (responder, reply) = Reply::channel();
+                state.leave_prompts.insert(tab, LeaveAsker::Tab(responder));
+                reply
+            }
+            Ok(_) => Reply::ok(true),
             Err(error) => Reply::err(error),
         }
+    }
+
+    fn choose_files_to_open(&self, window: Option<EngineWindowId>) -> Reply<Vec<PathBuf>> {
+        let mut state = self.state.lock();
+        if let Some(window) = window
+            && let Err(error) = state.window(window)
+        {
+            return Reply::err(error);
+        }
+        state.calls.push(MockCall::ChooseFilesToOpen(window));
+        Reply::ok(std::mem::take(&mut state.chosen_files))
     }
 
     fn enter_pip(&self, tab: EngineTabId, click_time: f64) -> Reply<PipEntry> {
@@ -1710,7 +1823,26 @@ impl BrowserEngine for MockBrowserEngine {
         state
             .calls
             .push(MockCall::DevTools(tab, method.to_owned(), params.clone()));
-        Reply::ok(json!({ "method": method, "params": params.unwrap_or(Value::Null) }))
+        drop(state);
+        let evaluator = self.evaluator.read().clone();
+        let expression = params
+            .as_ref()
+            .and_then(|params| params.get("expression"))
+            .and_then(Value::as_str);
+        match (method, expression, evaluator) {
+            ("Page.getFrameTree", _, _) => {
+                Reply::ok(json!({ "frameTree": { "frame": { "id": format!("frame-{}", tab.get()) } } }))
+            }
+            ("Page.createIsolatedWorld", _, _) => {
+                Reply::ok(json!({ "executionContextId": tab.get() + 1000 }))
+            }
+            ("Runtime.evaluate", Some(expression), Some(evaluator)) => {
+                Reply::ready(evaluator(tab, expression).map(|value| {
+                    json!({ "result": { "type": "object", "value": value.unwrap_or(Value::Null) } })
+                }))
+            }
+            _ => Reply::ok(json!({ "method": method, "params": params.unwrap_or(Value::Null) })),
+        }
     }
 
     fn devtools_layout(&self, tab: EngineTabId, size: Size) -> EngineResult<DevToolsLayout> {
@@ -2325,12 +2457,12 @@ mod tests {
             engine.query(EngineQuery::VideoUpscalingState).unwrap()["enabled"],
             json!(true)
         );
-        let globals: Vec<_> = engine
+        let globals = engine
             .calls()
             .into_iter()
             .filter(|c| matches!(c, MockCall::Global(_)))
-            .collect();
-        assert_eq!(globals.len(), 4);
+            .count();
+        assert_eq!(globals, 4);
     }
 
     #[test]
@@ -2362,5 +2494,103 @@ mod tests {
             .unwrap();
         assert!(engine.password_prompt(tab).unwrap().is_none());
         assert!(!format!("{:?}", engine.calls()).contains("hunter2"));
+    }
+
+    fn open_page(engine: &MockBrowserEngine, window: EngineWindowId, url: &str) -> EngineTabId {
+        let profile = engine.default_profile().unwrap();
+        engine
+            .open_tab(
+                window,
+                OpenTab {
+                    url: url.into(),
+                    profile,
+                    foreground: true,
+                },
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn pages_that_ask_before_leaving_wait_for_an_answer() {
+        let (engine, window, _) = engine_with_window();
+        let tab = open_page(&engine, window, "https://form.example/");
+        let mut quiet = engine.ask_before_leaving(tab);
+        assert_eq!(quiet.try_take(), Some(Ok(true)));
+        engine.set_asks_before_leaving(tab, true).unwrap();
+        assert!(engine.tab_info(tab).unwrap().asks_before_leaving);
+        let mut stay = engine.ask_before_leaving(tab);
+        assert_eq!(stay.try_take(), None);
+        assert_eq!(engine.leave_prompts(), vec![tab]);
+        assert!(engine.answer_leave_prompt(tab, false));
+        assert_eq!(stay.try_take(), Some(Ok(false)));
+        let mut leave = engine.ask_before_leaving(tab);
+        assert!(engine.answer_leave_prompt(tab, true));
+        assert_eq!(leave.try_take(), Some(Ok(true)));
+        assert!(!engine.answer_leave_prompt(tab, true));
+        assert!(
+            engine
+                .set_asks_before_leaving(EngineTabId::from_raw(999).unwrap(), true)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn closing_a_window_asks_each_page_that_wants_to() {
+        let (engine, window, _) = engine_with_window();
+        let calm = open_page(&engine, window, "https://calm.example/");
+        let first = open_page(&engine, window, "https://draft.example/");
+        let second = open_page(&engine, window, "https://upload.example/");
+        engine.set_asks_before_leaving(first, true).unwrap();
+        engine.set_asks_before_leaving(second, true).unwrap();
+        let events = engine.subscribe();
+        engine.close_window(window).unwrap();
+        assert_eq!(engine.leave_prompts(), vec![first]);
+        assert!(engine.answer_leave_prompt(first, false));
+        assert_eq!(
+            events.drain(),
+            vec![EngineEvent::WindowCloseCancelled { window }]
+        );
+        assert!(engine.live_tabs().contains(&calm));
+        engine.close_window(window).unwrap();
+        assert!(engine.answer_leave_prompt(first, true));
+        assert_eq!(engine.leave_prompts(), vec![second]);
+        assert!(engine.answer_leave_prompt(second, true));
+        assert!(engine.live_tabs().is_empty());
+        assert!(
+            events
+                .drain()
+                .contains(&EngineEvent::WindowClosed { window })
+        );
+    }
+
+    #[test]
+    fn the_open_panel_hands_back_the_chosen_files_once() {
+        let (engine, window, _) = engine_with_window();
+        engine.set_chosen_files([PathBuf::from("/tmp/a.html")]);
+        let mut chosen = engine.choose_files_to_open(Some(window));
+        assert_eq!(
+            chosen.try_take(),
+            Some(Ok(vec![PathBuf::from("/tmp/a.html")]))
+        );
+        let mut cancelled = engine.choose_files_to_open(None);
+        assert_eq!(cancelled.try_take(), Some(Ok(Vec::new())));
+        let mut gone = engine.choose_files_to_open(Some(EngineWindowId::from_raw(999).unwrap()));
+        assert!(matches!(gone.try_take(), Some(Err(_))));
+        assert!(
+            engine
+                .calls()
+                .contains(&MockCall::ChooseFilesToOpen(Some(window)))
+        );
+    }
+
+    #[test]
+    fn icons_can_be_scripted_and_fetches_are_logged() {
+        let (engine, _, profile) = engine_with_window();
+        engine.set_icon("https://i.example/a.png", vec![1, 2, 3]);
+        let mut scripted = engine.fetch_icon(profile, "https://i.example/a.png", 10);
+        assert_eq!(scripted.try_take(), Some(Ok(Some(vec![1, 2, 3]))));
+        let mut capped = engine.fetch_icon(profile, "https://i.example/a.png", 2);
+        assert_eq!(capped.try_take(), Some(Ok(None)));
+        assert_eq!(engine.icon_fetches().len(), 2);
     }
 }

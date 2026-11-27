@@ -10,22 +10,23 @@ use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
     AsyncWindowContext, AtlasTile, AvailableSpace, BackdropLayerSpec, Background, BorderStyle,
     Bounds, BoxShadow, Capslock, Context, Corners, CursorHideMode, CursorStyle, Decorations,
-    DevicePixels, DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, Edges, Effect,
-    Entity, EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId, GlyphId,
-    GpuSpecs, Hsla, InputHandler, InputPreference, IsZero, KeyBinding, KeyContext, KeyDownEvent,
-    KeyEvent, Keystroke, KeystrokeEvent, LayoutId, LineLayoutIndex, Modifiers,
-    ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent, MouseUpEvent,
-    PaintedPath, Path, PathHash, Pixels, PlatformAtlas, PlatformDisplay, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, Priority, PromptButton,
-    PromptLevel, Quad, Render, RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams,
-    Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR, SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y,
-    ScaledPixels, Scene, Shadow, SharedString, Size, SpriteAnimation, SpriteAnimationId,
-    StrikethroughStyle, Style, SubpixelSprite, Subscription, SystemWindowTab,
-    SystemWindowTabController, TabStopMap, Task, TextInputConfiguration, TextInputStateChange,
-    TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState, TransformationMatrix,
-    Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
-    WindowControls, WindowDecorations, WindowInsets, WindowOptions, WindowParams, WindowTextSystem,
-    WindowVisibility, point, prelude::*, px, rems, size, transparent_black,
+    DevicePixels, DispatchActionListener, DispatchNodeId, DispatchTree, DisplayId, DrawPhases,
+    Edges, Effect, Entity, EntityId, EventEmitter, FileDropEvent, FontId, Global, GlobalElementId,
+    GlyphId, GpuSpecs, Hsla, InputHandler, InputLatencySample, InputPreference, IsZero, KeyBinding,
+    KeyContext, KeyDownEvent, KeyEvent, Keystroke, KeystrokeEvent, LayoutId, LineLayoutIndex,
+    Modifiers, ModifiersChangedEvent, MonochromeSprite, MouseButton, MouseEvent, MouseMoveEvent,
+    MouseUpEvent, PaintedPath, Path, PathHash, Pixels, PlatformAtlas, PlatformDisplay,
+    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PolychromeSprite, Priority,
+    PromptButton, PromptLevel, Quad, Radians, Render, RenderGlyphParams, RenderImage,
+    RenderImageParams, RenderSvgParams, Replay, ResizeEdge, SMOOTH_SVG_SCALE_FACTOR,
+    SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
+    SpriteAnimation, SpriteAnimationId, StrikethroughStyle, Style, SubpixelSprite, Subscription,
+    SystemWindowTab, SystemWindowTabController, TabStopMap, Task, TextInputConfiguration,
+    TextInputStateChange, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
+    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
+    WindowBounds, WindowControls, WindowDecorations, WindowFrameTiming, WindowInsets,
+    WindowOptions, WindowParams, WindowTextSystem, WindowVisibility, point, prelude::*, px, rems,
+    size, transparent_black,
 };
 
 use crate::gestures::{GestureTuning, RecognizedTouchGesture, TouchGestureRecognizer};
@@ -71,12 +72,16 @@ use uuid::Uuid;
 pub(crate) mod a11y;
 mod liquid_glass;
 mod native_view;
+#[cfg(test)]
+mod paint_effects_tests;
 mod prompts;
+mod visual_effect;
 
 pub use a11y::A11ySubtreeBuilder;
 pub use liquid_glass::PaintLiquidGlass;
 use native_view::NativeViewState;
 pub use native_view::{NativeView, NativeViewId};
+pub use visual_effect::PaintVisualEffect;
 
 use self::a11y::A11y;
 #[cfg(not(target_family = "wasm"))]
@@ -462,6 +467,18 @@ impl Drop for ElementArenaScope {
     }
 }
 
+type FramePresentedObserver = Box<dyn FnMut(&WindowFrameTiming, &mut Window, &mut App) -> bool>;
+
+type InputLatencyObserver = Box<dyn FnMut(&InputLatencySample, &mut Window, &mut App) -> bool>;
+
+#[derive(Clone, Copy)]
+struct DrawnFrame {
+    draw_start: Instant,
+    layout_start: Instant,
+    phases: DrawPhases,
+    draw_end: Instant,
+}
+
 /// Returned when the element arena has been used and so must be cleared before the next draw.
 #[must_use]
 pub struct ArenaClearNeeded {
@@ -760,6 +777,9 @@ pub(crate) struct CursorStyleRequest {
 pub(crate) struct HitTest {
     pub(crate) ids: SmallVec<[HitboxId; 8]>,
     pub(crate) hover_hitbox_count: usize,
+    /// The hitboxes of the elements holding the native view that took the
+    /// position, which hear a pinch the platform forwards from the view.
+    pub(crate) native_view_holder_ids: SmallVec<[HitboxId; 4]>,
 }
 
 /// A type of window control area that corresponds to the platform window.
@@ -840,6 +860,14 @@ impl HitboxId {
         window.mouse_hit_test.ids.contains(&self)
     }
 
+    /// Checks if the hitbox with this ID contains the mouse and should handle pinch events.
+    ///
+    /// See [`Hitbox::should_handle_pinch`] for details.
+    pub fn should_handle_pinch(self, window: &Window) -> bool {
+        self.is_hovered_ignoring_last_input(window)
+            || window.mouse_hit_test.native_view_holder_ids.contains(&self)
+    }
+
     pub(crate) fn next(self) -> HitboxId {
         HitboxId(self.0.wrapping_add(1))
     }
@@ -858,6 +886,9 @@ pub struct Hitbox {
     pub content_mask: ContentMask<Pixels>,
     /// Flags that specify hitbox behavior.
     pub behavior: HitboxBehavior,
+    /// The hitbox of the element holding the one that inserted this, even
+    /// when it was drawn deferred or reused from an earlier frame.
+    parent: Option<HitboxId>,
 }
 
 impl Hitbox {
@@ -900,6 +931,16 @@ impl Hitbox {
     /// this sets `HitboxBehavior::BlockMouse` (`InteractiveElement::occlude`).
     pub fn should_handle_scroll(&self, window: &Window) -> bool {
         self.id.should_handle_scroll(window)
+    }
+
+    /// Checks if the hitbox contains the mouse and should handle pinch events, whatever the last
+    /// input modality was.
+    ///
+    /// This is `is_hovered`, except over a [`crate::NativeView`]: the platform hands a pinch over
+    /// the view on to the window, and the elements that hold the view handle it, while the
+    /// elements behind the view stay unhovered.
+    pub fn should_handle_pinch(&self, window: &Window) -> bool {
+        self.id.should_handle_pinch(window)
     }
 }
 
@@ -1045,6 +1086,8 @@ pub(crate) struct DeferredDraw {
     rem_size: Pixels,
     element: Option<AnyElement>,
     absolute_offset: Point<Pixels>,
+    paint_transform: Option<crate::PaintTransform>,
+    hitbox_parent: Option<HitboxId>,
     prepaint_range: Range<PrepaintStateIndex>,
     paint_range: Range<PaintIndex>,
     /// The entities the deferred element accessed while it was last drawn, in
@@ -1075,6 +1118,59 @@ pub(crate) struct Frame {
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) inspector_hitboxes: FxHashMap<HitboxId, crate::InspectorElementId>,
     pub(crate) tab_stops: TabStopMap,
+}
+
+/// For each element being prepainted, from the outermost, the first hitbox
+/// it inserted, which holds the hitboxes inserted after it.
+#[derive(Clone, Default)]
+pub(crate) struct HitboxOwners(Rc<RefCell<SmallVec<[Option<HitboxId>; 32]>>>);
+
+impl HitboxOwners {
+    /// Opens a frame for an element, closed when the returned guard drops,
+    /// even while unwinding.
+    pub(crate) fn push(&self, owner: Option<HitboxId>) -> HitboxOwnerFrame {
+        let mut owners = self.0.borrow_mut();
+        let depth = owners.len();
+        owners.push(owner);
+        HitboxOwnerFrame {
+            owners: self.clone(),
+            depth,
+        }
+    }
+
+    fn claim(&self, id: HitboxId) {
+        if let Some(owner @ None) = self.0.borrow_mut().last_mut() {
+            *owner = Some(id);
+        }
+    }
+
+    fn parent(&self) -> Option<HitboxId> {
+        self.0.borrow().iter().rev().find_map(|owner| *owner)
+    }
+
+    fn snapshot(&self) -> SmallVec<[Option<HitboxId>; 32]> {
+        self.0.borrow().clone()
+    }
+
+    fn restore(&self, owners: SmallVec<[Option<HitboxId>; 32]>) {
+        *self.0.borrow_mut() = owners;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.0.borrow().len()
+    }
+}
+
+pub(crate) struct HitboxOwnerFrame {
+    owners: HitboxOwners,
+    depth: usize,
+}
+
+impl Drop for HitboxOwnerFrame {
+    fn drop(&mut self) {
+        self.owners.0.borrow_mut().truncate(self.depth);
+    }
 }
 
 #[derive(Clone, Default)]
@@ -1183,7 +1279,7 @@ impl Frame {
     pub(crate) fn hit_test(&self, position: Point<Pixels>) -> HitTest {
         let mut set_hover_hitbox_count = false;
         let mut hit_test = HitTest::default();
-        for hitbox in self.hitboxes.iter().rev() {
+        for (index, hitbox) in self.hitboxes.iter().enumerate().rev() {
             let bounds = hitbox.bounds.intersect(&hitbox.content_mask.bounds);
             if bounds.contains(&position) {
                 hit_test.ids.push(hitbox.id);
@@ -1194,6 +1290,20 @@ impl Frame {
                     set_hover_hitbox_count = true;
                 }
                 if hitbox.behavior == HitboxBehavior::BlockMouse {
+                    if self
+                        .scene
+                        .native_views
+                        .iter()
+                        .any(|native_view| native_view.hitbox_id == hitbox.id)
+                    {
+                        let holders = self.holder_ids(index, position);
+                        let covered = hit_test.ids[..hit_test.ids.len() - 1]
+                            .iter()
+                            .any(|id| !holders.contains(id));
+                        if !covered {
+                            hit_test.native_view_holder_ids = holders;
+                        }
+                    }
                     break;
                 }
             }
@@ -1202,6 +1312,31 @@ impl Frame {
             hit_test.hover_hitbox_count = hit_test.ids.len();
         }
         hit_test
+    }
+
+    /// The hitboxes at `position` of the elements that hold the one at
+    /// `index`, from the innermost, as far as one that blocks the mouse.
+    fn holder_ids(&self, index: usize, position: Point<Pixels>) -> SmallVec<[HitboxId; 4]> {
+        let mut ids = SmallVec::new();
+        let mut parent = self.hitboxes[index].parent;
+        for holder in self.hitboxes[..index].iter().rev() {
+            if parent.is_none() {
+                break;
+            }
+            if Some(holder.id) != parent {
+                continue;
+            }
+            parent = holder.parent;
+            let bounds = holder.bounds.intersect(&holder.content_mask.bounds);
+            if !bounds.contains(&position) {
+                continue;
+            }
+            ids.push(holder.id);
+            if holder.behavior != HitboxBehavior::Normal {
+                break;
+            }
+        }
+        ids
     }
 
     pub(crate) fn focus_path(&self) -> SmallVec<[FocusId; 8]> {
@@ -1269,6 +1404,9 @@ pub struct Window {
     pub(crate) rendered_frame: Frame,
     pub(crate) next_frame: Frame,
     next_hitbox_id: HitboxId,
+    /// For each element being prepainted, from the outermost, the first
+    /// hitbox it inserted, which holds the hitboxes inserted after it.
+    pub(crate) hitbox_owners: HitboxOwners,
     native_views: Vec<std::rc::Weak<NativeViewState>>,
     next_native_view_id: u64,
     pub(crate) next_tooltip_id: TooltipId,
@@ -1292,6 +1430,11 @@ pub struct Window {
     visibility: WindowVisibility,
     pub(crate) visibility_observers:
         SingleSubscriberSet<Box<dyn FnMut(WindowVisibility, &mut Window, &mut App) -> bool>>,
+    frame_presented_observers: SingleSubscriberSet<FramePresentedObserver>,
+    input_latency_observers: SingleSubscriberSet<InputLatencyObserver>,
+    input_latency_wired: Cell<bool>,
+    draw_phases: Option<(Instant, DrawPhases)>,
+    unpresented_frame: Option<DrawnFrame>,
     hovered: Rc<Cell<bool>>,
     pub(crate) needs_present: Rc<Cell<bool>>,
     /// The rendered scene's [`Scene::animation_frame_interval`]. While it is
@@ -1347,6 +1490,21 @@ pub(crate) struct InputRateTracker {
 }
 
 const FRAME_INTERVAL_TOLERANCE: Duration = Duration::from_millis(1);
+
+const MIN_PAINT_SCALE: f32 = 1e-3;
+
+/// Where [`Window::paint_image_mask`] keeps the alpha of an image's frame in
+/// the monochrome atlas.
+fn image_mask_params(image: &RenderImage, frame_index: usize) -> RenderSvgParams {
+    RenderSvgParams {
+        path: format!("gpui-image-mask/{}/{frame_index}", image.id.0).into(),
+        size: image.size(frame_index),
+    }
+}
+
+/// What [`Window::push_transform`] changed, for [`Window::pop_transform`] to restore.
+#[must_use]
+pub(crate) struct PushedScale(Option<Option<crate::PaintTransform>>);
 
 /// Keeps throttled frames on a stable cadence despite callback delivery jitter.
 #[derive(Default)]
@@ -1677,6 +1835,7 @@ impl Window {
             #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
             use_display_p3,
             host_window,
+            keeps_key_appearance,
         } = options;
 
         let initial_window_title = titlebar
@@ -1725,6 +1884,9 @@ impl Window {
                 host_window,
             },
         )?;
+        if keeps_key_appearance {
+            platform_window.set_keeps_key_appearance(true);
+        }
 
         let tab_bar_visible = platform_window.tab_bar_visible();
         SystemWindowTabController::init_visible(cx, tab_bar_visible);
@@ -2093,6 +2255,10 @@ impl Window {
                                 window.advance_scene_animations(cx);
                                 window.present();
                                 arena_clear_needed.clear(cx);
+                                window.report_presented_frame(
+                                    request_frame_options.target_presented_at,
+                                    cx,
+                                );
                             })
                             .with_context(|| {
                                 format!(
@@ -2107,6 +2273,10 @@ impl Window {
                         .update(&mut cx, |_, window, cx| {
                             window.advance_scene_animations(cx);
                             window.present();
+                            window.report_presented_frame(
+                                request_frame_options.target_presented_at,
+                                cx,
+                            );
                         })
                         .with_context(|| {
                             format!("presenting frame for window {:?}", handle.window_id())
@@ -2471,6 +2641,7 @@ impl Window {
             next_frame: Frame::new(DispatchTree::new(cx.keymap.clone(), cx.actions.clone())),
             next_frame_callbacks,
             next_hitbox_id: HitboxId(0),
+            hitbox_owners: HitboxOwners::default(),
             native_views: Vec::new(),
             next_native_view_id: 0,
             next_tooltip_id: TooltipId::default(),
@@ -2492,6 +2663,11 @@ impl Window {
             active,
             visibility,
             visibility_observers: SingleSubscriberSet::new(),
+            frame_presented_observers: SingleSubscriberSet::new(),
+            input_latency_observers: SingleSubscriberSet::new(),
+            input_latency_wired: Cell::new(false),
+            draw_phases: None,
+            unpresented_frame: None,
             hovered,
             needs_present,
             scene_animation_interval,
@@ -2686,6 +2862,83 @@ impl Window {
                 callback(visibility, window, cx);
                 true
             }))
+    }
+
+    /// Registers a callback invoked with the timing of each drawn frame once
+    /// it was handed to the platform. Frames that only re-present an earlier
+    /// draw (scene animations) aren't reported, and a draw replaced by another
+    /// before it was presented is never reported.
+    ///
+    /// Available without the `profiler` feature. While no callback is
+    /// registered, draws take no timestamps for it.
+    pub fn on_frame_presented(
+        &self,
+        mut callback: impl FnMut(&WindowFrameTiming, &mut Window, &mut App) + 'static,
+    ) -> Subscription {
+        self.frame_presented_observers
+            .insert(Box::new(move |timing, window, cx| {
+                callback(timing, window, cx);
+                true
+            }))
+    }
+
+    /// Registers a callback invoked on the main thread with each input's
+    /// latency to the display, as the platform measures it: on macOS 14 and
+    /// later, scrolls and pinches drawn by the window's `CAMetalDisplayLink`.
+    /// Elsewhere the callback is never invoked.
+    ///
+    /// The platform only measures once a callback was registered for the
+    /// window, and samples arrive shortly after their frame reaches the
+    /// display.
+    pub fn on_input_latency(
+        &self,
+        cx: &App,
+        mut callback: impl FnMut(&InputLatencySample, &mut Window, &mut App) + 'static,
+    ) -> Subscription {
+        let subscription =
+            self.input_latency_observers
+                .insert(Box::new(move |sample, window, cx| {
+                    callback(sample, window, cx);
+                    true
+                }));
+        if !self.input_latency_wired.replace(true) {
+            let mut cx = self.to_async(cx);
+            self.platform_window
+                .on_input_latency(Some(Box::new(move |sample| {
+                    cx.update(|window, cx| {
+                        window
+                            .input_latency_observers
+                            .clone()
+                            .retain(|callback| callback(&sample, window, cx));
+                    })
+                    .ok();
+                })));
+        }
+        subscription
+    }
+
+    fn measures_frames(&self) -> bool {
+        cfg!(feature = "profiler") || !self.frame_presented_observers.is_empty()
+    }
+
+    fn report_presented_frame(&mut self, target_presented_at: Option<Instant>, cx: &mut App) {
+        let Some(frame) = self.unpresented_frame.take() else {
+            return;
+        };
+        if self.frame_presented_observers.is_empty() {
+            return;
+        }
+        let timing = WindowFrameTiming {
+            draw_start: frame.draw_start,
+            layout_start: frame.layout_start,
+            phases: frame.phases,
+            draw_end: frame.draw_end,
+            submitted_at: Instant::now(),
+            target_presented_at,
+        };
+        self.frame_presented_observers
+            .clone()
+            .retain(|callback| callback(&timing, self, cx));
     }
 
     /// Registers a callback to be invoked when the window appearance changes.
@@ -3267,13 +3520,20 @@ impl Window {
         self.platform_window.insets()
     }
 
-    /// Renders the current frame's scene to a texture and returns the pixel data as an RGBA image.
-    /// This does not present the frame to screen - useful for visual testing where we want
-    /// to capture what would be rendered without displaying it or requiring the window to be visible.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn render_to_image(&self) -> anyhow::Result<image::RgbaImage> {
+    /// Renders the last drawn frame's scene to a texture and returns the pixel data as an RGBA
+    /// image, without presenting it or touching what the window shows.
+    ///
+    /// `scale` is relative to the window's device pixels and must be in `(0, 1]`: 1.0 renders at
+    /// the window's drawable size and 0.5 at half of it, each side rounded down. Native views
+    /// and system materials are not part of the scene, so they are not in the image. Returns an
+    /// error on platforms that cannot render a window offscreen.
+    pub fn render_to_image(&self, scale: f32) -> anyhow::Result<image::RgbaImage> {
+        anyhow::ensure!(
+            scale.is_finite() && scale > 0. && scale <= 1.,
+            "render_to_image scale must be in (0, 1], got {scale}"
+        );
         self.platform_window
-            .render_to_image(&self.rendered_frame.scene)
+            .render_to_image(&self.rendered_frame.scene, scale)
     }
 
     /// Borrows the most recently rendered frame's scene, so benchmarks can validate their
@@ -3486,6 +3746,20 @@ impl Window {
     pub fn set_backdrop_layer(&self, spec: Option<BackdropLayerSpec>) {
         self.platform_window
             .set_backdrop_layer(spec.map(BackdropLayerSpec::sanitized));
+    }
+
+    /// Sets the gradients the backdrop layer draws above its base tint and
+    /// below its grain. A `base` gradient replaces the spec's three-stop one.
+    pub fn set_backdrop_gradients(&self, gradients: crate::BackdropGradients) {
+        self.platform_window
+            .set_backdrop_gradients(gradients.sanitized());
+    }
+
+    /// Keeps the window's key appearance (active traffic lights and vibrancy)
+    /// while the application is inactive, if it was the key or main window.
+    /// Only macOS honors this.
+    pub fn set_keeps_key_appearance(&self, keeps: bool) {
+        self.platform_window.set_keeps_key_appearance(keeps);
     }
 
     #[allow(missing_docs)]
@@ -3869,6 +4143,8 @@ impl Window {
     /// the contents of the new [`Scene`], use [`Self::present`].
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
+        let draw_start = self.measures_frames().then(Instant::now);
+        self.draw_phases = None;
         // Drain every draw in profiler builds so a previous frame's
         // first-invalidation timestamp can't be attributed to this one.
         #[cfg(feature = "profiler")]
@@ -4027,6 +4303,19 @@ impl Window {
             self.debug_frame_overlay.record_frame(draw_duration);
         }
 
+        if let Some(draw_start) = draw_start {
+            let (layout_start, phases) = self
+                .draw_phases
+                .take()
+                .unwrap_or((draw_start, DrawPhases::default()));
+            self.unpresented_frame = Some(DrawnFrame {
+                draw_start,
+                layout_start,
+                phases,
+                draw_end: Instant::now(),
+            });
+        }
+
         // Exit the scope to obtain the arena-clear token this draw owes; the
         // scope's teardown itself happens in `ElementArenaScope::drop`.
         arena_scope.exit(&cx.element_arena)
@@ -4151,12 +4440,11 @@ impl Window {
         // stretches to fill the viewport unless explicitly sized, window roots
         // fill the window when their size is `auto`.
         let scale_factor = self.scale_factor();
-        #[cfg(feature = "profiler")]
-        let request_layout_start = Instant::now();
+        let measures_frames = self.measures_frames();
+        let request_layout_start = measures_frames.then(Instant::now);
         let mut root_element = self.root.as_ref().unwrap().clone().into_any_element();
         let root_layout_id = root_element.request_layout(self, cx);
-        #[cfg(feature = "profiler")]
-        let prepaint_start = Instant::now();
+        let prepaint_start = measures_frames.then(Instant::now);
         self.layout_engine
             .as_mut()
             .unwrap()
@@ -4194,8 +4482,7 @@ impl Window {
         self.mouse_hit_test = self.next_frame.hit_test(self.mouse_position);
 
         // Now actually paint the elements.
-        #[cfg(feature = "profiler")]
-        let paint_start = Instant::now();
+        let paint_start = measures_frames.then(Instant::now);
         self.invalidator.set_phase(DrawPhase::Paint);
         root_element.paint(self, cx);
 
@@ -4215,13 +4502,18 @@ impl Window {
         #[cfg(any(feature = "inspector", debug_assertions))]
         self.paint_inspector_hitbox(cx);
 
-        #[cfg(feature = "profiler")]
-        self.window_profiler
-            .record_draw_phases(profiler::DrawPhases {
+        if let (Some(request_layout_start), Some(prepaint_start), Some(paint_start)) =
+            (request_layout_start, prepaint_start, paint_start)
+        {
+            let phases = DrawPhases {
                 request_layout: prepaint_start.duration_since(request_layout_start),
                 prepaint: paint_start.duration_since(prepaint_start),
                 paint: Instant::now().duration_since(paint_start),
-            });
+            };
+            #[cfg(feature = "profiler")]
+            self.window_profiler.record_draw_phases(phases);
+            self.draw_phases = Some((request_layout_start, phases));
+        }
 
         // a11y may have been activated/deactivated halfway through the frame
         let a11y_active_start_of_frame = self.a11y.is_active();
@@ -4365,17 +4657,24 @@ impl Window {
                     )
                 };
                 self.next_frame.dispatch_tree.set_active_node(parent_node);
+                let hitbox_owner = self
+                    .hitbox_owners
+                    .push(self.next_frame.deferred_draws[deferred_draw_ix].hitbox_parent);
 
                 let prepaint_start = self.prepaint_index();
                 if let Some(mut element) = element {
                     let content_mask =
                         self.next_frame.deferred_draws[deferred_draw_ix].content_mask;
+                    let paint_transform =
+                        self.next_frame.deferred_draws[deferred_draw_ix].paint_transform;
                     let ((), accessed_entities) = cx.detect_accessed_entities(|cx| {
                         self.with_rendered_view(current_view, |window| {
                             window.with_rem_size(Some(rem_size), |window| {
                                 window.with_absolute_element_offset(absolute_offset, |window| {
-                                    window.with_content_mask(content_mask, |window| {
-                                        element.prepaint(window, cx);
+                                    window.with_paint_transform(paint_transform, |window| {
+                                        window.with_content_mask(content_mask, |window| {
+                                            element.prepaint(window, cx);
+                                        });
                                     });
                                 });
                             });
@@ -4393,6 +4692,7 @@ impl Window {
                     );
                     self.reuse_prepaint(prepaint_range);
                 }
+                drop(hitbox_owner);
                 let prepaint_end = self.prepaint_index();
                 self.next_frame.deferred_draws[deferred_draw_ix].prepaint_range =
                     prepaint_start..prepaint_end;
@@ -4425,13 +4725,16 @@ impl Window {
 
             let paint_start = self.paint_index();
             let content_mask = deferred_draw.content_mask;
+            let paint_transform = deferred_draw.paint_transform;
             if let Some(element) = deferred_draw.element.as_mut() {
                 let ((), accessed_entities) = cx.detect_accessed_entities(|cx| {
                     self.with_rendered_view(deferred_draw.current_view, |window| {
-                        window.with_content_mask(content_mask, |window| {
-                            window.with_rem_size(Some(deferred_draw.rem_size), |window| {
-                                element.paint(window, cx);
-                            });
+                        window.with_paint_transform(paint_transform, |window| {
+                            window.with_content_mask(content_mask, |window| {
+                                window.with_rem_size(Some(deferred_draw.rem_size), |window| {
+                                    element.paint(window, cx);
+                                });
+                            })
                         })
                     })
                 });
@@ -4465,11 +4768,24 @@ impl Window {
     }
 
     pub(crate) fn reuse_prepaint(&mut self, range: Range<PrepaintStateIndex>) {
-        self.next_frame.hitboxes.extend(
-            self.rendered_frame.hitboxes[range.start.hitboxes_index..range.end.hitboxes_index]
-                .iter()
-                .cloned(),
-        );
+        let reused_hitboxes =
+            &self.rendered_frame.hitboxes[range.start.hitboxes_index..range.end.hitboxes_index];
+        let reused_ids = reused_hitboxes
+            .iter()
+            .map(|hitbox| hitbox.id)
+            .collect::<FxHashSet<_>>();
+        let hitbox_parent = self.hitbox_parent();
+        let reparent = |parent: Option<HitboxId>| {
+            parent
+                .filter(|parent| reused_ids.contains(parent))
+                .or(hitbox_parent)
+        };
+        self.next_frame
+            .hitboxes
+            .extend(reused_hitboxes.iter().map(|hitbox| Hitbox {
+                parent: reparent(hitbox.parent),
+                ..hitbox.clone()
+            }));
         self.next_frame.tooltip_requests.extend(
             self.rendered_frame.tooltip_requests
                 [range.start.tooltips_index..range.end.tooltips_index]
@@ -4509,6 +4825,8 @@ impl Window {
                     priority: deferred_draw.priority,
                     element: None,
                     absolute_offset: deferred_draw.absolute_offset,
+                    paint_transform: deferred_draw.paint_transform,
+                    hitbox_parent: reparent(deferred_draw.hitbox_parent),
                     prepaint_range: deferred_draw.prepaint_range.clone(),
                     paint_range: deferred_draw.paint_range.clone(),
                     accessed_entities: deferred_draw.accessed_entities.clone(),
@@ -4681,6 +4999,227 @@ impl Window {
         result
     }
 
+    /// Draws what `f` paints, and the hitboxes it inserts, scaled by `scale`
+    /// about `origin`, during both prepaint and paint. Scales nest: one
+    /// inside another scales about its origin as the outer scale moved it.
+    ///
+    /// Inside, [`Self::content_mask`] and element bounds stay in the
+    /// unscaled layout space, and the content mask in effect when the scale
+    /// began still clips in window space. Native views are scaled as a
+    /// whole by the platform (see [`crate::NativeView`]); liquid glass and
+    /// visual effect regions are platform layers and are not scaled.
+    pub fn with_scale<R>(
+        &mut self,
+        origin: Point<Pixels>,
+        scale: f32,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.with_transform(origin, scale, Radians(0.), f)
+    }
+
+    /// Like [`Self::with_scale`], scaling by `scale_x` horizontally and
+    /// `scale_y` vertically. See [`Self::with_transform_xy`] for how each
+    /// kind of primitive stretches.
+    pub fn with_scale_xy<R>(
+        &mut self,
+        origin: Point<Pixels>,
+        scale_x: f32,
+        scale_y: f32,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.with_transform_xy(origin, scale_x, scale_y, Radians(0.), f)
+    }
+
+    /// Like [`Self::with_scale`], turning what `f` paints clockwise by
+    /// `angle` about `origin` instead. See [`Self::with_transform`].
+    pub fn with_rotation<R>(
+        &mut self,
+        origin: Point<Pixels>,
+        angle: impl Into<Radians>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.with_transform(origin, 1., angle, f)
+    }
+
+    /// Draws what `f` paints, and the hitboxes it inserts, scaled by `scale`
+    /// and then turned clockwise by `angle` about `origin`, during both
+    /// prepaint and paint. Transforms nest like [`Self::with_scale`].
+    ///
+    /// Under a turn, monochrome and subpixel sprites (glyphs, SVGs and
+    /// [`Self::paint_image_mask`]) turn exactly through their matrix, and
+    /// paths turn exactly. Quads and straight underlines become path fills
+    /// of their turned shapes: dashed borders draw solid, a linear gradient
+    /// turns with the shape but spans the bounds of the turned shape, and
+    /// a wavy underline draws as a straight line. Shadows, polychrome
+    /// sprites (images and emoji) and surfaces can't turn on the GPU, so
+    /// they stay upright, scaled about where their center moves to.
+    ///
+    /// Hitboxes, content masks and fade masks are axis-aligned: a turned
+    /// element is hit within the bounds of its turned shape, and an overflow
+    /// mask inside a turn clips to the bounds of the turned mask. Native
+    /// views don't turn either: like polychrome sprites they stay upright,
+    /// scaled by how much the transform stretches each of their axes, so
+    /// they are hit exactly where they show (see [`crate::NativeView`]).
+    /// Liquid glass and visual effect regions are not transformed.
+    pub fn with_transform<R>(
+        &mut self,
+        origin: Point<Pixels>,
+        scale: f32,
+        angle: impl Into<Radians>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.with_transform_xy(origin, scale, scale, angle, f)
+    }
+
+    /// Like [`Self::with_transform`], scaling by `scale_x` horizontally and
+    /// `scale_y` vertically before the turn.
+    ///
+    /// Scaled unevenly, what `f` paints stretches along each axis: quads
+    /// with square corners stay quads, their left and right borders scaled
+    /// by `scale_x` and their top and bottom borders by `scale_y`, while
+    /// rounded quads become path fills of their elliptical corners, drawn
+    /// like turned quads. Underlines thicken by `scale_y`. Monochrome and
+    /// subpixel sprites stretch through their matrix, and paths stretch
+    /// exactly. Shadows, polychrome sprites and surfaces stretch their
+    /// bounds, keeping circular corners and blur scaled by the smaller of
+    /// the two scales. Hitboxes and content masks stretch with their
+    /// bounds. Native views stretch as a whole through their bounds.
+    pub fn with_transform_xy<R>(
+        &mut self,
+        origin: Point<Pixels>,
+        scale_x: f32,
+        scale_y: f32,
+        angle: impl Into<Radians>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let pushed = self.push_transform(origin, (scale_x, scale_y), Some(angle.into()));
+        let result = f(self);
+        self.pop_transform(pushed);
+        result
+    }
+
+    /// Begins what [`Self::with_transform_xy`] does, until the matching
+    /// [`Self::pop_transform`].
+    pub(crate) fn push_transform(
+        &mut self,
+        origin: Point<Pixels>,
+        (scale_x, scale_y): (f32, f32),
+        rotation: Option<Radians>,
+    ) -> PushedScale {
+        self.invalidator.debug_assert_paint_or_prepaint();
+        let finite_or_one = |scale: f32| if scale.is_finite() { scale } else { 1. };
+        let scale = point(finite_or_one(scale_x), finite_or_one(scale_y));
+        let rotation = rotation
+            .map(|angle| angle.0 % std::f32::consts::TAU)
+            .filter(|angle| angle.is_finite() && *angle != 0.)
+            .unwrap_or(0.);
+        if (scale == point(1., 1.) && rotation == 0.)
+            || !origin.x.0.is_finite()
+            || !origin.y.0.is_finite()
+        {
+            return PushedScale(None);
+        }
+        let scale_factor = self.scale_factor();
+        let current = self.next_frame.scene.paint_transform();
+        let clip = self.window_content_mask().scale(scale_factor).bounds;
+        let transform = crate::PaintTransform::about(
+            origin.scale(scale_factor),
+            point(scale.x.max(MIN_PAINT_SCALE), scale.y.max(MIN_PAINT_SCALE)),
+            Radians(rotation),
+            clip,
+            current,
+        );
+        self.push_paint_transform(Some(transform))
+    }
+
+    pub(crate) fn pop_transform(&mut self, pushed: PushedScale) {
+        if let PushedScale(Some(previous)) = pushed {
+            self.content_mask_stack.pop();
+            self.next_frame.scene.set_paint_transform(previous);
+        }
+    }
+
+    /// The scale of [`Self::with_scale`] in effect, relative to the window:
+    /// the larger of its horizontal and vertical scales, which
+    /// [`Self::paint_scale_xy`] gives apart.
+    pub fn paint_scale(&self) -> f32 {
+        let (scale_x, scale_y) = self.paint_scale_xy();
+        scale_x.max(scale_y)
+    }
+
+    /// The horizontal and vertical scales of [`Self::with_scale_xy`] in
+    /// effect, relative to the window.
+    pub fn paint_scale_xy(&self) -> (f32, f32) {
+        self.next_frame
+            .scene
+            .paint_transform()
+            .map_or((1., 1.), |transform| {
+                let scale = transform.scale();
+                (scale.x, scale.y)
+            })
+    }
+
+    /// Fades what `f` paints out toward an edge of `mask.bounds`, smoothly
+    /// per device pixel, without changing how it is laid out or hit.
+    ///
+    /// Sprites that cross the fade, such as glyphs, are cut into strips of
+    /// atlas texels that each take the fade at that column; other primitives
+    /// are clipped into device pixel strips. What lies past the edge is
+    /// dropped. Surfaces can't fade, and native views are left as they are.
+    pub fn with_fade_mask<R>(
+        &mut self,
+        mask: crate::FadeMask,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.invalidator.debug_assert_paint_or_prepaint();
+        let Some(ramp) = crate::FadeRamp::new(
+            mask,
+            self.scale_factor(),
+            self.next_frame.scene.paint_transform(),
+        ) else {
+            return f(self);
+        };
+        self.next_frame.scene.push_fade_ramp(ramp);
+        let result = f(self);
+        self.next_frame.scene.pop_fade_ramp();
+        result
+    }
+
+    fn window_content_mask(&self) -> ContentMask<Pixels> {
+        let mask = self.content_mask();
+        match self.next_frame.scene.paint_transform() {
+            Some(transform) => transform.logical_content_mask(mask, self.scale_factor()),
+            None => mask,
+        }
+    }
+
+    pub(crate) fn with_paint_transform<R>(
+        &mut self,
+        transform: Option<crate::PaintTransform>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let pushed = self.push_paint_transform(transform);
+        let result = f(self);
+        self.pop_transform(pushed);
+        result
+    }
+
+    fn push_paint_transform(&mut self, transform: Option<crate::PaintTransform>) -> PushedScale {
+        if transform == self.next_frame.scene.paint_transform() {
+            return PushedScale(None);
+        }
+        let window_mask = self.window_content_mask();
+        let local_mask = match transform {
+            Some(transform) => ContentMask {
+                bounds: transform.inverse_logical_bounds(window_mask.bounds, self.scale_factor()),
+            },
+            None => window_mask,
+        };
+        let previous = self.next_frame.scene.set_paint_transform(transform);
+        self.content_mask_stack.push(local_mask);
+        PushedScale(Some(previous))
+    }
+
     pub(crate) fn with_element_opacity<R>(
         &mut self,
         opacity: Option<f32>,
@@ -4707,8 +5246,10 @@ impl Window {
     pub fn transact<T, U>(&mut self, f: impl FnOnce(&mut Self) -> Result<T, U>) -> Result<T, U> {
         self.invalidator.debug_assert_prepaint();
         let index = self.prepaint_index();
+        let hitbox_owners = self.hitbox_owners.snapshot();
         let result = f(self);
         if result.is_err() {
+            self.hitbox_owners.restore(hitbox_owners);
             self.next_frame.hitboxes.truncate(index.hitboxes_index);
             self.next_frame
                 .tooltip_requests
@@ -4992,6 +5533,8 @@ impl Window {
             priority,
             element: Some(element),
             absolute_offset,
+            paint_transform: self.next_frame.scene.paint_transform(),
+            hitbox_parent: self.hitbox_parent(),
             prepaint_range: PrepaintStateIndex::default()..PrepaintStateIndex::default(),
             paint_range: PaintIndex::default()..PaintIndex::default(),
             accessed_entities: FxHashSet::default(),
@@ -5182,7 +5725,12 @@ impl Window {
 
         let is_rectangle =
             quad.border_widths == Edges::default() && quad.corner_radii == Corners::default();
-        if has_background && is_rectangle {
+        let is_filled_as_paths = self
+            .next_frame
+            .scene
+            .paint_transform()
+            .is_some_and(|transform| transform.fills_quad_as_paths(&quad));
+        if (has_background && is_rectangle) || is_filled_as_paths {
             self.next_frame.scene.insert_primitive(quad);
             return;
         }
@@ -5269,7 +5817,22 @@ impl Window {
         self.invalidator.debug_assert_paint();
 
         let scale_factor = self.scale_factor();
-        let content_mask = self.content_mask();
+        let mut content_mask = self.content_mask();
+        let mut path = path;
+        if let Some(transform) = self.next_frame.scene.paint_transform() {
+            path = if transform.rotates() || !transform.is_uniform() {
+                path.transformed(
+                    transform.linear(),
+                    transform.logical_translation(scale_factor),
+                )
+            } else {
+                path.scaled(
+                    transform.scale().x,
+                    transform.logical_translation(scale_factor),
+                )
+            };
+            content_mask = transform.logical_content_mask(content_mask, scale_factor);
+        }
         let opacity = self.element_opacity();
         let color: Background = color.into();
         self.next_frame.scene.insert_primitive(PaintedPath::new(
@@ -5686,6 +6249,114 @@ impl Window {
         Ok(())
     }
 
+    /// Paints the alpha of an image into `bounds` in `color`, as a monochrome
+    /// sprite that `transformation` moves, the way [`Self::paint_svg`] paints
+    /// an SVG. Unlike [`Self::paint_image`], what this paints turns exactly
+    /// under [`Self::with_transform`], so it suits a single-color icon
+    /// rendered to an image, such as a system symbol, that has to spin.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn paint_image_mask(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        data: Arc<RenderImage>,
+        frame_index: usize,
+        transformation: TransformationMatrix,
+        color: Hsla,
+    ) -> Result<()> {
+        self.paint_image_mask_sprite(bounds, data, frame_index, transformation, None, color)
+    }
+
+    /// Like [`Self::paint_image_mask`], moved by `animation` about the
+    /// center of `bounds`, which the window advances before every present
+    /// without the view being drawn again, as for
+    /// [`crate::Svg::with_timed_transformation`]. With reduced motion, the
+    /// mask is drawn still, as `animation` starts.
+    ///
+    /// This method should only be called as part of the paint phase of element drawing.
+    pub fn paint_animated_image_mask(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        data: Arc<RenderImage>,
+        frame_index: usize,
+        animation: crate::TimedTransformation,
+        color: Hsla,
+        cx: &App,
+    ) -> Result<()> {
+        let center = bounds.center();
+        let scale_factor = self.scale_factor();
+        let pose = animation.start();
+        let animation = (animation.is_animated() && !cx.reduce_motion())
+            .then(|| SpriteAnimation::new(animation, center, scale_factor));
+        let alpha = match animation {
+            Some(_) => 1.,
+            None => pose.alpha_factor(),
+        };
+        self.paint_image_mask_sprite(
+            bounds,
+            data,
+            frame_index,
+            pose.into_matrix(center, scale_factor),
+            animation,
+            color.opacity(alpha),
+        )
+    }
+
+    fn paint_image_mask_sprite(
+        &mut self,
+        bounds: Bounds<Pixels>,
+        data: Arc<RenderImage>,
+        frame_index: usize,
+        transformation: TransformationMatrix,
+        animation: Option<SpriteAnimation>,
+        color: Hsla,
+    ) -> Result<()> {
+        self.invalidator.debug_assert_paint();
+        let size = data.size(frame_index);
+        if size.width.0 <= 0
+            || size.height.0 <= 0
+            || bounds.size.width <= Pixels::ZERO
+            || bounds.size.height <= Pixels::ZERO
+        {
+            return Ok(());
+        }
+        let Some(tile) = self.sprite_atlas.get_or_insert_with(
+            image_mask_params(&data, frame_index).into(),
+            &mut || {
+                let Some(bytes) = data.as_bytes(frame_index) else {
+                    return Ok(None);
+                };
+                let alpha = bytes
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|pixel| pixel[3])
+                    .collect();
+                Ok(Some((size, Cow::Owned(alpha))))
+            },
+        )?
+        else {
+            return Ok(());
+        };
+        let sprite = MonochromeSprite {
+            order: 0,
+            animation: SpriteAnimationId::NONE,
+            bounds: self.snap_bounds(bounds),
+            content_mask: self.snapped_content_mask(),
+            color: color.opacity(self.element_opacity()),
+            tile,
+            transformation,
+        };
+        match animation {
+            Some(animation) => self
+                .next_frame
+                .scene
+                .insert_animated_sprite(sprite, animation),
+            None => self.next_frame.scene.insert_primitive(sprite),
+        }
+        Ok(())
+    }
+
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
@@ -5718,6 +6389,8 @@ impl Window {
             };
 
             self.sprite_atlas.remove(&params.into());
+            self.sprite_atlas
+                .remove(&image_mask_params(&data, frame_index).into());
         }
 
         Ok(())
@@ -5916,7 +6589,7 @@ impl Window {
     pub fn insert_hitbox(&mut self, bounds: Bounds<Pixels>, behavior: HitboxBehavior) -> Hitbox {
         self.invalidator.debug_assert_prepaint();
 
-        let content_mask = self.content_mask();
+        let (bounds, content_mask) = self.hitbox_geometry(bounds);
         let id = self.next_hitbox_id;
         self.next_hitbox_id = self.next_hitbox_id.next();
         let hitbox = Hitbox {
@@ -5924,9 +6597,29 @@ impl Window {
             bounds,
             content_mask,
             behavior,
+            parent: self.hitbox_parent(),
         };
+        self.hitbox_owners.claim(id);
         self.next_frame.hitboxes.push(hitbox.clone());
         hitbox
+    }
+
+    fn hitbox_parent(&self) -> Option<HitboxId> {
+        self.hitbox_owners.parent()
+    }
+
+    fn hitbox_geometry(&self, bounds: Bounds<Pixels>) -> (Bounds<Pixels>, ContentMask<Pixels>) {
+        let content_mask = self.content_mask();
+        match self.next_frame.scene.paint_transform() {
+            Some(transform) => {
+                let scale_factor = self.scale_factor();
+                (
+                    transform.logical_bounds(bounds, scale_factor),
+                    transform.logical_content_mask(content_mask, scale_factor),
+                )
+            }
+            None => (bounds, content_mask),
+        }
     }
 
     /// Set a hitbox which will act as a control area of the platform window.
@@ -6311,6 +7004,18 @@ impl Window {
                             cursor_style: None,
                             external_payload_source: None,
                         });
+                    }
+                    PlatformInput::MouseMove(MouseMoveEvent {
+                        position,
+                        pressed_button: Some(MouseButton::Left),
+                        modifiers: Modifiers::default(),
+                    })
+                }
+                FileDropEvent::ItemsEntered { position, items } => {
+                    self.mouse_position = position;
+                    let source_window = self.handle.window_id();
+                    if !cx.restore_platform_drag(source_window) && cx.active_drag.is_none() {
+                        cx.active_drag = Some(items.into_drag(position, cx));
                     }
                     PlatformInput::MouseMove(MouseMoveEvent {
                         position,
@@ -8659,6 +9364,130 @@ mod tests {
         assert!(!cx.app.borrow().windows.contains_key(window.window_id()));
     }
 
+    #[gpui::test]
+    fn test_frame_presented_observers_see_each_drawn_frame(cx: &mut TestAppContext) {
+        use scheduler::Instant;
+
+        cx.app.borrow_mut().mode = crate::app::GpuiMode::Production;
+        let window = cx.add_window(|_, _| EmptyView);
+        let platform_window = cx.test_window(window.into());
+        let presenting = RequestFrameOptions {
+            require_presentation: true,
+            ..Default::default()
+        };
+        platform_window.simulate_frame_request(presenting);
+
+        let frames = Rc::new(RefCell::new(Vec::new()));
+        let subscription = window
+            .update(cx, |_, window, _| {
+                assert!(
+                    cfg!(feature = "profiler") || window.unpresented_frame.is_none(),
+                    "draws take no timestamps for the hook until it is observed"
+                );
+                let frames = frames.clone();
+                window.on_frame_presented(move |timing, _, _| frames.borrow_mut().push(*timing))
+            })
+            .expect("window");
+
+        platform_window.simulate_frame_request(presenting);
+        assert!(
+            frames.borrow().is_empty(),
+            "re-presenting an earlier draw isn't a drawn frame"
+        );
+
+        let target = Instant::now() + Duration::from_millis(16);
+        for target_presented_at in [None, Some(target)] {
+            let before = Instant::now();
+            window
+                .update(cx, |_, window, _| window.refresh())
+                .expect("window");
+            platform_window.simulate_frame_request(RequestFrameOptions {
+                target_presented_at,
+                ..presenting
+            });
+            let frames = frames.borrow();
+            let timing = frames.last().expect("a drawn frame is reported");
+            assert!(before <= timing.draw_start);
+            assert!(timing.draw_start <= timing.layout_start);
+            let phases =
+                timing.phases.request_layout + timing.phases.prepaint + timing.phases.paint;
+            assert!(timing.layout_start + phases <= timing.draw_end);
+            assert!(timing.draw_end <= timing.submitted_at);
+            assert!(timing.submitted_at <= Instant::now());
+            assert_eq!(timing.target_presented_at, target_presented_at);
+        }
+        assert_eq!(frames.borrow().len(), 2, "one report per drawn frame");
+
+        cx.update_window(window.into(), |_, window, cx| {
+            window.refresh();
+            window.draw(cx).clear(cx);
+            window.refresh();
+        })
+        .expect("window");
+        platform_window.simulate_frame_request(presenting);
+        assert_eq!(
+            frames.borrow().len(),
+            3,
+            "a draw replaced before it was presented isn't reported"
+        );
+
+        drop(subscription);
+        window
+            .update(cx, |_, window, _| window.refresh())
+            .expect("window");
+        platform_window.simulate_frame_request(presenting);
+        assert_eq!(frames.borrow().len(), 3);
+        #[cfg(not(feature = "profiler"))]
+        window
+            .update(cx, |_, window, _| {
+                assert!(window.unpresented_frame.is_none());
+                assert!(window.draw_phases.is_none());
+            })
+            .expect("window");
+    }
+
+    #[gpui::test]
+    fn test_input_latency_observers_receive_platform_samples(cx: &mut TestAppContext) {
+        use crate::{InputLatencyKind, InputLatencySample};
+        use scheduler::Instant;
+
+        let window = cx.add_window(|_, _| EmptyView);
+        let platform_window = cx.test_window(window.into());
+        let event_time = Instant::now();
+        let sample = InputLatencySample {
+            kind: InputLatencyKind::Scroll,
+            event_time,
+            received_time: event_time + Duration::from_millis(1),
+            frame_start: event_time + Duration::from_millis(2),
+            target_presented_time: Some(event_time + Duration::from_millis(12)),
+            presented_time: event_time + Duration::from_millis(13),
+            late: Some(false),
+        };
+        assert!(
+            !platform_window.simulate_input_latency(sample),
+            "the platform isn't asked to measure before a callback is registered"
+        );
+
+        let samples = Rc::new(RefCell::new(Vec::new()));
+        let subscriptions = window
+            .update(cx, |_, window, cx| {
+                [0, 1].map(|_| {
+                    let samples = samples.clone();
+                    window.on_input_latency(cx, move |sample, _, _| {
+                        samples.borrow_mut().push(*sample)
+                    })
+                })
+            })
+            .expect("window");
+        assert!(platform_window.simulate_input_latency(sample));
+        assert_eq!(*samples.borrow(), [sample, sample]);
+        assert_eq!(sample.latency(), Duration::from_millis(13));
+
+        drop(subscriptions);
+        assert!(platform_window.simulate_input_latency(sample));
+        assert_eq!(samples.borrow().len(), 2);
+    }
+
     #[cfg(feature = "profiler")]
     #[gpui::test]
     fn test_frame_requests_and_skips_are_journaled(cx: &mut TestAppContext) {
@@ -9761,6 +10590,64 @@ mod tests {
         .unwrap();
 
         assert_eq!(child_bounds.get().size, size(px(300.), px(200.)));
+    }
+
+    struct TextDragView;
+
+    impl Render for TextDragView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .id("text-drag")
+                .size_full()
+                .on_drag("dragged text".to_string(), |_, _, _, cx| cx.new(|_| Empty))
+                .external_drag_payload(|text: &String, _, _| {
+                    Some(ExternalDragPayload::Text(text.clone()))
+                })
+        }
+    }
+
+    #[gpui::test]
+    fn text_drag_is_offered_to_the_platform_when_it_leaves_the_window(cx: &mut TestAppContext) {
+        let window: AnyWindowHandle = cx.add_window(|_, _| TextDragView).into();
+        cx.test_window(window).set_start_external_drag_result(true);
+        let update_result = cx.update_window(window, |_, window, cx| {
+            window.draw(cx).clear(cx);
+            for event in [
+                MouseDownEvent {
+                    position: point(px(10.), px(10.)),
+                    button: MouseButton::Left,
+                    modifiers: Default::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }
+                .to_platform_input(),
+                MouseMoveEvent {
+                    position: point(px(20.), px(20.)),
+                    pressed_button: Some(MouseButton::Left),
+                    modifiers: Default::default(),
+                }
+                .to_platform_input(),
+            ] {
+                window.dispatch_event(event, cx);
+            }
+            assert!(cx.active_drag.is_some());
+            window.dispatch_event(
+                MouseMoveEvent {
+                    position: point(px(-1.), px(20.)),
+                    pressed_button: Some(MouseButton::Left),
+                    modifiers: Default::default(),
+                }
+                .to_platform_input(),
+                cx,
+            );
+            assert!(cx.active_drag.is_none());
+        });
+        assert!(update_result.is_ok(), "{update_result:?}");
+        assert_eq!(
+            cx.test_window(window).external_drag_texts(),
+            ["dragged text"]
+        );
+        assert!(cx.test_window(window).external_drag_files().is_empty());
     }
 
     struct FileDragView {

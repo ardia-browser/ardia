@@ -101,6 +101,7 @@ pub struct CommandBarState {
 pub struct PeekCard {
     pub tab_id: TabId,
     pub source_tab_id: Option<TabId>,
+    pub click_px: Option<[f32; 2]>,
 }
 
 string_enum!(ToastKind { Info = "info", Undo = "undo", Error = "error" } default Info);
@@ -111,6 +112,7 @@ pub struct Toast {
     pub kind: ToastKind,
     pub message: String,
     pub action: Option<String>,
+    pub icon: Option<String>,
     pub created_at: Millis,
     pub expires_at: Option<Millis>,
 }
@@ -308,6 +310,7 @@ mod tests {
                 kind: ToastKind::Info,
                 message: format!("{id}"),
                 action: None,
+                icon: None,
                 created_at: 0,
                 expires_at: None,
             });

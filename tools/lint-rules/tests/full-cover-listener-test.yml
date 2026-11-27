@@ -1,0 +1,29 @@
+id: full-cover-listener
+valid:
+  - |
+    fn targets(cx: &mut App) -> impl IntoElement {
+        let dragging = cx.has_active_drag();
+        div().absolute().inset_0().when(dragging, |this| this.on_drag_move(on_move).on_drop(on_drop))
+    }
+  - |
+    fn scrim() -> impl IntoElement {
+        div().absolute().inset_0().occlude().on_mouse_down(MouseButton::Left, dismiss)
+    }
+  - |
+    fn dialog() -> impl IntoElement {
+        div().absolute().inset_0().occlude().child(div().absolute().inset_0().on_click(dismiss))
+    }
+  - |
+    fn popover() -> impl IntoElement {
+        deferred(div().absolute().inset_0().child(div().absolute().inset_0().on_mouse_down(MouseButton::Left, close)))
+    }
+  - "fn badge() -> impl IntoElement { div().absolute().top_0().right_0().on_click(open) }"
+invalid:
+  - |
+    fn targets() -> impl IntoElement {
+        div().id("pane-drop-targets").absolute().inset_0().on_drag_move(on_move).on_drop(on_drop)
+    }
+  - |
+    fn layer() -> impl IntoElement {
+        div().absolute().inset_0().on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    }

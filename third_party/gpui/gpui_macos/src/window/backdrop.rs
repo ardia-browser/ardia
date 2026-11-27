@@ -1,7 +1,10 @@
 use super::liquid_glass::{
     appearance, new_layer, ns_color, set_layer_color, transparent_class, with_disabled_actions,
 };
-use gpui::{BackdropAppearance, BackdropLayerSpec, DEFAULT_GRAIN_SEED, GrainTexture};
+use gpui::{
+    BackdropAppearance, BackdropGradient, BackdropGradients, BackdropLayerSpec, DEFAULT_GRAIN_SEED,
+    GrainTexture, Rgba,
+};
 use objc2::{
     AnyThread, class, msg_send,
     rc::Retained,
@@ -14,13 +17,15 @@ use objc2_app_kit::{
 };
 use objc2_core_graphics::{
     CGBitmapContextCreate, CGBitmapContextCreateImage, CGBitmapContextGetBytesPerRow,
-    CGBitmapContextGetData, CGColor, CGColorSpace, CGImageAlphaInfo, kCGColorSpaceSRGB,
+    CGBitmapContextGetData, CGColor, CGColorSpace, CGImageAlphaInfo,
+    kCGColorSpaceExtendedDisplayP3, kCGColorSpaceExtendedSRGB, kCGColorSpaceSRGB,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
-use std::{ptr, sync::OnceLock};
+use std::{ops::Deref, ptr, sync::OnceLock};
 
 const GRAIN_TILE: usize = 128;
-const GRAIN_POINTS: f64 = 128.;
+const WOVEN_GRAIN_POINTS: f64 = 64.;
+const FILM_GRAIN_POINTS: f64 = 128.;
 const MAX_GRAIN_PIXELS: f64 = 4096.;
 const SIZABLE_LAYER: u32 = (1 << 1) | (1 << 4);
 
@@ -43,9 +48,12 @@ struct Overlay {
     view: Retained<NSView>,
     base: Retained<AnyObject>,
     gradient: Retained<AnyObject>,
+    overlay_gradient: Retained<AnyObject>,
+    gradient_group: Retained<AnyObject>,
     grain: Retained<AnyObject>,
     grain_key: Option<(GrainTexture, u32, u64)>,
     spec: BackdropLayerSpec,
+    gradients: BackdropGradients,
     size: [f64; 2],
 }
 
@@ -70,6 +78,7 @@ impl Backdrop {
         &mut self,
         host: &NSView,
         spec: Option<&BackdropLayerSpec>,
+        gradients: &BackdropGradients,
         scale_factor: f64,
         is_key: bool,
     ) {
@@ -85,6 +94,7 @@ impl Backdrop {
             let overlay = self
                 .overlay
                 .get_or_insert_with(|| Overlay::new(host, blur, *spec));
+            overlay.gradients = *gradients;
             overlay.apply(*spec, host.bounds().size, scale_factor, is_key);
         });
     }
@@ -148,8 +158,17 @@ impl Overlay {
         let layer: Option<Retained<AnyObject>> = unsafe { msg_send![&*view, layer] };
         let base = unsafe { new_layer() };
         let gradient: Retained<AnyObject> = unsafe { msg_send![class!(CAGradientLayer), layer] };
+        let overlay_gradient: Retained<AnyObject> =
+            unsafe { msg_send![class!(CAGradientLayer), layer] };
+        let gradient_group = unsafe { new_layer() };
         let grain = unsafe { new_layer() };
-        for sublayer in [&base, &gradient, &grain] {
+        for sublayer in [&gradient, &overlay_gradient] {
+            unsafe {
+                let _: () = msg_send![&**sublayer, setAutoresizingMask: SIZABLE_LAYER];
+                let _: () = msg_send![&*gradient_group, addSublayer: &**sublayer];
+            }
+        }
+        for sublayer in [&base, &gradient_group, &grain] {
             unsafe {
                 let _: () = msg_send![&**sublayer, setAutoresizingMask: SIZABLE_LAYER];
                 if let Some(layer) = &layer {
@@ -161,9 +180,12 @@ impl Overlay {
             view,
             base,
             gradient,
+            overlay_gradient,
+            gradient_group,
             grain,
             grain_key: None,
             spec,
+            gradients: BackdropGradients::default(),
             size: [0., 0.],
         }
     }
@@ -181,26 +203,37 @@ impl Overlay {
         self.size = [size.width, size.height];
         let bounds = NSRect::new(NSPoint::new(0., 0.), size);
         let (start, end) = gradient_points(spec.gradient_angle, size.width, size.height);
-        let colors =
-            [spec.top, spec.mid, spec.bottom].map(|color| ns_color(color, spec.display_p3));
         unsafe {
-            for sublayer in [&self.base, &self.gradient, &self.grain] {
+            for sublayer in [
+                &self.base,
+                &self.gradient_group,
+                &self.gradient,
+                &self.overlay_gradient,
+                &self.grain,
+            ] {
                 let _: () = msg_send![&**sublayer, setFrame: bounds];
             }
+            let _: () = msg_send![&*self.gradient_group, setOpacity: self.gradients.opacity];
             set_layer_color(&self.base, Some(&ns_color(spec.base_tint, false)));
-            let gradient_colors: Retained<AnyObject> = msg_send![class!(NSMutableArray), array];
-            let locations: Retained<AnyObject> = msg_send![class!(NSMutableArray), array];
-            for (color, stop) in colors.iter().zip(spec.gradient_stops) {
-                let cg_color: *const CGColor = msg_send![&**color, CGColor];
-                let _: () = msg_send![&*gradient_colors, addObject: cg_color.cast::<AnyObject>()];
-                let location: Retained<AnyObject> =
-                    msg_send![class!(NSNumber), numberWithDouble: f64::from(stop)];
-                let _: () = msg_send![&*locations, addObject: &*location];
+            match &self.gradients.base {
+                Some(base) => set_gradient(&self.gradient, Some(base), spec.display_p3),
+                None => set_gradient(
+                    &self.gradient,
+                    Some(&BackdropGradient::new(
+                        [spec.top, spec.mid, spec.bottom]
+                            .into_iter()
+                            .zip(spec.gradient_stops),
+                        [start[0] as f32, start[1] as f32],
+                        [end[0] as f32, end[1] as f32],
+                    )),
+                    spec.display_p3,
+                ),
             }
-            let _: () = msg_send![&*self.gradient, setColors: &*gradient_colors];
-            let _: () = msg_send![&*self.gradient, setLocations: &*locations];
-            let _: () = msg_send![&*self.gradient, setStartPoint: NSPoint::new(start[0], start[1])];
-            let _: () = msg_send![&*self.gradient, setEndPoint: NSPoint::new(end[0], end[1])];
+            set_gradient(
+                &self.overlay_gradient,
+                self.gradients.overlay.as_ref(),
+                spec.display_p3,
+            );
         }
         let grain_key = (spec.grain_texture, spec.grain_seed, scale_factor.to_bits());
         if spec.grain_intensity > 0. && self.grain_key != Some(grain_key) {
@@ -214,6 +247,59 @@ impl Overlay {
         }
         self.view.setAlphaValue(self.opacity(is_key));
     }
+}
+
+unsafe fn set_gradient(layer: &AnyObject, gradient: Option<&BackdropGradient>, display_p3: bool) {
+    unsafe {
+        let Some(gradient) = gradient.filter(|gradient| !gradient.is_empty()) else {
+            let _: () = msg_send![layer, setHidden: Bool::YES];
+            return;
+        };
+        let colors: Retained<AnyObject> = msg_send![class!(NSMutableArray), array];
+        let locations: Retained<AnyObject> = msg_send![class!(NSMutableArray), array];
+        for (color, location) in gradient.colors().iter().zip(gradient.locations()) {
+            let Some(color) = gradient_color(*color, display_p3) else {
+                continue;
+            };
+            let color: *const CGColor = &*color;
+            let _: () = msg_send![&*colors, addObject: color.cast::<AnyObject>()];
+            let location: Retained<AnyObject> =
+                msg_send![class!(NSNumber), numberWithDouble: f64::from(*location)];
+            let _: () = msg_send![&*locations, addObject: &*location];
+        }
+        let [start_x, start_y] = gradient.start_point().map(f64::from);
+        let [end_x, end_y] = gradient.end_point().map(f64::from);
+        let _: () = msg_send![layer, setColors: &*colors];
+        let _: () = msg_send![layer, setLocations: &*locations];
+        let _: () = msg_send![layer, setStartPoint: NSPoint::new(start_x, start_y)];
+        let _: () = msg_send![layer, setEndPoint: NSPoint::new(end_x, end_y)];
+        let _: () = msg_send![layer, setHidden: Bool::NO];
+    }
+}
+
+fn gradient_color(color: Rgba, display_p3: bool) -> Option<impl Deref<Target = CGColor>> {
+    let name = unsafe {
+        if display_p3 {
+            kCGColorSpaceExtendedDisplayP3
+        } else {
+            kCGColorSpaceExtendedSRGB
+        }
+    };
+    let space = CGColorSpace::with_name(Some(name))?;
+    let finite = |value: f32| {
+        if value.is_finite() {
+            f64::from(value)
+        } else {
+            0.
+        }
+    };
+    let components = [
+        finite(color.r),
+        finite(color.g),
+        finite(color.b),
+        finite(color.a).clamp(0., 1.),
+    ];
+    unsafe { CGColor::new(Some(&space), components.as_ptr()) }
 }
 
 fn gradient_points(angle: f32, width: f64, height: f64) -> ([f64; 2], [f64; 2]) {
@@ -231,11 +317,17 @@ fn gradient_points(angle: f32, width: f64, height: f64) -> ([f64; 2], [f64; 2]) 
     )
 }
 
+fn grain_points(texture: GrainTexture) -> f64 {
+    match texture {
+        GrainTexture::Film => FILM_GRAIN_POINTS,
+        _ => WOVEN_GRAIN_POINTS,
+    }
+}
+
 fn grain_pattern(texture: GrainTexture, seed: u32, scale_factor: f64) -> Option<Retained<NSColor>> {
     let alpha = grain_alpha(texture, seed);
-    let side = (GRAIN_POINTS * scale_factor)
-        .round()
-        .clamp(1., MAX_GRAIN_PIXELS) as usize;
+    let points = grain_points(texture);
+    let side = (points * scale_factor).round().clamp(1., MAX_GRAIN_PIXELS) as usize;
     let space = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
     let context = unsafe {
         CGBitmapContextCreate(
@@ -267,7 +359,7 @@ fn grain_pattern(texture: GrainTexture, seed: u32, scale_factor: f64) -> Option<
         msg_send![
             NSImage::alloc(),
             initWithCGImage: &*image,
-            size: NSSize::new(GRAIN_POINTS, GRAIN_POINTS)
+            size: NSSize::new(points, points)
         ]
     };
     Some(NSColor::colorWithPatternImage(&image))
@@ -282,19 +374,21 @@ fn grain_alpha(texture: GrainTexture, seed: u32) -> Vec<u8> {
 
 fn film_grain(seed: u32) -> Vec<u8> {
     let offset = seed.wrapping_sub(DEFAULT_GRAIN_SEED);
-    let (shift_x, shift_y) = (f64::from(offset & 0xffff), f64::from(offset >> 16));
-    let fract = |value: f64| value - value.floor();
+    let (shift_x, shift_y) = ((offset & 0xffff) as f32, (offset >> 16) as f32);
+    let fract = |value: f32| value - value.floor();
     (0..GRAIN_TILE * GRAIN_TILE)
         .map(|index| {
-            let x = (index % GRAIN_TILE) as f64 + shift_x;
-            let y = (index / GRAIN_TILE) as f64 + shift_y;
+            let x = (index % GRAIN_TILE) as f32 + shift_x;
+            let y = (index / GRAIN_TILE) as f32 + shift_y;
             let (mut p0, mut p1, mut p2) =
                 (fract(x * 0.1031), fract(y * 0.1031), fract(x * 0.1031));
             let d = p0 * (p1 + 33.33) + p1 * (p2 + 33.33) + p2 * (p0 + 33.33);
             p0 += d;
             p1 += d;
             p2 += d;
-            ((1. - fract((p0 + p1) * p2)) * 255.).round() as u8
+            ((1. - fract((p0 + p1) * p2)) * 255.)
+                .round()
+                .clamp(0., 255.) as u8
         })
         .collect()
 }
@@ -387,6 +481,57 @@ mod tests {
     }
 
     #[test]
+    fn theme_gradients_share_one_group_layer_and_its_opacity() {
+        let frame = NSRect::new(NSPoint::new(0., 0.), NSSize::new(200., 100.));
+        let host: Retained<NSView> =
+            unsafe { msg_send![msg_send![class!(NSView), alloc], initWithFrame: frame] };
+        let blur: Retained<NSView> =
+            unsafe { msg_send![msg_send![class!(NSView), alloc], initWithFrame: frame] };
+        host.addSubview(&blur);
+        let mut overlay = Overlay::new(&host, &blur, BackdropLayerSpec::default());
+        overlay.gradients = BackdropGradients::arc(
+            135.,
+            &[
+                gpui::rgba(0xff0000ff),
+                gpui::rgba(0x00ff00ff),
+                gpui::rgba(0x0000ffff),
+            ],
+            [200., 100.],
+        )
+        .opacity(0.65);
+        overlay.apply(BackdropLayerSpec::default(), frame.size, 2., true);
+        unsafe {
+            for layer in [&overlay.gradient, &overlay.overlay_gradient] {
+                let parent: *mut AnyObject = msg_send![&**layer, superlayer];
+                assert_eq!(parent, Retained::as_ptr(&overlay.gradient_group).cast_mut());
+                let opacity: f32 = msg_send![&**layer, opacity];
+                assert_eq!(opacity, 1.);
+            }
+            let opacity: f32 = msg_send![&*overlay.gradient_group, opacity];
+            assert_eq!(opacity, 0.65);
+            let root: Retained<AnyObject> = msg_send![&*overlay.view, layer];
+            let sublayers: Retained<objc2_foundation::NSArray<AnyObject>> =
+                msg_send![&*root, sublayers];
+            let order: Vec<*const AnyObject> = sublayers
+                .iter()
+                .map(|layer| Retained::as_ptr(&layer))
+                .collect();
+            assert_eq!(
+                order,
+                [
+                    Retained::as_ptr(&overlay.base),
+                    Retained::as_ptr(&overlay.gradient_group),
+                    Retained::as_ptr(&overlay.grain),
+                ]
+            );
+        }
+        overlay.gradients = BackdropGradients::default();
+        overlay.apply(BackdropLayerSpec::default(), frame.size, 2., true);
+        let opacity: f32 = unsafe { msg_send![&*overlay.gradient_group, opacity] };
+        assert_eq!(opacity, 1.);
+    }
+
+    #[test]
     fn gradient_points_follow_css_angles_in_unit_space() {
         assert!(close(
             gradient_points(180., 300., 900.),
@@ -426,6 +571,29 @@ mod tests {
         assert_eq!(alpha.len(), GRAIN_TILE * GRAIN_TILE);
         assert_eq!(&alpha[..4], &[255, 26, 56, 147]);
         assert_ne!(alpha, grain_alpha(GrainTexture::Film, 7));
+    }
+
+    fn checksum(alpha: &[u8]) -> u64 {
+        alpha.iter().fold(0xcbf2_9ce4_8422_2325u64, |hash, &byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        })
+    }
+
+    #[test]
+    fn default_tiles_match_the_theme_grain_byte_for_byte() {
+        let theme = [
+            (GrainTexture::Grain, 0xdc94_3905_589e_af3d, 64.),
+            (GrainTexture::Sand, 0x3d97_d8ac_4a24_fdd9, 64.),
+            (GrainTexture::Denim, 0xccf9_2f28_21ea_abb6, 64.),
+            (GrainTexture::Tweed, 0xd716_9350_ff1b_fcc1, 64.),
+            (GrainTexture::Film, 0xdaff_7f3d_b39d_5c08, 128.),
+        ];
+        for (texture, sum, points) in theme {
+            let alpha = grain_alpha(texture, DEFAULT_GRAIN_SEED);
+            assert_eq!(alpha.len(), GRAIN_TILE * GRAIN_TILE);
+            assert_eq!(checksum(&alpha), sum, "{texture:?}");
+            assert_eq!(grain_points(texture), points, "{texture:?}");
+        }
     }
 
     #[test]

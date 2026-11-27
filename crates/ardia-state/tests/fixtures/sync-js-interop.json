@@ -1,0 +1,75 @@
+{
+ "files": {
+  "aaaaaaaaaaaaaaaaaaaaaaaaaa": "{\"v\":1,\"kind\":\"log\",\"device\":\"DEVA\",\"seq\":1,\"at\":1790000000000,\"ops\":[{\"k\":\"kv:a\",\"h\":\"0mubbs7i8.0000.DEVA\",\"v\":{\"n\":\"Ann\",\"list\":[1,2.5,\"x\"],\"nested\":{\"z\":true,\"a\":null}}},{\"k\":\"kv:b\",\"h\":\"0mubbs7i8.0001.DEVA\",\"v\":\"plain\"},{\"k\":\"kv:c\",\"h\":\"0mubbs7i8.0002.DEVA\",\"v\":42},{\"k\":\"kv:é\",\"h\":\"0mubbs7i8.0003.DEVA\",\"v\":{\"u\":\"https://example.com/ü\"}}]}",
+  "bbbbbbbbbbbbbbbbbbbbbbbbbb": "{\"v\":1,\"kind\":\"log\",\"device\":\"DEVA\",\"seq\":2,\"at\":1790000001000,\"ops\":[{\"k\":\"kv:c\",\"h\":\"0mubbs8a0.0000.DEVA\",\"v\":43},{\"k\":\"kv:b\",\"h\":\"0mubbs8a0.0001.DEVA\",\"v\":null}]}",
+  "cccccccccccccccccccccccccc": "{\"v\":1,\"kind\":\"snapshot\",\"device\":\"DEVA\",\"at\":1790000002000,\"vv\":{\"DEVA\":2},\"seen\":{\"DEVA\":1790000001000},\"records\":{\"kv:a\":{\"h\":\"0mubbs7i8.0000.DEVA\",\"v\":{\"n\":\"Ann\",\"list\":[1,2.5,\"x\"],\"nested\":{\"z\":true,\"a\":null}},\"o\":[\"DEVA\",1]},\"kv:b\":{\"h\":\"0mubbs8a0.0001.DEVA\",\"v\":null,\"o\":[\"DEVA\",2]},\"kv:c\":{\"h\":\"0mubbs8a0.0000.DEVA\",\"v\":43,\"o\":[\"DEVA\",2]},\"kv:é\":{\"h\":\"0mubbs7i8.0003.DEVA\",\"v\":{\"u\":\"https://example.com/ü\"},\"o\":[\"DEVA\",1]}}}",
+  "dddddddddddddddddddddddddd": "{\"v\":1,\"kind\":\"log\",\"device\":\"DEVA\",\"seq\":3,\"at\":1790000003000,\"ops\":[{\"k\":\"kv:d\",\"h\":\"0mubbs9tk.0000.DEVA\",\"v\":{\"added\":1790000003000}}]}"
+ },
+ "records": {
+  "kv:a": {
+   "h": "0mubbs7i8.0000.DEVA",
+   "v": {
+    "n": "Ann",
+    "list": [
+     1,
+     2.5,
+     "x"
+    ],
+    "nested": {
+     "z": true,
+     "a": null
+    }
+   },
+   "o": [
+    "DEVA",
+    1
+   ]
+  },
+  "kv:b": {
+   "h": "0mubbs8a0.0001.DEVA",
+   "v": null,
+   "o": [
+    "DEVA",
+    2
+   ]
+  },
+  "kv:c": {
+   "h": "0mubbs8a0.0000.DEVA",
+   "v": 43,
+   "o": [
+    "DEVA",
+    2
+   ]
+  },
+  "kv:é": {
+   "h": "0mubbs7i8.0003.DEVA",
+   "v": {
+    "u": "https://example.com/ü"
+   },
+   "o": [
+    "DEVA",
+    1
+   ]
+  },
+  "kv:d": {
+   "h": "0mubbs9tk.0000.DEVA",
+   "v": {
+    "added": 1790000003000
+   },
+   "o": [
+    "DEVA",
+    3
+   ]
+  }
+ },
+ "vv": {
+  "DEVA": 3
+ },
+ "canonical": {
+  "kv:a": "{\"list\":[1,2.5,\"x\"],\"n\":\"Ann\",\"nested\":{\"a\":null,\"z\":true}}",
+  "kv:b": "null",
+  "kv:c": "43",
+  "kv:é": "{\"u\":\"https://example.com/ü\"}",
+  "kv:d": "{\"added\":1790000003000}"
+ }
+}

@@ -15,6 +15,10 @@ impl Tx<'_> {
                 .unwrap_or_else(|| w.profile_id.clone())
         };
         let id = self.ids.tab();
+        let opener = spec
+            .opener
+            .clone()
+            .filter(|_| w.kind != WindowKind::LittleArdia);
         let mut tab = Tab::new(id.clone(), window.clone(), profile.clone(), "", self.now);
         match spec.snapshot {
             Some(snapshot) => {
@@ -62,11 +66,59 @@ impl Tx<'_> {
                 .or_insert_with(|| id.clone());
         }
         self.reorder_window(window);
+        if let Some(opener) = opener {
+            self.group_with_opener(&id, &opener, spec.background);
+        }
         if !spec.background {
             self.activate(&id);
         }
         self.out.tab = Some(id.clone());
         Ok(id)
+    }
+
+    fn group_with_opener(&mut self, id: &TabId, opener: &TabId, background: bool) {
+        let (Some(tab), Some(source)) = (self.s.tabs.get(id), self.s.tabs.get(opener)) else {
+            return;
+        };
+        if source.window_id != tab.window_id
+            || source.profile_id != tab.profile_id
+            || tab.pin.is_some()
+        {
+            return;
+        }
+        let profile = tab.profile_id.clone();
+        let creates = background && self.s.settings.cmd_click_creates_tab_group;
+        if self.s.in_pinned_container(opener.as_str()) {
+            let gathered = self
+                .s
+                .groups
+                .values()
+                .find(|g| {
+                    g.pinned_opener_id.as_ref() == Some(opener)
+                        && g.profile_id == profile
+                        && !g.tab_ids.is_empty()
+                })
+                .map(|g| g.id.clone());
+            if let Some(group) = gathered {
+                let _ = self.add_to_group(group, vec![id.clone()]);
+            } else if creates && let Ok(group) = self.create_group(std::slice::from_ref(id), "") {
+                self.mark_opener_group(&group, Some(opener.clone()));
+            }
+            return;
+        }
+        if let Some(existing) = self.s.group_of(opener.as_str()).map(|g| g.id.clone()) {
+            let _ = self.add_to_group(existing, vec![id.clone()]);
+        } else if creates && let Ok(group) = self.create_group(&[opener.clone(), id.clone()], "") {
+            self.mark_opener_group(&group, None);
+        }
+    }
+
+    fn mark_opener_group(&mut self, group: &GroupId, pinned_opener: Option<TabId>) {
+        if let Some(g) = Arc::make_mut(&mut self.s.groups).get_mut(group) {
+            let g = Arc::make_mut(g);
+            g.auto_ungroup = true;
+            g.pinned_opener_id = pinned_opener;
+        }
     }
 
     pub(crate) fn activate(&mut self, id: &TabId) {
@@ -75,6 +127,11 @@ impl Tx<'_> {
         };
         if tab.live.peek {
             return;
+        }
+        if let Some((next, holder)) = crate::pin_share::handed_off(self.s, id) {
+            self.out.changes.note_settled(self.s, &next);
+            *self.s = next;
+            return self.activate(&holder);
         }
         let now = self.now;
         if let Some(t) = self.tab_mut_as(id, Topics::TABS, true) {
@@ -205,6 +262,30 @@ impl Tx<'_> {
 
     pub(super) fn navigate(&mut self, id: &TabId, input: &str) -> Result<(), ActionError> {
         let tab = self.require_tab(id)?;
+        if !tab.page.has_page()
+            && let Some(holder) = crate::pin_share::holder_of(self.s, id).map(|h| h.id.clone())
+        {
+            let shown = self
+                .s
+                .windows
+                .get(&tab.window_id)
+                .and_then(|w| w.active_tab())
+                == Some(id);
+            if !shown {
+                return self.navigate(&holder, input);
+            }
+            self.activate(id);
+            let here = self
+                .s
+                .tabs
+                .get(&holder)
+                .is_some_and(|h| h.window_id == tab.window_id && h.page.has_page());
+            return if here {
+                self.navigate(&holder, input)
+            } else {
+                Ok(())
+            };
+        }
         let url = self.resolve_url(input);
         if url.is_empty() {
             return Err(ActionError::Invalid("there is nothing to open"));
@@ -337,6 +418,9 @@ impl Tx<'_> {
             if let Some(v) = update.engine_tab_id {
                 live.engine_tab_id = v;
             }
+            if let Some(v) = update.fullscreen {
+                live.fullscreen = v;
+            }
         })?;
         Ok(())
     }
@@ -356,6 +440,38 @@ impl Tx<'_> {
             if let Some(t) = self.tab_mut(id) {
                 t.page = TabPage {
                     kind: PageKind::Asleep,
+                    wake: t.page.wake.clone(),
+                };
+                t.live.loading = false;
+            }
+        }
+    }
+
+    pub(super) fn unload_top_app(&mut self, id: &TabId) {
+        if !self.is_listed(id) {
+            return;
+        }
+        let pages = crate::pin_share::open_pages(self.s, id);
+        let ids = if pages.is_empty() {
+            vec![id.clone()]
+        } else {
+            pages
+        };
+        let before = self.keeps_top_apps.replace(false);
+        self.close_tabs(&ids, false);
+        self.keeps_top_apps = before;
+    }
+
+    pub(super) fn forget_pages(&mut self, ids: &[TabId]) {
+        let listed: Vec<&TabId> = ids.iter().filter(|id| self.is_listed(id)).collect();
+        for id in listed {
+            let loaded = self.s.tabs.get(id).is_some_and(|t| t.page.has_page());
+            if !loaded {
+                continue;
+            }
+            if let Some(t) = self.tab_mut(id) {
+                t.page = TabPage {
+                    kind: PageKind::Idle,
                     wake: t.page.wake.clone(),
                 };
                 t.live.loading = false;
@@ -404,6 +520,32 @@ impl Tx<'_> {
         Ok(())
     }
 
+    pub(super) fn set_pinned_url(
+        &mut self,
+        id: &TabId,
+        url: Option<String>,
+    ) -> Result<(), ActionError> {
+        let tab = self.require_tab(id)?;
+        let next = url
+            .clone()
+            .filter(|u| !u.is_empty())
+            .unwrap_or_else(|| tab.url.clone());
+        if next.is_empty() || !self.s.in_pinned_container(id.as_str()) {
+            return Err(ActionError::Invalid(
+                "only a pinned tab has a pinned address",
+            ));
+        }
+        let moves = url.is_some() && !crate::tabs::same_page_key(&tab.url, &next);
+        if let Some(t) = self.tab_mut(id) {
+            t.pinned_url = Some(next.clone());
+            if moves {
+                t.url = next;
+                t.page = TabPage::LOADED;
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn cycle(&mut self, window: &WindowId, delta: i32) -> Result<(), ActionError> {
         let w = self.require_window(window)?;
         let view: Vec<TabId> = w
@@ -435,17 +577,16 @@ impl Tx<'_> {
         index: Option<usize>,
     ) -> Result<(), ActionError> {
         let w = self.require_window(window)?;
-        let view: Vec<TabId> = w
-            .tab_ids
-            .iter()
-            .filter(|t| {
-                self.s
-                    .tabs
-                    .get(*t)
-                    .is_some_and(|t| t.profile_id == w.profile_id)
-            })
-            .cloned()
-            .collect();
+        let view: Vec<TabId> =
+            w.tab_ids
+                .iter()
+                .filter(|t| {
+                    self.s.tabs.get(*t).is_some_and(|t| {
+                        t.profile_id == w.profile_id && !self.s.hidden_empty_card(t)
+                    })
+                })
+                .cloned()
+                .collect();
         let pick = match index {
             Some(i) => view.get(i),
             None => view.last(),

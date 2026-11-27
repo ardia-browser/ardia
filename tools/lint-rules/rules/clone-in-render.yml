@@ -1,0 +1,41 @@
+id: clone-in-render
+language: rust
+severity: warning
+message: "copies a whole entity state or collection on every frame"
+note: "Borrow it (read(cx).field.iter()), clone only the rows you draw, or keep it behind an Arc. Clones moved into listener closures, and ranges or iterators cloned to iterate (.clone().map(..)), are not flagged."
+ignores:
+  - crates/**/tests/**
+  - crates/**/tests.rs
+  - crates/**/*_tests.rs
+  - crates/**/test_support.rs
+  - crates/**/src/bin/**
+  - third_party/**
+rule:
+  all:
+    - any:
+        - pattern: $E.read($CX).clone()
+        - all:
+            - any:
+                - pattern: $E.$F.clone()
+                - pattern: $E.$F.to_vec()
+                - pattern: $E.$F.to_owned()
+            - has:
+                field: function
+                has:
+                  field: value
+                  kind: field_expression
+                  has:
+                    field: field
+                    regex: ^(snapshot|state|tabs|items|rows|entries|spaces|bookmarks|history|windows|records|results|matches|groups|pins|folders|downloads|extensions|plugins|visits|sessions|profiles|devices)$
+    - not:
+        inside:
+          kind: field_expression
+          field: value
+          has:
+            field: field
+            regex: ^(map|rev|step_by|zip|filter|filter_map|contains|start|end|len)$
+    - matches: render-scope
+    - not:
+        matches: in-deferred-closure
+    - not:
+        matches: in-test-code

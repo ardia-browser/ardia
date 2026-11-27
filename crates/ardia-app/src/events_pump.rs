@@ -201,19 +201,36 @@ impl AppCoordinator {
     pub(crate) fn apply_events(&self, events: Vec<EngineEvent>) {
         let mut batch = PageBatch::default();
         for event in events {
+            self.note_reader_event(&event);
+            self.note_page_overlay(&event);
+            self.note_media_event(&event);
+            self.note_share_event(&event);
+            self.note_translate_event(&event);
+            self.note_blocker_event(&event);
+            self.note_engine_event(&event);
+            self.note_telemetry_event(&event);
+            self.note_pip_event(&event);
+            if self.swallowed_by_internal_page(&event) {
+                continue;
+            }
             if let Some((tab, update)) = self.page_update_for(&event, &batch) {
                 batch.add(tab, update);
                 continue;
             }
             self.flush_pages(&mut batch);
+            let inserted = matches!(event, EngineEvent::TabInserted { .. }).then(|| event.clone());
             self.apply_event(event);
+            if let Some(inserted) = inserted {
+                self.note_inserted_tab(&inserted);
+            }
         }
         self.flush_pages(&mut batch);
     }
 
     fn flush_pages(&self, batch: &mut PageBatch) {
         for tab in batch.order.drain(..) {
-            if let Some(update) = batch.updates.remove(&tab) {
+            if let Some(mut update) = batch.updates.remove(&tab) {
+                self.adjust_page_update(&tab, &mut update);
                 self.dispatch_quietly(Action::UpdatePage { tab, update });
             }
         }
@@ -233,10 +250,37 @@ impl AppCoordinator {
         batch: &PageBatch,
     ) -> Option<(TabId, PageUpdate)> {
         let update = match event {
-            EngineEvent::TitleChanged { title, .. } => PageUpdate {
-                title: Some(title.clone()),
-                ..PageUpdate::default()
-            },
+            EngineEvent::TitleChanged { title, .. } => {
+                let listed = self.store.snapshot();
+                let placeholder = self
+                    .state_tab(event.tab()?)
+                    .and_then(|tab| listed.tab(tab.as_str()))
+                    .is_some_and(|tab| ardia_state::tabs::is_placeholder_title(title, &tab.url));
+                if placeholder {
+                    return None;
+                }
+                PageUpdate {
+                    title: Some(title.clone()),
+                    ..PageUpdate::default()
+                }
+            }
+            EngineEvent::ShownTitleChanged { title, url, .. } => {
+                if ardia_state::tabs::is_blank_address(url) {
+                    return None;
+                }
+                let listed = self.store.snapshot();
+                let same = self
+                    .state_tab(event.tab()?)
+                    .and_then(|tab| listed.tab(tab.as_str()).map(|t| t.title == *title))
+                    .unwrap_or(true);
+                if same {
+                    return None;
+                }
+                PageUpdate {
+                    title: Some(title.clone()),
+                    ..PageUpdate::default()
+                }
+            }
             EngineEvent::UrlChanged { url, .. } => PageUpdate {
                 url: Some(url.clone()),
                 ..PageUpdate::default()
@@ -268,6 +312,7 @@ impl AppCoordinator {
             },
             EngineEvent::RendererGone { .. } => PageUpdate {
                 loading: Some(false),
+                fullscreen: Some(false),
                 ..PageUpdate::default()
             },
             _ => return None,
@@ -284,6 +329,15 @@ impl AppCoordinator {
                 .is_some_and(|listed| listed.url.is_empty())
         {
             return None;
+        }
+        let mut update = update;
+        if let EngineEvent::UrlChanged { url, .. } = event
+            && self.favicon_left_behind(&tab, url)
+        {
+            update.favicon = Some(None);
+        }
+        if let Some(update) = self.kept_behind_new_tab(&tab, event, update.clone()) {
+            return update;
         }
         if let EngineEvent::TitleChanged { title, .. } = event {
             let waiting = batch
@@ -323,6 +377,7 @@ impl AppCoordinator {
             EngineEvent::Started => self.on_started(),
             EngineEvent::WillShutDown => {
                 self.shutting_down.store(true, Ordering::Release);
+                crate::webkit::page::flush_history();
             }
             EngineEvent::QuitCancelled => self.shutting_down.store(false, Ordering::Release),
             EngineEvent::EventsDropped { count, resync } => {
@@ -342,7 +397,11 @@ impl AppCoordinator {
                 opener,
                 disposition,
             } => self.on_tab_inserted(window, tab, opener, &disposition),
-            EngineEvent::TabRemoved { .. } => {}
+            EngineEvent::TabRemoved { tab, .. } => {
+                if let Ok(mut holds) = crate::pointer_hold::HOLDS.lock() {
+                    holds.forget(tab);
+                }
+            }
             EngineEvent::TabActivated { window, tab } => {
                 if let Some(window) = self.state_window(window) {
                     self.bridge.lock().engine_active.insert(window, tab);
@@ -405,14 +464,21 @@ impl AppCoordinator {
                 }
             }
             EngineEvent::FullscreenChanged {
-                window, fullscreen, ..
+                window,
+                tab,
+                fullscreen,
             } => {
-                if let Some(window) = self.state_window(window) {
-                    self.dispatch_quietly(Action::SetFullScreen {
-                        window,
-                        on: fullscreen,
-                        display: None,
+                if let Some(tab) = self.state_tab(tab) {
+                    self.dispatch_quietly(Action::UpdatePage {
+                        tab,
+                        update: PageUpdate {
+                            fullscreen: Some(fullscreen),
+                            ..PageUpdate::default()
+                        },
                     });
+                }
+                if let Some(window) = self.state_window(window) {
+                    self.touch(window);
                 }
             }
             EngineEvent::PasswordPrompt { tab, prompt, .. } => {
@@ -431,6 +497,8 @@ impl AppCoordinator {
                     }
                 }
             }
+            EngineEvent::PermissionRequested { ref request, .. }
+                if self.turned_down_unasked(request) => {}
             EngineEvent::PermissionRequested { tab, ref request } => {
                 match tab.and_then(|tab| self.state_tab(tab)) {
                     Some(tab) => {
@@ -452,6 +520,16 @@ impl AppCoordinator {
                 };
                 if let Some(tab) = tab {
                     self.publish_prompts(&tab);
+                }
+            }
+            EngineEvent::ExternalAppRequest { ref request, .. }
+                if crate::site::external_app_ask(request).is_none() =>
+            {
+                if let Some(id) = request.get("id").and_then(serde_json::Value::as_str)
+                    && let Some(engine) = self.engine()
+                    && let Err(problem) = engine.resolve_external_app(id, false, false)
+                {
+                    log::warn!("couldn't turn down {id}: {problem}");
                 }
             }
             EngineEvent::ExternalAppRequest { tab, ref request } => match self.state_tab(tab) {
@@ -478,12 +556,32 @@ impl AppCoordinator {
                 self.set_tab_popover(tab, open.then_some(Popover::Cast), |popover| {
                     *popover == Popover::Cast
                 });
+                self.signal.emit(ardia_ui::host_data::HostTopics::CAST);
             }
             EngineEvent::CastRoutes { routes, .. } => {
                 self.bridge.lock().cast_routes = routes;
+                self.signal.emit(ardia_ui::host_data::HostTopics::CAST);
+            }
+            EngineEvent::MediaAccessChanged { tab, access } => {
+                if let Some(tab) = self.state_tab(tab) {
+                    let mut bridge = self.bridge.lock();
+                    let any = access.camera || access.microphone || access.screen;
+                    let changed = if any {
+                        bridge.media_access.insert(tab, access) != Some(access)
+                    } else {
+                        bridge.media_access.remove(&tab).is_some()
+                    };
+                    drop(bridge);
+                    if changed {
+                        self.signal.emit(ardia_ui::host_data::HostTopics::PAGE);
+                    }
+                }
             }
             EngineEvent::ExtensionInstallPrompt { .. } => {
+                ardia_telemetry::counts::count("extension_install_prompts");
                 self.bridge.lock().prompts.hold(event);
+                self.signal
+                    .emit(ardia_ui::host_data::HostTopics::EXTENSIONS);
             }
             EngineEvent::ExtensionInstallFailed { message, .. } => {
                 self.notify(ToastKind::Error, message);
@@ -506,34 +604,70 @@ impl AppCoordinator {
             EngineEvent::PopupBlocked { tab, popup } => {
                 if let Some(tab) = self.state_tab(tab) {
                     let window = self.window_of(&tab);
-                    self.bridge.lock().prompts.block_popup(&tab, popup);
+                    let origin = popup.origin.clone();
+                    let first = {
+                        let mut bridge = self.bridge.lock();
+                        let first = bridge.prompts.blocked_popups(&tab).is_empty();
+                        bridge.prompts.block_popup(&tab, popup);
+                        first
+                    };
                     if let Some(window) = window {
                         self.touch(window);
                     }
+                    self.popup_was_blocked(&tab, &origin, first);
                 }
             }
             EngineEvent::DiscardedChanged { tab, discarded, .. } => {
                 if discarded && let Some(tab) = self.state_tab(tab) {
+                    self.bridge
+                        .lock()
+                        .applied
+                        .entry(tab.clone())
+                        .or_default()
+                        .asleep = true;
                     self.dispatch_quietly(Action::SleepTabs { tabs: vec![tab] });
                 }
             }
-            EngineEvent::AppUrlRequested { url, .. } => self.open_app_url(&url),
+            EngineEvent::AppUrlRequested { tab, url, .. } => {
+                match (ardia_ui::pages::is_internal(&url), self.state_tab(tab)) {
+                    (true, Some(tab)) => {
+                        if let Err(problem) =
+                            self.dispatch_action(Action::Navigate { tab, input: url })
+                        {
+                            log::debug!("an internal page didn't open: {problem}");
+                        }
+                    }
+                    _ => self.open_app_url(&url),
+                }
+            }
             EngineEvent::Download(DownloadEvent::Changed { profile, item }) => {
+                let download = state_download(profile, &item);
+                self.open_if_done(&download);
                 self.dispatch_quietly(Action::UpsertDownload {
-                    download: Box::new(state_download(profile, &item)),
+                    download: Box::new(download),
                 });
             }
             EngineEvent::Download(DownloadEvent::Removed { id, .. }) => {
                 self.dispatch_quietly(Action::RemoveDownload { id });
             }
-            EngineEvent::OpenUrls { urls } => {
-                for url in urls {
-                    self.open_url(&url);
+            EngineEvent::OpenUrls { urls, sender } => {
+                if let Some(sender) = sender {
+                    crate::link_sources::remember(
+                        &urls,
+                        &ardia_state::air_traffic::LinkSource {
+                            bundle_id: sender.bundle_id,
+                            app_name: sender.app_name,
+                        },
+                    );
+                }
+                for (index, url) in urls.iter().enumerate() {
+                    self.open_url_at(url, index);
                 }
             }
             EngineEvent::DockReopen {
                 has_visible_windows,
             } => {
+                ardia_telemetry::counts::count("dock_reopens");
                 if !has_visible_windows {
                     self.dispatch_quietly(Action::OpenLastWindowOrNew);
                 }
@@ -554,15 +688,56 @@ impl AppCoordinator {
                 );
             }
             EngineEvent::PageMessage { tab, message } => {
-                log::trace!("{tab} sent {}", message.kind);
+                if self.peek_page_message(tab, &message) {
+                } else if message.kind == "scroll" && message.main_frame {
+                    self.note_page_scroll(tab, &message.json);
+                } else if message.kind == "theme" && message.main_frame {
+                    self.note_page_theme(tab, &message.json);
+                } else if message.kind == "selection" && message.main_frame {
+                    if let Some(tab) = self.state_tab(tab) {
+                        self.note_page_selection(&tab, &message.json);
+                    }
+                } else if message.kind == "commandWheel" && message.main_frame {
+                    if let (Some(tab), Some(data)) = (self.state_tab(tab), message.data()) {
+                        self.command_wheel_from_page(tab, &data);
+                    }
+                } else {
+                    log::trace!("{tab} sent {}", message.kind);
+                }
             }
-            EngineEvent::Service(service) => {
-                log::debug!("engine service event {}", service.topic);
+            EngineEvent::Service(service) => match service.topic_kind() {
+                ardia_engine::ServiceTopic::ExtensionsChanged => self.extensions_changed(),
+                ardia_engine::ServiceTopic::ExtensionsAction => self.extension_actions_changed(),
+                ardia_engine::ServiceTopic::HistoryChanged => self.engine_history_changed(&service),
+                ardia_engine::ServiceTopic::BookmarksChanged => {
+                    self.engine_bookmarks_changed(&service)
+                }
+                ardia_engine::ServiceTopic::CliControl => self.control_server_changed(&service),
+                _ => log::debug!("engine service event {}", service.topic),
+            },
+            EngineEvent::ExtensionActionPopup { tab, popup } => {
+                let extension = popup
+                    .get("extensionId")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned();
+                if let Some(tab) = tab.and_then(|tab| self.state_tab(tab))
+                    && let Some(window) = self.window_of(&tab)
+                    && !extension.is_empty()
+                {
+                    self.close_popup(&window);
+                    self.open_extension_popup(&window, &tab, &extension);
+                }
             }
-            EngineEvent::ExtensionSidePanel { .. }
-            | EngineEvent::ExtensionActionPopup { .. }
-            | EngineEvent::ExtensionActionShortcut { .. }
+            EngineEvent::PreferredSizeChanged { tab, size } => {
+                self.popup_resized(tab, size.width, size.height);
+            }
+            EngineEvent::ExtensionSidePanel { tab, panel } => {
+                self.side_panel_requested(tab, &panel);
+            }
+            EngineEvent::ExtensionActionShortcut { .. }
             | EngineEvent::TitleChanged { .. }
+            | EngineEvent::ShownTitleChanged { .. }
             | EngineEvent::UrlChanged { .. }
             | EngineEvent::LoadingChanged { .. }
             | EngineEvent::ProgressChanged { .. }
@@ -574,17 +749,17 @@ impl AppCoordinator {
             | EngineEvent::StatusText { .. }
             | EngineEvent::DocumentCommitted { .. }
             | EngineEvent::FocusGained { .. }
-            | EngineEvent::PreferredSizeChanged { .. }
             | EngineEvent::PipChanged { .. }
+            | EngineEvent::PipActivity { .. }
             | EngineEvent::AutofillSuggestionsShown { .. }
             | EngineEvent::ContextMenuCommand { .. }
             | EngineEvent::ShareFromContextMenu { .. }
             | EngineEvent::ContextMenuShown { .. }
             | EngineEvent::NavigationBecameDownload { .. }
-            | EngineEvent::Responsive { .. }
-            | EngineEvent::MediaAccessChanged { .. }
-            | EngineEvent::PageScroll { .. }
-            | EngineEvent::PageOverscroll { .. } => {}
+            | EngineEvent::Responsive { .. } => {}
+            EngineEvent::PageScroll { .. } | EngineEvent::PageOverscroll { .. } => {
+                self.note_page_scroll_ack(&event);
+            }
         }
     }
 
@@ -746,6 +921,9 @@ impl AppCoordinator {
         opener: Option<EngineTabId>,
         disposition: &str,
     ) {
+        if self.is_popup_tab(tab) {
+            return;
+        }
         let Some(state_window) = self.state_window(window) else {
             log::debug!("{tab} arrived in {window}, which has no Ardia window");
             return;
@@ -804,6 +982,10 @@ impl AppCoordinator {
                     _ => None,
                 };
                 let opener = opener.and_then(|opener| self.state_tab(opener));
+                if self.route_page_link(tab, &state_window, opener.as_ref(), disposition, &info.url)
+                {
+                    return;
+                }
                 let outcome = self.store.dispatch(Action::NewTab {
                     window: state_window.clone(),
                     tab: NewTab {
@@ -829,7 +1011,7 @@ impl AppCoordinator {
             ..PageUpdate::default()
         };
         if !info.url.is_empty() {
-            update.url = Some(info.url.clone());
+            update.url = Some(info.url);
         }
         self.dispatch_quietly(Action::UpdatePage {
             tab: state_tab,
@@ -838,6 +1020,10 @@ impl AppCoordinator {
     }
 
     fn on_tab_will_close(&self, tab: EngineTabId) {
+        if self.is_popup_tab(tab) {
+            self.popup_tab_gone(tab);
+            return;
+        }
         let sheltered = {
             let mut bridge = self.bridge.lock();
             let window = bridge
@@ -964,10 +1150,35 @@ impl AppCoordinator {
         let _ = engine.close_window(window);
     }
 
-    fn on_favicon(&self, tab: EngineTabId, url: Option<String>) {
-        let Some(state_tab) = self.state_tab(tab) else {
-            return;
+    fn favicon_left_behind(&self, tab: &TabId, url: &str) -> bool {
+        let Some((page, has_icon)) = self
+            .store
+            .snapshot()
+            .tab(tab.as_str())
+            .map(|listed| (listed.url.clone(), listed.favicon.is_some()))
+        else {
+            return false;
         };
+        if !has_icon {
+            return false;
+        }
+        let page = self
+            .bridge
+            .lock()
+            .favicon_pages
+            .get(tab)
+            .cloned()
+            .unwrap_or(page);
+        favicon_site_changed(&page, url)
+    }
+
+    pub(crate) fn on_favicon(&self, tab: EngineTabId, url: Option<String>) {
+        if let Some(state_tab) = self.state_tab(tab) {
+            self.favicon_for_tab(state_tab, url);
+        }
+    }
+
+    pub(crate) fn favicon_for_tab(&self, state_tab: TabId, url: Option<String>) {
         let page = self
             .store
             .snapshot()
@@ -1002,37 +1213,29 @@ impl AppCoordinator {
             self.set_icon_theme(&state_tab, Some(favicons::theme_for_bytes(&bytes)));
             return;
         }
-        if !favicons::is_fetchable(&url) {
+        if !favicons::is_remote(&url) {
             self.set_icon_theme(&state_tab, Some(ardia_theme::IconTheme::Default));
             return;
         }
-        let (Some(engine), Some(profile)) = (self.engine(), self.engine_profile_of(&state_tab))
-        else {
-            return;
-        };
-        let reply = engine.fetch_icon(profile, &url, favicons::MAX_ICON_BYTES);
-        let me = self.weak();
-        self.spawn(async move {
-            let bytes = reply.await;
-            if let Some(me) = me.upgrade() {
-                me.icon_fetched(&state_tab, &url, bytes.ok().flatten());
-            }
-        });
-    }
-
-    pub(crate) fn icon_fetched(&self, tab: &TabId, url: &str, bytes: Option<Vec<u8>>) {
-        let current = self.bridge.lock().icon_urls.get(tab) == Some(&url.to_owned());
-        if !current {
+        if let Some(theme) = self.cached_icon_theme(&url) {
+            self.set_icon_theme(&state_tab, Some(theme));
             return;
         }
-        let theme = bytes.map_or(ardia_theme::IconTheme::Default, |bytes| {
-            favicons::theme_for_bytes(&bytes)
-        });
-        self.set_icon_theme(tab, Some(theme));
-        self.wake();
+        let profile = self
+            .store
+            .snapshot()
+            .tab(state_tab.as_str())
+            .map(|listed| listed.profile_id.clone());
+        let request = match profile {
+            Some(profile) => self.request_icon(&profile, &url),
+            None => favicons::IconRequest::FailedRecently,
+        };
+        if request == favicons::IconRequest::FailedRecently {
+            self.set_icon_theme(&state_tab, Some(ardia_theme::IconTheme::Default));
+        }
     }
 
-    fn set_icon_theme(&self, tab: &TabId, theme: Option<ardia_theme::IconTheme>) {
+    pub(crate) fn set_icon_theme(&self, tab: &TabId, theme: Option<ardia_theme::IconTheme>) {
         {
             let mut bridge = self.bridge.lock();
             match theme {
@@ -1053,29 +1256,109 @@ impl AppCoordinator {
         let Some(state_tab) = self.state_tab(tab) else {
             return;
         };
-        self.bridge
-            .lock()
-            .applied
-            .entry(state_tab.clone())
-            .or_default()
-            .muted = muted;
+        if !muted {
+            self.bridge
+                .lock()
+                .applied
+                .entry(state_tab.clone())
+                .or_default()
+                .muted = false;
+        }
         self.dispatch_quietly(Action::UpdatePage {
-            tab: state_tab.clone(),
+            tab: state_tab,
             update: PageUpdate {
                 audible: Some(audible),
                 ..PageUpdate::default()
             },
         });
-        let state_muted = self
-            .store
-            .snapshot()
-            .tab(state_tab.as_str())
-            .map(|t| t.muted);
-        if state_muted.is_some_and(|known| known != muted) {
-            self.dispatch_quietly(Action::SetMuted {
-                tab: state_tab,
-                muted,
+        self.mark_dirty();
+    }
+
+    fn kept_behind_new_tab(
+        &self,
+        tab: &TabId,
+        event: &EngineEvent,
+        update: PageUpdate,
+    ) -> Option<Option<(TabId, PageUpdate)>> {
+        let mut bridge = self.bridge.lock();
+        if let Some(kept) = bridge.new_tab_shown.get_mut(tab) {
+            match event {
+                EngineEvent::UrlChanged { url, .. } => kept.0 = url.clone(),
+                EngineEvent::TitleChanged { title, .. }
+                | EngineEvent::ShownTitleChanged { title, .. } => kept.1 = title.clone(),
+                _ => return None,
+            }
+            return Some(None);
+        }
+        if let EngineEvent::UrlChanged { url, .. } = event
+            && !url.is_empty()
+            && url != "about:blank"
+            && self
+                .store
+                .snapshot()
+                .tab(tab.as_str())
+                .is_some_and(|listed| listed.url.is_empty())
+        {
+            bridge.back_to_new_tab.insert(tab.clone());
+        }
+        let _ = update;
+        None
+    }
+
+    fn note_page_theme(&self, tab: EngineTabId, json: &str) {
+        let Some(state_tab) = self.state_tab(tab) else {
+            return;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else {
+            return;
+        };
+        let color = value
+            .get("color")
+            .and_then(serde_json::Value::as_str)
+            .and_then(RgbaColor::parse);
+        self.dispatch_quietly(Action::UpdatePage {
+            tab: state_tab,
+            update: PageUpdate {
+                theme_color: Some(color),
+                ..PageUpdate::default()
+            },
+        });
+    }
+
+    fn note_page_scroll(&self, tab: EngineTabId, json: &str) {
+        let Some(state_tab) = self.state_tab(tab) else {
+            return;
+        };
+        let down = serde_json::from_str::<serde_json::Value>(json)
+            .ok()
+            .and_then(|value| {
+                value
+                    .get("state")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s == "down")
             });
+        let Some(down) = down else {
+            return;
+        };
+        let hides = self.store.snapshot().settings.hide_toolbar_while_scrolling;
+        let changed = {
+            let mut bridge = self.bridge.lock();
+            if down && hides {
+                let hidden = bridge.scrolled_down.insert(state_tab.clone());
+                if hidden {
+                    crate::telemetry_events::note_toolbar_hidden(state_tab.as_str());
+                }
+                hidden
+            } else {
+                let shown = bridge.scrolled_down.remove(&state_tab);
+                if shown {
+                    crate::telemetry_events::note_toolbar_shown(state_tab.as_str());
+                }
+                shown
+            }
+        };
+        if changed {
+            self.signal.emit(ardia_ui::host_data::HostTopics::PAGE);
         }
     }
 
@@ -1172,6 +1455,7 @@ impl AppCoordinator {
                 kind,
                 message,
                 action: None,
+                icon: None,
                 created_at: now,
                 expires_at: Some(now + 6_000),
             },
@@ -1235,5 +1519,35 @@ impl AppCoordinator {
         }
         self.apply_events(held);
         self.mark_dirty();
+    }
+}
+
+pub fn favicon_site_changed(icon_page: &str, url: &str) -> bool {
+    let web = |u: &str| u.starts_with("https://") || u.starts_with("http://");
+    if !web(url) || !web(icon_page) {
+        return false;
+    }
+    ardia_state::omnibox::url::host_of(icon_page) != ardia_state::omnibox::url::host_of(url)
+}
+
+#[cfg(test)]
+mod favicon_site_tests {
+    use super::favicon_site_changed;
+
+    #[test]
+    fn a_tab_that_leaves_its_site_drops_the_old_icon() {
+        assert!(favicon_site_changed(
+            "https://x.com/home",
+            "https://example.com/"
+        ));
+        assert!(!favicon_site_changed(
+            "https://x.com/home",
+            "https://x.com/explore"
+        ));
+        assert!(!favicon_site_changed(
+            "https://www.x.com/",
+            "https://x.com/"
+        ));
+        assert!(!favicon_site_changed("https://x.com/", "ardia://history"));
     }
 }

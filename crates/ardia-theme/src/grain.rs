@@ -123,6 +123,11 @@ impl GrainTile {
         self.alpha[(y.rem_euclid(n) * n + x.rem_euclid(n)) as usize]
     }
 
+    pub fn mean_alpha(&self) -> f32 {
+        let total: u64 = self.alpha.iter().map(|&a| u64::from(a)).sum();
+        (total as f64 / (self.alpha.len().max(1) as f64 * 255.0)) as f32
+    }
+
     pub fn premultiplied_black_rgba(&self) -> Vec<u8> {
         self.alpha.iter().flat_map(|&a| [0, 0, 0, a]).collect()
     }

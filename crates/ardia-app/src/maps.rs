@@ -130,6 +130,14 @@ impl ProfileMap {
         self.owners.entry(engine_profile).or_insert(owner);
     }
 
+    pub fn forget(&mut self, profile: &ProfileId) {
+        if let Some(engine_profile) = self.engine.remove(profile)
+            && !self.engine.values().any(|other| *other == engine_profile)
+        {
+            self.owners.remove(&engine_profile);
+        }
+    }
+
     pub fn engine_of(&self, profile: &ProfileId) -> Option<EngineProfileId> {
         self.engine.get(profile).copied()
     }

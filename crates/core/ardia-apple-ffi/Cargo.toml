@@ -16,3 +16,6 @@ rustcrypto = ["ardia-ffi/rustcrypto"]
 [dependencies]
 ardia-ffi = { path = "../ardia-ffi", default-features = false }
 ardia-import-ffi = { path = "../ardia-import-ffi" }
+
+[lints]
+workspace = true

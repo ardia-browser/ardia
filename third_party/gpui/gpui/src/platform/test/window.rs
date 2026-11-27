@@ -1,11 +1,11 @@
 use crate::{
     AnyWindowHandle, BackdropLayerSpec, Bounds, Corners, Decorations, DevicePixels,
-    DispatchEventResult, DisplayId, GpuSpecs, HeadlessAtlas, KeyDownEvent, NativeViewId, Pixels,
-    Platform, PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PromptButton, RequestFrameOptions, Scene, Size,
-    TestDisplay, TestPlatform, TextInputConfiguration, TextInputStateChange, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowInsets, WindowParams,
-    WindowVisibility,
+    DispatchEventResult, DisplayId, GpuSpecs, HeadlessAtlas, KeyDownEvent, LiquidGlassRegion,
+    NativeViewId, Pixels, Platform, PlatformAtlas, PlatformDisplay, PlatformHeadlessRenderer,
+    PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton, RequestFrameOptions,
+    Scene, Size, TestDisplay, TestPlatform, TextInputConfiguration, TextInputStateChange,
+    VisualEffectRegion, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
+    WindowControlArea, WindowInsets, WindowParams, WindowVisibility,
 };
 use gpui_util::ResultExt as _;
 #[cfg(any(test, feature = "test-support"))]
@@ -54,6 +54,7 @@ pub(crate) struct TestWindowState {
     display_changed_callback: Option<Box<dyn FnMut()>>,
     appearance_change_callback: Option<Box<dyn FnMut()>>,
     request_frame_callback: Option<Box<dyn FnMut(RequestFrameOptions)>>,
+    input_latency_callback: Option<Box<dyn FnMut(crate::InputLatencySample)>>,
     frame_wake_count: Rc<Cell<usize>>,
     frame_scheduled: bool,
     frame_callback_pending: bool,
@@ -65,11 +66,15 @@ pub(crate) struct TestWindowState {
     appearance: WindowAppearance,
     decorations: Decorations,
     external_drag_files: Vec<(PathBuf, bool)>,
+    external_drag_texts: Vec<String>,
     start_external_drag_result: bool,
     background_appearance: WindowBackgroundAppearance,
     composites_liquid_glass: bool,
+    liquid_glass: Vec<LiquidGlassRegion>,
     backdrop_layer: Option<BackdropLayerSpec>,
     native_view_corner_radii: Vec<(NativeViewId, Corners<Pixels>)>,
+    composites_visual_effects: bool,
+    visual_effects: Vec<VisualEffectRegion>,
 }
 
 #[derive(Clone)]
@@ -139,6 +144,7 @@ impl TestWindow {
             native_view_focused_callback: None,
             key_down_before_native_view_callback: None,
             request_frame_callback: None,
+            input_latency_callback: None,
             frame_wake_count: Rc::new(Cell::new(0)),
             frame_scheduled: false,
             frame_callback_pending: false,
@@ -151,11 +157,15 @@ impl TestWindow {
             appearance: WindowAppearance::Light,
             decorations: Decorations::default(),
             external_drag_files: Vec::new(),
+            external_drag_texts: Vec::new(),
             start_external_drag_result: false,
             background_appearance: WindowBackgroundAppearance::Opaque,
             composites_liquid_glass: false,
+            liquid_glass: Vec::new(),
             backdrop_layer: None,
             native_view_corner_radii: Vec::new(),
+            composites_visual_effects: false,
+            visual_effects: Vec::new(),
         })))
     }
     pub fn simulate_close(&self) {
@@ -355,6 +365,20 @@ impl TestWindow {
         self.0.lock().frame_wake_count.get()
     }
 
+    /// Delivers an input latency sample, as the platform would once the
+    /// sample's frame was presented. Returns whether a callback received it.
+    pub fn simulate_input_latency(&self, sample: crate::InputLatencySample) -> bool {
+        let Some(mut callback) = self.0.lock().input_latency_callback.take() else {
+            return false;
+        };
+        callback(sample);
+        let mut lock = self.0.lock();
+        if lock.input_latency_callback.is_none() {
+            lock.input_latency_callback = Some(callback);
+        }
+        true
+    }
+
     /// Delivers a frame request to the window, as the platform's frame source
     /// would.
     pub fn simulate_frame_request(&self, options: RequestFrameOptions) {
@@ -382,12 +406,31 @@ impl TestWindow {
         self.0.lock().external_drag_files.clone()
     }
 
+    pub fn external_drag_texts(&self) -> Vec<String> {
+        self.0.lock().external_drag_texts.clone()
+    }
+
     pub fn set_start_external_drag_result(&self, result: bool) {
         self.0.lock().start_external_drag_result = result;
     }
 
     pub fn set_composites_liquid_glass(&self, composites: bool) {
         self.0.lock().composites_liquid_glass = composites;
+    }
+
+    /// Sets whether the window shows the visual effect regions of the scenes it draws.
+    pub fn set_composites_visual_effects(&self, composites: bool) {
+        self.0.lock().composites_visual_effects = composites;
+    }
+
+    /// The visual effect regions of the scene drawn last, in draw order.
+    pub fn visual_effects(&self) -> Vec<VisualEffectRegion> {
+        self.0.lock().visual_effects.clone()
+    }
+
+    /// The liquid glass regions of the scene drawn last, in draw order.
+    pub fn liquid_glass(&self) -> Vec<LiquidGlassRegion> {
+        self.0.lock().liquid_glass.clone()
     }
 
     pub fn backdrop_layer(&self) -> Option<BackdropLayerSpec> {
@@ -554,6 +597,10 @@ impl PlatformWindow for TestWindow {
         self.0.lock().composites_liquid_glass
     }
 
+    fn composites_visual_effects(&self) -> bool {
+        self.0.lock().composites_visual_effects
+    }
+
     fn set_backdrop_layer(&self, spec: Option<BackdropLayerSpec>) {
         self.0.lock().backdrop_layer = spec;
     }
@@ -620,6 +667,10 @@ impl PlatformWindow for TestWindow {
 
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>) {
         self.0.lock().request_frame_callback = Some(callback);
+    }
+
+    fn on_input_latency(&self, callback: Option<Box<dyn FnMut(crate::InputLatencySample)>>) {
+        self.0.lock().input_latency_callback = callback;
     }
 
     fn schedule_frame(&self) {
@@ -717,6 +768,10 @@ impl PlatformWindow for TestWindow {
         let mut state = self.0.lock();
         state.frame_callback_pending = true;
         state.frame_scheduled = true;
+        state
+            .visual_effects
+            .clone_from(&scene.visual_effect_regions);
+        state.liquid_glass.clone_from(&scene.liquid_glass_regions);
         let device_size: Size<DevicePixels> = state.bounds.size.to_device_pixels(scale_factor);
         if let Some(renderer) = &mut state.renderer {
             renderer.render_scene(scene, device_size).warn_on_err();
@@ -728,13 +783,23 @@ impl PlatformWindow for TestWindow {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<RgbaImage> {
+    fn render_to_image(&self, scene: &Scene, scale: f32) -> anyhow::Result<RgbaImage> {
         let scale_factor = self.scale_factor();
         let mut state = self.0.lock();
         let size = state.bounds.size;
         if let Some(renderer) = &mut state.renderer {
             let device_size: Size<DevicePixels> = size.to_device_pixels(scale_factor);
-            renderer.render_scene_to_image(scene, device_size)
+            let image = renderer.render_scene_to_image(scene, device_size)?;
+            if scale == 1. {
+                return Ok(image);
+            }
+            let (width, height) = image.dimensions();
+            Ok(image::imageops::resize(
+                &image,
+                ((width as f32 * scale).floor() as u32).max(1),
+                ((height as f32 * scale).floor() as u32).max(1),
+                image::imageops::FilterType::Triangle,
+            ))
         } else {
             anyhow::bail!("render_to_image not available: no HeadlessRenderer configured")
         }
@@ -766,6 +831,9 @@ impl PlatformWindow for TestWindow {
         match payload {
             crate::ExternalDragPayload::Files(paths) => {
                 state.external_drag_files.extend_from_slice(paths.entries());
+            }
+            crate::ExternalDragPayload::Text(text) => {
+                state.external_drag_texts.push(text.clone());
             }
         }
         state.start_external_drag_result

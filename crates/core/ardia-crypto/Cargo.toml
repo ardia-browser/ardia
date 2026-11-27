@@ -23,5 +23,5 @@ zeroize.workspace = true
 [dev-dependencies]
 ed25519-dalek = { workspace = true }
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("boringssl"))'] }
+[lints]
+workspace = true

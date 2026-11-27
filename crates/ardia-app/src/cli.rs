@@ -213,7 +213,7 @@ impl LaunchConfig {
     }
 
     pub fn socket_path(&self) -> PathBuf {
-        self.data_dir.join("ardia.sock")
+        self.data_dir.join(crate::control_protocol::SOCKET_NAME)
     }
 
     pub fn launch_options(&self) -> LaunchOptions {

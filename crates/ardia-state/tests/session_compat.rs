@@ -243,9 +243,21 @@ fn the_owners_real_profile_round_trips_when_present() {
     w.act(Action::ClearUnpinned {
         window: win.clone(),
     });
-    w.act(Action::UndoClear {
+    if w.state.cleared.contains_key(&win) {
+        w.act(Action::UndoClear { window: win });
+    }
+    check_invariants(&w.state);
+}
+
+#[test]
+fn a_clear_that_closes_nothing_leaves_nothing_to_undo() {
+    let mut w = World::new();
+    let win = w.open();
+    w.act(Action::ClearUnpinned {
         window: win.clone(),
     });
+    assert!(!w.state.cleared.contains_key(&win));
+    assert!(w.try_act(Action::UndoClear { window: win }).is_err());
     check_invariants(&w.state);
 }
 
@@ -271,5 +283,37 @@ fn the_owners_backup_restores_a_broken_session_when_present() {
             Vec::len
         )
     );
+    check_invariants(&state);
+}
+
+#[test]
+fn an_active_tab_dropped_as_an_orphan_falls_back_to_a_surviving_tab() {
+    let mut doc = fixture();
+    let window = doc["windows"][0]["id"].as_str().unwrap().to_owned();
+    let profile = doc["windows"][0]["profileId"].as_str().unwrap().to_owned();
+    doc["tabs"].as_array_mut().unwrap().push(json!({
+        "id": "tab-orphan",
+        "windowId": window,
+        "profileId": profile,
+        "url": "https://example.com/",
+    }));
+    doc["windows"][0]["activeTabIds"][&profile] = json!("tab-orphan");
+    doc["windows"][0]["activeTabIds"]["default"] = json!("tab-orphan");
+    let (state, report, _dir) = load(&doc);
+    assert_eq!(report.dropped_rows, 1);
+    assert!(state.tab("tab-orphan").is_none());
+    let w = state.window(&window).unwrap();
+    let active = state
+        .active_tab(&window)
+        .expect("a surviving tab is active");
+    assert_eq!(active.profile_id.as_str(), profile);
+    assert!(w.tab_ids.contains(&active.id));
+    for (p, t) in &w.active_tab_ids {
+        let tab = state
+            .tab(t.as_str())
+            .expect("every remembered active tab survives");
+        assert_eq!(&tab.profile_id, p);
+        assert!(w.tab_ids.contains(t));
+    }
     check_invariants(&state);
 }

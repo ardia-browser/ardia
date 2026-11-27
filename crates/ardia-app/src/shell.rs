@@ -113,6 +113,8 @@ pub struct Shell {
     utility: HashMap<UtilityWindowKind, AnyWindowHandle>,
     menu_signature: Option<u64>,
     activated: bool,
+    presented_browser: bool,
+    onboarding_waits: Option<UtilityWindowKind>,
 }
 
 fn utility_title(kind: UtilityWindowKind) -> &'static str {
@@ -120,6 +122,7 @@ fn utility_title(kind: UtilityWindowKind) -> &'static str {
         UtilityWindowKind::Settings => "Settings",
         UtilityWindowKind::Import => "Import",
         UtilityWindowKind::Onboarding => "Welcome to Ardia",
+        UtilityWindowKind::Intro => "Ardia",
     }
 }
 
@@ -131,6 +134,8 @@ impl Shell {
             utility: HashMap::new(),
             menu_signature: None,
             activated: false,
+            presented_browser: false,
+            onboarding_waits: None,
         }
     }
 
@@ -141,9 +146,15 @@ impl Shell {
         for effect in effects {
             self.apply(effect, cx);
         }
+        let hidden = self.coordinator.config().background;
         for window in report.refresh {
             if let Some(handle) = self.coordinator.gpui_window(&window) {
-                let _ = handle.update(cx, |_, window, _| window.refresh());
+                let _ = handle.update(cx, |_, window, _| {
+                    window.refresh();
+                    if hidden {
+                        crate::hidden_frames::request_frame(window);
+                    }
+                });
             }
         }
         self.sync_menu(cx);
@@ -167,7 +178,42 @@ impl Shell {
                     let _ = handle.update(cx, |_, window, _| window.activate_window());
                 }
             }
+            ShellEffect::OpenUtility(
+                kind @ (UtilityWindowKind::Onboarding | UtilityWindowKind::Intro),
+            ) if !self.presented_browser => {
+                self.onboarding_waits = Some(kind);
+            }
             ShellEffect::OpenUtility(kind) => self.open_utility(kind, cx),
+            ShellEffect::Confirm(request) => {
+                let coordinator = self.coordinator.clone();
+                let shown = request
+                    .window
+                    .as_ref()
+                    .and_then(|window| self.coordinator.gpui_window(window))
+                    .or_else(|| cx.active_window());
+                let prompt = shown.and_then(|handle| {
+                    handle
+                        .update(cx, |_, window, cx| {
+                            window.prompt(
+                                gpui::PromptLevel::Warning,
+                                &request.title,
+                                Some(&request.message),
+                                &[request.confirm.as_str(), request.cancel.as_str()],
+                                cx,
+                            )
+                        })
+                        .ok()
+                });
+                let id = request.id;
+                match prompt {
+                    Some(prompt) => cx
+                        .spawn(async move |_| {
+                            coordinator.answer_confirm(id, prompt.await.is_ok_and(|choice| choice == 0))
+                        })
+                        .detach(),
+                    None => coordinator.answer_confirm(id, false),
+                }
+            }
             ShellEffect::ConfirmCloseWithDownloads {
                 window,
                 request,
@@ -203,6 +249,97 @@ impl Shell {
             }
             ShellEffect::InstallMenu => self.menu_signature = None,
             ShellEffect::Copy(text) => cx.write_to_clipboard(ClipboardItem::new_string(text)),
+            ShellEffect::SyntheticInput { window, steps } => {
+                let found = if window.as_str() == crate::synthetic_input::SETTINGS_WINDOW {
+                    cx.windows().into_iter().find(|handle| {
+                        handle
+                            .downcast::<ardia_ui::settings::SettingsWindowView>()
+                            .is_some()
+                    })
+                } else if window.as_str() == crate::synthetic_input::ONBOARDING_WINDOW {
+                    cx.windows().into_iter().find(|handle| {
+                        handle
+                            .downcast::<ardia_ui::onboarding::OnboardingWindowView>()
+                            .is_some()
+                    })
+                } else if window.as_str() == crate::synthetic_input::RECORDING_PILL_WINDOW {
+                    cx.windows().into_iter().find(|handle| {
+                        handle
+                            .downcast::<ardia_ui::report::pill::RecordingPillView>()
+                            .is_some()
+                    })
+                } else {
+                    self.coordinator.gpui_window(&window)
+                };
+                let Some(handle) = found else {
+                    log::debug!("synthetic input for {window} has no GPUI window");
+                    return;
+                };
+                let (native, steps): (Vec<_>, Vec<_>) =
+                    steps.into_iter().partition(|step| step.native().is_some());
+                let delivered = handle.update(cx, |_, window, cx| {
+                    if !native.is_empty()
+                        && let Some(number) = crate::mouse_shortcuts::window_number_of(window)
+                    {
+                        let scrolls: Vec<_> = native.iter().filter_map(|s| s.native()).collect();
+                        crate::synthetic_input::post_native_scrolls(number, &scrolls);
+                    }
+                    for step in steps {
+                        match step {
+                            crate::synthetic_input::Step::KeyDown(keystroke) => {
+                                window.dispatch_keystroke(keystroke, cx);
+                            }
+                            other => {
+                                window.dispatch_event(other.into_platform_input(), cx);
+                            }
+                        }
+                    }
+                    window.refresh();
+                });
+                if delivered.is_err() {
+                    log::debug!("synthetic input for {window} found the window closed");
+                }
+            }
+            ShellEffect::RunCommand {
+                window,
+                window_number,
+                command,
+            } => {
+                let under_pointer = window_number.and_then(|wanted| {
+                    let windows = self.coordinator.bridge.lock().gpui.clone();
+                    windows.into_iter().find_map(|(id, handle)| {
+                        handle
+                            .update(cx, |_, window, _| {
+                                crate::mouse_shortcuts::window_number_of(window)
+                            })
+                            .ok()
+                            .flatten()
+                            .filter(|number| *number == wanted)
+                            .map(|_| id)
+                    })
+                });
+                let state = self.coordinator.store().snapshot();
+                let Some(window) = crate::mouse_shortcuts::pick_window(
+                    under_pointer,
+                    Some(window),
+                    |id| state.window(id.as_str()).is_some_and(|w| w.kind.has_tabs()),
+                ) else {
+                    return;
+                };
+                let Some(handle) = self.coordinator.gpui_window(&window) else {
+                    return;
+                };
+                let ran = handle.update(cx, |_, window, cx| {
+                    window.dispatch_action(ardia_ui::keybindings::action_for(&command), cx);
+                });
+                if ran.is_err() {
+                    log::debug!("a mouse shortcut found {window} closed");
+                }
+            }
+            ShellEffect::AskControlPeer { question, window } => {
+                crate::control_doorbell::present(&self.coordinator, question, window, cx);
+            }
+            ShellEffect::DismissControlPeer { ask } => crate::control_doorbell::dismiss(ask),
             ShellEffect::Quit => match self.mode {
                 ShellMode::Hosted => match self.coordinator.engine() {
                     Some(engine) => {
@@ -281,10 +418,15 @@ impl Shell {
             background: self.coordinator.config().background,
         };
         let ui: Arc<dyn UiHost> = self.coordinator.clone();
+        let opening = ardia_profile::window_opening(match kind {
+            WindowKind::LittleArdia => ardia_profile::FrameSlot::Little,
+            _ => ardia_profile::FrameSlot::Main,
+        });
         let opened = match kind {
             WindowKind::LittleArdia => ardia_ui::open_little_ardia_window(ui, target.clone(), cx),
             _ => ardia_ui::open_browser_window(ui, target.clone(), cx),
         };
+        opening.opened(opened.as_ref().map_or(0, |h| h.window_id().as_u64()));
         let handle = match opened {
             Ok(handle) => handle,
             Err(problem) => {
@@ -313,6 +455,10 @@ impl Shell {
             .register_gpui_window(window.clone(), handle);
         if host.is_some() {
             self.present(&window, handle, cx);
+        }
+        self.presented_browser = true;
+        if let Some(kind) = self.onboarding_waits.take() {
+            self.open_utility(kind, cx);
         }
     }
 
@@ -343,11 +489,21 @@ impl Shell {
             self.utility.remove(&kind);
         }
         let ui: Arc<dyn UiHost> = self.coordinator.clone();
+        let opening = match kind {
+            UtilityWindowKind::Settings => Some(ardia_profile::FrameSlot::Settings),
+            UtilityWindowKind::Onboarding => Some(ardia_profile::FrameSlot::Onboarding),
+            UtilityWindowKind::Import | UtilityWindowKind::Intro => None,
+        }
+        .map(ardia_profile::window_opening);
         let opened = match kind {
             UtilityWindowKind::Settings => ardia_ui::open_settings_window(ui, cx),
             UtilityWindowKind::Import => ardia_ui::open_import_window(ui, cx),
             UtilityWindowKind::Onboarding => ardia_ui::open_onboarding_window(ui, cx),
+            UtilityWindowKind::Intro => ardia_ui::open_intro_window(ui, cx),
         };
+        if let Some(opening) = opening {
+            opening.opened(opened.as_ref().map_or(0, |h| h.window_id().as_u64()));
+        }
         let handle = match opened {
             Ok(handle) => handle,
             Err(problem) => {
@@ -369,12 +525,26 @@ impl Shell {
         use crate::menu_bridge::native;
         let state = self.coordinator.store().snapshot();
         let context = native::menu_context(&state, &self.coordinator.recently_closed());
-        let signature = native::signature(&context);
+        let mut titles = self.coordinator.menu_titles(&state);
+        let tile_pin = self.coordinator.command_enabled("togglePin", Some("tile"));
+        if tile_pin {
+            titles.push(("togglePin:tile", native::TILE_PIN_TITLE));
+        }
+        let routes_undo = state.settings.undo_reopens_closed_tab;
+        if routes_undo {
+            titles.push(("undo", "Undo"));
+        }
+        let signature = native::titled_signature(&context, &titles);
         if self.menu_signature == Some(signature) {
             return;
         }
         self.menu_signature = Some(signature);
-        let bar = native::menu_bar(&context);
+        let mut bar = native::menu_bar(&context);
+        native::retitle(&mut bar, &titles);
+        native::add_tile_pin_item(&mut bar, tile_pin);
+        if routes_undo {
+            native::route_undo(&mut bar);
+        }
         match self.mode {
             ShellMode::Hosted => {
                 if let Err(problem) = bar.install() {
@@ -462,6 +632,10 @@ pub fn install(
         bind_menu_keys(cx);
     }
     ardia_ui::bind_global_keybindings(cx);
+    crate::text_services::install(cx, coordinator.clone());
+    #[cfg(target_os = "macos")]
+    crate::scripting::mac::install(cx, coordinator.clone());
+    crate::profiling::observe_keys(cx);
     {
         let coordinator = coordinator.clone();
         cx.on_action(move |action: &MenuCommand, cx| {
@@ -481,6 +655,7 @@ pub fn install(
                 if !coordinator.flush() {
                     log::warn!("the session didn't finish saving before quitting");
                 }
+                crate::telemetry::quit();
             }
         })
         .detach();
@@ -493,6 +668,9 @@ pub fn install(
             }
         })
         .detach();
+    }
+    if coordinator.config().background {
+        crate::hidden_frames::keep_drawing(cx);
     }
     let mut shell = Shell::new(coordinator.clone(), mode);
     coordinator.start();
@@ -610,6 +788,7 @@ impl AppCoordinator {
     }
 
     pub fn reopen(&self) {
+        ardia_telemetry::counts::count("dock_reopens");
         let state = self.store().snapshot();
         let shown = state
             .focus_order

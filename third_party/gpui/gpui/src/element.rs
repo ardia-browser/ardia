@@ -485,6 +485,7 @@ impl<E: Element> Drawable<E> {
                 }
 
                 let node_id = window.next_frame.dispatch_tree.push_node();
+                let hitbox_owner = window.hitbox_owners.push(None);
                 let mut prepaint = self.element.prepaint(
                     global_id.as_ref(),
                     inspector_id.as_ref(),
@@ -493,6 +494,7 @@ impl<E: Element> Drawable<E> {
                     window,
                     cx,
                 );
+                drop(hitbox_owner);
                 window.next_frame.dispatch_tree.pop_node();
 
                 if pushed_a11y_node {

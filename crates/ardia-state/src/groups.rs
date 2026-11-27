@@ -535,7 +535,7 @@ mod tests {
             &WindowId::new("w"),
         );
         assert_eq!(placed, ids(&["1", "2", "4", "3", "5"]));
-        let mut synced = groups.clone();
+        let mut synced = groups;
         sync_group_order(&mut synced, &WindowId::new("w"), &ids(&["4", "1", "2"]));
         assert_eq!(synced["a"].tab_ids, ids(&["4", "2"]));
     }

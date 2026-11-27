@@ -26,6 +26,9 @@ pub enum HangMonitorError {
     /// The monitor was already started for this app.
     #[error("the hang monitor was already started")]
     AlreadyStarted,
+    /// The foreground journal the monitor reads was disabled.
+    #[error("the foreground journal is disabled")]
+    JournalDisabled,
     /// The monitor thread couldn't be spawned.
     #[error("failed to spawn the hang monitor thread: {0}")]
     Spawn(#[source] std::io::Error),

@@ -1,0 +1,20 @@
+id: consecutive-entity-updates
+language: rust
+severity: warning
+message: "[gpui-fundamentals: Minimize Entity Updates] two updates of $E in a row; each one borrows, runs observers and may notify"
+note: "Fold them into a single update closure with one cx.notify()."
+metadata:
+  source: gpui-fundamentals SKILL.md, Performance Tips 1 (Minimize Entity Updates)
+ignores:
+  - third_party/**
+  - crates/**/tests/**
+  - crates/**/tests.rs
+rule:
+  all:
+    - kind: expression_statement
+    - pattern: $E.update($CX, $A);
+    - follows:
+        kind: expression_statement
+        pattern: $E.update($CX, $B);
+    - not:
+        matches: in-test-code

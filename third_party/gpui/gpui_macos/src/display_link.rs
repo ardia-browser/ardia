@@ -1,7 +1,7 @@
 //! Frame pacing for macOS windows.
 //!
 //! On macOS 14 and later a window is paced by a `CAMetalDisplayLink` on its
-//! layer ([`gpui_apple::display_link::MetalFrameSource`]). Earlier systems use
+//! layer ([`MetalFrameSource`]). Earlier systems use
 //! the shared `CVDisplayLink` registry described below ([`WindowFrameSource`]).
 //!
 //! CVDisplayLink has no safe teardown: `CVDisplayLinkStop` merely flags the
@@ -54,21 +54,38 @@
 //! is a std implementation detail, not a guarantee; if it changes, the cost
 //! is added latency under contention, not incorrectness.)
 
+mod gesture_mode;
+mod input_latency;
+mod metal_frame_source;
+mod vsync_clock;
+
+pub use gesture_mode::{GesturePhase, GesturePresenter, GestureTransition};
+pub use input_latency::{FrameTimes, InputKind, InputLatencyLog, LatencySink, PendingInput};
+pub use metal_frame_source::MetalFrameSource;
+
 use crate::main_thread_marker;
 use anyhow::Result;
+use block2::RcBlock;
 use core_graphics::display::CGDirectDisplayID;
 use dispatch2::{
     _dispatch_source_type_data_add, DispatchObject, DispatchQueue, DispatchRetained, DispatchSource,
 };
 use gpui::{FrameRequestSource, PlatformFrameSignal};
-use gpui_apple::display_link::MetalFrameSource;
 use gpui_util::ResultExt;
+use objc2::{
+    msg_send,
+    runtime::{AnyObject, ProtocolObject},
+};
+use objc2_quartz_core::{CAMetalDisplayLinkUpdate, CAMetalDrawable};
 use scheduler::Instant;
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, btree_map},
     ffi::c_void,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
+    sync::{
+        Arc, Mutex, MutexGuard, PoisonError,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -306,9 +323,245 @@ pub struct MetalFrames {
     source: RefCell<Option<MetalFrameSource>>,
     /// Whether GPUI asked for a frame since the current update began.
     woken: Cell<bool>,
+    latency_log: RefCell<Option<InputLatencyLog>>,
+    gesture: Option<GestureFrames>,
+}
+
+const GESTURE_PRESENT_ENV: &str = "ARDIA_GPUI_GESTURE_PRESENT";
+const FALLBACK_REFRESH_INTERVAL: f64 = 1.0 / 60.0;
+
+/// Synchronous presentation during trackpad gestures. See [`GesturePresenter`].
+#[derive(Default)]
+struct GestureFrames {
+    presenter: RefCell<GesturePresenter>,
+    /// Whether GPUI asked for a frame since the last gesture draw.
+    wanted: Cell<bool>,
+    tick_scheduled: Cell<bool>,
+    refresh_interval: Cell<f64>,
+    frame_started: Cell<f64>,
+    /// When the current frame committed, for its presented handler.
+    frame_committed: RefCell<Arc<AtomicU64>>,
+    /// Commit and presentation times reported by presented handlers.
+    displayed: Arc<Mutex<Vec<(f64, f64)>>>,
+}
+
+impl GestureFrames {
+    fn observe_displayed_frames(&self) {
+        let displayed = std::mem::take(
+            &mut *self
+                .displayed
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+        );
+        let mut presenter = self.presenter.borrow_mut();
+        for (committed, presented) in displayed {
+            presenter.observe_display(committed, presented);
+        }
+    }
+
+    fn watch_display(&self, drawable: &ProtocolObject<dyn CAMetalDrawable>) {
+        let committed = Arc::new(AtomicU64::new(0));
+        self.frame_committed.replace(committed.clone());
+        let displayed = self.displayed.clone();
+        let handler = RcBlock::new(move |presented: *mut AnyObject| {
+            let committed = f64::from_bits(committed.load(Ordering::Relaxed));
+            if presented.is_null() || committed <= 0.0 {
+                return;
+            }
+            let presented_time: f64 = unsafe { msg_send![presented, presentedTime] };
+            if presented_time > 0.0 {
+                displayed
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .push((committed, presented_time));
+            }
+        });
+        let _: () = unsafe { msg_send![drawable, addPresentedHandler: &*handler] };
+    }
+}
+
+fn gesture_present_enabled(value: Option<&str>) -> bool {
+    value.is_none_or(|value| value.trim() != "0")
 }
 
 impl MetalFrames {
+    /// Frames for a new window, logging input latency when the environment
+    /// names a log.
+    pub fn from_env() -> Self {
+        let gesture_present = std::env::var(GESTURE_PRESENT_ENV).ok();
+        Self {
+            latency_log: RefCell::new(InputLatencyLog::from_env()),
+            gesture: gesture_present_enabled(gesture_present.as_deref())
+                .then(GestureFrames::default),
+            ..Self::default()
+        }
+    }
+
+    /// Whether gesture mode is on for this window.
+    pub fn is_in_gesture_mode(&self) -> bool {
+        self.gesture
+            .as_ref()
+            .is_some_and(|gesture| gesture.presenter.borrow().is_active())
+    }
+
+    /// Clears the record of GPUI asking for a frame, before an event's dispatch.
+    pub fn begin_gesture_dispatch(&self) {
+        if let Some(gesture) = &self.gesture {
+            gesture.wanted.set(false);
+        }
+    }
+
+    /// Records a dispatched event of `phase`, returning how presentation changes.
+    pub fn gesture_after_event(&self, phase: GesturePhase) -> GestureTransition {
+        let Some(gesture) = &self.gesture else {
+            return GestureTransition::Stay;
+        };
+        if self.is_attached() && gesture.presenter.borrow().is_active() {
+            gesture.presenter.borrow_mut().abandon();
+        }
+        gesture
+            .presenter
+            .borrow_mut()
+            .after_event(host_time_seconds(), phase, gesture.wanted.get())
+    }
+
+    /// Detaches the display link and presents with the Core Animation
+    /// transaction, pacing frames at `refresh_interval` seconds.
+    pub fn enter_gesture_mode(
+        &self,
+        renderer: &mut crate::renderer::Renderer,
+        refresh_interval: f64,
+    ) {
+        self.replace(None);
+        renderer.set_display_link_attached(false);
+        renderer.set_presents_with_transaction(true);
+        if let Some(gesture) = &self.gesture {
+            let interval = if refresh_interval.is_finite() && refresh_interval > 0.0 {
+                refresh_interval
+            } else {
+                FALLBACK_REFRESH_INTERVAL
+            };
+            gesture.refresh_interval.set(interval);
+        }
+    }
+
+    /// Stops presenting with the Core Animation transaction. The caller then
+    /// starts the display link again.
+    pub fn exit_gesture_mode(&self, renderer: &mut crate::renderer::Renderer) {
+        renderer.set_presents_with_transaction(false);
+    }
+
+    /// Whether a gesture frame may present now: GPUI wants one, the window is
+    /// in gesture mode with its link detached, and none presented this refresh.
+    pub fn gesture_frame_due(&self) -> bool {
+        let Some(gesture) = &self.gesture else {
+            return false;
+        };
+        gesture.observe_displayed_frames();
+        !self.is_attached()
+            && gesture.wanted.get()
+            && gesture
+                .presenter
+                .borrow()
+                .may_present(host_time_seconds(), gesture.refresh_interval.get())
+    }
+
+    /// Starts a gesture draw into `drawable`, logging its presentation.
+    pub fn begin_gesture_frame(&self, drawable: &ProtocolObject<dyn CAMetalDrawable>) {
+        let now = host_time_seconds();
+        if let Some(gesture) = &self.gesture {
+            gesture.wanted.set(false);
+            gesture.frame_started.set(now);
+            gesture.watch_display(drawable);
+        }
+        if let Some(log) = &*self.latency_log.borrow() {
+            let frame = FrameTimes {
+                update_start: now,
+                target: None,
+            };
+            log.begin_frame(drawable, frame);
+        }
+    }
+
+    /// Ends a gesture draw that `used_drawable` or not.
+    pub fn end_gesture_frame(&self, used_drawable: bool) {
+        let Some(gesture) = &self.gesture else {
+            return;
+        };
+        if used_drawable {
+            let committed = host_time_seconds();
+            gesture
+                .frame_committed
+                .borrow()
+                .store(committed.to_bits(), Ordering::Relaxed);
+            gesture
+                .presenter
+                .borrow_mut()
+                .presented(gesture.frame_started.get(), committed);
+        }
+        if let Some(log) = &*self.latency_log.borrow() {
+            log.end_frame(used_drawable, !used_drawable && !gesture.wanted.get());
+        }
+    }
+
+    /// Checks whether the gesture is over, returning [`GestureTransition::Exit`]
+    /// when the window should present with its display link again.
+    pub fn gesture_tick(&self) -> GestureTransition {
+        let Some(gesture) = &self.gesture else {
+            return GestureTransition::Stay;
+        };
+        if self.is_attached() {
+            gesture.presenter.borrow_mut().abandon();
+            return GestureTransition::Stay;
+        }
+        gesture.presenter.borrow_mut().tick(host_time_seconds())
+    }
+
+    /// Claims the gesture timer, returning how long to wait before the next
+    /// tick, or `None` if one is already scheduled or gesture mode is off.
+    pub fn schedule_gesture_tick(&self) -> Option<Duration> {
+        let gesture = self.gesture.as_ref()?;
+        gesture.observe_displayed_frames();
+        let presenter = gesture.presenter.borrow();
+        if !presenter.is_active() || gesture.tick_scheduled.replace(true) {
+            return None;
+        }
+        let now = host_time_seconds();
+        let interval = gesture.refresh_interval.get();
+        let at = if gesture.wanted.get() {
+            presenter.next_present_at(now, interval)
+        } else {
+            now + interval
+        };
+        Some(Duration::from_secs_f64((at - now).clamp(0.001, interval)))
+    }
+
+    /// Releases the gesture timer when it fires.
+    pub fn gesture_tick_fired(&self) {
+        if let Some(gesture) = &self.gesture {
+            gesture.tick_scheduled.set(false);
+        }
+    }
+
+    /// Sends presentations of inputs to `sink` as well as the latency log
+    /// file, or stops with `None`. Inputs are only tracked while one of them
+    /// is open.
+    pub fn set_latency_sink(&self, sink: Option<Arc<LatencySink>>) {
+        let mut log = self.latency_log.borrow_mut();
+        *log = InputLatencyLog::with_sink(log.take(), sink);
+    }
+
+    /// Records an input for the latency log, if one is open.
+    pub fn record_input(&self, kind: InputKind, timestamp: f64) {
+        if let Some(log) = &*self.latency_log.borrow() {
+            log.record_input(PendingInput {
+                kind,
+                timestamp,
+                received: host_time_seconds(),
+            });
+        }
+    }
+
     pub fn replace(&self, source: Option<MetalFrameSource>) {
         *self.source.borrow_mut() = source;
     }
@@ -319,6 +572,9 @@ impl MetalFrames {
 
     pub fn wake(&self) {
         self.woken.set(true);
+        if let Some(gesture) = &self.gesture {
+            gesture.wanted.set(true);
+        }
         // A source being replaced starts unpaused, so skipping it is safe.
         if let Ok(source) = self.source.try_borrow()
             && let Some(source) = source.as_ref()
@@ -331,16 +587,40 @@ impl MetalFrames {
         self.woken.set(false);
     }
 
+    /// Logs when this update's drawable presents, if the latency log is open
+    /// and an input is waiting for it.
+    pub fn watch_presentation(&self, update: &CAMetalDisplayLinkUpdate) {
+        if let Some(log) = &*self.latency_log.borrow() {
+            let frame = FrameTimes {
+                update_start: host_time_seconds(),
+                target: Some(update.targetPresentationTimestamp()),
+            };
+            log.begin_frame(&update.drawable(), frame);
+        }
+    }
+
     pub fn debug_state(&self) -> serde_json::Value {
         let paused = self
             .source
             .try_borrow()
             .ok()
             .and_then(|source| source.as_ref().map(MetalFrameSource::is_paused));
+        let frame_latency = self
+            .source
+            .try_borrow()
+            .ok()
+            .and_then(|source| source.as_ref().map(MetalFrameSource::frame_latency));
         serde_json::json!({
             "kind": "CAMetalDisplayLink",
             "attached": self.is_attached(),
             "paused": paused,
+            "frame_latency": frame_latency,
+            "latency_log": self
+                .latency_log
+                .try_borrow()
+                .is_ok_and(|log| log.as_ref().is_some_and(InputLatencyLog::writes_file)),
+            "gesture_present": self.gesture.is_some(),
+            "gesture_mode": self.is_in_gesture_mode(),
             "woken": self.woken.get(),
         })
     }
@@ -352,8 +632,26 @@ impl MetalFrames {
         if pause && let Some(source) = self.source.borrow().as_ref() {
             source.set_paused(true);
         }
+        if let Some(log) = &*self.latency_log.borrow() {
+            log.end_frame(used_drawable, pause);
+        }
         pause
     }
+}
+
+fn host_time_seconds() -> f64 {
+    objc2_foundation::NSProcessInfo::processInfo().systemUptime()
+}
+
+/// The host time `seconds`, as from an event timestamp or a display link, as
+/// an [`Instant`].
+pub fn host_time_instant(seconds: f64) -> Option<Instant> {
+    input_latency::instant_at(seconds, host_time_seconds(), Instant::now())
+}
+
+/// The current host time and [`Instant`], for converting a batch of host times.
+pub fn host_time_now() -> (f64, Instant) {
+    (host_time_seconds(), Instant::now())
 }
 
 /// A per-window source of frame requests, paced by the display the window is
@@ -639,6 +937,114 @@ mod tests {
 
         frames.begin_frame();
         assert!(frames.end_frame(false), "an idle update pauses the link");
+    }
+
+    fn gesture_frames() -> MetalFrames {
+        MetalFrames {
+            gesture: Some(GestureFrames::default()),
+            ..MetalFrames::default()
+        }
+    }
+
+    #[test]
+    fn gesture_present_is_on_unless_turned_off() {
+        assert!(gesture_present_enabled(None));
+        assert!(gesture_present_enabled(Some("1")));
+        assert!(!gesture_present_enabled(Some("0")));
+        assert!(!gesture_present_enabled(Some(" 0 ")));
+        let frames = MetalFrames::default();
+        frames.wake();
+        assert_eq!(
+            frames.gesture_after_event(GesturePhase::Moving),
+            GestureTransition::Stay,
+            "frames without gesture present never enter"
+        );
+    }
+
+    #[test]
+    fn a_scroll_that_wakes_gpui_during_dispatch_enters_gesture_mode() {
+        let frames = gesture_frames();
+        frames.wake();
+        frames.begin_gesture_dispatch();
+        assert_eq!(
+            frames.gesture_after_event(GesturePhase::Moving),
+            GestureTransition::Stay,
+            "a wake before the dispatch doesn't count"
+        );
+        frames.begin_gesture_dispatch();
+        frames.wake();
+        assert_eq!(
+            frames.gesture_after_event(GesturePhase::Moving),
+            GestureTransition::Enter
+        );
+        assert!(frames.is_in_gesture_mode());
+    }
+
+    #[test]
+    fn gesture_frames_present_once_per_refresh_and_only_when_wanted() {
+        let frames = gesture_frames();
+        frames.wake();
+        frames.gesture_after_event(GesturePhase::Moving);
+        let mut renderer =
+            crate::renderer::MetalRenderer::new(Default::default(), false, false).unwrap();
+        frames.enter_gesture_mode(&mut renderer, 10.0);
+        assert!(frames.gesture_frame_due());
+        frames
+            .gesture
+            .as_ref()
+            .unwrap()
+            .presenter
+            .borrow_mut()
+            .presented(host_time_seconds(), host_time_seconds());
+        frames.gesture.as_ref().unwrap().wanted.set(false);
+        frames.wake();
+        assert!(
+            !frames.gesture_frame_due(),
+            "a frame already presented this refresh, so the next one waits"
+        );
+        assert!(frames.schedule_gesture_tick().is_some());
+        assert_eq!(frames.schedule_gesture_tick(), None, "one timer at a time");
+        frames.gesture_tick_fired();
+        assert!(frames.schedule_gesture_tick().is_some());
+    }
+
+    #[test]
+    fn a_gesture_frame_that_draws_nothing_is_not_a_present() {
+        let frames = gesture_frames();
+        frames.wake();
+        frames.gesture_after_event(GesturePhase::Moving);
+        let mut renderer =
+            crate::renderer::MetalRenderer::new(Default::default(), false, false).unwrap();
+        frames.enter_gesture_mode(&mut renderer, 10.0);
+        frames.end_gesture_frame(false);
+        frames.wake();
+        assert!(frames.gesture_frame_due());
+        let gesture = frames.gesture.as_ref().unwrap();
+        gesture.frame_started.set(host_time_seconds());
+        frames.end_gesture_frame(true);
+        assert!(
+            !frames.gesture_frame_due(),
+            "the frame counts from when it started drawing"
+        );
+    }
+
+    #[test]
+    fn gesture_mode_detaches_the_link_and_presents_with_the_transaction() {
+        let frames = gesture_frames();
+        let mut renderer =
+            crate::renderer::MetalRenderer::new(Default::default(), false, false).unwrap();
+        renderer.set_display_link_attached(true);
+        frames.enter_gesture_mode(&mut renderer, 1.0 / 120.0);
+        assert!(!frames.is_attached());
+        assert!(!renderer.is_display_link_attached());
+        assert!(renderer.presents_with_transaction());
+        assert!(
+            renderer.layer().unwrap().presentsWithTransaction(),
+            "the layer presents with the transaction too"
+        );
+        frames.exit_gesture_mode(&mut renderer);
+        assert!(!renderer.presents_with_transaction());
+        assert!(!renderer.layer().unwrap().presentsWithTransaction());
     }
 
     #[test]

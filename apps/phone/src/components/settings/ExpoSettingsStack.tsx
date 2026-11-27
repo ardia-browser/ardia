@@ -98,17 +98,21 @@ export function ExpoSettingsSheet() {
   const generation = useSettingsNav((s) => s.generation);
   const inPageMenu = usePageUi((ui) => settingsInMenu(ui, generation));
   const presented = open && !inPageMenu;
-  const presentedGeneration = useRef<number | null>(null);
-  if (presented) presentedGeneration.current = generation;
   useRefreshWhileOpen(open);
   usePublishNativeChromeLook();
   return (
     <Host testID="expoSettingsSheet" style={styles.anchor} pointerEvents="none">
-      <BottomSheet isPresented={presented} onIsPresentedChange={(shows) => (shows || presentedGeneration.current === null ? undefined : closeSettingsFrom(presentedGeneration.current))}>
+      <BottomSheet isPresented={presented} presentationToken={generation} onIsPresentedChange={presentationIgnored} onPresentation={settingsSheetPresentation}>
         <SettingsNavigation />
       </BottomSheet>
     </Host>
   );
+}
+
+const presentationIgnored = () => undefined;
+
+function settingsSheetPresentation({ phase, token }: { phase: "appear" | "disappear" | "release" | "dismiss"; token: number }) {
+  if (phase === "release" || phase === "dismiss") closeSettingsFrom(token);
 }
 
 function useRefreshWhileOpen(open: boolean) {
@@ -135,7 +139,7 @@ export function SettingsNavigation() {
   for (const key of path) seen.current.keys.add(key);
   const destinations = [...new Set([...settingsDestinationKeys(shown), ...seen.current.keys])];
   return (
-    <NavigationStack path={path} onPathChange={(path) => followSettingsPath(path, shownGeneration)} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }))}>
+    <NavigationStack key={shownGeneration} path={path} onPathChange={(path) => followSettingsPath(path, shownGeneration)} modifiers={modifierList(profileLook({ ...nativeLookColors(look, dark), usesGlass: glass }))}>
       <StackRoot route={shown[0]} />
       {destinations.map((key) => (
         <NavigationDestination key={key} value={key}>

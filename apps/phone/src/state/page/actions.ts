@@ -86,11 +86,12 @@ const READ_FAILED = Symbol("site read failed");
 
 async function readMenuSite(url: string, host: string | null, isPrivate: boolean): Promise<SiteRead | null> {
   const revision = bumpSite(host, isPrivate);
+  const defaults = nightShadeDefaults;
   const [shade, blockers] = await Promise.all([
     settled<Awaited<ReturnType<typeof pages.nightShade>> | typeof READ_FAILED>(() => pages.nightShade(host, isPrivate), READ_FAILED),
     settled<boolean | typeof READ_FAILED>(() => blocking.isEnabledForSite(url, isPrivate), READ_FAILED),
   ]);
-  if (shade === READ_FAILED || blockers === READ_FAILED || siteRevision(host, isPrivate) !== revision) return null;
+  if (shade === READ_FAILED || blockers === READ_FAILED || siteRevision(host, isPrivate) !== revision || defaults !== nightShadeDefaults) return null;
   const site: MenuSite = { host, isPrivate, nightShade: shade?.mode ?? "disabled", blockersEnabled: blockers };
   if (!isPrivate && host) knownSites.set(host, site);
   return { site, revision };
@@ -596,7 +597,10 @@ export function setNightShadeOn(on: boolean) {
     .then(counted, () => siteWriteFailed(next, revision, url));
 }
 
+let nightShadeDefaults = 0;
+
 export function nightShadeDefaultChanged() {
+  nightShadeDefaults++;
   knownSites.clear();
   preparedSite = null;
   const now = opening;
@@ -612,18 +616,25 @@ export function nightShadeDefaultChanged() {
 const pageZoomOf = (id: string) => usePages.getState().navigation[id]?.pageZoom ?? 1;
 
 const zoomQueues = new Map<string, Promise<number>>();
+const zoomsSeen = new Map<string, { zoom: number; navigation: unknown }>();
+
+function knownZoom(id: string): number {
+  const seen = zoomsSeen.get(id);
+  return seen && seen.navigation === usePages.getState().navigation[id] ? seen.zoom : pageZoomOf(id);
+}
 
 function zoomed(run: (id: string) => Promise<number>) {
   const id = selectedId();
   if (!id) return;
   const counted = siteChangeCounter("site_settings_zoom_changed");
-  const previous = zoomQueues.get(id) ?? Promise.resolve(pageZoomOf(id));
+  const previous = zoomQueues.get(id) ?? Promise.resolve(knownZoom(id));
   const next = previous.then(async (before) => {
     const after = await run(id);
+    zoomsSeen.set(id, { zoom: after, navigation: usePages.getState().navigation[id] });
     if (Math.abs(after - before) > 0.001) counted();
     return after;
   });
-  const settledZoom = next.catch(() => pageZoomOf(id));
+  const settledZoom = next.catch(() => knownZoom(id));
   zoomQueues.set(id, settledZoom);
   void settledZoom.then(() => {
     if (zoomQueues.get(id) === settledZoom) zoomQueues.delete(id);

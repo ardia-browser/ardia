@@ -188,6 +188,7 @@ async function siteSettingsInMenu(root: Root) {
 
 onIos("Site Settings opens inside the page menu's own sheet at full height while Settings' own sheet stays down, and is counted", async () => {
   jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   page("https://site0.example/", false);
   const root = menu();
   await siteSettingsInMenu(root);
@@ -251,9 +252,10 @@ onIos("the in-menu Site Settings starts with a section for the site: its host, N
 
 onIos("the site section's Zoom In, Zoom Out, Reset Zoom, Night Shade and Desktop site write to the page and each counts only once its write lands", async () => {
   const count = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   let zoomInLands: (zoom: number) => void = () => undefined;
   const zoomIn = jest.spyOn(pages, "zoomIn").mockImplementation(() => new Promise((resolve) => (zoomInLands = resolve)));
-  const zoomOut = jest.spyOn(pages, "zoomOut").mockResolvedValue(1);
+  const zoomOut = jest.spyOn(pages, "zoomOut").mockResolvedValue(1.25);
   const reset = jest.spyOn(pages, "setPageZoom").mockResolvedValue(1);
   const shade = jest.spyOn(pages, "setNightShade").mockResolvedValue(undefined);
   const desktop = jest.spyOn(pages, "setDesktopSite").mockResolvedValue(undefined);
@@ -290,6 +292,7 @@ onIos("the site section's Zoom In, Zoom Out, Reset Zoom, Night Shade and Desktop
 
 onIos("a write the page refuses counts nothing, and Reset Zoom on a page already at 100% counts nothing", async () => {
   const count = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   const reset = jest.spyOn(pages, "setPageZoom").mockResolvedValue(1);
   jest.spyOn(pages, "zoomIn").mockRejectedValue(new Error("gone"));
   jest.spyOn(pages, "setNightShade").mockRejectedValue(new Error("refused"));
@@ -312,6 +315,7 @@ onIos("a write the page refuses counts nothing, and Reset Zoom on a page already
 
 onIos("from a private tab neither opening Site Settings nor changing its site is counted", async () => {
   jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   jest.spyOn(pages, "zoomIn").mockResolvedValue(1.25);
   act(() => useTabs.setState((state) => ({ ...state, privates: [{ ...state.open[0]!, id: "p0", isPrivate: true }], selectedId: "p0", incognito: true })));
   act(() => usePages.setState((state) => ({ ...state, navigation: { p0: navigation("https://site0.example/", false) } })));
@@ -539,6 +543,7 @@ onIos("Share in the iPhone menu opens the page's own Share sheet over the menu, 
   page("https://share-print.example/", false);
   jest.spyOn(pages, "sharesWithPrint").mockReturnValue(true);
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  jest.spyOn(telemetry, "usageCountingWindow").mockImplementation(() => (field) => telemetry.countUsage(field));
   let finish: (activity: string | null) => void = () => undefined;
   const shared = jest.spyOn(pages, "sharePage").mockImplementation(() => new Promise((resolve) => (finish = resolve)) as never);
   const root = menu();

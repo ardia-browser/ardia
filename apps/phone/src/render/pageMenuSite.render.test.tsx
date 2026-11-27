@@ -176,6 +176,20 @@ test("a refused write counts nothing, and Reset Zoom on a page already at 100% c
   unmount(root);
 });
 
+test("a second Reset Zoom that lands before the page reports its new zoom counts nothing, since the zoom it reads back is unchanged", async () => {
+  const reset = jest.spyOn(pages, "setPageZoom").mockResolvedValue(1);
+  usePages.setState((state) => ({ ...state, navigation: { t0: navigation("https://site0.example/", 1.25) } }));
+  const root = await siteSettings();
+  (telemetry.countUsage as jest.Mock).mockClear();
+  tap(control(root, "button", "Reset Zoom"));
+  await flush();
+  tap(control(root, "button", "Reset Zoom"));
+  await flush();
+  expect(reset).toHaveBeenCalledTimes(2);
+  expect(siteCounts()).toEqual(["site_settings_zoom_changed"]);
+  unmount(root);
+});
+
 test("Night Shade in the site group stays disabled until the site's own setting is read, and the header follows the page's current address", async () => {
   let answer: (mode: { mode: string }) => void = () => undefined;
   jest.spyOn(pages, "nightShade").mockImplementation((host) => (host === "moved-on.example" ? new Promise((resolve) => (answer = resolve as never)) : Promise.resolve({ mode: "disabled" })) as never);

@@ -1,5 +1,6 @@
 import { compact, folderTransport, type Clock, type FolderInfo, type LogFile, type ScopeState, type SyncNative } from "../../platform/sync";
 import { errorText } from "../../lib/errors";
+import { isQuitting } from "../app/quit";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import type { ConsentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
@@ -129,10 +130,10 @@ export async function recreateChainFolder(
       return { error: "exists" };
     }
     const queued = doc.reseedScopes;
-    const putBack = () => {
+    const putBack = async () => {
       if (queued) doc.reseedScopes = queued;
       else delete doc.reseedScopes;
-      ctx.save();
+      await ctx.saveNow().catch(() => ctx.save());
     };
     const scopes = Object.entries(doc.scopes)
       .filter(([, state]) => hasScopeData(state))
@@ -142,14 +143,18 @@ export async function recreateChainFolder(
         doc.reseedScopes = [...new Set([...(queued ?? []), ...scopes])];
         await ctx.saveNow();
       }
+      if (isQuitting()) {
+        await putBack();
+        return { error: "busy" };
+      }
       if ((await native.folderInfo?.(folder).catch(() => null))?.exists) {
-        putBack();
+        await putBack();
         noteFolderRecreate("failed", consent);
         return { error: "exists" };
       }
       await native.createChain(folder);
     } catch (error) {
-      putBack();
+      await putBack();
       throw error;
     }
     created = true;

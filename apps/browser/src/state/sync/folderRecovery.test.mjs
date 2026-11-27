@@ -372,13 +372,47 @@ test("recreateSyncFolder checks again after waiting for the save, and leaves a f
   folders.delete(SYNC_FOLDER);
   await engine.syncNow();
 
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  };
   heldDocSaves.on = true;
-  const recreating = engine.recreateSyncFolder();
-  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  let answered = false;
+  const answer = engine.recreateSyncFolder().then((result) => ((answered = true), result));
+  await settle();
   plant(SYNC_FOLDER, "other-chain");
+  heldDocSaves.queue.splice(0).forEach((landed) => landed());
+  await settle();
+  assert.equal(answered, false, "the answer waits until the put-back queue has landed");
+  assert.equal(heldDocSaves.queue.length, 1);
   heldDocSaves.on = false;
   heldDocSaves.queue.splice(0).forEach((landed) => landed());
-  assert.deepEqual(await recreating, { error: "exists" });
+  assert.deepEqual(await answer, { error: "exists" });
   assert.ok(!chainOf(SYNC_FOLDER).has(OURS), "nothing is created next to the chain that came back");
   assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined, "nothing is left owed to a folder that wasn't created");
+});
+
+test("recreateSyncFolder creates nothing once the app is quitting, and puts the earlier queue back", async () => {
+  reset();
+  const { setQuitting } = await import("../app/quit.ts");
+  const engine = await import("./engine.ts?quitting");
+  engine.startSync();
+  assert.ok("ok" in (await engine.turnOnSync(SYNC_FOLDER)));
+  S().addBookmark({ profileId: "default", url: "https://kept.example/", title: "Kept" });
+  await engine.syncNow();
+  folders.delete(SYNC_FOLDER);
+  await engine.syncNow();
+
+  heldDocSaves.on = true;
+  const answer = engine.recreateSyncFolder();
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+  setQuitting(true);
+  heldDocSaves.on = false;
+  heldDocSaves.queue.splice(0).forEach((landed) => landed());
+  try {
+    assert.deepEqual(await answer, { error: "busy" });
+    assert.equal(folders.has(SYNC_FOLDER), false, "no chain is created while quitting");
+    assert.equal(JSON.parse(shell.docs.get("sync.json")).reseedScopes, undefined);
+  } finally {
+    setQuitting(false);
+  }
 });

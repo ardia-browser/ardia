@@ -54,7 +54,14 @@ const center = (id) => new Promise((r) => {
   item ? item.view.measureInWindow((x, y, w, h) => r([Math.round(x + Math.min(w / 2, 60)), Math.round(y + h / 2)])) : r(null);
 });
 const point = (x, y) => ac.shell.devSetPointer("w1", { x, y });
-const firstHit = (points, wanted) => points.reduce((found, [x, y]) => found.then((hit) => hit ?? act("hit:" + x + "," + y).then((chain) => (wanted(chain) ? { x, y, chain } : null))), Promise.resolve(null));
+const firstHit = (points, wanted) => {
+  const missed = {};
+  return points.reduce((found, [x, y]) => found.then((hit) => hit ?? act("hit:" + x + "," + y).then((chain) => {
+    if (wanted(chain)) return { x, y, chain };
+    (missed[chain] ??= []).push([x, y]);
+    return null;
+  })), Promise.resolve(null)).then((hit) => hit ?? { missed: Object.fromEntries(Object.entries(missed).map(([chain, at]) => [chain, [at[0], at.at(-1), at.length]])) });
+};
 const dragRegion = (chain) => chain.split(" < ")[0].includes("WindowDragRegion");
 const peekOpen = (from = "a") => {
   if (st().peeks[from]) st().closePeek(from);
@@ -73,7 +80,8 @@ async function clickOutside(name, findPoint, { kind = "", from = "a" } = {}) {
   const opened = await run(`return peekOpen(${JSON.stringify(from)});`);
   assert.ok(opened, "a Peek opened");
   const at = await run(`return ${findPoint};`);
-  assert.ok(at, `found where to click for ${name}`);
+  if (!at || at.missed) results[name] = { opened, missed: at?.missed ?? null };
+  assert.ok(at && !at.missed, `found where to click for ${name}: ${JSON.stringify(at?.missed ?? null)}`);
   const r = await run(`return afterClick(${at.x}, ${at.y}, ${JSON.stringify(kind)}, ${JSON.stringify(from)}, ${JSON.stringify(shots(name))});`);
   results[name] = { at, opened, ...r };
   rep.log(name, results[name]);
@@ -81,7 +89,8 @@ async function clickOutside(name, findPoint, { kind = "", from = "a" } = {}) {
 }
 
 const emptySidebar = `firstHit(Array.from({ length: 40 }, (_, i) => [110, 760 - i * 10]), dragRegion)`;
-const gutter = `firstHit(Array.from({ length: 12 }, (_, i) => [${SIDEBAR} + i, 420]), dragRegion)`;
+const gutter = `firstHit(Array.from({ length: 30 }, (_, i) => [${SIDEBAR} - 20 + i, 420]), dragRegion)`;
+const emptyStrip = `firstHit([8, 21, 34].flatMap((y) => Array.from({ length: 120 }, (_, i) => [1270 - i * 10, y])), dragRegion)`;
 
 try {
   app = await launch(appPath, { data, port, session: fixture, onboarded: true, ...(js ? { js } : {}) });
@@ -132,7 +141,7 @@ try {
 
   await rep.check("with tabs on top, a click on the strip's empty space closes the Peek", async () => {
     await run(`st().toggleTabLayout("w1"); return settle(1500);`);
-    const r = await clickOutside("strip-empty", `firstHit(Array.from({ length: 30 }, (_, i) => [1150 - i * 20, 21]), dragRegion)`);
+    const r = await clickOutside("strip-empty", emptyStrip);
     assert.equal(r.peek, null, "the Peek is still open");
   });
 } finally {

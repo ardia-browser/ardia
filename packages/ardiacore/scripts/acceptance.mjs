@@ -40,7 +40,7 @@
 //   launch(log, test, args, opts) · appUp(log)   (re)start the app on the run's data dir; `exited` is set once it's gone
 //   onScreenWindows() · firstPixel(png) · writePopupExtension(opts) · fixtureCrx()
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, constants as fsConstants, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { basename, join, resolve } from "node:path";
@@ -6315,7 +6315,27 @@ try {
       "me.proton.pass.nm": "/Applications/Proton Pass.app/Contents/Resources/assets/proton_pass_nm_host",
       "com.adguard.browser_extension_host.nm": "/Applications/Adguard.app/Contents/MacOS/adguard-nm",
     };
-    const expected = Object.keys(known).filter((name) => existsSync(known[name])).sort();
+    const runnable = (path) => {
+      if (typeof path !== "string" || !path.startsWith("/") || !existsSync(path) || !statSync(path).isFile()) return false;
+      try {
+        accessSync(path, fsConstants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const usable = (m, name) => m?.name === name && m.type === "stdio" && Array.isArray(m.allowed_origins) && runnable(m.path);
+    const chromeSystemManifest = (name) => {
+      try {
+        return JSON.parse(readFileSync(join("/Library/Google/Chrome/NativeMessagingHosts", `${name}.json`), "utf8"));
+      } catch {
+        return null;
+      }
+    };
+    const expected = [
+      ...Object.keys(known).filter((name) => usable(chromeSystemManifest(name), name) || runnable(known[name])),
+      ...["com.apple.passwordmanager"].filter((name) => usable(chromeSystemManifest(name), name)),
+    ].sort();
     const managed = JSON.parse(existsSync(join(dir, ".ardia-managed.json")) ? readFileSync(join(dir, ".ardia-managed.json"), "utf8") : "[]");
     for (const name of expected) {
       const manifest = JSON.parse(readFileSync(join(dir, `${name}.json`), "utf8"));

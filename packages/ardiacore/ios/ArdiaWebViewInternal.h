@@ -234,7 +234,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
               disposition:(NSString *)disposition
                      link:(BOOL)link
                     tries:(int)tries;
-- (void)noteNewTabLink:(nullable NSString *)url;
+- (void)noteNewTabLink:(nullable NSString *)url blankWindow:(BOOL)blankWindow;
 - (void)tabRemovedFromWindow:(ArdiaCoreWindow *)window;
 - (void)tabActivatedByChrome:(BOOL)chromes;
 - (void)devToolsChanged:(NSView *)devToolsView;

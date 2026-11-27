@@ -189,7 +189,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
   } else if ([kind isEqualToString:@"selection"] && main) {
     [self emit:@"selection" payload:@{@"selection" : SelectionState(dict, RootPointsPerLocalPoint(self)) ?: NSNull.null}];
   } else if ([kind isEqualToString:@"newTabLink"] && dict) {
-    [self noteNewTabLink:Text(dict, @"url", 8192)];
+    [self noteNewTabLink:Text(dict, @"url", 8192) blankWindow:Flag(dict, @"blankWindow")];
   } else if ([kind isEqualToString:@"trustedInput"] && !main) {
     if ([VerifiedOrigin(verifiedOrigin) hasPrefix:@"http"]) [self noteTrustedInputFrom:VerifiedOrigin(verifiedOrigin)];
   } else if ([kind isEqualToString:@"autoplayBlocked"] && dict) {

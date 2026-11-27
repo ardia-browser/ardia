@@ -1695,15 +1695,16 @@
     const eventPhaseOf = getter(Event.prototype, "eventPhase");
     const weakHas = WeakSet.prototype.has;
     const weakAdd = WeakSet.prototype.add;
-    const noteOpening = (url) => {
+    const noteOpening = (url, blankWindow) => {
       openingsNoted++;
-      send("newTabLink", { url });
+      send("newTabLink", blankWindow ? { url, blankWindow: true } : { url });
     };
     const noteNewTabLink = (e, link, click) => {
       if (replacesPage(link)) return;
-      if (defaultPrevented(e) && !(click.openedBlank && openingsNoted === click.notedBefore)) return;
+      const cancelled = defaultPrevented(e);
+      if (cancelled && !(click.openedBlank && openingsNoted === click.notedBefore)) return;
       const url = linkUrl(link);
-      if (url && apply(test, /^https?:/i, [url])) noteOpening(url);
+      if (url && apply(test, /^https?:/i, [url])) noteOpening(url, cancelled);
     };
     addEventListener(
       "click",

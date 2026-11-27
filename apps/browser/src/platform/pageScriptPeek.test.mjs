@@ -628,6 +628,7 @@ test("a plain click on a link that opens a new tab notes it at the end of the cl
   const env = environment();
   env.gesture([env.link("https://other.example/x", { target: "_blank" })], {});
   assert.deepEqual(newTabLinks(env), ["https://other.example/x"]);
+  assert.equal(env.sent.find((m) => m.kind === "newTabLink").blankWindow, undefined);
   env.flush();
   assert.deepEqual(newTabLinks(env), ["https://other.example/x"], "noted once");
   env.gesture([env.link("https://other.example/y", { target: "_blank" })], {}, { page: (e) => e.stopPropagation() });
@@ -765,6 +766,7 @@ test("a new-tab link whose click the page cancels to open a blank window itself 
   });
   env.flush();
   assert.deepEqual(newTabLinks(env), [wrapped]);
+  assert.equal(env.sent.find((m) => m.kind === "newTabLink").blankWindow, true, "native pairs it only with a blank tab, oldest first");
   const stopped = env.link("https://other.example/stopped", { target: "_blank" });
   env.gesture([stopped], {}, { page: (e) => (e.preventDefault(), e.stopPropagation(), env.window.open("about:blank")) });
   env.flush();

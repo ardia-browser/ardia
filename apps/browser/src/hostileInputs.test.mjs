@@ -1100,7 +1100,7 @@ test("a page's autoplayBlocked count and new-tab link reach native sinks only as
   const receiver = readFileSync(new URL("ArdiaWebView+PageMessages.mm", ios), "utf8");
   assert.match(receiver, /const NSInteger count = AutoplayBlockedCount\(dict\[@"count"\]\);\n.*\n\s+if \(count > 0 && now - _autoplayBlockedAt >= 1\) \{/, "the receiver forwards only what AutoplayBlockedCount gives, once a second");
   const tab = readFileSync(new URL("ArdiaWebView+Tab.mm", ios), "utf8");
-  assert.match(tab, /- \(void\)noteNewTabLink:\(NSString \*\)url \{\n {2}if \(!IsWebAddress\(url\)\) return;/, "notes are kept only when IsWebAddress takes them");
+  assert.match(tab, /- \(void\)noteNewTabLink:\(NSString \*\)url blankWindow:\(BOOL\)blankWindow \{\n {2}if \(!IsWebAddress\(url\)\) return;/, "notes are kept only when IsWebAddress takes them");
   assert.match(tab, /NSString \*url = IsWebAddress\(clicked\) && IsBlankAddress\(tab\.url\) \? clicked : tab\.url;/, "a note stands in only for a blank tab's address");
   assert.match(tab, /if \(clicked && self\.opensNewTabLinksInPlace && \(\[clicked isEqualToString:tab\.url \?: @""\] \|\| IsBlankAddress\(tab\.url\)\)\) \{/, "Little Ardia closes and replaces a tab only when it is going to the noted link or still blank");
   const scratch = mkdtempSync(join(tmpdir(), "ardia-receivers-"));

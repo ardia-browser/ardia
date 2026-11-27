@@ -305,11 +305,11 @@ BOOL IsBlankAddress(NSString *url) {
                 }]];
 }
 
-- (void)noteNewTabLink:(NSString *)url {
+- (void)noteNewTabLink:(NSString *)url blankWindow:(BOOL)blankWindow {
   if (!IsWebAddress(url)) return;
   [self dropStaleNewTabLinks];
   if (!_newTabLinks) _newTabLinks = [NSMutableArray array];
-  [_newTabLinks addObject:@{@"url" : url, @"at" : @(CACurrentMediaTime())}];
+  [_newTabLinks addObject:@{@"url" : url, @"at" : @(CACurrentMediaTime()), @"blankWindow" : @(blankWindow)}];
   if (_newTabLinks.count > kNewTabLinksKept) [_newTabLinks removeObjectsInRange:NSMakeRange(0, _newTabLinks.count - kNewTabLinksKept)];
 }
 
@@ -326,10 +326,21 @@ BOOL IsBlankAddress(NSString *url) {
 
 - (nullable NSString *)takeNewTabLinkNoted:(CFTimeInterval)within {
   [self dropStaleNewTabLinks];
-  NSDictionary *newest = _newTabLinks.lastObject;
-  if (!newest || CACurrentMediaTime() - [newest[@"at"] doubleValue] > within) return nil;
-  [_newTabLinks removeLastObject];
-  return newest[@"url"];
+  const CFTimeInterval now = CACurrentMediaTime();
+  for (NSUInteger i = 0; i < _newTabLinks.count; i++) {
+    NSDictionary *link = _newTabLinks[i];
+    if (![link[@"blankWindow"] boolValue] || now - [link[@"at"] doubleValue] > within) continue;
+    [_newTabLinks removeObjectAtIndex:i];
+    return link[@"url"];
+  }
+  for (NSUInteger i = _newTabLinks.count; i > 0; i--) {
+    NSDictionary *link = _newTabLinks[i - 1];
+    if ([link[@"blankWindow"] boolValue]) continue;
+    if (now - [link[@"at"] doubleValue] > within) return nil;
+    [_newTabLinks removeObjectAtIndex:i - 1];
+    return link[@"url"];
+  }
+  return nil;
 }
 
 - (void)emitOpenedTab:(ArdiaCoreTab *)tab

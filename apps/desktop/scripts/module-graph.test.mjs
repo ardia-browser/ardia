@@ -155,7 +155,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
   assert.ok(graph.get(`${desktop}shellEntry.tsx`).importedIds.includes(`${desktop}TrafficLights.tsx`), "Linux draws its own traffic lights when they are chosen");
   assert.ok(graph.get(`${desktop}TrafficLights.tsx`).importedIds.includes(`${desktop}captionControls.ts`), "the traffic lights close, minimize and maximize through the same adapters as the native buttons");
 
-  for (const [twin, suffix] of [["lib/platformFeatures", "linux"], ["lib/platformTerms", "linux"], ["lib/platformChrome", "desktop"], ["state/commands/comboWords", "desktop"], ["state/tabs/engineKeptCodes", "desktop"], ["lib/pageStacking", "desktop"]]) {
+  for (const [twin, suffix] of [["lib/platformFeatures", "linux"], ["lib/platformTerms", "linux"], ["lib/platformChrome", "desktop"], ["state/commands/comboWords", "desktop"], ["state/tabs/engineKeptCodes", "linux"], ["lib/pageStacking", "desktop"]]) {
     assert.ok(graph.has(`${browser}${twin}.${suffix}.ts`), `${twin} resolves to its .${suffix} twin`);
     assert.ok(!graph.has(`${browser}${twin}.ts`), `the macOS ${twin} stays out of the Linux bundle`);
   }
@@ -383,7 +383,7 @@ test("the win build shares every desktop adapter, takes Windows terms, and leave
   for (const [importer, seam] of seams) assert.ok(graph.get(`${desktop}${importer}`)?.importedIds.includes(`${desktop}${seam}`), `${importer} imports ${seam}`);
   assert.ok(graph.get(`${desktop}platform/win/hostUpdates.ts`)?.importedIds.includes(`${browser}platform/windowsUpdateCounts.win.ts`), "the Windows updater counts manifest checks in the same twin the hourly telemetry takes them from");
   const code = chunks.map((chunk) => chunk.code).join("\n");
-  for (const linux of ["Evolution Data Server", "yay -Syu", "Super+", "(polkit)", "Ardia is running without Chromium's sandbox", '"hyprland","sway","niri"']) assert.ok(!code.includes(linux), `the win bundle says ${linux}`);
+  for (const linux of ["Evolution Data Server", "makepkg -si", "Super+", "(polkit)", "Ardia is running without Chromium's sandbox", '"hyprland","sway","niri"']) assert.ok(!code.includes(linux), `the win bundle says ${linux}`);
   for (const windows of ["File Explorer", "Windows Hello or your Windows password"]) assert.ok(code.includes(windows), `the win bundle lacks ${windows}`);
 });
 
@@ -446,7 +446,7 @@ test("the mac build shares every desktop adapter, takes the Mac's own terms, and
     for (const shell of shellModules) assert.ok(!closure.has(shell), `${start} statically pulls in ${shell}`);
   }
   const code = chunks.map((chunk) => chunk.code).join("\n");
-  for (const other of ["Evolution Data Server", "yay -Syu", "(polkit)", "Super+", "File Explorer", "Windows Hello"]) assert.ok(!code.includes(other), `the mac bundle says ${other}`);
+  for (const other of ["Evolution Data Server", "makepkg -si", "(polkit)", "Super+", "File Explorer", "Windows Hello"]) assert.ok(!code.includes(other), `the mac bundle says ${other}`);
   for (const mac of ["shell.backdropRegions", "Finder", "Touch ID or your login password", "ArdiaShell.setMainMenu", "shell.glassBehindWindow"]) assert.ok(code.includes(mac), `the mac bundle lacks ${mac}`);
 });
 

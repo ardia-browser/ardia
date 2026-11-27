@@ -1,4 +1,5 @@
 import type { ColorValue, ViewProps } from "react-native";
+import type { LookColors } from "./look";
 
 export type PageNavigationState = {
   url: string | null;
@@ -46,6 +47,8 @@ export type PageObscuredColors = { top: ColorValue | null; bottom: ColorValue | 
 
 export type PageError = { code: string; message: string };
 
+export type PageSummaryLook = LookColors & { dark: boolean };
+
 export type SwipeNavigation = "anywhere" | "edges" | "off";
 
 export type PageSwipeDirection = "back" | "forward";
@@ -59,6 +62,7 @@ export type PageViewProps = ViewProps & {
   toneInsets?: PageToneInsets;
   bottomInsetTransitionMs?: number;
   summaryBottomInset?: number;
+  summaryLook?: PageSummaryLook;
   obscuredInsets?: PageObscuredInsets;
   obscuredColors?: PageObscuredColors;
   topClearance?: number;

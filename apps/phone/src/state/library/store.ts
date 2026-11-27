@@ -50,6 +50,13 @@ export function openLibrary(section: LibrarySection) {
   if (!useTabs.getState().incognito) countUsage("library_opened");
 }
 
+const DECK_MENU_COUNTS = { history: "deck_menu_history_opened", bookmarks: "deck_menu_bookmarks_opened", downloads: "deck_menu_downloads_opened" } as const;
+
+export function openLibraryFromDeck(section: keyof typeof DECK_MENU_COUNTS) {
+  if (!useTabs.getState().incognito) countUsage(DECK_MENU_COUNTS[section]);
+  openLibrary(section);
+}
+
 export const closeLibrary = () => useLibrary.setState({ open: false });
 
 export function libraryBack(): boolean {

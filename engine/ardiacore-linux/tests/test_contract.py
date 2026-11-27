@@ -33,7 +33,9 @@ class ContractTests(unittest.TestCase):
         source = (root / 'ardia/linux/ac_linux_host.cc').read_text()
         start = source.index('TabBinding* ShellHostView::ClaimedBinding(')
         end = source.index('\nbool ShellHostView::CloseTab(', start)
-        guard = source[start:end]
+        gone_start = source.index('bool ShellHostView::TabIsGone(')
+        gone_end = source.index('\nTabBinding* ShellHostView::ClaimedBinding(', gone_start)
+        guard = source[gone_start:gone_end] + source[start:end]
         code = r'''
 #include "ardia/linux/ac_linux_contract.h"
 #include <cassert>
@@ -70,6 +72,7 @@ struct ShellHostView {
   std::map<int, std::unique_ptr<TabBinding>> bindings_;
   TabBinding* Binding(int id) { auto it = bindings_.find(id); return it == bindings_.end() ? nullptr : it->second.get(); }
   TabBinding* ClaimedBinding(const base::DictValue&);
+  bool TabIsGone(int id);
 };
 ARDIA_NATIVE_GUARD
 using namespace ardiacore::linux_contract;
@@ -103,8 +106,23 @@ int main() {
   binding.claim.clear();
   assert(!owner.ClaimedBinding(request));
   binding.claim = "replacement";
+  assert(!owner.TabIsGone(7));
   binding.value = nullptr;
   assert(!owner.ClaimedBinding(request));
+  assert(owner.TabIsGone(7));
+  binding.replaced_ids = {3};
+  assert(owner.TabIsGone(3));
+  binding.value = &contents;
+  assert(!owner.TabIsGone(3));
+  assert(owner.TabIsGone(9));
+  assert(!owner.TabIsGone(0));
+  assert(!owner.TabIsGone(-1));
+  binding.replaced_ids.clear();
+  owner.bindings_.erase(7);
+  assert(owner.TabIsGone(7));
+  assert(ReleasedTabIsGone(false, false));
+  assert(ReleasedTabIsGone(true, false));
+  assert(!ReleasedTabIsGone(true, true));
   assert(CanReclaim("", ""));
   assert(CanReclaim("current", "current"));
   assert(!CanReclaim("current", ""));

@@ -302,6 +302,8 @@ gfx::Rect ArdiaVideoOverlayWindow::CalculateAndUpdateWindowBounds() {
   return VideoOverlayWindowViews::CalculateAndUpdateWindowBounds();
 }
 
+void ArdiaVideoOverlayWindow::SetForcedTucking(bool tuck) {}
+
 void ArdiaVideoOverlayWindow::ShowInactive() {
   ac_hide_timer_.Stop();
   ResetArdiaPictureInPictureFade(GetNativeWindow());

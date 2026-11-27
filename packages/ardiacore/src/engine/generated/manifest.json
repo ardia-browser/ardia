@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "824356c4ceb0f526b84811590c1aab1a8ad59aa6b3f949f06ad68fb723cef12f",
-        "swift": "41a93592952890260b4a8e0f8fba27b9931a42b5ee4a4b1b2bb25ca358f7c010"
+        "types": "06503bc68a8671906f150d0d1be7518834ce298287002970a5db2ae16b4eb4f3",
+        "swift": "1b0f1f7827a5f96df5bb21b9bb6725cc0e33419e7e003532f1c8d4492be92645"
       },
       "modules": {
         "ArdiaShell": {
@@ -1947,6 +1947,25 @@
                 "token"
               ],
               "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "fieldBlurCause": {
+              "args": [
+                "fieldTag"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "watchFieldBlurs": {
+              "args": [
+                "fieldTag",
+                "watch"
+              ],
+              "async": false,
               "mac": "custom",
               "desktop": "absent",
               "windows": "absent"

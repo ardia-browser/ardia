@@ -2,7 +2,9 @@ import type { ReportFile } from "./form";
 
 export type FailedStage = "create" | "upload" | "complete";
 
-export type FailureClass = "offline" | "storage" | "server" | "rate_limited" | "expired" | "rejected";
+export type FailureClass = "offline" | "unsupported" | "storage" | "server" | "rate_limited" | "expired" | "rejected";
+
+export const NOT_SENT_STATUS = -1;
 
 export const RETRY_DELAYS_MS = [2_000, 8_000] as const;
 
@@ -69,6 +71,7 @@ export function issueNumberOf(url: string | null): number | null {
 
 export function failureClass(status: number, json: unknown): FailureClass {
   const error = text(object(json).error) ?? "";
+  if (status < 0) return "unsupported";
   if (status === 0) return "offline";
   if (status === 429) return "rate_limited";
   if (status === 401 && error.startsWith("token_")) return "expired";
@@ -97,6 +100,8 @@ export function failureMessage(errorClass: FailureClass, status: number, json: u
   switch (errorClass) {
     case "offline":
       return "Couldn't reach Ardia's report server. Check your connection; your draft is kept.";
+    case "unsupported":
+      return "This copy of Ardia can't send attached files. Your draft is kept; remove the recording and attachments, then try again.";
     case "storage":
       return "Ardia's report server couldn't store this right now. Your draft is kept; try again in a minute.";
     case "server":

@@ -195,7 +195,61 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   but gone locally is a local deletion. Remote changes are applied only over keys with no
   unpublished edits. Each adapter publishes and then applies, with no wait in between, so an
   edit made while files were being read wins and isn't overwritten (tested).
-- **Joining.** Local data is published before remote data is applied, so joining is a union: no
+- **Rebase when the session went back in time** (#1577). The base lives in `sync.json` and the data it
+  describes partly in `session.json` (pins, settings, profiles and their looks), so a session restored from
+  a backup, an older build's own session file or a fresh start leaves the base ahead of the store, and the
+  three-way rule would read every pin the session lacks as deleted here and delete it on every Mac. Both
+  files carry a mark (`syncMark` in the session, `sessionMark` in `sync.json`). It is a revision, not a
+  launch id. Before any write that makes sync's saved state reflect a change to a session-backed adapter (the outgoing
+  batch's journal entry, a journal part with the cycle's base, the sealed checkpoint), and before the one that records a
+  finished rebase, `sync.json` gets a new mark (`markBeforeDurable` in `syncFiles.ts`). That `sync.json` save is awaited
+  before the write starts; if it fails, the write fails too and the mark stays owed for the next one, so nothing lands
+  that the mark doesn't cover. The store takes the mark too, so the session saved next carries it, and that save holds
+  everything the write reflects. Equal marks therefore always mean the session on disk covers the sync state on disk; a
+  crash anywhere in between leaves them apart. While quitting, `sync.json` still moves on but the store doesn't (the
+  session has saved for the quit), so a write that lands during the quit leaves the marks apart and the next launch
+  rebases. A backup or an older build's file from earlier in the same launch holds an older mark too. When the marks
+  differ at launch, every scope starts a rebase (`startRebase`) under a new recovery id, and `sync.json` maps each scope
+  that owes one to that id (`rebaseScopes`); a scope leaves the map only once its own saved state, holding rebase flags
+  with that id (`rebaseId`), is on disk, and flags left from an earlier recovery never count for a later one. The
+  launch leaves the marks apart: only the rebase's own progress, journalled after its repair reached the store, moves
+  them on again. So a crash before the repaired session is saved rebases again on the next launch; a rebase already
+  under way when the app stops carries on from its saved flags; and a scope that hadn't saved anything yet when another
+  scope's progress made the marks match still rebases, from the list. A `sync.json` from before
+  the marks existed that already holds a base rebases once on the first launch that reads it. While an adapter that reads the
+  session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
+  records) rebases, it publishes only keys no device has a record of, and no deletions; the cycle applies
+  every record it has, tombstones included, so the store takes the synced state back. The exception is a value
+  the adapter can show is newer than the record: a setting chosen here after the record was written (each explicit choice
+  keeps its time in `settingsMeta.chosenAt`, saved with the session, so the value and its time are always saved together
+  and every desktop window shares them) or a pin placement
+  still in `pinChoices`, including a tile turned into a row or back and a pinned group moved among the rows; those go
+  out instead (`keepLocal`), also when the value is the one in the base while a different synced value waits (only
+  while rebasing, so a skewed clock can't make an old choice win in a normal sync). On Linux and Windows the chosen
+  times reach the sync authority with the session the windows share, before its first cycle. A rebasing adapter publishes after the cycle's pull,
+  and while anything in the scope is still downloading or damaged it neither publishes nor applies anything (its keys wait for the next cycle), so a
+  record on its way can't be outrun by an older session value. An adapter told it's rebasing takes the synced
+  value even where it would otherwise keep a local one that differs from its base (a pinned group tab's home). The rebase ends for an adapter once it applied
+  without deferring and with nothing held back. The scope keeps the list of adapters that finished, so one that
+  isn't running yet (Settings turned off in What Syncs, pinned tabs off) still rebases on its first cycle when it
+  comes back. Bookmarks, history, passwords and extensions live in Chrome's own files and aren't affected; open
+  tabs already send only closes made here. A local edit to an existing record that has neither a stamp nor a
+  pending choice (for example a profile's colour changed in the moments before a crash) loses to the synced record
+  in a rebase (tested in `packages/sync/src/scope.test.ts`, `state/sync/syncDataLoss.test.mjs` and
+  `state/sync/settingEditsRebase.test.mjs`: an older session, a backup from the same launch, a rebase cut short, a
+  setting changed before a crash).
+- **Joining.** A scope set to wait for the other devices (`awaitRemote`: the app scope of a Mac
+  that connected with a recovery phrase, and each profile scope it paired) joins once it has read
+  a file from another device and nothing in it is still downloading or damaged, or a day after
+  that held it back, and in any case a day after the scope first waited (`awaitSince`), so a scope whose
+  only file from another device never downloads doesn't wait for good. That day is a fallback with a known risk: a
+  scope that joins by it without having read a file from another device starts publishing its own settings, profile
+  names, colours and switches, stamped now, so a file that was still downloading and arrives later loses to them where
+  both hold the same record. The alternative, waiting with no limit, would leave a Mac in "First sync in progress" for
+  good when a file never arrives (#1945; before, the first file from
+  another device was enough, so a Mac whose
+  iCloud Drive was still downloading published its own settings, colours and switches over the
+  ones still on their way). Local data is published before remote data is applied, so joining is a union: no
   local bookmark, visit or password is lost. Settings and profile names are the exception
   (`adoptRemoteOnJoin`): a joining Mac takes the synced values and doesn't publish its defaults
   until it has read another device's file (`awaitRemote`). Data that existed before sync was
@@ -278,10 +332,27 @@ Profiles).
     written its profiles yet, or while iCloud Drive was still downloading that file, used to pair with what it had
     read so far: Personal got an id of its own, received none of the other Mac's Personal data, and both Macs then
     offered the other's Personal as a new profile (#514). A day after joining it pairs with whatever it has, so a folder
-    whose other devices sync no profile doesn't keep it waiting. Until it pairs, no profile is offered to add. Known
-    residuals: once the default record is in, other profiles pair by name with what has arrived, even while a file
-    with a later profile is still downloading; and a Mac that paired early before this fix keeps its pairing, with two
-    default records left in the folder.
+    whose other devices sync no profile doesn't keep it waiting. Until it pairs, no profile is offered to add. Pairing
+    also waits while anything in the app scope is still downloading or damaged, even once the default record is in, so
+    a profile whose record is in a later file pairs by name instead of getting an id of its own and showing on the other
+    Mac as a second copy (#1945, tested in `state/sync/syncDataLoss.test.mjs`). A theme or preset picked on a profile
+    before it pairs is kept (`themesChosenWhileJoining`). Known residual: a Mac that paired early before these fixes
+    keeps its pairing, with two records left in the folder.
+- A profile missing from this Mac's session keeps its link (#1577): a build that reads an older or newer `session.json`
+  than the one sync last saw, or a session restored from a backup, can lack profiles `sync.json` still links. The link
+  stays, its scope is left alone, the profile is offered as Add to This Mac, and adding it gives it back its old id, so a
+  session that still has it lines up again. The scope starts over from what's synced, but keeps its sequence number,
+  outbox and journal, so the other devices take this Mac's next batch instead of reading it as one they already have,
+  and the records those queued batches hold are put back and applied, so a pin still waiting to be sent comes back too.
+  The new scope also owes a rebase (`rebaseScopes`, saved before its first journal entry), so if a crash leaves the old
+  scope's checkpoint on disk with only the new scope's later changes on top, the old base entries can't be read as pins
+  deleted here.
+  When the old id can't be reused (its data is still waiting to be deleted), the link moves to the new id. A link
+  retires only when the profile is deleted on this Mac (the store's `deleteProfile` tells the engine; on Linux and
+  Windows a window that isn't the sync authority forwards it as `retireProfile`, which the authority applies once the
+  deletion reaches its own store; a forward no authority answers is tried again every 15 s for 10 minutes, and a window
+  that has become the authority meanwhile retires the profile itself). Before, a missing profile was taken out of sync at once and came back under a new
+  sync id, a second copy on every Mac.
 - A synced profile this Mac lacks is offered as "Add to This Mac", with "Add All" when there are several.
 - Profiles that share another's data (Dia's "Share data with another profile") sync their tabs;
   the shared data syncs with the profile that owns it.
@@ -539,15 +610,24 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
   - Then Profiles (toggles, and Add to This Mac), All Open Tabs (a switch per synced profile: "Every open tab syncs, not
     just pinned ones. Closing a tab closes it on your other Macs too."), What Syncs (Bookmarks, History, Open Tabs,
     Pinned Tabs and Groups, Passwords, Extensions, Settings) and Devices (each with "last synced …").
-- **Stop Syncing This Device?** Dia's copy, plus "Everything on this Mac stays as it is", with
-  Save Recovery Kit / Cancel / Stop Syncing.
+- **Stop Syncing This Device?** Dia's copy, reworded so it also fits setting sync up afresh: "To sync with your
+  other devices again, you'll need one that is still syncing, or the recovery phrase from your Recovery Kit. You
+  can also set up sync from scratch in an empty folder. Everything on this Mac stays as it is.", with Save
+  Recovery Kit / Cancel / Stop Syncing.
   - Then **Delete Sync Data?**: "Would you also like to permanently delete your synced data
     from the sync folder? …", the checkbox "I understand this cannot be undone", and Keep Sync
     Data / Delete My Sync Data.
   - Stopping removes this Mac's tabs and name from the other devices and forgets the key. It
     keeps all local data.
   - Deleting removes this phrase's chain folder. The other Macs then show Dia's "This device is
-    out of sync. Sync may have been reset from another device." and stop, keeping their data.
+    out of sync. Sync may have been reset from another device.", followed by "or the sync folder hasn't
+    finished syncing" (a cloud drive that hasn't delivered the folder or evicted it looks the same), and
+    stall. They keep their data, their key, their setup and their unsent changes, write nothing to the
+    folder, and carry on from where they were if the chain comes back. A chain deleted while a cycle runs
+    is never recreated by its writes: only turning sync on creates the chain, a write into a missing one fails with
+    `ERR_SYNC_CHAIN_MISSING` (Mac and Linux vaults), and the cycle stalls the same way. The line ends with "To set
+    sync up again, choose Stop Syncing.": Stop Syncing is how a Mac lets go, for example to join a new chain
+    another Mac set up in the same folder (issue #302). The phone apps still reset here.
 - **Overflow menu.** One other device with open tabs shows "Your %@ Tabs" (the kind of Mac, from
   its name: "Your MacBook Pro Tabs"; "Your iPhone Tabs" for an iPhone). Several roll up into **Your Devices**
   (`macbook.and.iphone`), a submenu per device (`iphone` for a phone, `laptopcomputer` or `desktopcomputer` for a
@@ -559,7 +639,8 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
 
 The engine (`apps/browser/src/state/sync/engine.ts`) runs a cycle 15 s after the last one, 3 s after a
 bookmark, settings, profile or group edit, and on Sync Now. A cycle:
-1. Checks the chain folder: gone means reset elsewhere; the folder missing means offline.
+1. Checks the chain folder: gone means stalled until it's back (nothing read or written, nothing
+   forgotten); the folder missing means offline.
 2. Syncs the app scope and links profiles.
 3. Syncs each synced profile's scope, publishing, flushing, pulling, and then publishing and
    applying per adapter.
@@ -663,8 +744,8 @@ bookmark, settings, profile or group edit, and on Sync Now. A cycle:
   - A third Mac joins from the folder as it is (logs and a snapshot) and converges.
   - Turning sync off on B keeps its bookmarks, history, settings, pinned tabs and passwords, and
     removes its key. A drops B's device and tabs, and what B does while off stays on B.
-  - Delete My Sync Data on A empties the folder. C shows Dia's reset message and stops, and A and C
-    keep all their data.
+  - Delete My Sync Data on A empties the folder. C shows Dia's out of sync message and stalls with
+    its key and setup kept, and A and C keep all their data.
 
   The runs found and fixed:
   - Settings whose value is null bounced between Macs: a null record is a tombstone, so settings

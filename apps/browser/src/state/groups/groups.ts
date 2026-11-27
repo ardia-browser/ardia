@@ -1,7 +1,7 @@
 import type { GroupPlacement } from "../pins/tabGrouping";
 import type { StateCreator } from "zustand";
 import type { BrowserState } from "../browser/store";
-import { bookmarkProfileId, isPinnedRow, newId, snapshotTab, tabTitle } from "../browser/model";
+import { bookmarkProfileId, isPinnedRow, newId, pinKeyOf, snapshotTab, tabTitle } from "../browser/model";
 import { closingGroup, nestedSnapshot, rebuildNested, restoreSnapshots } from "../pins/closedTabs";
 import { groupLabel, movingGroup, withGroup, withRowsGrouped } from "../pins/tabGrouping";
 import { withSplitRows } from "../splits/splits";
@@ -13,6 +13,9 @@ import { pinnedGroupMembers } from "../browser/structure";
 import { newTabHome } from "../tabs/newTabHome";
 import { groupingOnto } from "../pins/placing";
 import type { CloseOptions } from "../tabs/tabs";
+import { isRegularWindow } from "../windows/small";
+import { noteSharedGroupUngroup, noteSharedGroupUnpin } from "../telemetry/sharedGroupCounts";
+import { keepUngroupedTabs, unpinsMirrors, withMirrorsUnpinned } from "./sharedUngroupSplits";
 
 export { ancestorIds, canNest, commonGroup, depthOf, depthsIn, descendantIds, groupPath, innermostGroupOf, nestGroups, reparent, rootOf, rootsIn, withParent } from "./groupNesting";
 
@@ -166,6 +169,7 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
   },
 
   updateGroup(id, patch) {
+    let mirrored = false;
     set((s) => {
       const g = s.groups[id];
       if (!g) return {};
@@ -175,9 +179,13 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
       const groups = withoutShownTabs({ ...s.groups, [id]: { ...g, ...patch } }, reset);
       const w = s.windows[g.windowId];
       if (patch.pinned === undefined || patch.pinned === g.pinned || !w) return { groups };
-      const window = { ...w, tabIds: orderSections(w.tabIds, s.tabs, groups) };
-      return { groups: syncGroupOrder(groups, window), windows: { ...s.windows, [w.id]: window } };
+      const nested = nestGroups(groups);
+      const window = { ...w, tabIds: orderSections(w.tabIds, s.tabs, nested) };
+      const local = { ...s, groups: syncGroupOrder(nested, window), windows: { ...s.windows, [w.id]: window } };
+      mirrored = unpinsMirrors(s, local, id);
+      return withMirrorsUnpinned(s, local, id);
     });
+    if (mirrored) noteSharedGroupUnpin();
   },
 
   addTabsToGroup(groupId, tabIds) {
@@ -230,15 +238,26 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
   },
 
   ungroup(groupId) {
+    let mirrored = false;
     set((s) => {
       const group = s.groups[groupId];
       if (!group) return {};
-      const { [groupId]: _, ...rest } = s.groups;
+      const shared = group.pinned && s.settings.shareTabsAcrossWindows && isRegularWindow(s.windows[group.windowId]);
+      const removing = shared
+        ? Object.values(s.groups).filter((g) => g.pinned && g.profileId === group.profileId && pinKeyOf(g) === pinKeyOf(group) && isRegularWindow(s.windows[g.windowId]))
+        : [group];
+      const rest = { ...s.groups };
+      for (const g of removing) delete rest[g.id];
       const groups = reparent(rest, s.groups);
-      if (!s.windows[group.windowId]) return { groups };
-      const next = withGroupsPlaced(s, group.windowId, groups);
-      return { groups: next.groups, windows: next.windows };
+      let next = { tabs: s.tabs, windows: s.windows, groups };
+      for (const windowId of new Set(removing.map((g) => g.windowId))) {
+        if (s.windows[windowId]) next = withGroupsPlaced(next, windowId, next.groups);
+      }
+      if (!shared) return { groups: next.groups, windows: next.windows };
+      mirrored = new Set(removing.map((g) => g.windowId)).size > 1;
+      return keepUngroupedTabs({ ...s, groups: next.groups, windows: next.windows }, group.windowId, new Set(removing.flatMap((g) => g.tabIds)));
     });
+    if (mirrored) noteSharedGroupUngroup();
   },
 
   newNestedGroup(parentId) {
@@ -286,7 +305,13 @@ export const createGroupsSlice: StateCreator<BrowserState, [], [], GroupsSlice> 
   },
 
   moveGroup(groupId, p) {
-    set((s) => movingGroup(s, groupId, p));
+    let mirrored = false;
+    set((s) => {
+      const moved = movingGroup(s, groupId, p);
+      mirrored = unpinsMirrors(s, { ...s, ...moved }, groupId);
+      return moved;
+    });
+    if (mirrored) noteSharedGroupUnpin();
   },
 
   duplicateGroup(groupId) {

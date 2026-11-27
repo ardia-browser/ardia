@@ -11,3 +11,12 @@ export function checkedSettingsPatch<P extends object>(patch: P, specs: Specs): 
 }
 
 export const keptSettingsPatch = <P extends object>(patch: P, specs: Specs): P => checkedSettingsPatch(patch, specs).patch;
+
+type FrameSettings = { pageFrameZeroInFullScreen: boolean; pageFrameZeroWhenTabsHidden: boolean };
+
+export function settledPatch<S extends FrameSettings>(settings: S, raw: Partial<S>, specs: Specs): Partial<S> {
+  const patch = keptSettingsPatch(raw, specs);
+  const next = { ...settings, ...patch };
+  const zeroWhenTabsHidden = next.pageFrameZeroInFullScreen && !next.pageFrameZeroWhenTabsHidden && !("pageFrameZeroWhenTabsHidden" in patch);
+  return zeroWhenTabsHidden ? { ...patch, pageFrameZeroWhenTabsHidden: true } : patch;
+}

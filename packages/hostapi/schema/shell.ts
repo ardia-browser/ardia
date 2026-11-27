@@ -94,6 +94,8 @@ export const shell = defineModuleDomain({
         saveKeyResponder: { args: [["windowId", "string"]], result: "number", swiftResult: "Int", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
         restoreKeyResponder: { args: [["token", "number", "Int"]], result: "boolean", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
         discardKeyResponder: { args: [["token", "number", "Int"]], result: "void", async: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
+        fieldBlurCause: { args: [["fieldTag", "number", "Int"]], result: "\"keyLoss\" | \"inWindow\"", swiftResult: "String", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
+        watchFieldBlurs: { args: [["fieldTag", "number", "Int"], ["watch", "boolean"]], result: "void", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
         setSwitcherCapture: { args: [["active", "boolean"]], result: "void", async: true, queue: "main", instance: "weak", mac: "custom", desktop: "absent", windows: "custom" },
         setDragEscapeCapture: { args: [["active", "boolean"]], result: "void", async: true, queue: "main", instance: "weak", mac: "custom", desktop: "absent", windows: "custom" },
         takeHoverCounts: { args: [], result: "Record<string, Record<string, number>>", swiftResult: "[String: [String: Int]]", async: false, optional: true, mac: "custom", desktop: "absent", windows: "absent" },

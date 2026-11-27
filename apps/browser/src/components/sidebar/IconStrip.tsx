@@ -21,7 +21,8 @@ import { FolderOrIcon } from "./AnimatedFolder";
 import { groupTint } from "./tokens";
 import { RestingTile } from "./TileFace";
 import { dragGesture } from "./dragGesture";
-import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripInset, stripLayout } from "./iconStripGeometry";
+import { ICON_STRIP, STRIP_DIVIDER_HEIGHT, stripInset, stripLayout, stripMeasureKey } from "./iconStripGeometry";
+import { useNewTabAtTop } from "../../state/sidebar/chrome";
 import { useRowCenters } from "./useRowCenters";
 import type { ConsentToken } from "../../state/telemetry/client";
 
@@ -49,7 +50,8 @@ export function IconStrip({ windowId, right, top, bottom, actions, align }: { wi
   const entries = useMemo(() => codes.map((code) => ({ code, key: keyOf(code), kind: code.slice(0, code.indexOf("\u0001")) })), [codes]);
   const aligned = useMemo(() => entries.filter((e) => ALIGNED.has(e.kind)).map((e) => e.key), [entries]);
   const rowsVersion = useSidebarRowsVersion(windowId);
-  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, `${align.layoutKey}:${rowsVersion}`);
+  const newTabAtTop = useNewTabAtTop();
+  const centers = useRowCenters(windowId, aligned, align.offset, align.paused, stripMeasureKey(align.layoutKey, rowsVersion, newTabAtTop, codes));
   const layout = useMemo(() => stripLayout(entries.map((e) => ({ key: ALIGNED.has(e.kind) ? e.key : `${e.kind}:${e.key}`, divider: e.kind === "divider", aligned: ALIGNED.has(e.kind) })), centers, top), [entries, centers, top]);
   return (
     <View style={StyleSheet.absoluteFill}>

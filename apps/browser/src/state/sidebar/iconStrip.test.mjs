@@ -65,7 +65,7 @@ test("every item survives its string code, so the strip re-renders only when one
 const { useLive } = await import("../live/store.ts");
 const { pinnedSequence } = await import("./pinnedOrder.ts");
 const { shownPinnedEntries, setPinnedCollapsed } = await import("./pinnedFold.ts");
-const { sidebarEntries, groupEntries } = await import("./entries.ts");
+const { sidebarEntries, groupEntries, keptEntries } = await import("./entries.ts");
 
 function sidebarRenders(s, w, profileId) {
   const live = useLive.getState();
@@ -74,7 +74,7 @@ function sidebarRenders(s, w, profileId) {
   const add = (entry) => {
     rows.push(entry);
     const group = entry.startsWith("g:") ? s.groups[entry.slice(2)] : null;
-    if (group && !group.collapsed) groupEntries(s, group.id).forEach(add);
+    if (group) (group.collapsed ? keptEntries(s, w, profileId, group.id) : groupEntries(s, group.id)).forEach(add);
   };
   shownPinnedEntries(s, w, profileId, pinnedSequence(s, live.folders, live.folderOrder, w, profileId)).forEach(add);
   list.forEach(add);
@@ -89,7 +89,7 @@ function stripShows(w, profileId) {
 
 test("the strip shows exactly the rows the sidebar renders, live folders and the folded pinned section included", () => {
   const t = seeded();
-  S().pinTabs([t.slack], true, { row: true });
+  S().pinTabs([t.slack], true, true);
   const group = S().createGroup([t.github, t.docs], { name: "Code", color: "blue" });
   useLive.setState({ folders: { lf1: { id: "lf1", profileId: t.profile, after: null, collapsed: false } }, folderOrder: ["lf1"] });
   try {
@@ -104,5 +104,21 @@ test("the strip shows exactly the rows the sidebar renders, live folders and the
     check("pinned section folded with its selected row kept");
   } finally {
     useLive.setState({ folders: {}, folderOrder: [] });
+  }
+});
+
+test("a collapsed group's selected tab stays after its square with the group's bar, as the sidebar keeps it under the header, pinned or not", () => {
+  for (const pinned of [false, true]) {
+    const t = seeded();
+    const group = S().createGroup([t.facebook, t.netflix, t.github], { name: "Watch", color: "red" });
+    if (pinned) S().updateGroup(group, { pinned: true });
+    S().updateGroup(group, { collapsed: true });
+    S().activate(t.netflix);
+    if (pinned) setPinnedCollapsed(t.profile, true);
+    const label = pinned ? "kept in the folded pinned section" : "in the list";
+    assert.deepEqual(stripShows(t.w, t.profile), sidebarRenders(S(), t.w, t.profile), label);
+    const items = iconStripItems(S(), t.w, t.profile, pinnedSequence(S(), useLive.getState().folders, useLive.getState().folderOrder, t.w, t.profile));
+    const at = items.findIndex((i) => i.kind === "group" && i.groupId === group);
+    assert.deepEqual([items[at + 1]?.kind, items[at + 1]?.tabId, items[at + 1]?.bar], ["tab", t.netflix, { color: "red", first: true, last: true }], label);
   }
 });

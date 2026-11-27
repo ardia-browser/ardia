@@ -5,6 +5,8 @@ import { fromLegacy } from "../../lib/legacy";
 import { chosenHere, retiredDefaultsWaiting } from "../settings/retiredDefaults";
 import { settleRetiredDefaults } from "../settings/settleRetiredDefaults";
 import { withSyncedTabSwitcherModes } from "../settings/tabSwitcherUpgrade";
+import { pickStillOut } from "../settings/sidebarPicks";
+import { settleSidebarPicks } from "../settings/actions";
 import { CLEAN_UP_KEY, hoursFromMinutes, LEGACY_CLEAN_UP_KEY, minutesFromHours } from "../settings/cleanUpAfter";
 
 const store = () => useBrowser.getState();
@@ -19,7 +21,7 @@ const TAB_SWITCHER_MODES = ["tabSwitcherOrder", "tabSwitcherView"] as const;
 export const settingsAdapter: Adapter = {
   prefix: "set:",
   adoptRemoteOnJoin: true,
-  extract: (base) => {
+  extract: (base, queued = () => false, _now = 0, _known = () => false, _remote = () => undefined, stamp = () => undefined) => {
     const settings = store().settings;
     const chosen = new Set(store().settingsMeta.chosen);
     const inferred = new Set(store().settingsMeta.inferred);
@@ -50,7 +52,15 @@ export const settingsAdapter: Adapter = {
         values.set(recordKey(name), { v: settings[name] });
       }
     }
-    return { values, ignore: (key) => !values.has(key) };
+    const picks = store().settingsMeta.picks;
+    const pickOf = (key: string) => pickStillOut(picks, settingOf(key), stamp(key));
+    return {
+      values,
+      ignore: (key) => !values.has(key),
+      republish: (key) => !!pickOf(key) && !queued(key),
+      stampedAt: pickOf,
+      published: () => settleSidebarPicks((name) => stamp(recordKey(name))),
+    };
   },
   apply: (visible, changed) => applySettingRecords(visible, changed),
 };

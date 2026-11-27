@@ -310,3 +310,30 @@ for (const apart of [false, true])
     await settle(devices);
     assertConverged(devices);
   });
+
+for (const order of ["A publishes first", "B publishes first"])
+  test(`from Icons, Full picked on one Mac and Hidden on another a minute later end on Hidden everywhere (${order})`, async () => {
+    const real = Date.now;
+    let now = real();
+    Date.now = () => now;
+    try {
+      const { devices } = await network(["A"], ["B"], ["C"]);
+      const [a, b] = devices;
+      a.pick("icons");
+      await settle(devices);
+      now += 1000;
+      a.pick("full");
+      now += 60_000;
+      b.pick("hidden");
+      now += 1000;
+      for (const d of order === "A publishes first" ? [a, b] : [b, a]) await d.sync();
+      await settle(devices);
+      for (const d of devices) assert.equal(d.state().mode, "hidden", `${d.id} after syncing`);
+      for (const d of devices) d.relaunch();
+      await settle(devices);
+      for (const d of devices) assert.equal(d.state().mode, "hidden", `${d.id} after a relaunch`);
+      assertConverged(devices);
+    } finally {
+      Date.now = real;
+    }
+  });

@@ -256,7 +256,7 @@ function settleDurable(state            ) {
   for (const settle of queue) settle();
 }
 
-                                                            
+                                                                     
                                                     
 
                                                                          
@@ -322,7 +322,7 @@ async function changesOf(state            , adapter         , now        , optio
   const extraction = first && state.applying ? await recoverBatches(state, adapter.prefix, first, adapter.extractUsesBase ? extractWith : null, !!adapter.savesWhole, options) : first;
   if (!extraction) return null;
   const changes           = [];
-  const { values, json: knownJson, republish, ignore, keepLocal } = extraction;
+  const { values, json: knownJson, republish, ignore, keepLocal, stampedAt } = extraction;
   const unsettled = failedTargets(state, adapter.prefix, options);
   values.forEach((value, key) => {
     if (value === null || value === undefined) throw new Error(`[sync] ${key}: a live value can't be null`);
@@ -330,7 +330,7 @@ async function changesOf(state            , adapter         , now        , optio
     if (unsettled?.get(key)?.has(json)) return;
     if (adopting && key in state.records && !keepLocal?.(key)) return;
     if (state.base[key] === json && (!(republish?.(key) || (adopting && keepLocal?.(key))) || awaitsRecovery(state, key))) return;
-    changes.push({ key, value, json });
+    changes.push({ key, value, json, h: stampedAt?.(key) });
   });
   const keys = adopting ? [] : baseKeysWith(state, adapter.prefix);
   for (let i = 0; i < keys.length; i++) {
@@ -341,7 +341,8 @@ async function changesOf(state            , adapter         , now        , optio
   return { changes, settle: extraction.published, source };
 }
 
-function stampOf(state            , adapter         , clock       , { key, value }        )      {
+function stampOf(state            , adapter         , clock       , { key, value, h }        )      {
+  if (h) return h;
   const editedAt = !state.records[key] && value !== null ? adapter.editedAt?.(value) : undefined;
   return editedAt !== undefined ? clock.at(editedAt) : clock.tick();
 }
@@ -1281,6 +1282,7 @@ const emptyScope = ()             => ({
                                
                                     
                                        
+                                               
                                        
                                           
                                                              

@@ -1,6 +1,6 @@
 import type { BrowserState } from "../browser/store";
 import type { GroupColor } from "../browser/types";
-import { groupEntries, sidebarEntries } from "./entries";
+import { groupEntries, keptEntries, sidebarEntries } from "./entries";
 import { entryKey, parseEntry } from "./entryKey";
 import { folderIdOfCell } from "../pins/tileFolders";
 import { splitRowPanes } from "../splits/splits";
@@ -17,7 +17,7 @@ export type StripItem =
   | { kind: "group"; key: string; groupId: string; color: GroupColor | null; open: boolean; bar: StripBar | null }
   | { kind: "live"; key: string; liveFolderId: string };
 
-function entryItems(s: BrowserState, entry: string, bar: StripBar | null, out: StripItem[]) {
+function entryItems(s: BrowserState, windowId: string, profileId: string, entry: string, bar: StripBar | null, out: StripItem[]) {
   const { kind, id } = parseEntry(entry);
   if (kind === "tab") return void (s.tabs[id] && out.push({ kind: "tab", key: entry, tabId: id, bar }));
   if (kind === "split") {
@@ -30,9 +30,8 @@ function entryItems(s: BrowserState, entry: string, bar: StripBar | null, out: S
   const g = s.groups[id];
   if (!g) return;
   out.push({ kind: "group", key: entry, groupId: id, color: g.color, open: !g.collapsed, bar });
-  if (g.collapsed) return;
-  const members = groupEntries(s, id);
-  members.forEach((member, i) => entryItems(s, member, { color: g.color, first: i === 0, last: i === members.length - 1 }, out));
+  const members = g.collapsed ? keptEntries(s, windowId, profileId, id) : groupEntries(s, id);
+  members.forEach((member, i) => entryItems(s, windowId, profileId, member, { color: g.color, first: i === 0, last: i === members.length - 1 }, out));
 }
 
 export function iconStripItems(s: BrowserState, windowId: string, profileId: string, pinnedSequence?: string[]): StripItem[] {
@@ -44,9 +43,9 @@ export function iconStripItems(s: BrowserState, windowId: string, profileId: str
     out.push(folderId ? { kind: "tileFolder", key: entryKey("tileFolder", folderId), folderId } : { kind: "tile", key: entryKey("tab", cell), tabId: cell });
   }
   const rows: StripItem[] = [];
-  for (const entry of pinned) entryItems(s, entry, null, rows);
+  for (const entry of pinned) entryItems(s, windowId, profileId, entry, null, rows);
   const pinnedShown = rows.length;
-  for (const entry of list) entryItems(s, entry, null, rows);
+  for (const entry of list) entryItems(s, windowId, profileId, entry, null, rows);
   if (out.length && rows.length) out.push({ kind: "divider", key: "divider:tiles" });
   if (pinnedShown && rows.length > pinnedShown) rows.splice(pinnedShown, 0, { kind: "divider", key: "divider:pinned" });
   return out.concat(rows);

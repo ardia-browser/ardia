@@ -77,6 +77,7 @@ export type Extraction = {
   values: Map<string, unknown>;
   ignore?: (key: string) => boolean;
   republish?: (key: string) => boolean;
+  stampedAt?: (key: string) => HLC | undefined;
   keepLocal?: (key: string) => boolean;
   published?: (keys: Set<string>) => void;
   json?: (key: string, value: unknown) => string | undefined;

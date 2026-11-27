@@ -21,7 +21,7 @@ const { setActiveLook } = await import("../../lib/activeLook.ts");
 const { layout } = await import("../ui/theme.ts");
 const { useInterfaceScale } = await import("../../state/settings/interfaceScale.ts");
 const { noteSidebarRowMoved, useSidebarRowGeometry } = await import("../../state/sidebar/rowGeometry.ts");
-const { ICON_STRIP, stripLayout } = await import("./iconStripGeometry.ts");
+const { ICON_STRIP, stripLayout, stripMeasureKey } = await import("./iconStripGeometry.ts");
 const { registerSidebarDrag } = await import("./stripDrag.ts");
 const { useRowCenters } = await import("./useRowCenters.ts");
 
@@ -124,4 +124,23 @@ test("an aligned row the sidebar hasn't measured yet reserves the square it is d
   const { slots, square } = stripLayout(items, { a: 100, b: 126 }, 9);
   assert.equal(square, 24, "the measured rows are packed tight");
   assert.equal(slots[3].top - slots[2].top, square + ICON_STRIP.gap, "the unmeasured row takes the drawn square plus the gap");
+});
+
+test("moving the inline New Tab row from the bottom to the top re-measures, though no row or scroll content lays out anew", async () => {
+  const key = (top) => stripMeasureKey("1200x800:9", useSidebarRowGeometry.getState().w ?? 0, top, scene.keys.map((k) => `tab\u0001${k}`));
+  const measure = async (top) => {
+    await settled();
+    useRowCenters("w", scene.keys, 0, false, key(top));
+    await settled();
+    const centers = useRowCenters("w", scene.keys, 0, false, key(top));
+    const { slots, square } = stripLayout(scene.keys.map((k) => ({ key: k, divider: false, aligned: true })), centers, 9);
+    return Math.max(...slots.map(({ top: y }, i) => Math.abs(y + square / 2 - center(i))));
+  };
+  assert.ok((await measure(false)) <= 1);
+  scene.above = pitch();
+  assert.ok((await measure(false)) >= pitch() - 1, "a key without the New Tab position leaves the icons a row off");
+  const moved = await measure(true);
+  scene.above = 0;
+  assert.ok((await measure(false)) <= 1);
+  assert.ok(moved <= 1, `the first row moved ${pitch()} pt with the New Tab row and its icon followed (off by ${moved})`);
 });

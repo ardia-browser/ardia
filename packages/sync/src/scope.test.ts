@@ -983,3 +983,29 @@ test("outside a rebase a value the adapter would keep isn't republished just for
   await a.sync();
   assert.equal(a.store.get("x:1"), "two");
 });
+
+test("a change goes out under the stamp its adapter gives, so a pick made earlier but published later loses to a later pick, even one of the same value", async () => {
+  class Picking extends Device {
+    picked = new Map<string, string>();
+    adapters(): Adapter[] {
+      const [x, ...rest] = super.adapters();
+      return [{ ...x!, extract: () => ({ values: new Map(this.store), republish: (k) => this.picked.has(k), stampedAt: (k) => this.picked.get(k) }) }, ...rest];
+    }
+  }
+  for (const order of [["devA", "devB"], ["devB", "devA"]]) {
+    const folder = new Folder();
+    const a = new Picking("devA", folder);
+    const b = new Picking("devB", folder);
+    a.store.set("x:k", "kept");
+    await syncAll([a, b]);
+    folder.now += 10;
+    a.store.set("x:k", "A's pick");
+    a.picked.set("x:k", a.clock.tick());
+    folder.now += 60_000;
+    b.picked.set("x:k", b.clock.tick());
+    await syncAll(order.map((id) => (id === "devA" ? a : b)), 3);
+    assert.deepEqual([a.store.get("x:k"), b.store.get("x:k")], ["kept", "kept"], order.join(" then "));
+    assert.equal(a.state.records["x:k"]!.h, b.picked.get("x:k"));
+    assert.deepEqual(a.state.records, b.state.records);
+  }
+});

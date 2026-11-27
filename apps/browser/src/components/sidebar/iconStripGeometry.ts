@@ -27,6 +27,8 @@ export function stripPointerOver(x: number, right: boolean, windowWidth: number)
   return right ? x >= windowWidth - ICON_STRIP.width : x < ICON_STRIP.width;
 }
 
+export const stripMeasureKey = (layoutKey: string, rowsVersion: number, newTabAtTop: boolean, codes: readonly string[]) => `${layoutKey}:${rowsVersion}:${newTabAtTop ? "top" : "bottom"}:${codes.join("|")}`;
+
 export const STRIP_DIVIDER_HEIGHT = 1 + ICON_STRIP.gap * 2;
 
 export type StripSlot = { top: number; joinAbove: number };

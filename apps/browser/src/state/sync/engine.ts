@@ -47,7 +47,10 @@ let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint } = syncFiles(() => doc);
 
-const load = () => { const loaded = read(); if (loaded) doc = loaded; };
+function load() {
+  const loaded = read();
+  if (loaded) doc = loaded;
+}
 
 function publishUi(patch: Partial<SyncUi> = {}) {
   if (!doc.enabled || !typeSyncedFor(doc.types, "settings", true)) settleRetiredDefaultsWithoutSync();
@@ -71,11 +74,17 @@ function watchExtensions() {
   if (profiles.length) watchExtensionIntents(profiles);
 }
 
-const scheduleSync = (delay = AFTER_EDIT_MS) => void (doc.enabled && (clearTimeout(timer), (timer = setTimeout(() => void runCycle(), delay))));
+function scheduleSync(delay = AFTER_EDIT_MS) {
+  if (!doc.enabled) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => void runCycle(), delay);
+}
 
 let stopping = false;
 let folderOp: Promise<unknown> | null = null;
-const folderOpSettled = async () => { while (folderOp) await folderOp.catch(() => {}); };
+const folderOpSettled = async () => {
+  while (folderOp) await folderOp.catch(() => {});
+};
 
 export const syncWritesOpen = () => doc.enabled && !stopping && !["starting", "locked", "off", "unavailable"].includes(useSync.getState().status);
 
@@ -106,7 +115,10 @@ async function runCycle({ retiring = false, forcePasswords = false }: CycleOptio
   }
 }
 
-const clockFor = (device: string) => (editClock().device !== device && startEditClock(device, doc.clock), editClock());
+function clockFor(device: string) {
+  if (editClock().device !== device) startEditClock(device, doc.clock);
+  return editClock();
+}
 
 async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string, device: string, { retiring, forcePasswords }: Required<CycleOptions>) {
   const consent = consentToken();
@@ -120,14 +132,22 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       return publishUi({ status: "offline", error: unavailableFolderError((await native.folderInfo?.(folder).catch(() => null)) ?? null) });
     }
     if (status === "missing") return await resetFromElsewhere();
-    const transport = folderTransport(native, folder), clock = clockFor(device);
+    const transport = folderTransport(native, folder);
+    const clock = clockFor(device);
     if (doc.reseedScopes?.length) await reseedPendingScopes({ native, doc, folder, device, clock, watchScope, persistJournal, save });
     const app = appScopeOf(doc);
     if (freezeRemovals(doc)) save();
     const appSettled = watchScope(APP_SCOPE, app, clock);
     try {
-      const options = { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting };
-      noteCycle(consent, await syncScope({ scope: APP_SCOPE, state: app, transport, adapters: appAdapters(doc, retiring), clock, device, options }));
+      noteCycle(consent, await syncScope({
+        scope: APP_SCOPE,
+        state: app,
+        transport,
+        adapters: appAdapters(doc, retiring),
+        clock,
+        device,
+        options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
+      }));
     } finally {
       await appSettled();
     }
@@ -144,8 +164,15 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        const options = { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting };
-        noteCycle(consent, await syncScope({ scope, state, transport, adapters: profileAdapters(doc, profileId, retire, forcePasswords), clock, device, options }));
+        noteCycle(consent, await syncScope({
+          scope,
+          state,
+          transport,
+          adapters: profileAdapters(doc, profileId, retire, forcePasswords),
+          clock,
+          device,
+          options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
+        }));
       } finally {
         await settled();
       }
@@ -180,7 +207,11 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
   }
 }
 
-export const adoptProfileTheme = (profileId: string): void => void (themeChosenHere(doc.profiles[profileId]) && (save(), doc.enabled && scheduleSync(AFTER_EDIT_MS)));
+export function adoptProfileTheme(profileId: string) {
+  if (!themeChosenHere(doc.profiles[profileId])) return;
+  save();
+  if (doc.enabled) scheduleSync(AFTER_EDIT_MS);
+}
 
 async function loadSavedState() {
   const loading = doc;
@@ -199,7 +230,11 @@ async function resetFromElsewhere() {
 
 export const folderInfo = async (path?: string | null): Promise<FolderInfo | null> => (await SyncNative?.folderInfo(path ?? doc.folder ?? null)) ?? null;
 
-const pointAt = (path: string) => void ((doc.folder = path), save(), publishUi());
+function pointAt(path: string) {
+  doc.folder = path;
+  save();
+  publishUi();
+}
 
 export const setSyncFolder = (path: string) => void (doc.enabled || pointAt(path));
 

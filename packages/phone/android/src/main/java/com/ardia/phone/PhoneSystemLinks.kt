@@ -9,6 +9,7 @@ import com.ardia.browser.BrowserUrl
 object PhoneSystemLinks {
     const val SOURCE_EXTRA = "com.ardia.SOURCE"
     private const val HANDLED_EXTRA = "com.ardia.phone.LINK_HANDLED"
+    private const val HELD_SOURCE = "held"
     private const val INBOX_HOST = "inbox"
     private const val QUEUE_LIMIT = 20
 
@@ -116,7 +117,7 @@ object PhoneSystemLinks {
             listener?.takeUnless { holding() } ?: run {
                 if (holding()) {
                     if (held.size >= QUEUE_LIMIT) held.removeFirst()
-                    held.addLast(payload)
+                    held.addLast(payload + ("source" to HELD_SOURCE))
                     persistHeld()
                 } else {
                     if (queued.size >= QUEUE_LIMIT) queued.removeFirst()

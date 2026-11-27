@@ -1,7 +1,7 @@
 import { requireOptionalNativeModule } from "expo-modules-core";
 import type { Subscription } from "./pageTypes";
 
-export type SystemLinkSource = "web" | "system" | "shortcut" | "share" | "handoff" | "intent";
+export type SystemLinkSource = "web" | "system" | "shortcut" | "share" | "handoff" | "intent" | "held";
 
 export type SystemLink = (
   | { kind: "open"; url: string }

@@ -738,8 +738,9 @@ off in the lab`.
     - the tab another app's link just opened (tap a link in Messages or Discord), once its own history is used up:
       ◁ closes that tab and Ardia goes to the background, so the app the link came from shows again, as Chrome's
       does. The tab before it in the list is selected for next time. Only the latest such tab does this, and only
-      until another tab is selected; a link opened after onboarding or after a failed start was held, not handed
-      over, so its tab opens the deck as usual;
+      until another tab is selected or Ardia leaves the screen (Home, then Ardia's icon, and ◁ opens the deck). A
+      link held through onboarding, a failed start or the update from the old app wasn't handed over live, so its
+      tab opens the deck as usual;
     - rotate with the page menu open, then ◁: the menu closes.
     With gesture navigation, the same with an edge swipe.
 69. **Remove animations is followed while Ardia runs** (from sync20b). Open the deck: the blobs move. Without

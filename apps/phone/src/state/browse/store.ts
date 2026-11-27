@@ -157,6 +157,7 @@ export function appBecameActive() {
 
 export function appWillResignActive() {
   appActive = false;
+  tabFromAnotherApp = null;
   if (archiveTimer) clearInterval(archiveTimer);
   archiveTimer = null;
   const selected = currentTabs().selectedId;

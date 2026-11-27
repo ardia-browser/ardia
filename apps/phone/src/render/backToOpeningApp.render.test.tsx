@@ -104,3 +104,13 @@ test("selecting another tab and coming back forgets that the tab came from anoth
   expect(openIds()).toContain(opened);
   expect(counted).not.toHaveBeenCalledWith("tabs_returned_to_app");
 });
+
+test("leaving Ardia and coming back from its icon forgets the link, so Back shows the deck", () => {
+  const opened = openFromAnotherApp("https://x.com/jack/status/20");
+  act(() => browse.appWillResignActive());
+  act(() => browse.appBecameActive());
+  expect(currentTabs().selectedId).toBe(opened);
+  expect(back()).toBe(true);
+  expect(deckShown).toHaveBeenCalledTimes(1);
+  expect(openIds()).toContain(opened);
+});

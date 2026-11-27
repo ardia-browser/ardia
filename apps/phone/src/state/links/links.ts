@@ -151,11 +151,12 @@ export function startLinks() {
   started = true;
   listenForLinks();
   void settled(() => initialLink(), null).then((link) => {
-    if (link) take(link);
+    const waitedThroughFailure = useBoot.getState().failures > 0 ? replayed : (waited: IncomingLink) => waited;
+    if (link) take(waitedThroughFailure(link));
     const queued = waiting ?? [];
     waiting = null;
     if (queued.length) quietlyOnDatabase(() => writePreference(browserDatabase(), KEPT_KEY, null));
-    for (const later of queued) take(later);
+    for (const later of queued) take(waitedThroughFailure(later));
   });
   useOnboarding.subscribe((state) => {
     if (state.showing || !heldLinks().length) return;

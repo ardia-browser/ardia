@@ -309,20 +309,24 @@ function showRows(text: string, typedAt: number = Date.now()) {
   catchUpSources();
   const suggested = suggestionsFor(text, carriedRemote(text));
   useSearch.setState({ text, rows: suggested.rows, completion: suggested.completion, completedFor: text });
-  if (!text.trim()) return;
+  const scope = remoteScope();
+  if (!text.trim() || !currentPreferences().searchSuggestions) {
+    suggester.prune(scope, "");
+    if (text.trim()) markSearchLocalRows(typedAt);
+    return;
+  }
   markSearchLocalRows(typedAt);
-  if (!currentPreferences().searchSuggestions) return;
   const sentAt = Date.now();
   suggester.ask({
-    scope: remoteScope(),
+    scope,
     text,
     remembers: !draft.incognito,
-    current: () => (ownsSearch(draft) ? useSearch.getState().text : null),
+    current: () => (ownsSearch(draft) && remoteScope() === scope ? useSearch.getState().text : null),
     show: (answer: RemoteAnswer, cached: boolean) => {
       const now = useSearch.getState().text;
       const merged = suggestionsFor(now, carriedValues(answer, now));
       useSearch.setState({ rows: merged.rows, completion: merged.completion, completedFor: now });
-      if (answer.values.length) markSearchRemoteRows(typedAt, sentAt, cached);
+      if (answer.values.length) markSearchRemoteRows(typedAt, sentAt, cached, draft.incognito);
     },
   });
 }

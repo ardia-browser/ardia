@@ -13,6 +13,11 @@ let firstTypedAt: number | null = null;
 let localMs: number | null = null;
 let suggestPrivate = false;
 
+const dropSuggestSample = () => {
+  firstTypedAt = null;
+  localMs = null;
+};
+
 export function markSearchPressed(at: number = Date.now(), incognito = false) {
   openingSince = at;
   openingPrivate = incognito;
@@ -39,8 +44,9 @@ export function markSearchPresented() {
 }
 
 export function markSearchTyped(typedAt: number, incognito: boolean) {
-  if (firstTypedAt !== null) return;
+  if (firstTypedAt !== null && suggestPrivate === incognito) return;
   firstTypedAt = typedAt;
+  localMs = null;
   suggestPrivate = incognito;
 }
 
@@ -50,21 +56,20 @@ export function markSearchLocalRows(typedAt: number) {
   if (interactionPerfEnabled()) labLog(`PAGELAB search local ${now - typedAt}`);
 }
 
-export function markSearchRemoteRows(typedAt: number, sentAt: number, cached: boolean) {
+export function markSearchRemoteRows(typedAt: number, sentAt: number, cached: boolean, incognito: boolean) {
   const now = Date.now();
   if (interactionPerfEnabled()) labLog(`PAGELAB search remote ${now - typedAt} sent ${sentAt - typedAt} ${cached ? "cached" : `wait ${now - sentAt}`}`);
-  if (firstTypedAt === null || localMs === null) return;
+  if (firstTypedAt === null || localMs === null || incognito !== suggestPrivate) return;
   const remoteMs = now - firstTypedAt;
   const local = localMs;
-  firstTypedAt = null;
-  localMs = null;
-  if (!suggestPrivate) reportSearchSuggest(local, remoteMs);
+  const privately = suggestPrivate;
+  dropSuggestSample();
+  if (!privately && !incognito) reportSearchSuggest(local, remoteMs);
 }
 
 export function markSearchClosing() {
   openingSince = null;
-  firstTypedAt = null;
-  localMs = null;
+  dropSuggestSample();
   if (!interactionPerfEnabled()) return;
   pressedAt = null;
   closedAt = Date.now();

@@ -41,6 +41,7 @@ test("a typed filter list address becomes an http or https URL, or nothing", () 
   assert.equal(filterListAddress("  https://example.com/filters.txt "), "https://example.com/filters.txt");
   assert.equal(filterListAddress("example.com/list.txt"), "https://example.com/list.txt");
   assert.equal(filterListAddress("http://localhost:8080/l.txt"), "http://localhost:8080/l.txt");
+  assert.equal(filterListAddress("example.com"), "https://example.com/");
   for (const bad of ["", "   ", "file:///etc/hosts", "javascript:alert(1)", "not a url", "https://intranet/l.txt", "ftp://example.com/l.txt"])
     assert.equal(filterListAddress(bad), null, bad);
 });
@@ -63,6 +64,7 @@ test("a filter list address keeps its path when the URL class appends a slash, a
     assert.equal(filterListAddress("example.com/list.txt"), "https://example.com/list.txt");
     assert.equal(filterListAddress("https://example.com/list.txt?v=2"), "https://example.com/list.txt?v=2");
     assert.equal(filterListAddress("https://example.com/lists/"), "https://example.com/lists/");
+    assert.equal(filterListAddress("example.com"), "https://example.com/");
   } finally {
     globalThis.URL = NodeURL;
   }

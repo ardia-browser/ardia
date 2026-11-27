@@ -12,7 +12,8 @@
 //   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
 //       fake's Pairing and pairs again from the Login list, leaving that instance paired; E34-E38 filter it as you type
 //       on filter.localhost's /login-ready (its Sign in button is enabled and submit is recorded, not sent), and E37
-//       ends Pairing and pairs again too
+//       ends Pairing and pairs again too; E34fetches (both engines) clicks and types 12 characters there and the fake sees
+//       one login list request
 //       E16dropped: the fake never answers one list fetch; that list says Apple Passwords didn't answer, the next lists the
 //       logins. E16held: the fake holds a password reply 30 s; meanwhile status answers at once and another tab lists logins
 //   E5chromium… the same Login list checks in a Chromium tab of that instance
@@ -419,7 +420,7 @@ const CHECKS = {
     return Object.fromEntries(Object.entries(steps).map(([k, v]) => [k, v.enabled]));
   },
   ...loginListChecks({ paired, sites }),
-  ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E35", "E36", "E37"]),
+  ...inChromium(loginListChecks({ paired, sites, engine: "chromium" }), ["E5", "E6", "E7", "E12", "E13", "E15", "E34", "E34fetches", "E35", "E36", "E37"]),
   ...savingChecks({ paired, sites }),
   ...inChromium(savingChecks({ paired, sites, engine: "chromium" }), ["E18", "E19", "E20", "E21", "E22", "E22garbled", "E23"]),
   ...strongPasswordChecks({ paired, sites, fresh: freshChromiumTab }),

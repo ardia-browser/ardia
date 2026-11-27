@@ -358,6 +358,23 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await other?.close();
       }
     },
+    async E34fetches() {
+      const { fake } = await paired();
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        const fetches = () => fake.requests().filter((r) => r.cmd === 4).length;
+        const before = fetches();
+        await tab.click("#u");
+        await tab.waitRows();
+        const typed = "anna@example";
+        await typedRows(tab, typed, ["anna@example.test", FOOTER], `the list for ${typed}`);
+        await sleep(500);
+        assert(fetches() - before === 1, `clicking and typing ${typed.length} characters fetch the site's logins once`, fetches() - before);
+        return { engine: engineName, typed: typed.length, fetches: fetches() - before };
+      } finally {
+        await tab.close();
+      }
+    },
     async E34() {
       const { app } = await paired();
       const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;

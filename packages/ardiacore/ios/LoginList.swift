@@ -53,13 +53,24 @@ final class LoginList: NSObject {
     let at: Date
   }
 
+  private struct Fetched {
+    weak var target: LoginListTarget?
+    let page: String
+    let host: String
+    let entries: [ApplePasswordsEntry]
+    let domains: [String: String]
+    let at: Date
+  }
+
   static let accountSeconds: TimeInterval = 300
+  static let fetchedSeconds: TimeInterval = 30
 
   private var shown: Shown?
   private var accounts: [Account] = []
   private var ticket = 0
   private var declined: Set<String> = []
   private var resume: Shown?
+  private var fetched: Fetched?
 
   override init() {
     super.init()
@@ -94,26 +105,41 @@ final class LoginList: NSObject {
       guard scheme == "https" else { return close(target) }
       return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked)
     }
+    if field.trigger == .typing, let cache = fetched, cache.target === target, cache.page == page, cache.host == host,
+      Date().timeIntervalSince(cache.at) < Self.fetchedSeconds
+    {
+      return listed(.success(cache.entries), domains: cache.domains, target: target, field: field, page: page, host: host, scheme: scheme, pageHost: pageHost)
+    }
     ApplePasswordsClient.shared.logins(host: host) { [weak self, weak target] result in
       let entries = (try? result.get()) ?? []
       Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
         guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
-        guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
-        let site = domains[pageHost] ?? pageHost
-        if field.kind == .login, !field.typed.isEmpty { self.remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
-        var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
-        next.domains = domains
-        next.strong = field.kind == .newPassword
-        switch result {
-        case .success:
-          if !next.strong { next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains) }
-          self.present(next, notice: nil)
-        case .failure(.notConnected): self.offerConnect(next)
-        case .failure(let problem): self.present(next, notice: Self.notice(problem))
-        }
+        self.fetched = (try? result.get()).map { _ in Fetched(target: target, page: page, host: host, entries: entries, domains: domains, at: Date()) }
+        self.listed(result, domains: domains, target: target, field: field, page: page, host: host, scheme: scheme, pageHost: pageHost)
       }
     }
   }
+
+  private func listed(
+    _ result: Result<[ApplePasswordsEntry], ApplePasswordsClient.Problem>, domains: [String: String], target: LoginListTarget, field: LoginListField, page: String,
+    host: String, scheme: String, pageHost: String
+  ) {
+    guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return close(target) }
+    let site = domains[pageHost] ?? pageHost
+    if field.kind == .login, !field.typed.isEmpty { remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
+    var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
+    next.domains = domains
+    next.strong = field.kind == .newPassword
+    switch result {
+    case .success(let entries):
+      if !next.strong { next.logins = ApplePasswordsMatch.logins(entries, scheme: scheme, host: host, domains: domains) }
+      present(next, notice: nil)
+    case .failure(.notConnected): offerConnect(next)
+    case .failure(let problem): present(next, notice: Self.notice(problem))
+    }
+  }
+
+  func forgetFetchedLogins() { fetched = nil }
 
   static func isCode(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9]{4,10}$", options: .regularExpression) != nil }
 
@@ -176,6 +202,7 @@ final class LoginList: NSObject {
   }
 
   private func applePasswordsChanged(_ state: String) {
+    fetched = nil
     guard state == "connected" else { return declined.removeAll() }
     guard let waiting = resume else { return }
     resume = nil

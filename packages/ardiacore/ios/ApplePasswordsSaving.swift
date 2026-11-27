@@ -59,7 +59,10 @@ final class ApplePasswordsSaving: NSObject {
     ApplePasswordsClient.shared.save(host: host, insecure: scheme == "http", user: username, password: password, update: update) { result in
       DispatchQueue.main.async {
         let saved = (try? result.get()) != nil
-        if saved { remember(scheme: scheme, host: host, user: username, password: password) }
+        if saved {
+          remember(scheme: scheme, host: host, user: username, password: password)
+          LoginList.shared.forgetFetchedLogins()
+        }
         count(saved ? "saved" : "saveFailed", engine: engine)
         done(saved)
       }

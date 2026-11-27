@@ -242,3 +242,24 @@ test("a hover-woken tab shown in a split pane it doesn't focus counts as opened 
   assert.deepEqual(asked, [], "no put-back for a tab on screen");
   webviews.clear();
 });
+
+test("a put-back answer that comes after the tab loaded again leaves it awake", async () => {
+  const { hidden } = windowWithHiddenTab();
+  const consent = consentToken();
+  S().updateTab(hidden, { page: { kind: "idle" } });
+  await wakeOnHover(hidden, consent);
+  let answer;
+  webviews.set(hidden, { sleepIfHidden: () => new Promise((resolve) => (answer = resolve)) });
+  takeTabSleepCounts();
+  const putting = putBackHoverWake(hidden, { consent });
+  await settle();
+  useLifecycle.setState({ discarded: { [hidden]: true } });
+  const { noteTabReady } = await import("./sleepAsks.ts");
+  noteTabReady(hidden);
+  useLifecycle.setState({ discarded: {} });
+  answer([]);
+  assert.equal(await putting, true, "the engine did put it back");
+  assert.equal(useLifecycle.getState().discarded[hidden], undefined, "but the page running again isn't marked asleep");
+  assert.equal(takeTabSleepCounts().hover_wakes_put_back, 1);
+  webviews.clear();
+});

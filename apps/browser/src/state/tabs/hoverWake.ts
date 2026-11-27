@@ -11,6 +11,7 @@ import { noteHoverWakePutBack, noteHoverWokenTabOpened, noteTabWokenOnHover } fr
 import { heldByCli } from "./cliHolds";
 import { inUse } from "./loadedTabBudget";
 import { hasPage, restoredLazily, wokenPage } from "./pageSession";
+import { askToSleep, sleepAskedNow } from "./sleepAsks";
 import { shownTabIds } from "./shownTabs";
 import { isSleeping, markSleeping, useLifecycle, wasSleptByHand } from "./sleepingTabs";
 import { liveOf } from "./tabLive";
@@ -102,14 +103,15 @@ export async function putBackHoverWake(id: string, wake: Pick<Wake, "consent">):
   const s = useBrowser.getState();
   const t = s.tabs[id];
   const view = webviews.get(id);
-  if (!t || !view || !hasPage(t) || isSleeping(id) || shownTabIds(s).has(id) || inUse(s, id) || heldByCli(id) || liveOf(id).isLoading) return false;
-  const keptBy = await Promise.resolve()
-    .then(() => view.sleepIfHidden(0))
-    .catch(() => undefined);
-  if (!keptBy || keptBy.length) return false;
-  markSleeping(id);
-  noteHoverWakePutBack(wake.consent);
-  return true;
+  if (!t || !view || !hasPage(t) || isSleeping(id) || sleepAskedNow(id) || shownTabIds(s).has(id) || inUse(s, id) || heldByCli(id) || liveOf(id).isLoading) return false;
+  let slept = false;
+  await askToSleep(id, () => view.sleepIfHidden(0), ({ keptBy, awakeMeanwhile }) => {
+    if (!keptBy || keptBy.length) return;
+    if (!awakeMeanwhile) markSleeping(id);
+    noteHoverWakePutBack(wake.consent);
+    slept = true;
+  });
+  return slept;
 }
 
 function putBack(id: string, wake: Wake) {

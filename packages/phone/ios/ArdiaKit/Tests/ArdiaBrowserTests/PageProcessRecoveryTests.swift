@@ -28,6 +28,15 @@ import Testing
     #expect(recovery.processEnded(shown: true) == .reload)
   }
 
+  @Test func aReloadEndedInTheBackgroundWaitsInsteadOfFailing() {
+    var recovery = PageProcessRecovery()
+    #expect(recovery.processEnded(shown: true) == .reload)
+    #expect(recovery.processEnded(shown: false) == .wait)
+    #expect(!recovery.isReloading && recovery.awaitsReload)
+    #expect(recovery.pageShown() == .reload)
+    #expect(recovery.loadFinished() == .recovered)
+  }
+
   @Test func aDeathWhileHiddenNeverShowsTheFailurePage() {
     var recovery = PageProcessRecovery()
     #expect(recovery.processEnded(shown: false) == .wait)

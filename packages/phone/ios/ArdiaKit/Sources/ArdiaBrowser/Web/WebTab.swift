@@ -119,6 +119,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       self.url = url
       return
     }
+    processRecovery.navigationAsked()
     webView.load(URLRequest(url: url))
   }
 
@@ -169,14 +170,14 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   public func goBack() {
     failure = nil
-    guard let webView = webViewForNavigation() else { return }
-    webView.goBack()
+    guard let webView = webViewForNavigation(), webView.goBack() != nil else { return }
+    processRecovery.navigationAsked()
   }
 
   public func goForward() {
     failure = nil
-    guard let webView = webViewForNavigation() else { return }
-    webView.goForward()
+    guard let webView = webViewForNavigation(), webView.goForward() != nil else { return }
+    processRecovery.navigationAsked()
   }
 
   public func reload() {
@@ -191,7 +192,6 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   private func webViewForNavigation() -> WKWebView? {
     if webView == nil { engine?.revive(self) }
-    processRecovery.navigationAsked()
     return webView
   }
 
@@ -201,10 +201,10 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   var isShownToUser: Bool {
     guard let webView, webView.window != nil else { return false }
-    return UIApplication.shared.applicationState != .background
+    return UIApplication.shared.applicationState == .active
   }
 
-  func pageShown() {
+  public func pageShown() {
     guard processRecovery.awaitsReload, isShownToUser, let webView else { return }
     guard processRecovery.pageShown() == .reload else { return }
     failure = nil
@@ -212,6 +212,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   public func stopLoading() {
+    processRecovery.loadFailed()
     webView?.stopLoading()
   }
 

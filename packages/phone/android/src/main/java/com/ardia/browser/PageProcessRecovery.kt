@@ -15,11 +15,12 @@ internal class PageProcessRecovery {
         private set
 
     fun processEnded(shown: Boolean): Step {
-        if (isReloading) {
+        if (isReloading && shown) {
             isReloading = false
             awaitsReload = false
             return Step.ShowFailure
         }
+        isReloading = false
         awaitsReload = true
         return if (shown) beginReload() else Step.Wait
     }

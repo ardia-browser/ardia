@@ -19,11 +19,12 @@ public struct PageProcessRecovery: Equatable, Sendable {
   public init() {}
 
   public mutating func processEnded(shown: Bool) -> Step {
-    if isReloading {
+    if isReloading, shown {
       isReloading = false
       awaitsReload = false
       return .showFailure
     }
+    isReloading = false
     awaitsReload = true
     return shown ? beginReload() : .wait
   }

@@ -36,6 +36,15 @@ class PageProcessRecoveryTest {
     }
 
     @Test
+    fun reloadEndedWhileHiddenWaitsInsteadOfFailing() {
+        val recovery = PageProcessRecovery()
+        assertEquals(PageProcessRecovery.Step.Reload, recovery.processEnded(shown = true))
+        assertEquals(PageProcessRecovery.Step.Wait, recovery.processEnded(shown = false))
+        assertTrue(recovery.awaitsReload)
+        assertFalse(recovery.isReloading)
+    }
+
+    @Test
     fun failedLoadEndsTheRecoveryWithoutCountingIt() {
         val recovery = PageProcessRecovery()
         recovery.processEnded(shown = true)

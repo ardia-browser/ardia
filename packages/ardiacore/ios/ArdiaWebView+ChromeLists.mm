@@ -15,12 +15,18 @@ using namespace ardia_web_view;
 - (void)pushChromeLists {
   ArdiaCoreTab *tab = _tab;
   if (!tab) return;
-  const BOOL claims = [ApplePasswordsProfiles containsProfile:_profile ?: @""];
-  const BOOL engineHasHook = [tab respondsToSelector:@selector(setSuppressedAutofillKinds:)];
   [self pushLoginList];
-  NoteEvent(ardia_host::BrowserId(tab), @"chromeLists", @{@"profile" : _profile ?: @"", @"claimed" : @(claims), @"engineHook" : @(engineHasHook)});
-  if (!engineHasHook) return;
-  NSSet<NSString *> *kinds = claims ? [NSSet setWithObject:@"login"] : [NSSet set];
+  NoteEvent(ardia_host::BrowserId(tab), @"chromeLists",
+            @{@"profile" : _profile ?: @"", @"claimed" : @([ApplePasswordsProfiles containsProfile:_profile ?: @""]), @"engineHook" : @([tab respondsToSelector:@selector(setSuppressedAutofillKinds:)])});
+  [self pushClaimedAutofillKinds];
+}
+
+- (void)pushClaimedAutofillKinds {
+  ArdiaCoreTab *tab = _tab;
+  if (![tab respondsToSelector:@selector(setSuppressedAutofillKinds:)]) return;
+  const BOOL claims = [ApplePasswordsProfiles containsProfile:_profile ?: @""];
+  const BOOL signIn = [_loginList.field[@"signIn"] boolValue];
+  NSSet<NSString *> *kinds = !claims ? [NSSet set] : signIn ? [NSSet setWithObjects:@"login", @"address", @"history", nil] : [NSSet setWithObject:@"login"];
   if ([tab.suppressedAutofillKinds isEqualToSet:kinds] && !tab.suppressedAutofillLogins) return;
   tab.suppressedAutofillLogins = nil;
   tab.suppressedAutofillKinds = kinds;

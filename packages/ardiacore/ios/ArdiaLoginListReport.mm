@@ -28,6 +28,11 @@ NSNumber *Length(NSDictionary *d, NSString *key) {
   return std::isfinite(number) ? @((NSInteger)MAX(0, MIN(kLengthMax, std::floor(number)))) : @0;
 }
 
+BOOL Flag(NSDictionary *d, NSString *key) {
+  id value = d[key];
+  return [value isKindOfClass:NSNumber.class] && CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID() && [value boolValue];
+}
+
 NSString *Typed(NSDictionary *d) {
   id value = d[@"typed"];
   if (![value isKindOfClass:NSString.class]) return @"";
@@ -69,6 +74,7 @@ NSDictionary *ArdiaLoginListReport(id message) {
     @"token" : token,
     @"field" : field,
     @"typed" : [field isEqualToString:@"username"] ? Typed(d) : @"",
+    @"signIn" : @([field isEqualToString:@"username"] && Flag(d, @"signIn")),
     @"rect" : [NSValue valueWithRect:rect],
   } mutableCopy];
   if ([field isEqualToString:@"newPassword"]) {

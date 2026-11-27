@@ -341,6 +341,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)pushSelectionPopover;
 - (void)pushFieldProvider;
 - (void)pushChromeLists;
+- (void)pushClaimedAutofillKinds;
 - (void)pushLoginList;
 - (void)loginFieldFromPage:(NSDictionary *)data frame:(NSString *)frameId main:(BOOL)main origin:(nullable NSString *)origin;
 - (void)endLoginField;

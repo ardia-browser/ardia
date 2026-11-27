@@ -79,7 +79,10 @@ NSDictionary *LoginListConfig(NSString *profile) {
     if (sameField) [self keyLoginList:report[@"key"]];
     return;
   }
-  _loginList.field = @{@"frame" : frameId, @"token" : report[@"token"], @"origin" : origin};
+  const BOOL signIn = [report[@"signIn"] boolValue];
+  const BOOL claimed = [_loginList.field[@"signIn"] boolValue];
+  _loginList.field = @{@"frame" : frameId, @"token" : report[@"token"], @"origin" : origin, @"signIn" : @(signIn)};
+  if (signIn != claimed) [self pushClaimedAutofillKinds];
   [self showLoginListFrom:origin
                screenRect:[self loginListScreenRect:[report[@"rect"] rectValue]]
                    typing:[event isEqualToString:@"input"]
@@ -90,8 +93,10 @@ NSDictionary *LoginListConfig(NSString *profile) {
 
 - (void)endLoginField {
   if (!_loginList.field) return;
+  const BOOL claimed = [_loginList.field[@"signIn"] boolValue];
   _loginList.field = nil;
   [self closeLoginList];
+  if (claimed) [self pushClaimedAutofillKinds];
 }
 
 - (void)fillLoginList:(NSDictionary<NSString *, NSString *> *)values origin:(NSString *)origin completion:(void (^)(BOOL filled))completion {

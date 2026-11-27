@@ -1112,7 +1112,8 @@
       const fresh = found.code ? [] : newPasswords(el);
       const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : "username";
       const rules = fresh.length ? passwordRules(fresh, el) : {};
-      send("loginField", { event, token: active.token, field, typed: field === "username" ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
+      const signIn = field === "username" && !!found.password && !newPasswords(found.password).length;
+      send("loginField", { event, token: active.token, field, signIn, typed: field === "username" ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
     };
     const listen = () => {
       if (listening) return;

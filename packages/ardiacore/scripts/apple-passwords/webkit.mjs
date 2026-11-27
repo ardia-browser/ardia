@@ -138,6 +138,11 @@ export function engineTabs(app, { log = () => {}, engine: engineName = "webkit" 
         if (!shown) return null;
         return parseRows(await act(shown.number, "ax:bold"));
       },
+      async lists() {
+        const children = JSON.parse((await act(await windowNumber(), "children")) || "[]");
+        const panels = children.filter((c) => c.class === "NSPanel" && c.visible);
+        return Promise.all(panels.map(async (p) => parseRows(await act(p.number, "ax:bold"))));
+      },
       async chromePopups() {
         const children = JSON.parse((await act(await windowNumber(), "children")) || "[]");
         return children.filter((c) => c.visible && c.class === "NativeWidgetMacNSWindow");

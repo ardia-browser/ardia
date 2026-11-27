@@ -60,7 +60,29 @@ const go = document.getElementById("go");
 const ready = () => (go.disabled = !(document.getElementById("u").value && document.getElementById("p").value));
 document.addEventListener("input", ready, true);`;
 
+const emailSignInForm = () => `<form method="post" action="/signed-in">
+<input id="u" name="email" type="email" autocomplete="username" style="top:40px">
+<input id="p" name="password" type="password" autocomplete="current-password" style="top:100px">
+<button id="go" disabled style="top:160px">Sign in</button></form>`;
+
+const emailSignUpForm = () => `<form method="post" action="/signed-in">
+<input id="u" name="email" type="email" autocomplete="email" style="top:40px">
+<input id="p" name="new-password" type="password" autocomplete="new-password" style="top:100px">
+<input id="c" name="confirm-password" type="password" autocomplete="new-password" style="top:160px">
+<button id="go" disabled style="top:220px">Create account</button></form>`;
+
+const checkoutForm = () => `<form method="post" action="/signed-in">
+<input id="name" name="name" autocomplete="name" style="top:40px">
+<input id="u" name="email" type="email" autocomplete="email" style="top:100px">
+<input id="street" name="street" autocomplete="street-address" style="top:160px">
+<input id="city" name="city" autocomplete="address-level2" style="top:220px">
+<input id="zip" name="zip" autocomplete="postal-code" style="top:280px">
+<button id="go" style="top:340px">Pay</button></form>`;
+
 export const PAGES = {
+  "/login-email": (host) => page(`Sign in to ${host}`, emailSignInForm(), enableWhenFilled),
+  "/signup-email": (host) => page(`Sign up on ${host}`, emailSignUpForm(), enableWhenFilled),
+  "/checkout": (host) => page(`Check out on ${host}`, checkoutForm()),
   "/login": (host) => page(`Sign in to ${host}`, loginForm(), enableWhenFilled),
   "/login-ready": (host) => page(`Sign in to ${host}`, loginForm("/signed-in", { ready: true }), holdSubmit),
   "/login-fails": (host) => page(`Sign in to ${host}`, loginForm("/login-fails"), enableWhenFilled),

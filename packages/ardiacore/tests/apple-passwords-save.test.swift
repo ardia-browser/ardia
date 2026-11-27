@@ -40,6 +40,12 @@ private func save(_ host: String, _ user: String, _ password: String) async -> R
     #expect(lines("asked.jsonl").map { $0["choice"] as? String } == ["notNow", "save"])
   }
 
+  @Test func `only a save failure that proves nothing was stored tells the user it wasn't saved`() {
+    let known: [ApplePasswordsClient.Problem] = [.notConnected, .refused, .unreadable, .unavailable(.helperMissing), .unavailable(.notEntitled)]
+    #expect(!ApplePasswordsClient.Problem.timedOut.provesNotSaved, "the helper's window may still be open, and a later Save still stores the login")
+    #expect(known.allSatisfy { $0.provesNotSaved })
+  }
+
   @Test func `an unreadable save reply is a failure and is never checked against the list`() async throws {
     try setMode(["garble": ["6": true]])
     let before = lines("requests.jsonl").count

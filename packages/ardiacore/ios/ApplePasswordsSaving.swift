@@ -142,7 +142,7 @@ final class ApplePasswordsSaving: NSObject {
         LoginList.shared.forgetFetchedLogins()
         let problem: ApplePasswordsClient.Problem? = if case .failure(let failed) = result { failed } else { nil }
         count(problem == nil ? "saveSent" : "saveFailed", engine: engine, kind: problem?.kind)
-        done(problem == nil)
+        done(problem?.provesNotSaved != true)
       }
     }
   }

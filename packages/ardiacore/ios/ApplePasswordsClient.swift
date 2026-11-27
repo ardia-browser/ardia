@@ -358,6 +358,13 @@ final class ApplePasswordsClient: @unchecked Sendable {
       case .unreadable: "unreadable"
       }
     }
+
+    var provesNotSaved: Bool {
+      switch self {
+      case .timedOut: false
+      case .notConnected, .refused, .unavailable, .unreadable: true
+      }
+    }
   }
 
   static let saveCmd = 6

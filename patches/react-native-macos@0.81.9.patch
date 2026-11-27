@@ -21,6 +21,20 @@ index 72266bd2fa7e3a8a64dc6abc88b1a1a00cf0b614..e25055dfc5bbdc02028ee537fe7e9a8a
        ref={mergedRef}
        style={typeof style === 'function' ? style({pressed}) : style}
        collapsable={false}>
+diff --git a/Libraries/Components/ScrollView/ScrollView.js b/Libraries/Components/ScrollView/ScrollView.js
+index cb141d793057d26ce965e7e423cf7ce078aca299..64ff1bc36d1ac1e14d31c2c41ad650e2671ecdc8 100644
+--- a/Libraries/Components/ScrollView/ScrollView.js
++++ b/Libraries/Components/ScrollView/ScrollView.js
+@@ -1150,6 +1150,9 @@ class ScrollView extends React.Component<ScrollViewProps, ScrollViewState> {
+ 
+   // [macOS
+   _handlePreferredScrollerStyleDidChange = (event: ScrollEvent) => {
++    if (this.props.hasOverlayStyleIndicator === true) {
++      return;
++    }
+     this.setState({contentKey: this.state.contentKey + 1});
+   }; // macOS]
+ 
 diff --git a/Libraries/Components/ScrollView/ScrollViewNativeComponent.js b/Libraries/Components/ScrollView/ScrollViewNativeComponent.js
 index 16d98c235863fd52fb07387efea0e87687558fed..2cd1ef7a1c5241f390b33104d43f3e6a4be951e1 100644
 --- a/Libraries/Components/ScrollView/ScrollViewNativeComponent.js
@@ -4031,7 +4045,7 @@ index 0a4efc1fff0a6e32ea1634ab5f863c211f452409..c75665485afa81574f2f0be0829c1f3a
 +@end
 +#endif // macOS]
 diff --git a/React/Views/ScrollView/RCTScrollView.m b/React/Views/ScrollView/RCTScrollView.m
-index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..5f0aff14856085d411049d93b86536a133eefbd0 100644
+index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..11c865c24b85680f13b5673c93904d5b10395192 100644
 --- a/React/Views/ScrollView/RCTScrollView.m
 +++ b/React/Views/ScrollView/RCTScrollView.m
 @@ -50,6 +50,7 @@ + (BOOL)isCompatibleWithResponsiveScrolling;
@@ -4088,7 +4102,7 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..5f0aff14856085d411049d93b86536a1
  }
  
  #if TARGET_OS_OSX // [macOS
-@@ -740,13 +749,23 @@ - (void)viewDidMoveToWindow
+@@ -740,13 +749,29 @@ - (void)viewDidMoveToWindow
    NSNotificationCenter *defaultCenter = [NSNotificationCenter defaultCenter];
    if ([self window] == nil) {
      // Unregister for bounds change notifications
@@ -4101,6 +4115,9 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..5f0aff14856085d411049d93b86536a1
      [defaultCenter removeObserver:self
                               name:NSPreferredScrollerStyleDidChangeNotification
                             object:nil];
++    [defaultCenter removeObserver:self
++                             name:NSScrollViewWillStartLiveScrollNotification
++                           object:nil];
    } else {
 +    // [Ardia: AppKit calls this again each time the view is re-added in the same window: register once.
 +    [defaultCenter removeObserver:self
@@ -4109,11 +4126,25 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..5f0aff14856085d411049d93b86536a1
 +    [defaultCenter removeObserver:self
 +                             name:NSPreferredScrollerStyleDidChangeNotification
 +                           object:nil];
++    [defaultCenter removeObserver:self
++                             name:NSScrollViewWillStartLiveScrollNotification
++                           object:nil];
 +    // Ardia]
      // Register for bounds change notifications so we can track scrolling
      [defaultCenter addObserver:self
                        selector:@selector(scrollViewDocumentViewBoundsDidChange:)
-@@ -886,8 +905,13 @@ - (void)flashScrollIndicators
+@@ -756,6 +781,10 @@ - (void)viewDidMoveToWindow
+                       selector:@selector(preferredScrollerStyleDidChange:)
+                           name:NSPreferredScrollerStyleDidChangeNotification
+                         object:nil];
++    [defaultCenter addObserver:self
++                      selector:@selector(scrollViewWillStartLiveScroll:)
++                          name:NSScrollViewWillStartLiveScrollNotification
++                        object:_scrollView];
+   }
+ 
+   _notifyDidScroll = ([self window] != nil);
+@@ -886,8 +915,13 @@ - (void)flashScrollIndicators
  #pragma mark - ScrollView delegate
  
  #if TARGET_OS_OSX // [macOS
@@ -4128,6 +4159,21 @@ index eb79ff32614392cb16e6eb3dbec6cc5b037fe27a..5f0aff14856085d411049d93b86536a1
    if (_disableScrollEvents) {
      return;
    }
+@@ -1427,6 +1461,14 @@ - (void)keyUp:(NSEvent *)event {
+   }
+ }
+ 
++- (void)scrollViewWillStartLiveScroll:(__unused NSNotification *)notification
++{
++  NSEventType type = NSApp.currentEvent.type;
++  if (type == NSEventTypeLeftMouseDown || type == NSEventTypeLeftMouseDragged) {
++    RCT_SEND_SCROLL_EVENT(onScrollBeginDrag, (@{@"scroller" : @YES}));
++  }
++}
++
+ - (void)preferredScrollerStyleDidChange:(__unused NSNotification *)notification {
+   RCT_SEND_SCROLL_EVENT(onPreferredScrollerStyleDidChange, (@{ @"preferredScrollerStyle": RCTStringForScrollerStyle([NSScroller preferredScrollerStyle])}));
+ }
 diff --git a/React/Views/ScrollView/RCTScrollViewManager.m b/React/Views/ScrollView/RCTScrollViewManager.m
 index fbd215c2b3d86a76d5519382fd9e03fc4ba30540..ab500b1fa9cef5db91fe00779d620557c183b53e 100644
 --- a/React/Views/ScrollView/RCTScrollViewManager.m

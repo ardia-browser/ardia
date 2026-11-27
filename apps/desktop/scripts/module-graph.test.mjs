@@ -162,7 +162,6 @@ test("production graph uses current Linux adapters and one canonical shared stat
   assert.ok(graph.get(`${browser}state/onboarding/presets.ts`).importedIds.includes(`${browser}lib/platformFeatures.linux.ts`), "onboarding's classic-browser presets read Linux's features, so they leave the tab layout to the sidebar default");
   assert.ok(!graph.has(`${browser}platform/fieldTiming.ts`), "the macOS-only field timing module stays out of the Linux bundle");
   assert.ok(graph.get(`${browser}state/telemetry/journeys.ts`).importedIds.includes(`${desktop}fieldTiming.ts`), "journeys reads the Linux field timing stub");
-  assert.ok(graph.get(`${browser}components/sidebar/SidebarPage.tsx`).importedIds.includes(`${desktop}sidebarScroller.ts`), "the sidebar keeps its scroll bar hidden on Linux, where a web scroll bar would take the rows' width");
   for (const shared of ["state/live/sources.ts", "state/live/net.ts"]) assert.ok(!graph.has(`${browser}${shared}`), `${shared} and its renderer fetch stay out of the Linux bundle`);
   const liveImporters = [
     [`${browser}state/live/engine.ts`, `${desktop}liveSources.ts`],

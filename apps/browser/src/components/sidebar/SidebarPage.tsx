@@ -28,7 +28,7 @@ import { clearlyOverflows, DOCK_SHARE, DOCKED_ROW_PAD, dockedAfter, GLOW_ROOM, p
 import { noteNewTabDocked } from "../../state/telemetry/sidebarScrollCounts";
 import { noteSidebarPlayerStayedAcrossPages } from "../../state/telemetry/mediaCardCounts";
 import { PageRows } from "./PageRows";
-import { SIDEBAR_SCROLLER } from "../../platform/sidebarScroller";
+import { useSidebarScroller } from "./sidebarScroller";
 import { NewTabRow } from "./NewTabRow";
 import { SelectedRowPill, useSelectedRowAway } from "./SelectedRowPill";
 import { withOverscan, type ListViewport } from "./listViewport";
@@ -131,6 +131,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
   useEffect(() => () => forgetRowsScrolled(windowRef.current), []);
   const page = useRef<PageSpot>({ scrollY: 0, viewport: 0, regions: { pinnedGroups: 0, list: 0 }, tilesFixed: true, newTabAtTop: false, edgeLift: 0, shown: false, owns: false, scroller: null }).current;
   const scrollView = useRef<ScrollView | null>(null);
+  const scroller = useSidebarScroller(scrollView);
   useLayoutEffect(() => {
     page.scroller = scrollView.current;
     spots.set(profileId, page);
@@ -223,7 +224,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                             if (page.owns) sharedGeometry.current.laidOut?.();
                           }}
                           style={{ flex: 1, transform: [{ translateY: playerMotion.listUnclip }] }}
-                          {...SIDEBAR_SCROLLER}
+                          {...scroller}
                           scrollEventThrottle={16}
                           onScroll={onScroll}
                           onContentSizeChange={(_, content) => {

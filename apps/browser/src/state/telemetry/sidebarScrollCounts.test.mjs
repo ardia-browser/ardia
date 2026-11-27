@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { noteNewTabDocked, noteSidebarHoverHeld, noteSidebarScrolled, noteSidebarTeardownHeld } = await import("./sidebarScrollCounts.ts");
+const { noteNewTabDocked, noteSidebarHoverHeld, noteSidebarScrolled, noteSidebarScrollerDragged, noteSidebarTeardownHeld } = await import("./sidebarScrollCounts.ts");
 const { takeSidebarResizeCounts } = await import("./sidebarResizeCounts.ts");
 const { setConsentPeriod } = await import("./consentPeriod.ts");
 
@@ -15,8 +15,9 @@ test("a scroll counts once, a steady scroll's update more than 34 ms late counts
   noteNewTabDocked(true);
   noteNewTabDocked(false);
   noteNewTabDocked(true);
-  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 2, sidebar_scroll_stalls: 1, sidebar_scroll_held_hovers: 1, sidebar_scroll_held_teardowns: 1, sidebar_new_tab_docks: 2, sidebar_new_tab_undocks: 1, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
-  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 0, sidebar_scroll_stalls: 0, sidebar_scroll_held_hovers: 0, sidebar_scroll_held_teardowns: 0, sidebar_new_tab_docks: 0, sidebar_new_tab_undocks: 0, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
+  noteSidebarScrollerDragged();
+  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 2, sidebar_scroll_stalls: 1, sidebar_scroll_held_hovers: 1, sidebar_scroll_held_teardowns: 1, sidebar_new_tab_docks: 2, sidebar_new_tab_undocks: 1, sidebar_scroller_drags: 1, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
+  assert.deepEqual(takeSidebarResizeCounts(), { sidebar_resizes: 0, sidebar_scrolls: 0, sidebar_scroll_stalls: 0, sidebar_scroll_held_hovers: 0, sidebar_scroll_held_teardowns: 0, sidebar_new_tab_docks: 0, sidebar_new_tab_undocks: 0, sidebar_scroller_drags: 0, sidebar_folds: 0, sidebar_fold_stutters: 0, sidebar_fold_overruns: 0 });
   setConsentPeriod(false, null);
   noteSidebarTeardownHeld();
   assert.equal(takeSidebarResizeCounts().sidebar_scroll_held_teardowns, 0);

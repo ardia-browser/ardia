@@ -14,7 +14,6 @@ const replacements = new Map([
   ...inputAdapters,
   [here("../browser/src/platform/livePersistence.ts"), here("./src/livePersistence.ts")],
   [here("../browser/src/platform/fieldTiming.ts"), here("./src/fieldTiming.ts")],
-  [here("../browser/src/platform/sidebarScroller.ts"), here("./src/sidebarScroller.ts")],
   [here("../browser/src/platform/pickConfirmation.ts"), here("./src/pickConfirmation.ts")],
   [here("../browser/src/platform/sharedFolders.ts"), here("./src/hostSharedFolders.ts")],
   [here("../../packages/core/src/suggestFetcher.ts"), here("./src/suggestFetcher.ts")],

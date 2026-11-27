@@ -72,3 +72,13 @@ test("B2: a fill naming another site's origin or another field fills nothing, an
   assert.deepEqual(await fillReplies(run), [{ ticket: "3", filled: true }]);
   assert.deepEqual(await seen(), { u: "ada@example.test", p: "fixture-pw-ada-1", events: ["input:u", "change:u", "input:p", "change:p"] }, "the field it was opened for fills");
 });
+
+test("Escape reaches native even before the page hears the Login list is open, so a list shown a moment ago still closes", { skip: CHROMIUM_MISSING, timeout: 30_000 }, async (t) => {
+  const browser = await launchChromium();
+  t.after(() => browser.close());
+  const { page, run } = await openFixture(browser);
+  await page.mouse.click(30, 25);
+  const [{ token }] = await loginFields(run);
+  await page.keyboard.press("Escape");
+  assert.deepEqual(await loginFields(run), [{ event: "key", key: "escape", token }]);
+});

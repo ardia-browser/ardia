@@ -59,11 +59,9 @@ final class LoginList: NSObject {
     let host: String
     let entries: [ApplePasswordsEntry]
     let domains: [String: String]
-    let at: Date
   }
 
   static let accountSeconds: TimeInterval = 300
-  static let fetchedSeconds: TimeInterval = 30
 
   private var shown: Shown?
   private var accounts: [Account] = []
@@ -85,6 +83,7 @@ final class LoginList: NSObject {
     dropdown.onDismiss = { [weak self] in
       self?.sync()
       self?.shown = nil
+      self?.fetched = nil
     }
     return dropdown
   }()
@@ -106,16 +105,14 @@ final class LoginList: NSObject {
       return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked)
     }
     if field.kind == .newPassword { return showStrong(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked) }
-    if field.trigger == .typing, let cache = fetched, cache.target === target, cache.page == page, cache.host == host,
-      Date().timeIntervalSince(cache.at) < Self.fetchedSeconds
-    {
+    if field.trigger == .typing, isShown(for: target), let cache = fetched, cache.target === target, cache.page == page, cache.host == host {
       return listed(.success(cache.entries), domains: cache.domains, target: target, field: field, page: page, host: host, scheme: scheme, pageHost: pageHost)
     }
     ApplePasswordsClient.shared.logins(host: host) { [weak self, weak target] result in
       let entries = (try? result.get()) ?? []
       Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
         guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
-        self.fetched = (try? result.get()).map { _ in Fetched(target: target, page: page, host: host, entries: entries, domains: domains, at: Date()) }
+        self.fetched = (try? result.get()).map { _ in Fetched(target: target, page: page, host: host, entries: entries, domains: domains) }
         self.listed(result, domains: domains, target: target, field: field, page: page, host: host, scheme: scheme, pageHost: pageHost)
       }
     }
@@ -310,6 +307,7 @@ final class LoginList: NSObject {
     dropdown.close()
     sync()
     shown = nil
+    fetched = nil
   }
 
   private func sync() {

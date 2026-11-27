@@ -375,6 +375,30 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E34fresh() {
+      const { fake } = await paired();
+      const added = { user: "anneliese@new.test", password: "fixture-pw-anneliese-20", sites: ["filter.localhost"] };
+      const tab = await open("filter.localhost", "/login-ready");
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        await typedRows(tab, "an", [...FILTERED, FOOTER], "the list for an");
+        await tab.key("escape");
+        assert(!(await tab.noList(800)), "Escape closes the list", null);
+        fake.setLogins((logins) => [...logins, added]);
+        await tab.type("n");
+        const rows = await waitFor("the login just added in Passwords", async () => {
+          const shown = await tab.rows();
+          return shown?.some((r) => r.title === added.user) ? shown : null;
+        }, 5000).catch(async () => {
+          throw new Error(`the list reopened by typing lists a login just added in Passwords: saw ${q(titles((await tab.rows()) ?? []))}`);
+        });
+        return { engine: engineName, rows: titles(rows) };
+      } finally {
+        fake.setLogins((logins) => logins.filter((l) => l.user !== added.user));
+        await tab.close();
+      }
+    },
     async E34() {
       const { app } = await paired();
       const shownCounts = () => app.output().split(COUNTED_SHOWN).length - 1;

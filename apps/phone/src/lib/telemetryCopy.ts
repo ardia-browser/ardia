@@ -42,6 +42,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["color_choice"],
       },
       {
+        text: "With each launch, whether your theme keeps Ardia Light or Dark whatever you chose, while web pages keep your choice. Never which theme",
+        fields: ["theme_fixed_scheme"],
+      },
+      {
         text: "With each launch, the best glass this phone can draw, not what each surface drew: the Liquid Glass lens, frosted glass, clear glass when the lens can’t be drawn, or no blur on Android, the system’s own glass, Classic, or none in Material You",
         fields: ["glass_render"],
       },

@@ -2565,7 +2565,7 @@ Nothing here is done until it has been watched in the screens agent's own simula
 - Start page: the tile press, which dims in place with no scale (main springs a scale with `Motion.press`; the owner's motion rule keeps it plain); the glass of the tiles, bar and capsule; the light-mode veil in the drawn fallback; the bar glyph sizes (estimated from SF sizes 16 and 18).
 - Deck: the `···`, space and Incognito pill menus; the pill appearing and leaving (fade, 0.9 scale spring); the Archive capsule's entrance and exit, its interval picker, and the cards' 26 pt spring down and back, easing to zero as a card opens.
 - Spaces: the deck on a space switch (order reset, scroll to the second-last card, cards fading in, the archive card); the two-step card menu (Move to Space, then the space list); a moved card leaving and the gap closing; the swipe neighbours after a switch; the page changing to the new space's latest tab, or the start page for an empty space; the colour change; Switch to Tab on another space's tab (for a moment it may have no swipe neighbours until the sync event arrives).
-- Appearance: the page's push and pop, the swatch ring; switching Glass and Classic live on open surfaces (the native `Glass` must take a `surface` change at runtime); switching Light and Dark live across windows, sheets, the keyboard, the status bar and pages' `prefers-color-scheme`, and back to System; Match My Mac following a new synced look; Reduce Transparency switched on while open; Night Shade Automatic following the app's scheme.
+- Appearance: the page's push and pop, the swatch ring; switching Glass and Classic live on open surfaces (the native `Glass` must take a `surface` change at runtime); switching Light and Dark live across windows, sheets, the keyboard, the status bar and pages' `prefers-color-scheme`, and back to System; Match My Mac following a new synced look; Reduce Transparency switched on while open; Night Shade Automatic following the pages' scheme; a light custom theme keeping pages on the system's scheme (#3482).
 - Sheets with Remove animations on Android: Settings, Spaces, the archive and the small sheets come up and go at once, as Compose's do (the system scales Compose's durations to zero); with Reduce Motion on iPhone they still move on a 200 ms timing.
 - Page menu: the sheet opening and closing on its white or black fill and its drag; the tiles' in-place press dim (no scale) and glass; row press highlights (instant, where main fades them over 0.2 s); the title feedback crossfade; the print sheet after the menu has gone; the Send to Device menu's place; Site Settings opening as the menu slides away; the accessibility-size layout.
 - Tray field on the way out: from the first frame the tray leaves, its text shows as plain text with no caret (the native field is blurred and dropped), on both phones; check it doesn't jump or change size.
@@ -4409,6 +4409,28 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
   Dark wins. A look whose ink isn't readable keeps the other appearance (`readableDark`, the Mac's 3:1 and 2:1), and
   the page then says "Kept dark (light) so text stays readable". Match System keeps the app's choice. The override
   goes to the window through `overrideColorScheme`.
+- Web pages keep the scheme you chose, not the theme's (#3482): Settings › Light, Dark, System or Match My Mac
+  (`preferredScheme`, before `themedScheme`) goes to the page engine through `overridePageScheme`
+  (`pages.setPageScheme`). On iPhone `WebEngine` sets each `WKWebView`'s `overrideUserInterfaceStyle` itself, from
+  `BrowsingPreferences.pageScheme` (kept in the page defaults, so a page restored before JS starts gets it too) or,
+  for System, from the window scene's trait, which a window override doesn't touch; it watches the scene's
+  `UITraitUserInterfaceStyle`, so switching the phone's appearance updates open pages live. A light theme
+  keeps Ardia light while sites with a dark mode still draw dark in system dark mode, as in Safari, and Night
+  Shade's Automatic follows the pages' scheme. On Android, `DevelopmentWebViewEngine` gives every WebView a
+  `PageThemeContext` (the activity's theme with the page's night mode applied as an override configuration) behind
+  its `MutableContextWrapper`, because WebView reads `prefers-color-scheme` from its own context's `isLightTheme`
+  each time it rebuilds the page's preferences, and the app theme's `AppCompat` night mode would otherwise reach it.
+  System reads `Resources.getSystem()`, which app overrides don't touch. `PageNightBinding` keeps the context the
+  open WebViews are bound to apart from the cache: a change (or a new WebView, which applies first) rebinds every
+  wrapper and dispatches the new configuration to live WebViews, so a tab opened between the phone's switch and the
+  posted `onConfigurationChanged` can't leave older pages on the old night. The pref is `pageScheme` in the site
+  preferences. On iPhone the scene watches are dropped on `UIScene.didDisconnectNotification`.
+- Native reports the pages' resolved light or dark: `setPageScheme` returns it and `pages.dark` follows each change.
+  `usePageDark` keeps it, and `usePageTheme` is `useTheme` resolved for it: under Material You its scheme comes
+  from the palette pair for the page's darkness, not the app's, and Incognito's forced dark stays in `useTheme`. What stands in for the page uses it:
+  the loading card (`PageCover`), the destination face, the loading placeholder, the page's own surface and its
+  obscured colours. So under a theme held Light, a dark page arrives on a dark card with no light step.
+  `app_launched` carries `theme_fixed_scheme` (a theme holds the app away from your choice).
 - Drawing: every look view that takes the look's colours (`ProfileBackdrop`, `DeckBackdrop`, `Frost`, `Glass`)
   also gets `themeLook`. This is the look resolved for the view's light or dark (`themeLookFor`): stops as 0 to 1
   floats with their pad places, intensity, grain, texture, translucency and angle. Native draws the Mac's

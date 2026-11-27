@@ -42,6 +42,23 @@ class DevelopmentWebViewEngine(
     private val roster = LivePageRoster<WebViewPage>(liveLimit)
     private val contextWrappers = WeakHashMap<MutableContextWrapper, Unit>()
     private var hostActivity: Context? = null
+    private var pageContext: PageThemeContext? = null
+    var onPageNightChange: ((Boolean) -> Unit)? = null
+    private val pageNightBinding = PageNightBinding(
+        resolve = ::currentPageContext,
+        nightOf = { it.night },
+        rebind = { context -> for (wrapper in contextWrappers.keys) if (wrapper.baseContext !== context) wrapper.baseContext = context },
+        redraw = { context ->
+            val configuration = context.resources.configuration
+            for (id in roster.liveIds) roster.page(id)?.webViewOrNull?.dispatchConfigurationChanged(configuration)
+        },
+        report = { night -> onPageNightChange?.invoke(night) },
+    )
+    var pageNight: Boolean? = null
+        set(value) {
+            field = value
+            applyPageNight()
+        }
     private val grantedPermissions = HashSet<String>()
     private val privateGrantedPermissions = HashSet<String>()
     private var privateProfileName: String? = null
@@ -119,7 +136,9 @@ class DevelopmentWebViewEngine(
                 }
             }
 
-            override fun onConfigurationChanged(newConfig: Configuration) = Unit
+            override fun onConfigurationChanged(newConfig: Configuration) {
+                mainHandler.post { if (pageNight == null) applyPageNight() }
+            }
 
             @Deprecated("Deprecated in Java")
             override fun onLowMemory() {
@@ -165,14 +184,25 @@ class DevelopmentWebViewEngine(
 
     override fun attach(activity: Context) {
         hostActivity = activity
-        for (wrapper in contextWrappers.keys) wrapper.baseContext = activity
+        applyPageNight()
     }
 
     override fun detach(activity: Context) {
         if (hostActivity !== activity) return
         hostActivity = null
-        for (wrapper in contextWrappers.keys) wrapper.baseContext = appContext
+        applyPageNight()
     }
+
+    val pageIsNight: Boolean get() = pageNight ?: PageThemeContext.systemNight()
+
+    private fun currentPageContext(): PageThemeContext {
+        val host = hostActivity ?: appContext
+        val night = pageIsNight
+        pageContext?.let { if (it.host === host && it.night == night) return it }
+        return PageThemeContext(host, night).also { pageContext = it }
+    }
+
+    fun applyPageNight() = pageNightBinding.apply()
 
     @androidx.annotation.OptIn(WebViewCompat.ExperimentalAsyncStartUp::class)
     override fun warmUp() {
@@ -215,7 +245,7 @@ class DevelopmentWebViewEngine(
     internal fun createWebView(isPrivate: Boolean): WebView {
         if (isPrivate && !separatesPrivatePages) throw PrivatePagesUnavailableException()
         prepareProfiles()
-        val wrapper = MutableContextWrapper(hostActivity ?: appContext)
+        val wrapper = MutableContextWrapper(pageNightBinding.forNewPage())
         contextWrappers[wrapper] = Unit
         val webView = WebView(wrapper)
         if (isPrivate) WebViewCompat.setProfile(webView, privateProfile())

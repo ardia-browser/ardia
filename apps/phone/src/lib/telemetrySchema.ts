@@ -80,6 +80,7 @@ export const EVENT_FIELDS = {
     color_scheme: { kind: "enum", values: ["match_mac", "system", "light", "dark"] },
     material_colors: { kind: "enum", values: ["wallpaper", "profile", "fallback", "not_material"] },
     color_choice: { kind: "enum", values: ["match_mac", "preset", "custom"] },
+    theme_fixed_scheme: { kind: "flag" },
     glass_render: { kind: "enum", values: ["lens", "frost", "clear", "solid", "classic", "native", "none"] },
     previous_session: { kind: "enum", values: PREVIOUS_SESSIONS },
   },

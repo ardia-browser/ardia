@@ -4,7 +4,7 @@ import { notePeekOutsideClosePress } from "../telemetry/usage";
 import { dismissPeek } from "./actions";
 import { pressPeekScrim } from "./gesturePresses";
 import { shownPeek } from "./peek";
-import { pressSwitchedShownPage } from "./pressSwitches";
+import { notePressSwitchesShownPage, pressSwitchedShownPage } from "./pressSwitches";
 
 export const OUTSIDE_CLICK_SLOP = 10;
 const PRIMARY_BUTTON = 0;
@@ -51,4 +51,8 @@ export function cancelPeekOutsidePress(windowId: string) {
 
 export function pressPeekOutsideOnDragRegion(windowId: string) {
   if (shownPeekTab(windowId)) closeShownPeek(windowId);
+}
+
+export function notePressSwitchesProfile(windowId: string, profileId: string) {
+  if (useBrowser.getState().windows[windowId]?.profileId !== profileId) notePressSwitchesShownPage(windowId);
 }

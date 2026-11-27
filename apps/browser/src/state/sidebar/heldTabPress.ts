@@ -189,7 +189,7 @@ export function holdTabPress(windowId: string, tabId: string, press: GestureResp
     return previous;
   }
   settleUnansweredPressOut();
-  if (activeTabId(useBrowser.getState(), windowId) !== tabId) notePressSwitchesShownPage(windowId);
+  if (plainPress(press) && activeTabId(useBrowser.getState(), windowId) !== tabId) notePressSwitchesShownPage(windowId);
   noteRowPressIn(windowId);
   const nativePress = claimPress(tabId, startedAt);
   const wasShown = shownAndAwake(windowId, tabId);

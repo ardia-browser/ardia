@@ -12,9 +12,8 @@ if (!appArg) {
 
 A Peek closes on a click outside its card, through AppKit's event path (#4576): on the sidebar's empty space, on the
 shown tab's own row, on the top tab strip's empty space and on the dim, while a click on another tab's row switches to
-it and keeps the Peek with its tab, and a right-click, a drag of a row or a window drag by the sidebar's empty space
-leaves it open. A synthesized drag doesn't move a window (AppKit's window drag follows the real mouse), so that check
-then expects the press to count as a click. --out writes window snapshots before and after each click and results.json there.`);
+it and keeps the Peek with its tab, a right-click or a drag of a row leaves it open, and a press that starts a window
+drag on the sidebar's empty space closes it on the press, as it closes the Downloads panel. --out writes window snapshots before and after each click and results.json there.`);
   process.exit(2);
 }
 const appPath = resolve(appArg);
@@ -116,17 +115,15 @@ try {
     assert.deepEqual(back, { shown: "a", peek: r.opened }, "the same Peek shows again on tab a");
   });
 
-  await rep.check("a press that moves the window by the sidebar's empty space leaves the Peek open, one that doesn't is a click", async () => {
+  await rep.check("a press on the sidebar's empty space closes the Peek at once, so a window drag started there does too, as it closes Downloads", async () => {
     const opened = await run(`return peekOpen("a");`);
     assert.ok(opened, "a Peek opened");
-    const r = await run(`return ${emptySidebar}.then((at) => { const before = st().windows.w1.frame.slice(0, 2); return snap(${JSON.stringify(shots("window-drag")?.[0] ?? null)})
+    const r = await run(`return ${emptySidebar}.then((at) => snap(${JSON.stringify(shots("window-drag")?.[0] ?? null)})
       .then(() => act("drag:" + at.x + "," + at.y + ";" + (at.x + 40) + "," + (at.y - 40) + ";" + (at.x + 80) + "," + (at.y - 80)))
-      .then(() => settle(1500)).then(() => snap(${JSON.stringify(shots("window-drag")?.[1] ?? null)}))
-      .then(() => ({ at, before, after: st().windows.w1.frame.slice(0, 2), peek: peekOf("a") })); });`);
+      .then(() => settle(1500)).then(() => snap(${JSON.stringify(shots("window-drag")?.[1] ?? null)})).then(() => ({ at, peek: peekOf("a") })));`);
     results["window-drag"] = { opened, ...r };
     rep.log("window-drag", results["window-drag"]);
-    const moved = r.after.some((v, i) => v !== r.before[i]);
-    assert.equal(r.peek, moved ? opened : null, moved ? "the window moved and the Peek closed" : "the window stayed, so the press was a click, and the Peek stayed open");
+    assert.equal(r.peek, null, "the Peek is still open");
   });
 
   await rep.check("a right-click on the sidebar's empty space leaves the Peek open", async () => {

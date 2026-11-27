@@ -117,6 +117,7 @@ final class WindowDragRegion: ExpoView {
 
   private func press(_ event: NSEvent, _ place: PressPlace, releaseFollows: Bool) {
     guard let window else { return }
+    if place == .region { onRegionPress([:]) }
     let leavesWindowBehind = event.modifierFlags.contains(.command)
     var key = NSApp.keyWindow
     while let k = key, k !== window { key = k.parent }
@@ -128,9 +129,7 @@ final class WindowDragRegion: ExpoView {
     }
     ArdiaHost.beginPressLoop("windowDragRegion")
     defer { ArdiaHost.endPressLoop() }
-    let origin = window.frame.origin
     window.performDrag(with: event)
-    if place == .region, window.frame.origin == origin { onRegionPress([:]) }
   }
 
   private func clickOrDrag(_ down: NSEvent, in window: NSWindow) {

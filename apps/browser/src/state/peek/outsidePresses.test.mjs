@@ -11,7 +11,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { forgetPeekStage, notePeekStageState } = await import("./gesturePresses.ts");
 const { shownPeek } = await import("./peek.ts");
-const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
+const { cancelPeekOutsidePress, endPeekOutsidePress, movePeekOutsidePress, notePressSwitchesProfile, OUTSIDE_CLICK_SLOP, pressPeekOutsideOnDragRegion, startPeekOutsidePress } = await import("./outsidePresses.ts");
 const { notePressSwitchesShownPage } = await import("./pressSwitches.ts");
 after(() => client.setSharing(false, "settings"));
 const S = () => useBrowser.getState();
@@ -86,6 +86,14 @@ test("a click on another tab whose switch lands later (a pinned page handed over
   assert.equal((await sentCloses()) - before, 0);
   click(w);
   assert.equal(S().peeks[a], undefined, "the switch mark lasts one press");
+});
+
+test("a profile dot keeps the Peek only when it switches to another space", () => {
+  const { w, a, shown } = windowWithTwoPeeks();
+  click(w, AT, 0, () => notePressSwitchesProfile(w, "another-space"));
+  assert.equal(S().peeks[a]?.tabId, shown, "another space's dot keeps it");
+  click(w, AT, 0, () => notePressSwitchesProfile(w, S().windows[w].profileId));
+  assert.equal(S().peeks[a], undefined, "the current space's dot is a click outside");
 });
 
 test("a switch mark left by a press outside the sidebar never blocks the next outside click", () => {

@@ -603,7 +603,10 @@ Settings › General › Sync. Dia puts sync in Account › Sync, with the secti
     write is placed by asking for the folder's state (the Mac's `ERR_SYNC_CHAIN_MISSING` and the Linux and Windows
     engine's `ERR_SYNC_FOLDER` alike), Recreate's first upload included; when the folder and chain are already back
     by then (a drive that reconnected), the cycle runs again at once instead of reporting anything, and only a second
-    such failure in a row counts as missing. The Mac's read reports a missing chain itself. Linux and Windows read a missing
+    such failure in a row counts as missing. Each outage is one record in `sync.json` (`chainOutage`: the folder, the
+    consent token it was first seen under, and whether it was counted), cleared only by a cycle that finds the chain
+    healthy. It is counted at most once, and only if that token is still the current one, so an outage first seen with
+    sharing off is never counted, and a relaunch neither loses nor repeats the count. The Mac's read reports a missing chain itself. Linux and Windows read a missing
     chain as an empty folder, so an empty read of a scope whose files this computer knew checks the chain at once,
     and an empty read of a scope with no known files has the cycle check the chain once before "updated".
   - **Recreate Folder…** takes the place of Connect Another Device… only when the folder is missing ("Sync folder

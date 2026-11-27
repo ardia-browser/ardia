@@ -222,7 +222,8 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   every record it has, tombstones included, so the store takes the synced state back. The exception is a value
   the adapter can show is newer than the record: a setting changed here (each local choice is stamped from the
   sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
-  still in `pinChoices`, including a tile turned into a row or back; those go out instead (`keepLocal`). On Linux and
+  still in `pinChoices`, including a tile turned into a row or back and a pinned group moved among the rows; those go
+  out instead (`keepLocal`), also when the value is the one in the base while a different synced value waits. On Linux and
   Windows a setting chosen in a window that isn't the sync authority is forwarded to it (`noteSettingsChosen`) and
   stamped there; a forward that fails, as during a handoff between windows, is tried again, and a window that has
   become the authority meanwhile stamps it itself. A rebasing adapter publishes after the cycle's pull,
@@ -343,6 +344,9 @@ Profiles).
   session that still has it lines up again. The scope starts over from what's synced, but keeps its sequence number,
   outbox and journal, so the other devices take this Mac's next batch instead of reading it as one they already have,
   and the records those queued batches hold are put back and applied, so a pin still waiting to be sent comes back too.
+  The new scope also owes a rebase (`rebaseScopes`, saved before its first journal entry), so if a crash leaves the old
+  scope's checkpoint on disk with only the new scope's later changes on top, the old base entries can't be read as pins
+  deleted here.
   When the old id can't be reused (its data is still waiting to be deleted), the link moves to the new id. A link
   retires only when the profile is deleted on this Mac (the store's `deleteProfile` tells the engine; on Linux and
   Windows a window that isn't the sync authority forwards it as `retireProfile`, which the authority applies once the

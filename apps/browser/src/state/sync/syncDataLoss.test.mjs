@@ -815,3 +815,44 @@ test("#1577: a second recovery doesn't take the first one's finished rebase for 
   });
   assert.equal(tombstones(), before, "and deletes no pin");
 });
+
+test("#1577: a profile added back while one of its files downloads, then a crash before a full checkpoint, deletes no pin on restart", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?resetA1");
+  let work;
+  await a.with(() => {
+    work = S().createProfile({ name: "Work" });
+  });
+  await turnOn(a, engineA1);
+  await a.with(async () => {
+    pin(["https://one.example/"], work);
+    await engineA1.syncNow();
+    await engineA1.syncNow();
+  });
+  const workSyncId = await a.with(() => syncIdOf(engineA1, "Work"));
+  const pinFile = [...folder].find(([, f]) => f.scope === `p:${workSyncId}` && f.payload.includes("one.example"))?.[0];
+  assert.ok(pinFile);
+  const engineA2 = await relaunch(a, "resetA2", await withoutProfile(a, work));
+  downloading.add(pinFile);
+  let restored;
+  try {
+    await a.with(async () => {
+      assert.equal(engineA2.addRemoteProfile(workSyncId), work);
+      S().createWindow({ profileId: work });
+      await engineA2.syncNow();
+      restored = S();
+    });
+  } finally {
+    downloading.delete(pinFile);
+  }
+  const before = tombstones();
+  const engineA3 = await relaunch(a, "resetA3", restored);
+  await a.with(async () => {
+    await engineA3.syncNow();
+    await engineA3.syncNow();
+    assert.deepEqual(pinnedUrls(work), ["https://one.example/"], "the pin comes back once its file is read");
+  });
+  assert.equal(tombstones(), before, "no pin is deleted after the restart");
+});

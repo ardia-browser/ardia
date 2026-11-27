@@ -8,6 +8,7 @@ import { APP_SCOPE, type SyncDoc } from "./syncDoc";
 import { pairTheme } from "./syncThemes";
 import { noteTopAppsSharingFromSync, startedBySync } from "../telemetry/topAppsSharing";
 import { noteJoinWait } from "../telemetry/syncSafetyCounts";
+import { oweRebase } from "./rebaseObligations";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 
 const remoteTopApps = (doc: SyncDoc, syncId: string) => topAppsRecord(doc.scopes[APP_SCOPE]?.records[`${PROFILE_TOP_APPS}${syncId}`]?.v);
@@ -119,7 +120,9 @@ export function addLinkedProfile(doc: SyncDoc, syncId: string, record: ProfileRe
   if (missing && missing !== id) delete doc.profiles[missing];
   doc.profiles[id] = { syncId, enabled: true };
   pairTheme(doc.scopes[APP_SCOPE], id, doc.profiles[id]!, record);
-  doc.scopes[profileScope(syncId)] = freshScopeAfter(doc.scopes[profileScope(syncId)], doc.deviceId ?? "");
+  const previous = doc.scopes[profileScope(syncId)];
+  doc.scopes[profileScope(syncId)] = freshScopeAfter(previous, doc.deviceId ?? "");
+  if (previous) oweRebase(doc, [profileScope(syncId)]);
   return id;
 }
 

@@ -1,4 +1,4 @@
-import type { Adapter } from "../../platform/sync";
+import { canonical, type Adapter } from "../../platform/sync";
 import { editStamp } from "./editClock";
 import { settingOf, SYNCED_SETTINGS } from "./settingsAdapter";
 import type { SyncDoc } from "./syncDoc";
@@ -23,13 +23,15 @@ export function withSettingEdits(adapter: Adapter, doc: SyncDoc): Adapter {
       const extraction = await adapter.extract(base, queued, now, known, remote, stamp, baseJson);
       if (!extraction) return extraction;
       const covered = { ...doc.settingEdits };
+      const newerHere = (key: string) => {
+        const edited = doc.settingEdits?.[settingOf(key)];
+        const synced = stamp(key);
+        return !!edited && (synced === undefined || edited > synced);
+      };
       return {
         ...extraction,
-        keepLocal: (key) => {
-          const edited = doc.settingEdits?.[settingOf(key)];
-          const synced = stamp(key);
-          return !!edited && (synced === undefined || edited > synced);
-        },
+        keepLocal: newerHere,
+        republish: (key) => !!extraction.republish?.(key) || (newerHere(key) && !queued(key) && remote(key) !== undefined && canonical(remote(key)) !== baseJson(key)),
         published: (keys) => {
           extraction.published?.(keys);
           const sent = new Set([...keys].map(settingOf));

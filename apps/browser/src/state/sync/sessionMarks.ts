@@ -7,6 +7,7 @@ import { noteMissingProfiles, noteSessionRebase } from "../telemetry/syncSafetyC
 import { dormantLink } from "./profileLinks";
 import type { SyncDoc } from "./syncDoc";
 import type { SessionMarkHooks } from "./syncFiles";
+import { oweRebase, takeUnsavedObligations } from "./rebaseObligations";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 
 function markSessionWith(doc: SyncDoc, mark: string) {
@@ -26,9 +27,7 @@ export function settleLaunchMark(doc: SyncDoc, consent: ConsentToken | null) {
   const unmarked = doc.sessionMark === undefined;
   const stale = unmarked ? holdsBase(doc) : doc.sessionMark !== here;
   if (stale) {
-    const recovery = newId("rb");
-    for (const state of Object.values(doc.scopes)) startRebase(state, recovery);
-    doc.rebaseScopes = { ...doc.rebaseScopes, ...Object.fromEntries(Object.keys(doc.scopes).map((name) => [name, recovery])) };
+    oweRebase(doc, Object.keys(doc.scopes));
     noteSessionRebase(consent);
     if (unmarked) doc.sessionMark = newId("sm");
   } else if (unmarked) {
@@ -57,6 +56,9 @@ function rebaseRecorded(doc: SyncDoc, names: string[]) {
 }
 
 export const sessionMarkHooks = (current: () => SyncDoc): SessionMarkHooks => ({
-  moved: (scopes) => sessionMovedBeforeDurable(current(), scopes),
+  moved: (scopes) => {
+    const owed = takeUnsavedObligations(current());
+    return sessionMovedBeforeDurable(current(), scopes) || owed;
+  },
   saved: (names) => rebaseRecorded(current(), names),
 });

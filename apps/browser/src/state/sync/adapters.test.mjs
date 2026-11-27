@@ -5,7 +5,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { bookmarkRoots } = await import("../bookmarks/bookmarks.ts");
 const { historyOf } = await import("../history/history.ts");
 const model = await import("../browser/model.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, startRebase, syncScope } = await import("@ardia/sync");
 const adapters = { ...(await import("./adapters.ts")), ...(await import("./historyAdapter.ts")) };
 const { useEditClock } = await import("./editClock.ts");
 const { settingsAdapter, settleSettingsFromSavedSync } = await import("./settingsAdapter.ts");
@@ -59,8 +59,9 @@ class Folder {
 }
 
 class Device {
-  constructor(id, folder, { legacy = false, settings } = {}) {
+  constructor(id, folder, { legacy = false, settings, sessionBacked = false } = {}) {
     this.id = id;
+    this.sessionBacked = sessionBacked;
     this.folder = folder;
     this.legacy = legacy;
     this.settings = settings;
@@ -104,8 +105,7 @@ class Device {
       const p = await run(
         profileId === "default" ? "p" : `p:${profileId}`,
         [
-          ...(this.legacy ? [] : [pinnedRowsAdapter(profileId), pinnedOrderAdapter(profileId)]),
-          pinnedArea.pinnedAdapter(profileId),
+          ...[...(this.legacy ? [] : [pinnedRowsAdapter(profileId), pinnedOrderAdapter(profileId)]), pinnedArea.pinnedAdapter(profileId)].map((adapter) => (this.sessionBacked ? { ...adapter, sessionBacked: true } : adapter)),
           adapters.bookmarksAdapter(profileId),
           adapters.historyAdapter(profileId),
           adapters.deviceTabsAdapter(profileId, this.id, () => `${this.id}'s MacBook Pro`),
@@ -2452,4 +2452,26 @@ test("an 8,000-deep pinned group chain is applied with work in line with its dep
   assert.equal(chain.length, depth);
   assert.ok(chain.every((x) => x.tabIds.length === 1), "every group in the chain holds the leaf");
   assert.ok(steps < 100 * depth, `${steps} set and list insertions`);
+});
+
+test("a rebase keeps a pinned group moved here and not sent yet, since its order choice is newer than the synced one", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder, { sessionBacked: true });
+  const b = new Device("devB", folder, { sessionBacked: true });
+  a.with(() => {
+    const w = S().createWindow({ url: "https://home.example/" });
+    const row = S().newTab(w, { url: "https://row.example/", background: true });
+    S().pinTabs([row], true, true);
+    const member = S().newTab(w, { url: "https://member.example/", background: true });
+    S().groupTabs([member], { pinned: true, name: "Group" });
+  });
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  assert.deepEqual(pinnedAreaOf(b), ["row:row", "Group:member"]);
+  moveGroupAbove(b, "https://row.example/");
+  assert.deepEqual(pinnedAreaOf(b), ["Group:member", "row:row"]);
+  startRebase(b.scopes.p);
+  await syncAll([b, a]);
+  assert.deepEqual(pinnedAreaOf(b), ["Group:member", "row:row"], "the rebase keeps the move made here");
+  assert.deepEqual(pinnedAreaOf(a), ["Group:member", "row:row"], "and it reaches the other Mac");
 });

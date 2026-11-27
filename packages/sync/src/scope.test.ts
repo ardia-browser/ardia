@@ -947,3 +947,22 @@ test("while a download holds a rebase back, a pulled change doesn't overwrite a 
   assert.equal(a.store.get("x:1"), "mine, newer", "once nothing is held, the kept value goes out");
   assert.equal(b.store.get("x:2"), "two");
 });
+
+test("a rebase publishes a value the adapter keeps and republishes even when it equals the base, instead of applying the older record", async () => {
+  const folder = new Folder();
+  const a = new Device("a", folder);
+  a.store.set("x:1", "one");
+  await a.sync();
+  const b = new SessionDevice("b", folder);
+  await b.sync();
+  a.store.set("x:1", "two");
+  await a.sync();
+  const own = b.adapters();
+  const kept = (key: string) => key === "x:1";
+  b.adapters = () => own.map((adapter) => (adapter.prefix === "x:" ? { ...adapter, extract: async (...args) => ({ ...(await adapter.extract(...args))!, keepLocal: kept, republish: kept }) } : adapter));
+  startRebase(b.state);
+  await b.sync();
+  assert.equal(b.store.get("x:1"), "one", "the value chosen here, the same as the base, stays");
+  await a.sync();
+  assert.equal(a.store.get("x:1"), "one", "and goes out over the older record");
+});

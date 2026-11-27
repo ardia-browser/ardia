@@ -177,3 +177,25 @@ test("a published batch drops only the setting edit it carried, not one made whi
   extraction.published(new Set(["set:pageFrame", "set:sidebarSide"]));
   assert.deepEqual(doc.settingEdits, { pageFrame: "0c.0000.dev" }, "the newer pageFrame choice stays; the sent sidebarSide one goes");
 });
+
+test("a protected setting choice that equals the base is republished while a different synced value waits, and only then", async () => {
+  const { withSettingEdits } = await import("./settingEdits.ts");
+  const doc = { enabled: true, settingEdits: { pageFrame: "0c.0000.dev" } };
+  const inner = { prefix: "set:", extract: async () => ({ values: new Map([["set:pageFrame", { v: 10 }]]) }), apply: () => true };
+  const records = { "set:pageFrame": { v: { v: 11 }, h: "0b.0000.other" } };
+  const extract = (overrides = {}) =>
+    withSettingEdits(inner, { ...doc, ...overrides }).extract(
+      () => ({ v: 10 }),
+      () => false,
+      0,
+      (key) => key in records,
+      (key) => records[key]?.v,
+      (key) => records[key]?.h,
+      () => '{"v":10}',
+    );
+  assert.equal((await extract()).republish("set:pageFrame"), true, "the newer choice goes out though it matches the base");
+  records["set:pageFrame"] = { v: { v: 10 }, h: "0b.0000.other" };
+  assert.equal((await extract()).republish("set:pageFrame"), false, "nothing to send when the record already holds it");
+  records["set:pageFrame"] = { v: { v: 11 }, h: "0d.0000.other" };
+  assert.equal((await extract()).republish("set:pageFrame"), false, "or when the synced value is the newer one");
+});

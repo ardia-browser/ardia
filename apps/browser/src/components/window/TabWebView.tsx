@@ -35,6 +35,7 @@ import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
+import { pairFromLoginList } from "../../state/site/loginListPairing";
 import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
 import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { hoverStatus } from "../../state/tabs/hoverStatus";
@@ -374,6 +375,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       onFieldProviderOpened={(opened: FieldProviderOpened) => fieldProviderOpened(tabId, opened)}
       onFieldProviderHint={(hint: FieldProviderHint) => fieldProviderHint(tabId, hint)}
       onVerificationCodeFound={(found: VerificationCodeFound) => verificationCodeFound(tabId, found)}
+      onApplePasswordsConnect={() => pairFromLoginList(tabId)}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {
         endPageDocument(tabId, documentReporter);

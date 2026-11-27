@@ -27,6 +27,7 @@ const titles = (rows) => rows.map((r) => r.title);
 export function loginListChecks({ paired, sites, engine: engineName = "webkit" }) {
   const applePasswords = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().state", { timeout: 20_000 });
   const pairingStep = async (app) => app.eval("return ac.applePasswords.useApplePasswords.getState().pairing?.step ?? null", { timeout: 20_000 });
+  const prompting = async (app, tabId) => app.eval(`return ac.pageState.getState().pages[${q(tabId)}]?.applePasswordsPairing === true`, { timeout: 20_000 });
   const endPairing = async (app, fake) => {
     fake.endPairing();
     await waitFor("Pairing ended", async () => ((await applePasswords(app)) === "notConnected" ? true : null), 10_000);
@@ -195,7 +196,9 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
       try {
         seen.ended = titles(await connectRows(tab));
         await tab.pick(CONNECT);
+        await waitFor("the Pairing prompt over the page", async () => ((await prompting(app, tab.id)) ? true : null), 10_000);
         await pairAgain(app, fake);
+        await waitFor("the Pairing prompt gone", async () => ((await prompting(app, tab.id)) ? null : true), 10_000);
         const back = await tab.waitRows("the logins after Pairing");
         assert(q(titles(back.slice(0, -1))) === q(usersFor("example.localhost")), "Pairing there brings the site's logins back", back);
         seen.paired = titles(back);

@@ -36,6 +36,7 @@ export type PageState = {
   autofillPrompt: AutofillPrompt | null;
   externalApp: ExternalAppRequest | null;
   verificationCode: VerificationCodeOffer | null;
+  applePasswordsPairing: boolean;
   mediaAccess: MediaAccess | null;
   wasNewTab: boolean;
   backToNewTab: boolean;
@@ -58,6 +59,7 @@ const IDLE_PAGE: PageState = {
   autofillPrompt: null,
   externalApp: null,
   verificationCode: null,
+  applePasswordsPairing: false,
   mediaAccess: null,
   wasNewTab: false,
   backToNewTab: false,

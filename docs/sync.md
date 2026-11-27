@@ -202,11 +202,14 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   files carry a mark (`syncMark` in the session, `sessionMark` in `sync.json`). It is a revision, not a
   launch id: a cycle that writes the base of a session-backed adapter (a pin applied or sent, a setting, a
   profile look) moves it on, in `sync.json` before that cycle's base is journalled, and in the store, so the
-  session saved next carries it (not while quitting, so the session saved at quit still matches). A backup or
+  session saved next carries it (not while quitting, so the session saved at quit still matches). It is counted
+  from the writes themselves, so a cycle that fails after changing the base (a batch whose write failed) moves it
+  on too. A backup or
   an older build's file from earlier in the same launch therefore holds an older mark too. When the marks
-  differ at launch, every scope starts a rebase (`startRebase`), the sealed state holding the rebase flags is
-  saved, and only once that save landed are the marks made equal again; a crash in between rebases again on
-  the next launch, and a rebase already under way when the app stops carries on from its saved flags, though
+  differ at launch, every scope starts a rebase (`startRebase`), `rebaseUnsaved` is written to `sync.json`, the
+  sealed state holding the rebase flags is saved, and only once that save landed is the flag cleared and are the
+  marks made equal again; while the save keeps failing no cycle aligns them, and a launch that finds the flag
+  rebases again, and a rebase already under way when the app stops carries on from its saved flags, though
   the marks then match. While an adapter that reads the
   session (`sessionBacked`: the pinned area, settings and the profile, theme, Top Apps and All Open Tabs
   records) rebases, it publishes only keys no device has a record of, and no deletions; the cycle applies
@@ -215,7 +218,8 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   sync clock into `settingEdits` in `sync.json` at once, and dropped when its batch is on disk) or a pin placement
   still in `pinChoices`; those go out instead (`keepLocal`). A rebasing adapter publishes after the cycle's pull,
   and while anything in the scope is still downloading or damaged it neither publishes nor applies its rebase, so a
-  record on its way can't be outrun by an older session value. The rebase ends for an adapter once it applied
+  record on its way can't be outrun by an older session value. An adapter told it's rebasing takes the synced
+  value even where it would otherwise keep a local one that differs from its base (a pinned group tab's home). The rebase ends for an adapter once it applied
   without deferring and with nothing held back. The scope keeps the list of adapters that finished, so one that
   isn't running yet (Settings turned off in What Syncs, pinned tabs off) still rebases on its first cycle when it
   comes back. Bookmarks, history, passwords and extensions live in Chrome's own files and aren't affected; open
@@ -324,11 +328,13 @@ Profiles).
   than the one sync last saw, or a session restored from a backup, can lack profiles `sync.json` still links. The link
   stays, its scope is left alone, the profile is offered as Add to This Mac, and adding it gives it back its old id, so a
   session that still has it lines up again. The scope starts over from what's synced, but keeps its sequence number,
-  outbox and journal, so the other devices take this Mac's next batch instead of reading it as one they already have.
+  outbox and journal, so the other devices take this Mac's next batch instead of reading it as one they already have,
+  and the records those queued batches hold are put back and applied, so a pin still waiting to be sent comes back too.
   When the old id can't be reused (its data is still waiting to be deleted), the link moves to the new id. A link
   retires only when the profile is deleted on this Mac (the store's `deleteProfile` tells the engine; on Linux and
   Windows a window that isn't the sync authority forwards it as `retireProfile`, which the authority applies once the
-  deletion reaches its own store). Before, a missing profile was taken out of sync at once and came back under a new
+  deletion reaches its own store; a forward no authority answers is tried again every 15 s for 10 minutes, and a window
+  that has become the authority meanwhile retires the profile itself). Before, a missing profile was taken out of sync at once and came back under a new
   sync id, a second copy on every Mac.
 - A synced profile this Mac lacks is offered as "Add to This Mac", with "Add All" when there are several.
 - Profiles that share another's data (Dia's "Share data with another profile") sync their tabs;

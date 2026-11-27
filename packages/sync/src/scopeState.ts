@@ -87,6 +87,7 @@ export type ApplyRecords = {
   horizon: number;
   joined: boolean;
   held(): boolean;
+  rebasing?: boolean;
   landed(key: string): void;
   defer(key: string): void;
 };

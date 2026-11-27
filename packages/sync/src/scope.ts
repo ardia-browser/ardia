@@ -89,6 +89,20 @@ export const startRebase = (state: ScopeState) => void (state.rebase = []);
 
 export const rebasing = (state: ScopeState, adapter: Adapter) => !!state.rebase && !!adapter.sessionBacked && !state.rebase.includes(adapter.prefix);
 
+const sessionWritesAtStart = new WeakMap<ScopeState, { prefixes: string[]; before: number[] }>();
+
+function sessionBaseWritesSinceStart(state: ScopeState): number {
+  const start = sessionWritesAtStart.get(state);
+  return start ? start.prefixes.reduce((n, prefix, i) => n + baseWritesUnder(state, prefix) - start.before[i]!, 0) : 0;
+}
+
+export function takeSessionBaseWrites(state: ScopeState): number {
+  const writes = sessionBaseWritesSinceStart(state);
+  const start = sessionWritesAtStart.get(state);
+  if (start) start.before = start.prefixes.map((prefix) => baseWritesUnder(state, prefix));
+  return writes;
+}
+
 const publishesLate = (state: ScopeState, adapter: Adapter) => !!adapter.publishAfterPull || rebasing(state, adapter);
 
 function noteRebased(state: ScopeState, adapter: Adapter) {
@@ -252,6 +266,7 @@ async function applyAdapter(state: ScopeState, adapter: Adapter, keys: Set<strin
       horizon,
       joined: applyAs[adapter.prefix] === "joined",
       held,
+      rebasing: rebasing(state, adapter),
       landed: (key: string) => void landed.add(key),
       defer: (key: string) => void (mine.has(key) && deferred.add(key)),
     };
@@ -316,7 +331,7 @@ export async function syncScope(args: {
   startApplying(state, now(), options);
   await settleOwedRetirements(state, options);
   const sessionPrefixes = adapters.filter((a) => a.sessionBacked).map((a) => a.prefix);
-  const sessionWritesBefore = sessionPrefixes.map((prefix) => baseWritesUnder(state, prefix));
+  sessionWritesAtStart.set(state, { prefixes: sessionPrefixes, before: sessionPrefixes.map((prefix) => baseWritesUnder(state, prefix)) });
   let published = 0;
   const stamps = new Map<Adapter, Stamps>();
   for (const adapter of adapters) {
@@ -366,6 +381,6 @@ export async function syncScope(args: {
   if (journalFailed) throw new Error("[sync] couldn't journal what this cycle was about to apply");
   const compacted = await compact(state, transport, scope, device, now(), options);
   const snapshotBytes = compacted ? (newestSnapshot(Object.entries(state.files), device)?.[1].b ?? 0) : 0;
-  const sessionBaseWrites = sessionPrefixes.reduce((n, prefix, i) => n + baseWritesUnder(state, prefix) - sessionWritesBefore[i]!, 0);
+  const sessionBaseWrites = sessionBaseWritesSinceStart(state);
   return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes, reapplied: takeReapplied(state), sessionBaseWrites };
 }

@@ -177,6 +177,7 @@ __define("packages/sync/src/scope.ts", function (exports, __require) {
   __export(exports, "ingestSnapshot", () => ingestSnapshot);
   __export(exports, "startRebase", () => startRebase);
   __export(exports, "rebasing", () => rebasing);
+  __export(exports, "takeSessionBaseWrites", () => takeSessionBaseWrites);
   __export(exports, "flush", () => flush);
   __export(exports, "restoreJournal", () => restoreJournal);
   __export(exports, "writtenSeq", () => writtenSeq);
@@ -276,6 +277,20 @@ function noteExtracted(state            , adapter         , source              
 const startRebase = (state            ) => void (state.rebase = []);
 
 const rebasing = (state            , adapter         ) => !!state.rebase && !!adapter.sessionBacked && !state.rebase.includes(adapter.prefix);
+
+const sessionWritesAtStart = new WeakMap                                                      ();
+
+function sessionBaseWritesSinceStart(state            )         {
+  const start = sessionWritesAtStart.get(state);
+  return start ? start.prefixes.reduce((n, prefix, i) => n + baseWritesUnder(state, prefix) - start.before[i] , 0) : 0;
+}
+
+function takeSessionBaseWrites(state            )         {
+  const writes = sessionBaseWritesSinceStart(state);
+  const start = sessionWritesAtStart.get(state);
+  if (start) start.before = start.prefixes.map((prefix) => baseWritesUnder(state, prefix));
+  return writes;
+}
 
 const publishesLate = (state            , adapter         ) => !!adapter.publishAfterPull || rebasing(state, adapter);
 
@@ -440,6 +455,7 @@ async function applyAdapter(state            , adapter         , keys           
       horizon,
       joined: applyAs[adapter.prefix] === "joined",
       held,
+      rebasing: rebasing(state, adapter),
       landed: (key        ) => void landed.add(key),
       defer: (key        ) => void (mine.has(key) && deferred.add(key)),
     };
@@ -504,7 +520,7 @@ async function syncScope(args
   startApplying(state, now(), options);
   await settleOwedRetirements(state, options);
   const sessionPrefixes = adapters.filter((a) => a.sessionBacked).map((a) => a.prefix);
-  const sessionWritesBefore = sessionPrefixes.map((prefix) => baseWritesUnder(state, prefix));
+  sessionWritesAtStart.set(state, { prefixes: sessionPrefixes, before: sessionPrefixes.map((prefix) => baseWritesUnder(state, prefix)) });
   let published = 0;
   const stamps = new Map                 ();
   for (const adapter of adapters) {
@@ -554,7 +570,7 @@ async function syncScope(args
   if (journalFailed) throw new Error("[sync] couldn't journal what this cycle was about to apply");
   const compacted = await compact(state, transport, scope, device, now(), options);
   const snapshotBytes = compacted ? (newestSnapshot(Object.entries(state.files), device)?.[1].b ?? 0) : 0;
-  const sessionBaseWrites = sessionPrefixes.reduce((n, prefix, i) => n + baseWritesUnder(state, prefix) - sessionWritesBefore[i] , 0);
+  const sessionBaseWrites = sessionBaseWritesSinceStart(state);
   return { published, changed: changed.size, pending: state.pending, compacted, snapshotBytes, reapplied: takeReapplied(state), sessionBaseWrites };
 }
 
@@ -1266,6 +1282,7 @@ const emptyScope = ()             => ({
                   
                   
                   
+                     
                             
                            
   

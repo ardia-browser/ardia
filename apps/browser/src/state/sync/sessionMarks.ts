@@ -1,4 +1,4 @@
-import { startRebase } from "../../platform/sync";
+import { startRebase, takeSessionBaseWrites, type ScopeState } from "../../platform/sync";
 import { useBrowser } from "../browser/store";
 import { newId } from "../browser/model";
 import { isQuitting } from "../app/quit";
@@ -16,6 +16,13 @@ function advanceSessionMark(doc: SyncDoc, save: () => void) {
   save();
 }
 
+async function rebaseSaved(doc: SyncDoc, checkpoint: () => Promise<boolean>): Promise<boolean> {
+  if (!doc.rebaseUnsaved) return true;
+  if (!(await checkpoint())) return false;
+  delete doc.rebaseUnsaved;
+  return true;
+}
+
 export function markNewSync(doc: SyncDoc) {
   const mark = useBrowser.getState().syncMark || newId("sm");
   doc.sessionMark = mark;
@@ -24,19 +31,18 @@ export function markNewSync(doc: SyncDoc) {
 
 export async function settleLaunchMark(doc: SyncDoc, consent: ConsentToken | null, { checkpoint, save }: MarkFiles) {
   noteMissingProfiles(consent, Object.keys(doc.profiles).filter((id) => dormantLink(doc, id)).length);
-  const stale = doc.sessionMark !== undefined && doc.sessionMark !== useBrowser.getState().syncMark;
+  const stale = !!doc.rebaseUnsaved || (doc.sessionMark !== undefined && doc.sessionMark !== useBrowser.getState().syncMark);
   if (!stale && doc.sessionMark !== undefined) return;
   if (stale) {
     for (const state of Object.values(doc.scopes)) startRebase(state);
     noteSessionRebase(consent);
-    if (!(await checkpoint())) return;
+    doc.rebaseUnsaved = true;
+    save();
   }
-  advanceSessionMark(doc, save);
+  if (await rebaseSaved(doc, checkpoint)) advanceSessionMark(doc, save);
 }
 
-export const markedAfter =
-  (doc: SyncDoc, save: () => void) =>
-  <Result extends { sessionBaseWrites: number }>(result: Result): Result => {
-    if (result.sessionBaseWrites > 0 && !isQuitting()) advanceSessionMark(doc, save);
-    return result;
-  };
+export async function settledAfterMark(doc: SyncDoc, files: MarkFiles, state: ScopeState, settle: () => Promise<void>) {
+  if (takeSessionBaseWrites(state) > 0 && !isQuitting() && (await rebaseSaved(doc, files.checkpoint))) advanceSessionMark(doc, files.save);
+  return settle();
+}

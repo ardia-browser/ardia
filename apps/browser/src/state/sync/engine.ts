@@ -12,7 +12,7 @@ import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
 import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
 import { summarize } from "./syncSummary";
-import { markedAfter, markNewSync, settleLaunchMark } from "./sessionMarks";
+import { markNewSync, settledAfterMark, settleLaunchMark } from "./sessionMarks";
 import { noteChainStatus, noteCycle, timedCycle } from "./cycleWork";
 import { exposeDevSync } from "./devSync";
 import { folderScopes, moveChain, noteFolderMove, noteTurnOn, type FolderMoveResult, type TurnOnFolder } from "./folderMove";
@@ -131,7 +131,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
     if (freezeRemovals(doc)) save();
     const appSettled = watchScope(APP_SCOPE, app, clock);
     try {
-      noteCycle(consent, markedAfter(doc, save)(await syncScope({
+      noteCycle(consent, await syncScope({
         scope: APP_SCOPE,
         state: app,
         transport,
@@ -139,9 +139,9 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
         clock,
         device,
         options: { persist: persistJournal(APP_SCOPE), persistApplying: persistApplying(APP_SCOPE), holdApply: isQuitting },
-      })));
+      }));
     } finally {
-      await appSettled();
+      await settledAfterMark(doc, { checkpoint, save }, app, appSettled);
     }
     settleRemovals(doc, app);
     if (app.joined && readyToPair(doc, app) && !isQuitting()) linkProfiles(doc, app);
@@ -156,7 +156,7 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
       const state = (doc.scopes[scope] ??= emptyScope());
       const settled = watchScope(scope, state, clock);
       try {
-        noteCycle(consent, markedAfter(doc, save)(await syncScope({
+        noteCycle(consent, await syncScope({
           scope,
           state,
           transport,
@@ -164,9 +164,9 @@ async function cycleOnce(native: NonNullable<typeof SyncNative>, folder: string,
           clock,
           device,
           options: { expired: historyExpired, persist: persistJournal(scope), persistApplying: persistApplying(scope), holdApply: isQuitting },
-        })));
+        }));
       } finally {
-        await settled();
+        await settledAfterMark(doc, { checkpoint, save }, state, settled);
       }
       pending += state.pending;
       if (!retire && !isQuitting() && typeSynced(doc, "extensions", profileId) && profileOpened(engineProfile(useBrowser.getState(), profileId))) await extensionsOf(profileId).reconcile(visible(state, EXTENSION_PREFIX), Date.now(), isQuitting);

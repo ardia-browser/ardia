@@ -45,7 +45,7 @@ test("a profile deleted in a window that isn't the sync authority is forwarded; 
   const home = S().createProfile({ name: "Home" });
   let leading = false;
   const sent = [];
-  const stop = forwardProfileDeletions(() => leading, (id) => sent.push(id));
+  const stop = forwardProfileDeletions(() => leading, async (id) => void sent.push(id), () => assert.fail("nothing is retired here while another window leads"));
   try {
     S().deleteProfile(work);
     leading = true;
@@ -54,6 +54,46 @@ test("a profile deleted in a window that isn't the sync authority is forwarded; 
     stop();
   }
   assert.deepEqual(sent, [work]);
+});
+
+test("a deletion no authority answered is retried until one does, or retired here once this window leads", async () => {
+  S().hydrate({});
+  const work = S().createProfile({ name: "Work" });
+  const home = S().createProfile({ name: "Home" });
+  let leading = false;
+  let answering = false;
+  const pending = [];
+  const timers = { set: (done) => (pending.push(done), pending.length), clear: () => {} };
+  const delivered = [];
+  const retiredHere = [];
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  const stop = forwardProfileDeletions(
+    () => leading,
+    async (id) => {
+      if (!answering) throw new Error("no authority answered");
+      delivered.push(id);
+    },
+    (id) => retiredHere.push(id),
+    timers,
+  );
+  try {
+    S().deleteProfile(work);
+    await tick();
+    assert.deepEqual(delivered, []);
+    assert.equal(pending.length, 1, "a retry is scheduled");
+    answering = true;
+    pending.shift()();
+    await tick();
+    assert.deepEqual(delivered, [work], "the retry reaches the authority once it answers");
+    answering = false;
+    S().deleteProfile(home);
+    await tick();
+    leading = true;
+    pending.shift()();
+    assert.deepEqual(retiredHere, [home], "a window that became the authority meanwhile retires it itself");
+  } finally {
+    stop();
+  }
 });
 
 test("the authority retires a forwarded profile only once the deletion reaches its store, and gives up on one that never leaves", async () => {

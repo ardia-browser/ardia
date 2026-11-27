@@ -8,6 +8,7 @@ globalThis.__DEV__ = false;
 
 const folder = new Map();
 const downloading = new Set();
+const failing = { writes: 0, stateSeals: false };
 let ids = 0;
 globalThis.acTestNativeModules = {
   ArdiaSync: {
@@ -20,6 +21,7 @@ globalThis.acTestNativeModules = {
     forget: async () => {},
     chainStatus: async () => "ok",
     write: async (_folder, scope, payload) => {
+      if (failing.writes > 0 && failing.writes--) throw new Error("The sync folder went away mid-write");
       const id = `f${folder.size + 1}`;
       folder.set(id, { scope, payload });
       return id;
@@ -31,7 +33,10 @@ globalThis.acTestNativeModules = {
       return { files, pending: unknown.filter((id) => downloading.has(id)), damaged: [], present: here.map(([id]) => id) };
     },
     remove: async (_folder, _scope, list) => list.forEach((id) => folder.delete(id)),
-    sealLocal: async (text) => `sealed:${text}`,
+    sealLocal: async (text) => {
+      if (failing.stateSeals && text.startsWith('{"covers":')) throw new Error("disk full");
+      return `sealed:${text}`;
+    },
     openLocal: async (sealed) => (sealed.startsWith("sealed:") ? sealed.slice(7) : null),
     readPasswords: async () => null,
   },
@@ -469,4 +474,121 @@ test("#1945: a dormant link left waiting for the other devices doesn't keep Sett
   const here = S().createProfile({ name: "Here" });
   const active = { ...doc, profiles: { [here]: { syncId: "w", enabled: true } } };
   assert.equal(firstSyncRunning(active), true, "a profile that's here and still waiting does count");
+});
+
+test("#1577: a cycle that fails after sending a pin still moves the mark on, so a backup without that pin gets a rebase", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const b = new Mac();
+  const engineA1 = await import("./engine.ts?failA1");
+  const engineB = await import("./engine.ts?failB");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  await b.with(() => S().createWindow({}));
+  await join(b, engineB);
+  await b.with(async () => {
+    await engineB.syncNow();
+    await engineB.syncNow();
+  });
+  const backup = a.browser;
+  await a.with(async () => {
+    pin(["https://two.example/"]);
+    failing.writes = 1;
+    await engineA1.syncNow();
+    assert.equal(engineA1.useSync.getState().status, "stalled", "the batch with the pin couldn't be written");
+  });
+  failing.writes = 0;
+  assert.notEqual(JSON.parse(a.docs.get("sync.json")).sessionMark, backup.syncMark, "the mark moved on though the cycle failed");
+  const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
+  const engineA2 = await relaunch(a, "failA2", backup);
+  await a.with(async () => {
+    await engineA2.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"], "the pin the backup lacked comes back");
+  });
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "and isn't deleted for the other Mac");
+  await b.with(async () => {
+    await engineB.syncNow();
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://two.example/"]);
+  });
+});
+
+test("#1577: while the rebase's checkpoint can't be saved, no cycle makes the marks match, so the next launch rebases again", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?sealA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const older = a.browser;
+  const engineA2 = await relaunch(a, "sealA2");
+  await a.with(async () => {
+    pin(["https://two.example/"]);
+    await engineA2.syncNow();
+    await engineA2.syncNow();
+  });
+  failing.stateSeals = true;
+  try {
+    const engineA3 = await relaunch(a, "sealA3", older);
+    await a.with(async () => {
+      await engineA3.syncNow();
+      pin(["https://three.example/"]);
+      await engineA3.syncNow();
+    });
+    const saved = JSON.parse(a.docs.get("sync.json"));
+    assert.equal(saved.rebaseUnsaved, true, "the rebase is still owed");
+    assert.notEqual(saved.sessionMark, a.browser.syncMark, "and the marks stay apart");
+  } finally {
+    failing.stateSeals = false;
+  }
+  const tombstonesBefore = published("pin:t:").filter((op) => op.v === null).length;
+  const engineA4 = await relaunch(a, "sealA4", older);
+  await a.with(async () => {
+    await engineA4.syncNow();
+    assert.ok(pinnedUrls().includes("https://two.example/"), "the next launch rebases again");
+  });
+  assert.equal(published("pin:t:").filter((op) => op.v === null).length, tombstonesBefore, "and deletes nothing");
+  assert.equal(JSON.parse(a.docs.get("sync.json")).rebaseUnsaved, undefined, "the owed rebase clears once its checkpoint lands");
+});
+
+test("#1577: a pin still waiting to be sent when its profile went missing comes back with the profile and reaches the other Mac", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const b = new Mac();
+  const engineA1 = await import("./engine.ts?queuedA1");
+  const engineB = await import("./engine.ts?queuedB");
+  let work;
+  await a.with(() => {
+    work = S().createProfile({ name: "Work" });
+  });
+  await turnOn(a, engineA1);
+  await a.with(async () => {
+    pin(["https://one.example/"], work);
+    await engineA1.syncNow();
+    await engineA1.syncNow();
+  });
+  const workSyncId = await a.with(() => syncIdOf(engineA1, "Work"));
+  await a.with(async () => {
+    pin(["https://queued.example/"], work);
+    failing.writes = 1;
+    await engineA1.syncNow();
+  });
+  failing.writes = 0;
+  const engineA2 = await relaunch(a, "queuedA2", await withoutProfile(a, work));
+  await a.with(async () => {
+    assert.equal(engineA2.addRemoteProfile(workSyncId), work);
+    S().createWindow({ profileId: work });
+    await engineA2.syncNow();
+    await engineA2.syncNow();
+    assert.deepEqual(pinnedUrls(work), ["https://one.example/", "https://queued.example/"], "the queued pin is back here too");
+  });
+  await join(b, engineB);
+  await b.with(async () => {
+    const workOnB = engineB.addRemoteProfile(workSyncId);
+    S().createWindow({ profileId: workOnB });
+    await engineB.syncNow();
+    await engineB.syncNow();
+    assert.deepEqual(pinnedUrls(workOnB), ["https://one.example/", "https://queued.example/"]);
+  });
 });

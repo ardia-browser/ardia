@@ -119,12 +119,15 @@ export function addLinkedProfile(doc: SyncDoc, syncId: string, record: ProfileRe
   if (missing && missing !== id) delete doc.profiles[missing];
   doc.profiles[id] = { syncId, enabled: true };
   pairTheme(doc.scopes[APP_SCOPE], id, doc.profiles[id]!, record);
-  doc.scopes[profileScope(syncId)] = freshScopeAfter(doc.scopes[profileScope(syncId)]);
+  doc.scopes[profileScope(syncId)] = freshScopeAfter(doc.scopes[profileScope(syncId)], doc.deviceId ?? "");
   return id;
 }
 
-function freshScopeAfter(before: ScopeState | undefined): ScopeState {
+function freshScopeAfter(before: ScopeState | undefined, device: string): ScopeState {
   const fresh: ScopeState = { ...emptyScope(), awaitRemote: true };
   if (!before) return fresh;
-  return { ...fresh, seq: before.seq, outbox: before.outbox, ...(before.journal?.length ? { journal: before.journal } : {}) };
+  const records: ScopeState["records"] = {};
+  const queued = [...(before.journal ?? []).map((file) => ({ ops: file.ops, o: [file.device, file.seq] as [string, number] })), { ops: before.outbox, o: [device, before.seq + 1] as [string, number] }];
+  for (const { ops, o } of queued) for (const op of ops) if (!records[op.k] || records[op.k]!.h < op.h) records[op.k] = { h: op.h, v: op.v, o };
+  return { ...fresh, seq: before.seq, outbox: before.outbox, records, unapplied: Object.keys(records), ...(before.journal?.length ? { journal: before.journal } : {}) };
 }

@@ -8,7 +8,7 @@ const { webviews } = await import("../../platform/webviews.ts");
 const { useLifecycle, noteSleptByHand, forgetSleptByHand } = await import("./sleepingTabs.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
 const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
-const { HOVER_WAKE_KEPT_MS, HOVER_WAKE_MS, HOVER_WAKE_OPENED_WITHIN_MS, armHoverWake, cancelHoverWake, hoverWakeOf, noteHoverWakeOpened, wakeOnHover } = await import("./hoverWake.ts");
+const { HOVER_WAKE_KEPT_MS, HOVER_WAKE_MS, HOVER_WAKE_OPENED_WITHIN_MS, armHoverWake, cancelHoverWake, hoverWakeOf, noteHoverWakeOpened, putBackHoverWake, wakeOnHover } = await import("./hoverWake.ts");
 setConsentPeriod(true, "hover-wake-test");
 
 const S = () => useBrowser.getState();
@@ -143,7 +143,7 @@ test("a wake counted while sharing was off isn't paired with an open counted aft
   webviews.clear();
 });
 
-test("a speculative wake nobody opened is put back after two minutes", async (t) => {
+test("a speculative wake nobody opened is put back after two minutes, only when the engine confirms it slept", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { hidden, asked } = sleepingTab(async () => true);
   takeTabSleepCounts();
@@ -152,20 +152,60 @@ test("a speculative wake nobody opened is put back after two minutes", async (t)
   t.mock.timers.tick(HOVER_WAKE_KEPT_MS - 1);
   assert.deepEqual(asked, []);
   t.mock.timers.tick(1);
+  await settle();
   assert.deepEqual(asked, [0], "the engine is asked to sleep it again, with every protection it applies");
+  assert.equal(useLifecycle.getState().discarded[hidden], true);
   assert.equal(takeTabSleepCounts().hover_wakes_put_back, 1);
-  const lazy = windowWithHiddenTab();
-  S().updateTab(lazy.hidden, { page: { kind: "idle" } });
-  assert.equal(await wakeOnHover(lazy.hidden, consentToken()), "unloaded");
-  assert.equal(S().tabs[lazy.hidden].page.kind, "loaded");
-  t.mock.timers.tick(HOVER_WAKE_KEPT_MS);
-  assert.equal(S().tabs[lazy.hidden].page.kind, "idle", "a tab restored without its page goes back to having none");
   const opened = windowWithHiddenTab();
   S().updateTab(opened.hidden, { page: { kind: "idle" } });
   await wakeOnHover(opened.hidden, consentToken());
   noteHoverWakeOpened(opened.hidden);
   t.mock.timers.tick(HOVER_WAKE_KEPT_MS);
   assert.equal(S().tabs[opened.hidden].page.kind, "loaded", "an opened tab is left alone");
+  webviews.clear();
+});
+
+test("a put-back the engine refuses, or one the page is busy for, isn't counted and never unloads the page itself", async () => {
+  const { hidden } = windowWithHiddenTab();
+  const consent = consentToken();
+  takeTabSleepCounts();
+  S().updateTab(hidden, { page: { kind: "idle" } });
+  await wakeOnHover(hidden, consent);
+  assert.equal(S().tabs[hidden].page.kind, "loaded");
+  assert.equal(await putBackHoverWake(hidden, { consent }), false, "no page view: nothing to ask");
+  const asked = [];
+  webviews.set(hidden, { sleepIfHidden: (seconds) => (asked.push(seconds), Promise.resolve([102])) });
+  assert.equal(await putBackHoverWake(hidden, { consent }), false, "a running download keeps it");
+  webviews.set(hidden, { sleepIfHidden: () => Promise.reject(new Error("gone")) });
+  assert.equal(await putBackHoverWake(hidden, { consent }), false);
+  webviews.set(hidden, { sleepIfHidden: (seconds) => (asked.push(seconds), Promise.resolve([])) });
+  S().updateLive(hidden, { playingAudio: true });
+  assert.equal(await putBackHoverWake(hidden, { consent }), false, "playing: the engine isn't even asked");
+  S().updateLive(hidden, { playingAudio: false });
+  const { holdForCli, releaseAllCliHolds } = await import("./cliHolds.ts");
+  holdForCli("hover-test", [hidden]);
+  assert.equal(await putBackHoverWake(hidden, { consent }), false, "held by an ardia command session");
+  releaseAllCliHolds();
+  assert.deepEqual(asked, [0]);
+  assert.equal(S().tabs[hidden].page.kind, "loaded", "the page is never torn down by the app");
+  assert.equal(takeTabSleepCounts().hover_wakes_put_back, 0);
+  assert.equal(await putBackHoverWake(hidden, { consent }), true);
+  assert.equal(takeTabSleepCounts().hover_wakes_put_back, 1);
+  useLifecycle.setState({ discarded: {} });
+  webviews.clear();
+});
+
+test("an open during a wake still on its way counts only within ten seconds of the hover", async () => {
+  let finish;
+  const { hidden } = sleepingTab(() => new Promise((resolve) => (finish = resolve)));
+  takeTabSleepCounts();
+  const waking = wakeOnHover(hidden, consentToken(), 1_000_000);
+  noteHoverWakeOpened(hidden, 1_000_000 + HOVER_WAKE_OPENED_WITHIN_MS + 1);
+  finish(true);
+  await waking;
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_woken_on_hover, 1);
+  assert.equal(counts.hover_woken_tabs_opened, 0);
   webviews.clear();
 });
 

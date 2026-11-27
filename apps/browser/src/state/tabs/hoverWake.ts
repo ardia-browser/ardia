@@ -3,16 +3,18 @@ import { isWebPageUrl } from "../../lib/url";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { engineProfile, isIncognitoProfile } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
-import type { TabPage } from "../browser/types";
 import { tabEngine } from "../engines/engines";
 import { holderOf } from "../pins/pinShare";
 import { consentToken } from "../telemetry/client";
 import type { ConsentToken } from "../telemetry/choice";
 import { noteHoverWakePutBack, noteHoverWokenTabOpened, noteTabWokenOnHover } from "../telemetry/tabSleepCounts";
 import { onFrontTabChanged } from "../windows/frontTabs";
+import { heldByCli } from "./cliHolds";
+import { inUse } from "./loadedTabBudget";
 import { hasPage, restoredLazily, wokenPage } from "./pageSession";
 import { shownTabIds } from "./shownTabs";
-import { useLifecycle, wasSleptByHand } from "./sleepingTabs";
+import { isSleeping, markSleeping, useLifecycle, wasSleptByHand } from "./sleepingTabs";
+import { liveOf } from "./tabLive";
 import type { MemoryPressure } from "./sleepPolicy";
 
 export const HOVER_WAKE_MS = 150;
@@ -68,8 +70,7 @@ type Wake = {
   consent: ConsentToken | null;
   kind: Exclude<HoverWake, null>;
   inFlight: boolean;
-  openedInFlight: boolean;
-  before?: TabPage;
+  openedAt?: number;
   putBack?: ReturnType<typeof setTimeout>;
 };
 
@@ -89,7 +90,7 @@ export function noteHoverWakeOpened(tabId: string | undefined, now = Date.now())
   const wake = tabId ? woken.get(tabId) : undefined;
   if (!tabId || !wake) return false;
   if (wake.inFlight) {
-    wake.openedInFlight = true;
+    wake.openedAt ??= now;
     return true;
   }
   forgetWake(tabId, wake);
@@ -98,16 +99,22 @@ export function noteHoverWakeOpened(tabId: string | undefined, now = Date.now())
   return true;
 }
 
-function putBack(id: string, wake: Wake) {
-  if (!forgetWake(id, wake)) return;
+export async function putBackHoverWake(id: string, wake: Pick<Wake, "consent">): Promise<boolean> {
   const s = useBrowser.getState();
   const t = s.tabs[id];
-  if (!t || shownTabIds(s).has(id)) return;
-  if (wake.kind === "unloaded") {
-    if (!hasPage(t) || !wake.before) return;
-    s.updateTab(id, { page: wake.before });
-  } else void Promise.resolve(webviews.get(id)?.sleepIfHidden(0)).catch(() => undefined);
+  const view = webviews.get(id);
+  if (!t || !view || !hasPage(t) || isSleeping(id) || shownTabIds(s).has(id) || inUse(s, id) || heldByCli(id) || liveOf(id).isLoading) return false;
+  const keptBy = await Promise.resolve()
+    .then(() => view.sleepIfHidden(0))
+    .catch(() => undefined);
+  if (!keptBy || keptBy.length) return false;
+  markSleeping(id);
   noteHoverWakePutBack(wake.consent);
+  return true;
+}
+
+function putBack(id: string, wake: Wake) {
+  if (forgetWake(id, wake)) void putBackHoverWake(id, wake);
 }
 
 function watchOpens() {
@@ -120,7 +127,7 @@ export async function wakeOnHover(id: string, consent: ConsentToken | null, now 
   const s = useBrowser.getState();
   const kind = hoverWakeOf(factsOf(s, id));
   if (!kind) return null;
-  const wake: Wake = { at: now, consent, kind, inFlight: true, openedInFlight: false };
+  const wake: Wake = { at: now, consent, kind, inFlight: true };
   woken.set(id, wake);
   watchOpens();
   if (kind === "discarded") {
@@ -131,15 +138,13 @@ export async function wakeOnHover(id: string, consent: ConsentToken | null, now 
       return null;
     }
   } else {
-    const t = s.tabs[id]!;
-    wake.before = t.page;
-    s.updateTab(id, { page: wokenPage(t) });
+    s.updateTab(id, { page: wokenPage(s.tabs[id]!) });
     wake.inFlight = false;
   }
   noteTabWokenOnHover(consent);
-  if (wake.openedInFlight) {
+  if (wake.openedAt !== undefined) {
     forgetWake(id, wake);
-    noteHoverWokenTabOpened(consent);
+    if (wake.openedAt - wake.at <= HOVER_WAKE_OPENED_WITHIN_MS) noteHoverWokenTabOpened(consent);
   } else if (woken.get(id) === wake) wake.putBack = setTimeout(() => putBack(id, wake), HOVER_WAKE_KEPT_MS);
   return kind;
 }

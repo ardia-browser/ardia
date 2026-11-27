@@ -16,7 +16,7 @@ import type { ConsentToken } from "../telemetry/choice";
 import { hasPage } from "./pageSession";
 import { usePages } from "./pageState";
 import { shownTabIds } from "./shownTabs";
-import { isSleeping, useLifecycle } from "./sleepingTabs";
+import { isSleeping, markSleeping, useLifecycle } from "./sleepingTabs";
 import { engineVeto, MINUTE, SLEEPS_PER_TICK, sleepRules, sleepVeto, sleptPastSoftKeeps, tabsToSleep, unusedAfterMs, unusedTabsToSleep, type SleepPlan, type SleepRules, type SleepVeto, type TabSleepFacts } from "./sleepPolicy";
 import { liveOf, onLiveChange } from "./tabLive";
 import { countSwitch, forgetSwitchesExcept, switchesOf } from "./tabSwitches";
@@ -114,6 +114,7 @@ let countedIn: ConsentToken | null = null;
 
 function noteVeto(id: string, veto: SleepVeto | null, consent: ConsentToken | null) {
   if (!veto || !COUNTED_VETOES.has(veto) || !stillValid(consent)) return;
+  if (veto === "reopenedSoon" && !stillValid(reopenedSoon.get(id))) return;
   if (countedIn !== consent) {
     countedVetoes.clear();
     countedIn = consent;
@@ -133,7 +134,17 @@ function vetoNow(id: string, budget: LoadedTabBudget, now: number): SleepVeto | 
 }
 
 const seenAt = new Map<string, number>();
-const reopenedSoon = new Set<string>();
+const reopenedSoon = new Map<string, ConsentToken | null>();
+const inFlightSleeps = new Set<string>();
+
+async function askToSleep(id: string, ask: () => Promise<number[]> | undefined): Promise<number[] | undefined> {
+  inFlightSleeps.add(id);
+  try {
+    return await withDeadline(Promise.resolve().then(ask).catch(() => undefined), ANSWER_WITHIN_MS, undefined);
+  } finally {
+    inFlightSleeps.delete(id);
+  }
+}
 const askAgainAt = new Map<string, number>();
 const unusedAskAgainAt = new Map<string, number>();
 const sleptAt = new Map<string, { at: number; consent: ConsentToken | null }>();
@@ -152,7 +163,7 @@ async function sweepOverBudget(budget: LoadedTabBudget | null, now: number, cons
   for (const id of shownTabIds(s)) seenAt.set(id, now);
   for (const id of seenAt.keys()) if (!s.tabs[id]) seenAt.delete(id);
   for (const id of lastAudibleAt.keys()) if (!s.tabs[id]) lastAudibleAt.delete(id);
-  for (const id of reopenedSoon) if (!s.tabs[id]) reopenedSoon.delete(id);
+  for (const id of reopenedSoon.keys()) if (!s.tabs[id]) reopenedSoon.delete(id);
   for (const key of countedVetoes) if (!s.tabs[vetoedTabOf(key)]) countedVetoes.delete(key);
   forgetSwitchesExcept(s.tabs);
   for (const [id, at] of askAgainAt) if (!s.tabs[id] || at <= now) askAgainAt.delete(id);
@@ -168,15 +179,16 @@ async function sweepOverBudget(budget: LoadedTabBudget | null, now: number, cons
   try {
     for (const id of asking) {
       if (generation !== pressureGeneration) break;
+      if (inFlightSleeps.has(id)) continue;
       const vetoed = vetoNow(id, budget, now);
       if (vetoed) {
         if (vetoed !== "gone") noteVeto(id, vetoed, consent);
         continue;
       }
-      const asked = Promise.resolve(webviews.get(id)?.sleepIfHidden(budget.hiddenMs / 1000)).catch(() => undefined);
-      const keptBy = await withDeadline(asked, ANSWER_WITHIN_MS, undefined);
+      const keptBy = await askToSleep(id, () => webviews.get(id)?.sleepIfHidden(budget.hiddenMs / 1000));
       const veto = keptBy ? engineVeto(keptBy) : null;
       if (keptBy?.length === 0) {
+        markSleeping(id);
         slept.push(id);
         sleptAt.set(id, { at: now, consent });
         keptAt.delete(id);
@@ -199,7 +211,7 @@ export function noteTabOpened(tabId: string | undefined, now = Date.now()) {
   if (!tabId || !slept) return;
   sleptAt.delete(tabId);
   if (now - slept.at >= REOPENED_SOON_MS) return;
-  reopenedSoon.add(tabId);
+  reopenedSoon.set(tabId, slept.consent);
   noteTabSleptOverBudgetReopened(slept.consent);
 }
 
@@ -216,13 +228,24 @@ let shownBefore: ReadonlySet<string> = new Set();
 
 export function noteShownTabs(shown: ReadonlySet<string>, now = Date.now()) {
   for (const id of shownBefore) if (!shown.has(id)) seenAt.set(id, now);
-  for (const id of shown) if (!shownBefore.has(id)) seenAt.set(id, now);
+  for (const id of shown) {
+    if (shownBefore.has(id)) continue;
+    seenAt.set(id, now);
+    noteTabOpened(id, now);
+  }
   shownBefore = new Set(shown);
 }
 
 let sweepingUnused = false;
 
-const answered = <T,>(asked: Promise<T> | T | undefined, fallback: T) => withDeadline(Promise.resolve(asked).catch(() => fallback), ANSWER_WITHIN_MS, fallback);
+type SleepAsker = { sleepIfHidden(seconds: number): Promise<number[]>; sleepIfUnused?(seconds: number): Promise<number[]> };
+
+export function askUnusedSleep(view: SleepAsker, seconds: number): Promise<number[]> {
+  if (!view.sleepIfUnused) return view.sleepIfHidden(seconds);
+  return Promise.resolve()
+    .then(() => view.sleepIfUnused!(seconds))
+    .catch(() => view.sleepIfHidden(seconds));
+}
 
 function unusedVetoNow(id: string, afterMs: number, now: number): SleepVeto | "gone" | null {
   const s = useBrowser.getState();
@@ -250,13 +273,14 @@ export async function sleepUnusedTabs(afterMsNow: () => number | null, consent: 
     for (const id of plan.sleep.slice(0, SLEEPS_PER_TICK)) {
       const afterMs = afterMsNow();
       if (afterMs === null) break;
+      if (inFlightSleeps.has(id)) continue;
       const vetoed = unusedVetoNow(id, afterMs, now);
       if (vetoed) {
         if (vetoed !== "gone" && vetoed !== "recentlySeen") noteVeto(id, vetoed, consent);
         continue;
       }
       const view = webviews.get(id)!;
-      const keptBy = await answered(view.sleepIfUnused ? view.sleepIfUnused(afterMs / 1000) : view.sleepIfHidden(afterMs / 1000), undefined);
+      const keptBy = await askToSleep(id, () => askUnusedSleep(view, afterMs / 1000));
       if (!keptBy) continue;
       const pastSoftKeeps = sleptPastSoftKeeps(keptBy);
       if (keptBy.length && !pastSoftKeeps) {
@@ -268,6 +292,7 @@ export async function sleepUnusedTabs(afterMsNow: () => number | null, consent: 
         }
         continue;
       }
+      markSleeping(id);
       slept.push(id);
       noteTabSleptUnused(!!useBrowser.getState().tabs[id]?.pin, pastSoftKeeps, consent);
     }

@@ -752,3 +752,97 @@ test("a split's second pane that just left the screen counts as just used, ahead
   const over = tabsOverBudget(S(), [active, ...ids], { tabs: 3, hiddenMs: 30 * minute }, now + 5 * minute);
   assert.deepEqual([...over].sort(), [ids[1], ids[2]].sort(), "the second pane left the screen a moment ago and stays; older ordinary tabs go first");
 });
+
+test("reopen protection taken while sharing was off still keeps the tab, but its veto isn't counted after sharing turns on", async (t) => {
+  const { sleepTabsOverBudget, noteTabOpened, noteTabGone } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  const { setConsentPeriod: setPeriod } = await import("../telemetry/consentPeriod.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 3200 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  const asked = [];
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => (asked.push(id), Promise.resolve([])) });
+  const budget = { tabs: 1, hiddenMs: 30 * minute };
+  setPeriod(false, "reopen-veto-off");
+  assert.deepEqual(await settleSweep(t, sleepTabsOverBudget(budget, now)), [ids[0]]);
+  lifecycle.noteReady(ids[0]);
+  noteTabOpened(ids[0], now + minute);
+  setPeriod(true, "reopen-veto-on");
+  takeTabSleepCounts();
+  asked.length = 0;
+  assert.deepEqual(await settleSweep(t, sleepTabsOverBudget(budget, now + 2 * minute)), [], "still kept");
+  assert.deepEqual(asked, []);
+  assert.equal(takeTabSleepCounts().sleep_kept_reopened_soon, 0, "no veto counted for a reopen that wasn't");
+  noteTabGone(ids[0]);
+  webviews.clear();
+});
+
+test("a tab asked to sleep by one sweep isn't asked by another until the answer comes, and a slept tab is counted once", async (t) => {
+  const { sleepTabsOverBudget, sleepUnusedTabs } = await import("./loadedTabBudget.ts");
+  const { consentToken } = await import("../telemetry/consentPeriod.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 3600 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  let answer;
+  const asked = [];
+  webviews.clear();
+  webviews.set(active, { sleepIfHidden: () => Promise.resolve([4]) });
+  webviews.set(ids[0], {
+    sleepIfHidden: () => (asked.push("budget"), new Promise((resolve) => (answer = resolve))),
+    sleepIfUnused: () => (asked.push("unused"), Promise.resolve([])),
+  });
+  takeTabSleepCounts();
+  const budgetSweep = sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, now);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(await sleepUnusedTabs(() => 60 * minute, consentToken(), now), [], "the unused sweep skips the tab whose ask is out");
+  answer([]);
+  assert.deepEqual(await budgetSweep, [ids[0]]);
+  assert.deepEqual(await settleSweep(t, sleepUnusedTabs(() => 60 * minute, consentToken(), now)), [], "the tab the budget just slept is already asleep, before the engine's event arrives");
+  assert.deepEqual(asked, ["budget"]);
+  const counts = takeTabSleepCounts();
+  assert.equal(counts.tabs_slept_over_budget + counts.tabs_slept_unused, 1);
+  webviews.clear();
+});
+
+test("an engine that doesn't know the unused-tab call is asked the plain sleep instead", async (t) => {
+  const { askUnusedSleep, sleepUnusedTabs } = await import("./loadedTabBudget.ts");
+  const { consentToken } = await import("../telemetry/consentPeriod.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const plain = [];
+  const older = { sleepIfUnused: () => Promise.reject(new Error("unknown command sleepIfUnused")), sleepIfHidden: (seconds) => (plain.push(seconds), Promise.resolve([13])) };
+  assert.deepEqual(await askUnusedSleep(older, 60), [13], "an older host's refusal leaves the soft keeps in place");
+  assert.deepEqual(await askUnusedSleep({ sleepIfHidden: () => Promise.resolve([]) }, 60), []);
+  assert.deepEqual(await askUnusedSleep({ sleepIfUnused: () => { throw new Error("sync"); }, sleepIfHidden: () => Promise.resolve([7]) }, 60), [7]);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 4000 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  webviews.clear();
+  webviews.set(active, { sleepIfHidden: () => Promise.resolve([4]) });
+  webviews.set(ids[0], { sleepIfUnused: () => Promise.reject(new Error("unknown command")), sleepIfHidden: (seconds) => (plain.push(seconds), Promise.resolve([])) });
+  assert.deepEqual(await settleSweep(t, sleepUnusedTabs(() => 60 * minute, consentToken(), now)), [ids[0]]);
+  assert.deepEqual(plain, [60, 3600]);
+  webviews.clear();
+});
+
+test("a slept tab shown in a Peek or a split pane counts as opened", async (t) => {
+  const { sleepTabsOverBudget, noteShownTabs, noteTabGone } = await import("./loadedTabBudget.ts");
+  const { webviews } = await import("../../platform/webviews.ts");
+  const { takeTabSleepCounts } = await import("../telemetry/tabSleepCounts.ts");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const now = Date.now() + 4400 * 60 * minute;
+  const { ids, active } = unusedWorld(1, now);
+  webviews.clear();
+  for (const id of [active, ...ids]) webviews.set(id, { sleepIfHidden: () => Promise.resolve(id === active ? [4] : []) });
+  takeTabSleepCounts();
+  assert.deepEqual(await settleSweep(t, sleepTabsOverBudget({ tabs: 1, hiddenMs: 30 * minute }, now)), [ids[0]]);
+  noteShownTabs(new Set([active]), now);
+  noteShownTabs(new Set([active, ids[0]]), now + minute);
+  assert.equal(takeTabSleepCounts().tabs_slept_over_budget_reopened, 1);
+  noteShownTabs(new Set([active]), now + 2 * minute);
+  noteTabGone(ids[0]);
+  webviews.clear();
+});

@@ -10,7 +10,7 @@ import { failure } from "../automation/automationMethods";
 import type { Body } from "../automation/controlSocket";
 import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { notePlugin, notePluginTimes } from "../telemetry/pluginCounts";
-import { grantIdentity, isGrantId } from "./folderGrants";
+import { folderIdentityOf, grantIdentity, isGrantId } from "./folderGrants";
 import { updateRecord } from "./lifecycle";
 import { acceptsRun, onProcessStopped } from "./process";
 import { activeManifest, currentPlugins, recordOf } from "./store";
@@ -103,12 +103,10 @@ export function rootFor(c: Caller, m: PluginManifest, raw: unknown): Root {
   return { ok: true, path: grant.path, label: raw, identity: grantIdentity(grant), ticket: filesTicket() };
 }
 
-const isIdentityPart = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-
 async function learnedIdentity(name: string, id: string, path: string): Promise<PluginFolderIdentity | null> {
   const info = await pluginFolderInfo(path).catch(() => null);
-  if (!info?.exists || info.realPath !== path || !isIdentityPart(info.device) || !isIdentityPart(info.inode)) return null;
-  const identity = { device: info.device, inode: info.inode };
+  const identity = info?.exists && info.realPath === path ? folderIdentityOf(info) : null;
+  if (!identity) return null;
   updateRecord(
     name,
     (r) => {
@@ -287,13 +285,12 @@ async function pickedEntry(c: Caller, path: string): Promise<{ id: string; name:
   if (!file || pathProblem(file) !== null) return null;
   const info = await pluginFolderInfo(dir).catch(() => null);
   if (!info?.exists || info.protected === true || isArdiaOwnFolder(info.realPath) || isArdiaOwnFolder(path)) return null;
-  if (!isIdentityPart(info.device) || !isIdentityPart(info.inode)) return null;
-  const identity = { device: info.device, inode: info.inode };
+  const identity = folderIdentityOf(info);
+  if (!identity) return null;
   const probe = await nativeCall({ op: "read", plugin: c.name, root: info.realPath, ticket: filesTicket(), rootIdentity: identity, path: file, offset: 0, length: 0 });
   if (!probe.ok || probe.value.found === false) return null;
-  const opened = probe.value as { device?: unknown; inode?: unknown };
-  if (!isIdentityPart(opened.device) || !isIdentityPart(opened.inode)) return null;
-  const fileIdentity = { device: opened.device, inode: opened.inode };
+  const fileIdentity = folderIdentityOf(probe.value as { device?: unknown; inode?: unknown });
+  if (!fileIdentity) return null;
   let mine = picked.get(c.name);
   if (!mine) picked.set(c.name, (mine = new Map()));
   let id = `p${secureRandomHex(10)}`;

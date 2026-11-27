@@ -16,7 +16,7 @@ import { consentToken, type ConsentToken } from "../telemetry/choice";
 import { notePlugin } from "../telemetry/pluginCounts";
 import { fileUrlOf } from "../sharedFolders/actions";
 import { dropFileWatches } from "./channelFiles";
-import { folderNameProblem, grantIdentity, isGrantId, MAX_FOLDER_GRANTS } from "./folderGrants";
+import { folderIdentityOf, folderNameProblem, grantIdentity, isGrantId, MAX_FOLDER_GRANTS } from "./folderGrants";
 import { updateRecord } from "./lifecycle";
 import { acceptsRun } from "./process";
 import { activeManifest, currentPlugins, NO_RECORD, recordOf, type PluginFolderGrant } from "./store";
@@ -57,9 +57,8 @@ export const isArdiaOwnFolder = (path: string): boolean => ardiaOwnFolders().som
 
 const isProtected = (info: PluginFolderInfo) => info.protected === true || isArdiaOwnFolder(info.realPath);
 
-const isIdentityPart = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
-const identityOf = (info: PluginFolderInfo) => (isIdentityPart(info.device) && isIdentityPart(info.inode) ? { device: info.device, inode: info.inode } : {});
+const identityOf = (info: PluginFolderInfo) => folderIdentityOf(info) ?? {};
 
 function isGrantedFolder(grant: PluginFolderGrant, info: PluginFolderInfo): boolean {
   if (!info.exists || info.realPath !== grant.path) return false;
@@ -91,7 +90,7 @@ function grant(c: Caller, info: PluginFolderInfo, consent: ConsentToken | null):
     return { result: { folder: viewOf(id, regranted, true) } };
   }
   if (Object.keys(grantsOf(name)).length >= MAX_FOLDER_GRANTS) return failure("refused", `A plugin may use at most ${MAX_FOLDER_GRANTS} folders; forget one first.`);
-  if (!isIdentityPart(info.device) || !isIdentityPart(info.inode)) return failure("unavailable", "That folder couldn't be identified, so it wasn't added.");
+  if (!folderIdentityOf(info)) return failure("unavailable", "That folder couldn't be identified, so it wasn't added.");
   const id = newGrantId(name);
   const added: PluginFolderGrant = { name: baseName(info.realPath), path: info.realPath, location: info.location === "icloud" ? "icloud" : "other", addedAt: Date.now(), ...identityOf(info) };
   const saved = updateRecord(name, (r) => (r === NO_RECORD ? null : { ...r, folders: { ...(r.folders ?? {}), [id]: added } }), consent);
@@ -132,8 +131,9 @@ async function checkedFolder(path: string): Promise<{ realPath: string; identity
   if (isArdiaOwnFolder(path) || info.protected || isArdiaOwnFolder(info.realPath)) return failure("refused", PROTECTED_FOLDER);
   if (!info.exists) return null;
   if (withoutPrivate(info.realPath) !== withoutPrivate(path)) return failure("refused", "That folder is a link to another one, so Ardia won't make a folder through it.");
-  if (!isIdentityPart(info.device) || !isIdentityPart(info.inode)) return failure("unavailable", "That folder couldn't be identified, so nothing was made in it.");
-  return { realPath: info.realPath, identity: { device: info.device, inode: info.inode } };
+  const identity = folderIdentityOf(info);
+  if (!identity) return failure("unavailable", "That folder couldn't be identified, so nothing was made in it.");
+  return { realPath: info.realPath, identity };
 }
 
 async function capturedParent(path: string): Promise<CapturedParent | Body> {

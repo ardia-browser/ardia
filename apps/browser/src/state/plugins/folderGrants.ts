@@ -18,7 +18,10 @@ export function folderNameProblem(value: unknown): string | null {
   return null;
 }
 
-const isIdentityPart = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+export const isIdentityPart = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+export const folderIdentityOf = (raw: { device?: unknown; inode?: unknown } | null | undefined): { device: number; inode: number } | null =>
+  raw && isIdentityPart(raw.device) && isIdentityPart(raw.inode) ? { device: raw.device, inode: raw.inode } : null;
 
 export const grantIdentity = (grant: PluginFolderGrant): { device: number; inode: number } | null => (grant.device !== undefined && grant.inode !== undefined ? { device: grant.device, inode: grant.inode } : null);
 

@@ -1285,7 +1285,7 @@
   {
    "id": "plugin-method:app.*",
    "source": "plugin",
-   "guard": "controlStatus answers two booleans and nothing else; openSettings takes only pane plugins or advanced (anything else is bad_request), needs a normal window and opens Settings at most once every 2 s a plugin; neither changes a setting; icon takes only a path matching APP_ICON_PATH (an .app at most two folders inside /Applications or /System/Applications, no . or .. parts) and answers a PNG data URL or null",
+   "guard": "Needs permissions.app. controlStatus answers two booleans and nothing else; openSettings takes only pane plugins or advanced (anything else is bad_request), needs a normal window and opens Settings at most once every 2 s a plugin; neither changes a setting; icon takes only a path matching APP_ICON_PATH (an .app at most two folders inside /Applications or /System/Applications, no . or .. parts) and answers a PNG data URL or null",
    "checks": [
     "apps/browser/src/state/plugins/channelApp.ts#appMethod",
     "apps/browser/src/state/plugins/channelApp.ts#OPENABLE_SETTINGS",
@@ -1296,11 +1296,44 @@
   {
    "id": "plugin-method:appleNotes.*",
    "source": "plugin",
-   "guard": "Nothing is read until Ardia's own sheet ('<Plugin> wants to read your Apple Notes') is allowed, for that run only, and macOS's Automation consent follows; native runs two fixed JXA scripts (the folder id goes in as a JSON string literal, offset and limit as integers, at most 200 notes a call) and never in a background test instance; whatever Notes answers is parsed once and cleaned (cleanFolders, cleanNotes: strings capped, locked notes' bodies dropped)",
+   "guard": "Needs permissions.appleNotes. Nothing is read until Ardia's own sheet ('<Plugin> wants to read your Apple Notes') is allowed, for that run only, and macOS's Automation consent follows; native runs two fixed JXA scripts (the folder id goes in as a JSON string literal, offset and limit as integers, at most 200 notes a call) and never in a background test instance; whatever Notes answers is parsed once and cleaned (cleanFolders, cleanNotes: strings capped, a body only for a note Notes says is unlocked; the sheet names the hosts the plugin can reach instead of saying nothing is sent)",
    "checks": [
     "apps/browser/src/state/plugins/channelAppleNotes.ts#appleNotesMethod",
     "apps/browser/src/state/plugins/channelAppleNotes.ts#cleanNotes",
     "packages/shell/ios/AppleNotesScripting.swift#notesSource"
+   ],
+   "detected": false
+  },
+  {
+   "id": "site-bootstrap:hidden-page",
+   "source": "page",
+   "guard": "Before a hidden sites page loads https://<host>/robots.txt with the profile's cookies, anchorStaysOnOrigin fetches it through Ardia's own client with no cookies, following only that host; a redirect elsewhere or an answer from another origin refuses the site. The page drops itself on the first navigation change to another origin (noteContextNavigation) and every run checks location.origin and a plain-text document first (stillOnItsOrigin). Open: a redirect sent only to a request with cookies is followed once; refusing it inside the redirect needs a NavigationThrottle in engine/ardiacore",
+   "checks": [
+    "apps/browser/src/state/plugins/siteContexts.ts#anchorStaysOnOrigin",
+    "apps/browser/src/state/plugins/siteContexts.ts#noteContextNavigation",
+    "apps/browser/src/state/plugins/siteContexts.ts#stillOnItsOrigin"
+   ],
+   "detected": false
+  },
+  {
+   "id": "other-app:apple-notes-answer",
+   "source": "other-app",
+   "guard": "The JSON Notes' scripting answers is parsed once (answerOf) and cleaned: strings capped, counts and dates whole numbers, a note's body kept only when Notes said locked is false (cleanNotes, and the script asks each note when the bulk read fails and counts an unknown one as locked), folders need an id (cleanFolders)",
+   "checks": [
+    "apps/browser/src/state/plugins/channelAppleNotes.ts#cleanNotes",
+    "apps/browser/src/state/plugins/channelAppleNotes.ts#cleanFolders",
+    "packages/shell/ios/AppleNotesScripting.swift#notesSource"
+   ],
+   "detected": false
+  },
+  {
+   "id": "native:folder-identity",
+   "source": "native",
+   "guard": "A folder's or a picked file's device and inode from pluginFolderInfo, pluginFolderCreate or a probe read mint a grant or a pick only through folderIdentityOf: two safe whole numbers 0 or more, else nothing is granted. Native then compares them with fstat of every root and picked file it opens (PluginFileStore.openRoot, read's expecting) and checks the held directory chain around every mutation (intact)",
+   "checks": [
+    "apps/browser/src/state/plugins/folderGrants.ts#folderIdentityOf",
+    "packages/shell/ios/PluginCore/PluginFileStore.swift#intact",
+    "packages/shell/ios/PluginCore/PluginFileStore.swift#openRoot"
    ],
    "detected": false
   },

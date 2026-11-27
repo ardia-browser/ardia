@@ -1276,3 +1276,65 @@ test("a plugin page's navigate request only ever moves its tab to one of that pl
   assert.equal(routePluginPage(id, "other", JSON.stringify({ path: "/x" })), false, "another plugin can't move this tab");
 });
 
+
+test("codex S10: native folder and file identities mint a grant only as two safe whole numbers", async () => {
+  const { folderIdentityOf } = await import("./state/plugins/folderGrants.ts");
+  assert.deepEqual(folderIdentityOf({ device: 16777230, inode: 42 }), { device: 16777230, inode: 42 }, "positive control");
+  for (const { value } of HOSTILE_VALUES) {
+    for (const shaped of [{ device: value, inode: 1 }, { device: 1, inode: value }, value]) {
+      const identity = folderIdentityOf(typeof shaped === "object" && shaped !== null ? shaped : { device: shaped, inode: shaped });
+      if (identity) {
+        assert.ok(Number.isSafeInteger(identity.device) && identity.device >= 0, show(value));
+        assert.ok(Number.isSafeInteger(identity.inode) && identity.inode >= 0, show(value));
+        assert.deepEqual(Object.keys(identity).sort(), ["device", "inode"]);
+      }
+    }
+  }
+  for (const bad of [{ device: -1, inode: 1 }, { device: 1.5, inode: 1 }, { device: 2 ** 60, inode: 1 }, { device: "1", inode: 1 }, null, undefined]) assert.equal(folderIdentityOf(bad), null);
+});
+
+test("codex S10: whatever Apple Notes answers reaches a plugin only as capped text, with no body unless Notes said unlocked", async () => {
+  const { cleanFolders, cleanNotes, APPLE_NOTES_LIMITS } = await import("./state/plugins/channelAppleNotes.ts");
+  for (const { value } of HOSTILE_VALUES) {
+    for (const raw of [value, { total: value, notes: [value] }, { notes: [{ id: "n", locked: value, body: value, name: value, created: value }] }]) {
+      const { total, notes } = cleanNotes(raw);
+      assert.ok(Number.isSafeInteger(total) && total >= 0, show(value));
+      for (const n of notes) {
+        assert.equal(typeof n.body, "string");
+        assert.ok(n.body.length <= APPLE_NOTES_LIMITS.bodyChars && n.name.length <= APPLE_NOTES_LIMITS.nameChars);
+        if (n.locked) assert.equal(n.body, "", show(value));
+        if (n.body) assert.equal(n.locked, false);
+      }
+    }
+    for (const f of cleanFolders([value, { id: value, name: value, parent: value, count: value }])) {
+      assert.ok(f.id.length > 0 && f.id.length <= APPLE_NOTES_LIMITS.idChars);
+      assert.ok(Number.isSafeInteger(f.count) && f.count >= 0);
+    }
+  }
+});
+
+test("codex S10: a hidden sites page keeps its sign-in only on its own origin, whatever address it reports", async () => {
+  const { noteContextNavigation, useSiteContexts, openSiteContext, attachSiteContext } = await import("./state/plugins/siteContexts.ts");
+  const keys = [];
+  const unsubscribe = useSiteContexts.subscribe((s) => {
+    for (const view of Object.values(s.contexts))
+      if (!keys.includes(view.key)) {
+        keys.push(view.key);
+        queueMicrotask(() => attachSiteContext(view.key, { evaluate: async () => ({ origin: view.origin, ready: true, plain: true }) }));
+      }
+  });
+  for (const { value } of HOSTILE_VALUES) {
+    if (typeof value !== "string") continue;
+    const opened = await openSiteContext("hostile", "https://app.example.com", "p", "w");
+    assert.ok(opened.ok, "positive control: the context opens");
+    noteContextNavigation(opened.key, "https://app.example.com/robots.txt");
+    assert.ok(useSiteContexts.getState().contexts[opened.key], "its own origin keeps it");
+    const reported = value;
+    noteContextNavigation(opened.key, reported);
+    const kept = !!useSiteContexts.getState().contexts[opened.key];
+    if (kept) assert.ok(reported === "" || reported === "about:blank" || new URL(reported).origin === "https://app.example.com", show(value));
+    noteContextNavigation(opened.key, "https://other.example.com/");
+    assert.equal(useSiteContexts.getState().contexts[opened.key], undefined);
+  }
+  unsubscribe();
+});

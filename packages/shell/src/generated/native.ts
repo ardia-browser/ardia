@@ -4,7 +4,7 @@ import type { CliInstallResult } from "../cli";
 import type { CommandEvent } from "../commands";
 import type { ConfigFileRead } from "../config";
 import type { Click, ClickResult, KeyPress, KeyPressResult, KeyTiming, PointerSweep, PointerSweepResult, SidebarEdgeStats } from "../dev";
-import type { ChooseOptions, ConfirmOptions, PromptOptions } from "../dialogs";
+import type { ChooseOptions, ConfirmOptions, PickedFileIdentity, PromptOptions } from "../dialogs";
 import type { BangListReply } from "../documents";
 import type { InlineWrite } from "../inlineCompletion";
 import type { AppEvent, AppearanceMode, OpenURLSource } from "../lifecycle";
@@ -126,6 +126,7 @@ export type DialogsNative = {
   choose?(options: ChooseOptions): Promise<{ choice: number; unshown?: boolean }>;
   prompt(options: PromptOptions): Promise<string | null>;
   pickFiles(): Promise<string[]>;
+  pickFilesIdentified?(): Promise<PickedFileIdentity[]>;
   pickFolder(current: string | null, prompt: string | null): Promise<string | null>;
 };
 

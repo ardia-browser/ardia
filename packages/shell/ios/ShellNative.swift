@@ -378,6 +378,7 @@ protocol DialogsNative {
   static func choose(_ options: ChooseOptions, _ promise: Promise)
   static func prompt(_ options: PromptOptions, _ promise: Promise)
   static func pickFiles(_ promise: Promise)
+  static func pickFilesIdentified(_ promise: Promise)
   static func pickFolder(_ current: String?, _ prompt: String?, _ promise: Promise)
 }
 
@@ -406,6 +407,10 @@ extension DialogsNative {
 
   static var pickFilesFunction: AnyDefinition {
     AsyncFunction("pickFiles") { (promise: Promise) in Self.pickFiles(promise) }.runOnQueue(.main)
+  }
+
+  static var pickFilesIdentifiedFunction: AnyDefinition {
+    AsyncFunction("pickFilesIdentified") { (promise: Promise) in Self.pickFilesIdentified(promise) }.runOnQueue(.main)
   }
 
   static var pickFolderFunction: AnyDefinition {

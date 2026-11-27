@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "9cedd869d61072f1bb925daf5db96bbd1f60e89417085b452e67c5e4271a493d",
-        "swift": "cf1140b3ee76aa46c73155b63f5599bcc8aab5b89c5d39f6f50457da027e67bb"
+        "types": "095db61b4416c21daf6ec215144232937e3294e68d23c306c4620c9d5b9ca530",
+        "swift": "c517b6e408278274db01c701575f6de95904ac4874d45b10af0afccf3325dab9"
       },
       "modules": {
         "ArdiaShell": {
@@ -2173,6 +2173,13 @@
               "mac": "custom",
               "desktop": "absent",
               "windows": "custom"
+            },
+            "pickFilesIdentified": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             },
             "pickFolder": {
               "args": [

@@ -34,3 +34,5 @@ export type PromptOptions = {
 };
 
 export type { DialogsNative };
+
+export type PickedFileIdentity = { url: string; device?: number; inode?: number; parentDevice?: number; parentInode?: number };

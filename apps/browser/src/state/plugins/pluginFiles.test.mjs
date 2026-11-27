@@ -13,6 +13,18 @@ globalThis.acTestNativeModules = {
     confirm: async (options) => (dialog.confirms.push(options), await dialog.confirmGate, dialog.confirmAnswer),
     pickFolder: async (current, prompt) => (dialog.picks.push({ current, prompt }), dialog.pickAnswer),
     pickFiles: async () => (dialog.filePicks++, dialog.fileAnswer),
+    pickFilesIdentified: async () => {
+      dialog.filePicks++;
+      const answers = dialog.fileAnswer.map((url) => {
+        const path = decodeURIComponent(url.replace(/^file:\/\//, ""));
+        const dir = path.slice(0, path.lastIndexOf("/")) || "/";
+        const file = stub.pluginFiles.identityOf(dir, path.slice(dir.length + 1));
+        const parent = stub.pluginFiles.identities[dir] ?? stub.pluginFiles.folders[dir];
+        return file && parent ? { url, ...file, parentDevice: parent.device, parentInode: parent.inode } : { url };
+      });
+      await dialog.afterPanel?.();
+      return answers;
+    },
   },
   ArdiaApp: { ...shellNativeModules.ArdiaApp, share: async (url, title, windowId) => void shares.push({ url, title, windowId }) },
   ArdiaSharedFolders: {
@@ -823,4 +835,20 @@ test("codex S3: Apple Notes needs the appleNotes permission, and its sheet says 
   assert.match(appleNotesDisclosure(online), /app\.notion\.com/);
   const any = readManifest(JSON.stringify({ ...NOTES, permissions: { ...NOTES.permissions, network: "*" } })).manifest;
   assert.match(appleNotesDisclosure(any), /the internet/);
+});
+
+test("codex round 2 S2: a pick is bound to the identity the panel saw when you chose, not to what a later probe finds", async () => {
+  await enable(DATA_ONLY);
+  S().createWindow({ url: "https://a.example/" });
+  const run = await activated("scratch");
+  files.folders["/Users/me/Downloads"] = { exists: true, realPath: "/Users/me/Downloads", location: "other", protected: false, device: 1, inode: 77 };
+  files.identities["/Users/me/Downloads"] = { device: 1, inode: 77 };
+  files.put("scratch", "/Users/me/Downloads", "chosen.zip", "the one you chose");
+  dialog.fileAnswer = ["file:///Users/me/Downloads/chosen.zip"];
+  dialog.afterPanel = () => files.put("scratch", "/Users/me/Downloads", "chosen.zip", "swapped in before the probe");
+  assert.equal((await askLong("scratch", "files.pick", {}, run)).error.code, "refused", "a file swapped between the panel and the probe isn't given");
+  dialog.afterPanel = null;
+  const [one] = (await askLong("scratch", "files.pick", {}, run)).result.files;
+  assert.ok(one, "positive control: an unchanged file is given");
+  dialog.fileAnswer = [];
 });

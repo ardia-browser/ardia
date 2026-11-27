@@ -117,6 +117,30 @@ public class DialogsModule: Module, DialogsNative {
     }
   }
 
+  static func pickFilesIdentified(_ promise: Promise) {
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = true
+    panel.canChooseDirectories = false
+    panel.begin { response in
+      guard response == .OK else { return promise.resolve([[String: Any]]()) }
+      promise.resolve(panel.urls.map(Self.identified))
+    }
+  }
+
+  static func identified(_ url: URL) -> [String: Any] {
+    var entry: [String: Any] = ["url": url.absoluteString]
+    var file = stat()
+    var parent = stat()
+    guard url.isFileURL, lstat(url.path, &file) == 0, (file.st_mode & S_IFMT) == S_IFREG,
+      lstat(url.deletingLastPathComponent().path, &parent) == 0, (parent.st_mode & S_IFMT) == S_IFDIR
+    else { return entry }
+    entry["device"] = Int64(file.st_dev)
+    entry["inode"] = Int64(file.st_ino)
+    entry["parentDevice"] = Int64(parent.st_dev)
+    entry["parentInode"] = Int64(parent.st_ino)
+    return entry
+  }
+
   static func pickFolder(_ current: String?, _ prompt: String?, _ promise: Promise) {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
@@ -138,6 +162,7 @@ public class DialogsModule: Module, DialogsNative {
     Self.chooseFunction
     Self.promptFunction
     Self.pickFilesFunction
+    Self.pickFilesIdentifiedFunction
     Self.pickFolderFunction
   }
 

@@ -1,6 +1,7 @@
 import { callPlugin, filesCall, filesRevoke, filesTicket, filesUnwatch, filesWatch, onPluginFilesChange, pluginFolderInfo, sendToPlugin, type PluginFilesResult, type PluginFilesSpec, type PluginFolderIdentity } from "../../platform/plugins";
 import { errorText } from "../../lib/errors";
-import { pickFiles } from "../../platform/dialogs";
+import { isFields } from "../../lib/decode";
+import { pickFiles, pickFilesIdentified } from "../../platform/dialogs";
 import { useBrowser } from "../browser/store";
 import { lastFocusedEligibleWindow } from "../automation/automationWindows";
 import { isArdiaOwnFolder } from "./channelFolders";
@@ -278,7 +279,11 @@ const fileUrlPath = (url: string): string | null => {
   }
 };
 
-async function pickedEntry(c: Caller, path: string): Promise<{ id: string; name: string; size: number } | null> {
+type PanelIdentity = { file: PluginFolderIdentity; parent: PluginFolderIdentity } | null;
+
+const sameIdentity = (a: PluginFolderIdentity | null, b: PluginFolderIdentity | null) => !!a && !!b && a.device === b.device && a.inode === b.inode;
+
+async function pickedEntry(c: Caller, path: string, panel: PanelIdentity): Promise<{ id: string; name: string; size: number } | null> {
   const cut = path.lastIndexOf("/");
   const dir = path.slice(0, cut) || "/";
   const file = path.slice(cut + 1);
@@ -286,11 +291,12 @@ async function pickedEntry(c: Caller, path: string): Promise<{ id: string; name:
   const info = await pluginFolderInfo(dir).catch(() => null);
   if (!info?.exists || info.protected === true || isArdiaOwnFolder(info.realPath) || isArdiaOwnFolder(path)) return null;
   const identity = folderIdentityOf(info);
-  if (!identity) return null;
+  if (!identity || (panel && !sameIdentity(identity, panel.parent))) return null;
   const probe = await nativeCall({ op: "read", plugin: c.name, root: info.realPath, ticket: filesTicket(), rootIdentity: identity, path: file, offset: 0, length: 0 });
   if (!probe.ok || probe.value.found === false) return null;
-  const fileIdentity = folderIdentityOf(probe.value as { device?: unknown; inode?: unknown });
-  if (!fileIdentity) return null;
+  const opened = folderIdentityOf(probe.value as { device?: unknown; inode?: unknown });
+  if (!opened || (panel && !sameIdentity(opened, panel.file))) return null;
+  const fileIdentity = panel?.file ?? opened;
   let mine = picked.get(c.name);
   if (!mine) picked.set(c.name, (mine = new Map()));
   let id = `p${secureRandomHex(10)}`;
@@ -300,25 +306,36 @@ async function pickedEntry(c: Caller, path: string): Promise<{ id: string; name:
   return { id, name: file, size: sizeAndTime(probe.value).size };
 }
 
+function panelAnswers(raw: unknown): { url: string; panel: PanelIdentity | "unknown" }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isFields(entry) || typeof entry.url !== "string") return [];
+    const file = folderIdentityOf(entry);
+    const parent = folderIdentityOf({ device: entry.parentDevice, inode: entry.parentInode });
+    return [{ url: entry.url, panel: file && parent ? { file, parent } : ("unknown" as const) }];
+  });
+}
+
 async function pick(c: Caller, params: Record<string, unknown>, consent: ConsentToken | null): Promise<Body> {
   if (params.multiple !== undefined && typeof params.multiple !== "boolean") return failure("bad_request", "multiple is true or false.");
   if (picking.has(c.name)) return failure("failed", "This plugin is already asking for a file. Wait for that answer first.");
   if (!lastFocusedEligibleWindow(useBrowser.getState())) return failure("no_window", "No window to ask in.");
   picking.add(c.name);
   try {
-    let urls: unknown;
+    let answered: { url: string; panel: PanelIdentity | "unknown" }[];
     try {
-      urls = await pickFiles();
+      const identified = pickFilesIdentified();
+      answered = identified ? panelAnswers(await identified) : (await pickFiles()).filter((u): u is string => typeof u === "string").map((url) => ({ url, panel: null }));
     } catch (error) {
       return failure("failed", errorText(error));
     }
-    const chosen = (Array.isArray(urls) ? urls : []).filter((u): u is string => typeof u === "string").slice(0, params.multiple === true ? FILES_LIMITS.picksPerCall : 1);
+    const chosen = answered.slice(0, params.multiple === true ? FILES_LIMITS.picksPerCall : 1);
     if (!acceptsRun(c.name, c.run) || !activeManifest(currentPlugins(), c.name)?.permissions.files) return failure("refused", "The plugin stopped or lost the files permission while you were choosing.");
     const files: { id: string; name: string; size: number }[] = [];
     let refused = 0;
-    for (const url of chosen) {
+    for (const { url, panel } of chosen) {
       const path = fileUrlPath(url);
-      const entry = path ? await pickedEntry(c, path) : null;
+      const entry = path && panel !== "unknown" ? await pickedEntry(c, path, panel) : null;
       if (entry) files.push(entry);
       else refused++;
     }

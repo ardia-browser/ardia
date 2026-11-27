@@ -822,6 +822,10 @@ export const pluginFiles = {
     const parts = path.split("/");
     for (let i = 1; i < parts.length; i++) at.dirs.add(parts.slice(0, i).join("/"));
   },
+  identityOf(root: string, path: string) {
+    const file = pluginFiles.roots[root]?.files.get(path);
+    return file ? { device: 1, inode: fakeInodeOf(file) } : null;
+  },
   text(plugin: string, root: string | null, path: string) {
     const file = pluginFiles.roots[pluginFiles.rootKey(plugin, root)]?.files.get(path);
     return file ? new TextDecoder().decode(file.data) : undefined;

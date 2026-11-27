@@ -1,4 +1,4 @@
-import { nativeModule, type ChooseOptions, type ConfirmOptions, type PromptOptions } from "@ardia/shell";
+import { nativeModule, type ChooseOptions, type ConfirmOptions, type PickedFileIdentity, type PromptOptions } from "@ardia/shell";
 
 export type { ChooseOptions };
 
@@ -12,4 +12,5 @@ export const dismissShownOnlyDialogs = async (key?: string) => {
 export const choose = async (options: ChooseOptions) => (Dialogs.choose ? Dialogs.choose(options) : { choice: -1, unshown: true });
 export const prompt = (options: PromptOptions) => Dialogs.prompt(options);
 export const pickFiles = () => Dialogs.pickFiles();
+export const pickFilesIdentified = (): Promise<PickedFileIdentity[]> | null => Dialogs.pickFilesIdentified?.() ?? null;
 export const pickFolder = (current: string | null, prompt: string | null = null) => Dialogs.pickFolder(current, prompt);

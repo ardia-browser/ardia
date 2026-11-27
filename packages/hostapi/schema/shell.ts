@@ -10,7 +10,7 @@ export const shell = defineModuleDomain({
     "../commands": ["CommandEvent"],
     "../config": ["ConfigFileRead"],
     "../dev": ["Click", "ClickResult", "KeyPress", "KeyPressResult", "KeyTiming", "PointerSweep", "PointerSweepResult", "SidebarEdgeStats"],
-    "../dialogs": ["ChooseOptions", "ConfirmOptions", "PromptOptions"],
+    "../dialogs": ["ChooseOptions", "ConfirmOptions", "PickedFileIdentity", "PromptOptions"],
     "../documents": ["BangListReply"],
     "../inlineCompletion": ["InlineWrite"],
     "../lifecycle": ["AppEvent", "AppearanceMode", "OpenURLSource"],
@@ -131,6 +131,7 @@ export const shell = defineModuleDomain({
         choose: { args: [["options", "ChooseOptions", "ChooseOptions"]], result: "{ choice: number; unshown?: boolean }", async: true, optional: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
         prompt: { args: [["options", "PromptOptions", "PromptOptions"]], result: "string | null", async: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
         pickFiles: { args: [], result: "string[]", async: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
+        pickFilesIdentified: { args: [], result: "PickedFileIdentity[]", async: true, optional: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "absent" },
         pickFolder: { args: [["current", "string | null", "String?"], ["prompt", "string | null", "String?"]], result: "string | null", async: true, promise: true, queue: "main", mac: "custom", desktop: "absent", windows: "custom" },
       },
       constants: {

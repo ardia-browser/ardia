@@ -81,6 +81,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   public let blockedResources = BlockedResourceCounter()
 
   public var isLive: Bool { webView != nil }
+  public var awaitsProcessReload: Bool { processRecovery.awaitsReload }
   public let isPrivate: Bool
   public var host: String? { url.flatMap { BrowserURL.host(of: $0.absoluteString) } }
 
@@ -95,7 +96,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   @ObservationIgnored private var restoringState = false
   @ObservationIgnored private var lastVisit: Visit?
   @ObservationIgnored private var lastCommit = Date.distantPast
-  @ObservationIgnored private var crashReloads = 0
+  @ObservationIgnored private var processRecovery = PageProcessRecovery()
   @ObservationIgnored private var snapshotTask: Task<Void, Never>?
   @ObservationIgnored private var pendingURL: URL?
   @ObservationIgnored private var swipeSnapshots: [ObjectIdentifier: UIImage] = [:]
@@ -168,19 +169,46 @@ public final class WebTab: DiscardablePage, Identifiable {
 
   public func goBack() {
     failure = nil
-    webView?.goBack()
+    guard let webView = webViewForNavigation() else { return }
+    webView.goBack()
   }
 
   public func goForward() {
     failure = nil
-    webView?.goForward()
+    guard let webView = webViewForNavigation() else { return }
+    webView.goForward()
   }
 
   public func reload() {
     failure = nil
-    crashReloads = 0
-    guard let webView else { return }
+    guard let webView else {
+      engine?.revive(self)
+      return
+    }
+    processRecovery.navigationAsked()
+    reloadDocument(in: webView)
+  }
+
+  private func webViewForNavigation() -> WKWebView? {
+    if webView == nil { engine?.revive(self) }
+    processRecovery.navigationAsked()
+    return webView
+  }
+
+  private func reloadDocument(in webView: WKWebView) {
     if webView.url == nil, let url { webView.load(URLRequest(url: url)) } else { webView.reload() }
+  }
+
+  var isShownToUser: Bool {
+    guard let webView, webView.window != nil else { return false }
+    return UIApplication.shared.applicationState != .background
+  }
+
+  func pageShown() {
+    guard processRecovery.awaitsReload, isShownToUser, let webView else { return }
+    guard processRecovery.pageShown() == .reload else { return }
+    failure = nil
+    reloadDocument(in: webView)
   }
 
   public func stopLoading() {
@@ -227,7 +255,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   public func readableContent() async throws -> ReadableContent {
-    guard let webView else { throw ReadableContentError.pageNotLoaded }
+    guard let webView, !processRecovery.awaitsReload else { throw ReadableContentError.pageNotLoaded }
     return try await ReadableContent.extract(from: webView)
   }
 
@@ -305,6 +333,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     request = nil
     coordinator = nil
     self.webView = nil
+    processRecovery = PageProcessRecovery()
     isLoading = false
     progress = 0
   }
@@ -499,7 +528,7 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func didFinish() {
-    crashReloads = 0
+    if let outcome = processRecovery.loadFinished() { engine?.onPageProcess?(id, outcome, isPrivate) }
     if refreshesVisibleContentAfterLoad {
       refreshesVisibleContentAfterLoad = false
       Task { [weak self] in
@@ -519,16 +548,26 @@ public final class WebTab: DiscardablePage, Identifiable {
     if error.domain == WKError.errorDomain && error.code == 102 { return }
     if error.domain == "WebKitErrorDomain" && (error.code == 102 || error.code == 204) { return }
     guard provisional else { return }
+    processRecovery.loadFailed()
     failure = .network(title: String(localized: "This Webpage Couldn’t Load"), message: Self.message(for: error))
     failureReason = PageNetworkReason(error)
   }
 
   fileprivate func processTerminated() {
-    if crashReloads == 0 {
-      crashReloads += 1
-      webView?.reload()
-    } else {
+    engine?.onPageProcess?(id, .gone, isPrivate)
+    request?.dismiss()
+    request = nil
+    snapshotTask?.cancel()
+    snapshotTask = nil
+    switch processRecovery.processEnded(shown: isShownToUser) {
+    case .reload:
+      failure = nil
+      if let webView { reloadDocument(in: webView) }
+    case .showFailure:
       failure = .crashed
+      engine?.onPageProcess?(id, .failed, isPrivate)
+    case .wait:
+      break
     }
   }
 

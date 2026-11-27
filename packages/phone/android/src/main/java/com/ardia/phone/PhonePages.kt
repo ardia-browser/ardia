@@ -476,6 +476,7 @@ object PhonePages {
                 send(id, "page.longPress", "target" to PagePayloads.pressTarget(event.target), "x" to (event.x / density).toDouble(), "y" to (event.y / density).toDouble())
             }
             PageEvent.CloseRequested -> send(id, "page.closeRequested")
+            is PageEvent.ProcessEnded -> send(id, "page.processEnded", "outcome" to event.outcome.wire)
             is PageEvent.ExternalAppMissing -> send(id, "page.externalAppMissing", "url" to event.url)
         }
     }

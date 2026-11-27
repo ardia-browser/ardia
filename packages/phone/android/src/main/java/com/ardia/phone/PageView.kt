@@ -308,6 +308,12 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         applyObscuredInsets()
     }
 
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        val shown = page ?: return
+        if (visibility == View.VISIBLE && !shown.state.value.isLive) PhonePages.activate(shown.id)
+    }
+
     override fun onDetachedFromWindow() {
         dismissSummary(animated = false)
         viewTreeObserver.removeOnPreDrawListener(asksWhenShown)

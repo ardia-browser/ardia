@@ -72,7 +72,7 @@ internal class WebViewPage(
     private var pendingUrl: String? = null
     private var desktopSite = savedBundle?.getBoolean(DESKTOP_SITE_KEY, false) ?: false
     private var desktopHost: String? = setup.url?.takeIf { savedBundle?.containsKey(DESKTOP_SITE_KEY) == true }?.let(BrowserUrl::host)
-    private var crashReloads = 0
+    private val processRecovery = PageProcessRecovery()
     private var released = false
     private var systemUserAgent = ""
     private var filterHandler: ScriptHandler? = null
@@ -151,6 +151,7 @@ internal class WebViewPage(
         val zoom = engine.sitePreferences.pageZoom(mutableState.value.host, isPrivate) ?: 1.0
         web.settings.textZoom = (zoom * 100).roundToInt()
         update { it.copy(isLive = true, pageZoom = zoom, isDesktopSite = desktopSite) }
+        processRecovery.navigationAsked()
         val popup = popup
         this.popup = null
         val saved = savedBundle
@@ -206,7 +207,6 @@ internal class WebViewPage(
 
     override fun reload() {
         failedUrl = null
-        crashReloads = 0
         update { it.copy(failure = null) }
         val web = webView
         if (web == null) {
@@ -728,7 +728,7 @@ internal class WebViewPage(
 
     internal fun pageFinished(web: WebView, url: String) {
         if (web !== webView) return
-        crashReloads = 0
+        processRecovery.loadFinished()?.let { mutableEvents.tryEmit(PageEvent.ProcessEnded(it)) }
         progressThrottle.reset()
         answeredSignIns.clear()
         if (isNavigatingHistory) {
@@ -819,6 +819,7 @@ internal class WebViewPage(
 
     internal fun failed(web: WebView, url: String, reason: NetworkFailure) {
         if (web !== webView) return
+        processRecovery.loadFailed()
         failedUrl = url
         update {
             it.copy(
@@ -836,13 +837,18 @@ internal class WebViewPage(
             web.destroy()
             return
         }
+        val shown = web.isAttachedToWindow && web.windowVisibility == View.VISIBLE
         tearDown(web)
-        if (!didCrash || released) return
-        if (crashReloads == 0) {
-            crashReloads += 1
-            engine.mainHandler.post { makeLive() }
-        } else {
-            update { it.copy(failure = PageLoadFailure.Crashed) }
+        if (released) return
+        Log.i(LOG_TAG, "renderer gone for $id, crashed $didCrash, shown $shown")
+        mutableEvents.tryEmit(PageEvent.ProcessEnded(PageProcessOutcome.Gone))
+        when (processRecovery.processEnded(shown)) {
+            PageProcessRecovery.Step.Reload -> engine.mainHandler.post { makeLive() }
+            PageProcessRecovery.Step.ShowFailure -> {
+                update { it.copy(failure = PageLoadFailure.Crashed) }
+                mutableEvents.tryEmit(PageEvent.ProcessEnded(PageProcessOutcome.Failed))
+            }
+            PageProcessRecovery.Step.Wait -> Unit
         }
     }
 

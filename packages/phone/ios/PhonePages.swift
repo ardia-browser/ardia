@@ -71,6 +71,10 @@ final class PhonePages {
       guard let self, let pageID = self.pageIDs[tabID] else { return }
       self.send(pageID, "page.closeRequested", [:])
     }
+    engine.onPageProcess = { [weak self] tabID, outcome, _ in
+      guard let self, let pageID = self.pageIDs[tabID] else { return }
+      self.send(pageID, "page.processEnded", ["outcome": outcome.rawValue])
+    }
     engine.onPopup = { [weak self] opener, popup in self?.popupOpened(from: opener, popup: popup) }
     engine.onOpenLink = { [weak self] url, opener, inBackground in self?.linkOpened(url, from: opener, inBackground: inBackground) }
     engine.onPrivateBrowsingEnded = { [weak self] in self?.privateBrowsingEnded() }

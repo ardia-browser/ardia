@@ -119,6 +119,7 @@ export type {
   NightShadeMode,
   PageEngineCapabilities,
   PageEngineEvent,
+  PageProcessOutcome,
   PageError,
   PageLoadFailure,
   PageNavigationState,

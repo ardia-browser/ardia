@@ -6,6 +6,7 @@ import {
   type FindResult,
   type PageEngineEvent,
   type PageNavigationState,
+  type PageProcessOutcome,
   type PageRequest,
   type PageScrollPosition,
   type PageSnapshot,
@@ -15,7 +16,7 @@ import {
   type RefusedSnapshot,
 } from "../../platform/pages";
 
-export type { FindResult, PageEngineEvent, PageNavigationState, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle, RefusedSnapshot };
+export type { FindResult, PageEngineEvent, PageNavigationState, PageProcessOutcome, PageRequest, PageScrollPosition, PageSnapshot, PageState, PageTone, PageViewHandle, RefusedSnapshot };
 export { isRefusedSnapshot };
 
 type PagesState = {

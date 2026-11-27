@@ -204,26 +204,30 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       body = { call: message.call, result: result === undefined ? null : result };
     } catch (error) {
       body = { call: message.call, error: errorMessage(error) };
+    }
+    try {
+      if (!signal.cancelled) await sendResult(body, signal);
     } finally {
       forgetCall(message.call, signal);
     }
-    if (signal.cancelled) return;
-    await sendResult(body);
   }
 
-  async function sendResult(body: Record<string, unknown>) {
+  async function sendResult(body: Record<string, unknown>, signal: Signal) {
+    const options = { protocol: true, dropIf: () => signal.cancelled };
     try {
-      await rpc.request(M.result, body);
+      await rpc.request(M.result, body, options);
     } catch (error) {
       if (!isUnencodable(error)) return report(error);
-      await rpc.request(M.result, { call: body.call, error: `The plugin's result couldn't be sent: ${errorMessage(error)}` }).catch(report);
+      await rpc.request(M.result, { call: body.call, error: `The plugin's result couldn't be sent: ${errorMessage(error)}` }, options).catch(report);
     }
   }
 
   async function refuseCall(message: PluginCallMessage, signal: Signal, activationError: unknown) {
-    forgetCall(message.call, signal);
-    if (signal.cancelled) return;
-    await sendResult({ call: message.call, error: `The plugin didn't activate: ${errorMessage(activationError)}` });
+    try {
+      if (!signal.cancelled) await sendResult({ call: message.call, error: `The plugin didn't activate: ${errorMessage(activationError)}` }, signal);
+    } finally {
+      forgetCall(message.call, signal);
+    }
   }
 
   function deliverEvent(name: string, data: Record<string, unknown>, time: number | undefined) {

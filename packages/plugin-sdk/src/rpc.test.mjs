@@ -85,3 +85,35 @@ test("a request whose send throws gives its budget back", async () => {
   rpc.takeReply({ id: sent[0].id, result: 1 });
   assert.equal(await next, 1);
 });
+
+test("codex S4: a protocol reply goes out at once while bulk reads hold every slot and byte of their own", async () => {
+  const sent = [];
+  const rpc = createRpc({ send: (line) => sent.push(JSON.parse(line)), onLine: () => {} });
+  const chunk = 4 << 20;
+  const reads = Array.from({ length: 40 }, (_, i) => rpc.request("files.read", { i, length: chunk }, { replyBytes: readReplyBytes(chunk) }));
+  const readsSent = sent.length;
+  assert.ok(readsSent < 40, "bulk reads are paced");
+  const reply = rpc.request("result", { call: "c1", result: 1 }, { protocol: true });
+  assert.equal(sent.length, readsSent + 1, "the result isn't queued behind the reads");
+  assert.equal(sent.at(-1).method, "result");
+  rpc.takeReply({ id: sent.at(-1).id, result: { ok: true } });
+  assert.deepEqual(await reply, { ok: true });
+  rpc.close(new Error("done"));
+  await Promise.allSettled(reads);
+});
+
+test("codex S4: a queued protocol reply whose call was cancelled is dropped, never sent", async () => {
+  const sent = [];
+  const rpc = createRpc({ send: (line) => sent.push(JSON.parse(line)), onLine: () => {} });
+  const held = Array.from({ length: 8 }, (_, i) => rpc.request("result", { call: `h${i}` }, { protocol: true }));
+  assert.equal(sent.length, 8);
+  let cancelled = false;
+  const late = rpc.request("result", { call: "late" }, { protocol: true, dropIf: () => cancelled });
+  assert.equal(sent.length, 8, "the ninth waits for a slot");
+  cancelled = true;
+  rpc.takeReply({ id: sent[0].id, result: null });
+  assert.equal(await late, undefined);
+  assert.ok(!sent.some((m) => m.params.call === "late"));
+  rpc.close(new Error("done"));
+  await Promise.allSettled(held);
+});

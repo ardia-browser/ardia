@@ -103,6 +103,8 @@
   }
   var MAX_IN_FLIGHT = 16;
   var MAX_IN_FLIGHT_BYTES = 12 << 20;
+  var PROTOCOL_IN_FLIGHT = 8;
+  var PROTOCOL_IN_FLIGHT_BYTES = 8 << 20;
   var SMALL_REPLY_BYTES = 4096;
   var MAX_READ_BYTES = 4 << 20;
   var readReplyBytes = (length) => {
@@ -115,21 +117,30 @@
     let next = 0;
     let closedBy = null;
     const send = (message) => transport.send(JSON.stringify(message));
-    const queued = [];
+    const bulk = { queued: [], inFlight: new Set(), bytes: 0, slots: MAX_IN_FLIGHT, budget: MAX_IN_FLIGHT_BYTES };
+    const protocol = { queued: [], inFlight: new Set(), bytes: 0, slots: PROTOCOL_IN_FLIGHT, budget: PROTOCOL_IN_FLIGHT_BYTES };
     const costs = new Map();
-    let inFlightBytes = 0;
     const settle = (id) => {
-      inFlightBytes -= costs.get(id) ?? 0;
+      const spent = costs.get(id);
+      if (spent) {
+        spent.lane.bytes -= spent.cost;
+        spent.lane.inFlight.delete(id);
+      }
       costs.delete(id);
       waiting.delete(id);
     };
-    const fits = (cost) => waiting.size === 0 || waiting.size < MAX_IN_FLIGHT && inFlightBytes + cost <= MAX_IN_FLIGHT_BYTES;
-    const pump = () => {
-      while (queued.length && !closedBy && fits(queued[0].cost)) {
-        const { id, line, cost, waiter } = queued.shift();
+    const fits = (lane, cost) => lane.inFlight.size === 0 || lane.inFlight.size < lane.slots && lane.bytes + cost <= lane.budget;
+    const pumpLane = (lane) => {
+      while (lane.queued.length && !closedBy && fits(lane, lane.queued[0].cost)) {
+        const { id, line, cost, waiter, dropIf } = lane.queued.shift();
+        if (dropIf?.()) {
+          waiter.resolve(void 0);
+          continue;
+        }
         waiting.set(id, waiter);
-        costs.set(id, cost);
-        inFlightBytes += cost;
+        costs.set(id, { lane, cost });
+        lane.inFlight.add(id);
+        lane.bytes += cost;
         try {
           transport.send(line);
         } catch (error) {
@@ -137,6 +148,10 @@
           waiter.reject(error);
         }
       }
+    };
+    const pump = () => {
+      pumpLane(protocol);
+      pumpLane(bulk);
     };
     return {
       send,
@@ -150,7 +165,8 @@
           return Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`));
         }
         return new Promise((resolve, reject) => {
-          queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve, reject } });
+          const lane = options.protocol ? protocol : bulk;
+          lane.queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve, reject }, ...options.dropIf ? { dropIf: options.dropIf } : {} });
           pump();
         });
       },
@@ -167,15 +183,18 @@
         pump();
         return true;
       },
-      pendingCount: () => waiting.size + queued.length,
-      inFlightBytes: () => inFlightBytes,
+      pendingCount: () => waiting.size + bulk.queued.length + protocol.queued.length,
+      inFlightBytes: () => bulk.bytes + protocol.bytes,
       close(reason) {
         if (closedBy) return;
         closedBy = reason;
-        const waiters = [...waiting.values(), ...queued.splice(0).map((q) => q.waiter)];
+        const waiters = [...waiting.values(), ...bulk.queued.splice(0).map((q) => q.waiter), ...protocol.queued.splice(0).map((q) => q.waiter)];
         waiting.clear();
         costs.clear();
-        inFlightBytes = 0;
+        for (const lane of [bulk, protocol]) {
+          lane.bytes = 0;
+          lane.inFlight.clear();
+        }
         for (const waiter of waiters) waiter.reject(reason);
       }
     };
@@ -1633,24 +1652,28 @@
         body = { call: message.call, result: result === void 0 ? null : result };
       } catch (error) {
         body = { call: message.call, error: errorMessage(error) };
+      }
+      try {
+        if (!signal.cancelled) await sendResult(body, signal);
       } finally {
         forgetCall(message.call, signal);
       }
-      if (signal.cancelled) return;
-      await sendResult(body);
     }
-    async function sendResult(body) {
+    async function sendResult(body, signal) {
+      const options2 = { protocol: true, dropIf: () => signal.cancelled };
       try {
-        await rpc.request(HOST_METHODS.result, body);
+        await rpc.request(HOST_METHODS.result, body, options2);
       } catch (error) {
         if (!isUnencodable(error)) return report(error);
-        await rpc.request(HOST_METHODS.result, { call: body.call, error: `The plugin's result couldn't be sent: ${errorMessage(error)}` }).catch(report);
+        await rpc.request(HOST_METHODS.result, { call: body.call, error: `The plugin's result couldn't be sent: ${errorMessage(error)}` }, options2).catch(report);
       }
     }
     async function refuseCall(message, signal, activationError) {
-      forgetCall(message.call, signal);
-      if (signal.cancelled) return;
-      await sendResult({ call: message.call, error: `The plugin didn't activate: ${errorMessage(activationError)}` });
+      try {
+        if (!signal.cancelled) await sendResult({ call: message.call, error: `The plugin didn't activate: ${errorMessage(activationError)}` }, signal);
+      } finally {
+        forgetCall(message.call, signal);
+      }
     }
     function deliverEvent(name, data, time) {
       if (name.startsWith(STATE_PREFIX)) return subscriptions.deliverState(name, data, time);

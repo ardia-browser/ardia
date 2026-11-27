@@ -12,7 +12,7 @@ export class PluginError extends Error {
   }
 }
 
-export type RequestOptions = { replyBytes?: number };
+export type RequestOptions = { replyBytes?: number; protocol?: boolean; dropIf?: () => boolean };
 
 export type Rpc = {
   request<T = unknown>(method: string, params?: Record<string, unknown>, options?: RequestOptions): Promise<T>;
@@ -55,6 +55,8 @@ function replyError(error: HostReply["error"]): PluginError {
 
 export const MAX_IN_FLIGHT = 16;
 export const MAX_IN_FLIGHT_BYTES = 12 << 20;
+export const PROTOCOL_IN_FLIGHT = 8;
+export const PROTOCOL_IN_FLIGHT_BYTES = 8 << 20;
 export const SMALL_REPLY_BYTES = 4096;
 
 export const MAX_READ_BYTES = 4 << 20;
@@ -73,21 +75,31 @@ export function createRpc(transport: Transport): Rpc {
   let closedBy: Error | null = null;
 
   const send = (message: Record<string, unknown>) => transport.send(JSON.stringify(message));
-  const queued: { id: number; line: string; cost: number; waiter: Waiter }[] = [];
-  const costs = new Map<number, number>();
-  let inFlightBytes = 0;
+  type Lane = { queued: { id: number; line: string; cost: number; waiter: Waiter; dropIf?: () => boolean }[]; inFlight: Set<number>; bytes: number; slots: number; budget: number };
+  const bulk: Lane = { queued: [], inFlight: new Set(), bytes: 0, slots: MAX_IN_FLIGHT, budget: MAX_IN_FLIGHT_BYTES };
+  const protocol: Lane = { queued: [], inFlight: new Set(), bytes: 0, slots: PROTOCOL_IN_FLIGHT, budget: PROTOCOL_IN_FLIGHT_BYTES };
+  const costs = new Map<number, { lane: Lane; cost: number }>();
   const settle = (id: number) => {
-    inFlightBytes -= costs.get(id) ?? 0;
+    const spent = costs.get(id);
+    if (spent) {
+      spent.lane.bytes -= spent.cost;
+      spent.lane.inFlight.delete(id);
+    }
     costs.delete(id);
     waiting.delete(id);
   };
-  const fits = (cost: number) => waiting.size === 0 || (waiting.size < MAX_IN_FLIGHT && inFlightBytes + cost <= MAX_IN_FLIGHT_BYTES);
-  const pump = () => {
-    while (queued.length && !closedBy && fits(queued[0]!.cost)) {
-      const { id, line, cost, waiter } = queued.shift()!;
+  const fits = (lane: Lane, cost: number) => lane.inFlight.size === 0 || (lane.inFlight.size < lane.slots && lane.bytes + cost <= lane.budget);
+  const pumpLane = (lane: Lane) => {
+    while (lane.queued.length && !closedBy && fits(lane, lane.queued[0]!.cost)) {
+      const { id, line, cost, waiter, dropIf } = lane.queued.shift()!;
+      if (dropIf?.()) {
+        waiter.resolve(undefined);
+        continue;
+      }
       waiting.set(id, waiter);
-      costs.set(id, cost);
-      inFlightBytes += cost;
+      costs.set(id, { lane, cost });
+      lane.inFlight.add(id);
+      lane.bytes += cost;
       try {
         transport.send(line);
       } catch (error) {
@@ -95,6 +107,10 @@ export function createRpc(transport: Transport): Rpc {
         waiter.reject(error);
       }
     }
+  };
+  const pump = () => {
+    pumpLane(protocol);
+    pumpLane(bulk);
   };
 
   return {
@@ -109,7 +125,8 @@ export function createRpc(transport: Transport): Rpc {
         return Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`));
       }
       return new Promise<T>((resolve, reject) => {
-        queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve: resolve as (value: unknown) => void, reject } });
+        const lane = options.protocol ? protocol : bulk;
+        lane.queued.push({ id, line, cost: line.length + replyCost(options), waiter: { resolve: resolve as (value: unknown) => void, reject }, ...(options.dropIf ? { dropIf: options.dropIf } : {}) });
         pump();
       });
     },
@@ -126,15 +143,18 @@ export function createRpc(transport: Transport): Rpc {
       pump();
       return true;
     },
-    pendingCount: () => waiting.size + queued.length,
-    inFlightBytes: () => inFlightBytes,
+    pendingCount: () => waiting.size + bulk.queued.length + protocol.queued.length,
+    inFlightBytes: () => bulk.bytes + protocol.bytes,
     close(reason) {
       if (closedBy) return;
       closedBy = reason;
-      const waiters = [...waiting.values(), ...queued.splice(0).map((q) => q.waiter)];
+      const waiters = [...waiting.values(), ...bulk.queued.splice(0).map((q) => q.waiter), ...protocol.queued.splice(0).map((q) => q.waiter)];
       waiting.clear();
       costs.clear();
-      inFlightBytes = 0;
+      for (const lane of [bulk, protocol]) {
+        lane.bytes = 0;
+        lane.inFlight.clear();
+      }
       for (const waiter of waiters) waiter.reject(reason);
     },
   };

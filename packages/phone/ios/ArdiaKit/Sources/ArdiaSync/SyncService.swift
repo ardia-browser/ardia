@@ -147,6 +147,7 @@ public final class SyncService {
   @ObservationIgnored private var visitGeneration = 0
   @ObservationIgnored private var dueVisits: Set<String> = []
   @ObservationIgnored private var stopping = false
+  @ObservationIgnored var holdFolderCheck: (@MainActor () async -> Void)?
   @ObservationIgnored private var localDirty = false
   @ObservationIgnored private var foreground = false
   @ObservationIgnored private var missingSince: Date?
@@ -210,10 +211,15 @@ public final class SyncService {
     adopt(engine)
   }
 
+  private func unchanged(since generation: Int) -> Bool {
+    engineGeneration == generation && !stopping
+  }
+
   private func adopt(_ engine: SyncEngine) {
+    let generation = engineGeneration
     Task {
       let cached = await engine.cachedSnapshot()
-      guard self.engine === engine else { return }
+      guard unchanged(since: generation) else { return }
       switch cached {
       case .read(let saved):
         if snapshot == .empty { snapshot = saved }
@@ -294,18 +300,21 @@ public final class SyncService {
     } catch {
       return .invalidPhrase(Self.message(for: .checksum))
     }
-    guard let prepared = await Self.prepare(folder: folder, entropy: entropy) else { return .folderUnavailable }
+    let generation = engineGeneration
+    guard let prepared = await checkFolder(folder, entropy: entropy) else { return .folderUnavailable }
+    guard unchanged(since: generation) else { return .busy }
     switch prepared.check {
     case .matches: break
     case .mismatch: return .mismatch
     case .noSyncData: return .noSyncData
     case .unavailable: return .folderUnavailable
     }
-    guard !stopping else { return .busy }
     if let retiring { await retiring.value }
     let abandoned = await finishPendingRetire(giveUp: true)
+    guard unchanged(since: generation) else { return .busy }
     if let old = engine {
       await old.retire()
+      guard unchanged(since: generation) else { return .busy }
       engine = nil
     }
     let reuse = phase == .locked ? meta.deviceId.flatMap { id in Self.opensState(files, entropy: entropy) ? id : nil } : nil
@@ -351,8 +360,11 @@ public final class SyncService {
   @discardableResult
   public func changeFolder(_ folder: URL) async -> ConnectResult {
     guard !isDemo else { return .connected }
+    guard !stopping else { return .busy }
     guard meta.enabled, let deviceId = meta.deviceId, let entropy = keyStore.load(account: deviceId), entropy.count == 32 else { return .keychainFailed }
-    guard let prepared = await Self.prepare(folder: folder, entropy: entropy) else { return .folderUnavailable }
+    let generation = engineGeneration
+    guard let prepared = await checkFolder(folder, entropy: entropy) else { return .folderUnavailable }
+    guard unchanged(since: generation) else { return .busy }
     switch prepared.check {
     case .matches: break
     case .mismatch: return .mismatch
@@ -370,6 +382,7 @@ public final class SyncService {
       } catch {
         return .folderUnavailable
       }
+      guard unchanged(since: generation) else { return .busy }
       set(\.phase, .starting)
       Task { await runCycle() }
       return .connected
@@ -472,6 +485,7 @@ public final class SyncService {
   public func stopSyncing() async {
     guard !isDemo, !stopping else { return }
     stopping = true
+    engineGeneration += 1
     defer { stopping = false }
     let deviceId = meta.deviceId
     foregroundLoop?.cancel()
@@ -772,7 +786,7 @@ public final class SyncService {
     let generation = engineGeneration
     await broken.retire()
     keyStore.delete(account: oldId)
-    guard engineGeneration == generation, isEnabled else { return }
+    guard unchanged(since: generation), isEnabled else { return }
     engine = nil
     visitsDue = true
     guard makeEngine(deviceId: deviceId, entropy: entropy, grant: grant) != nil else { return }
@@ -903,6 +917,11 @@ public final class SyncService {
     var grant: SyncFolderGrant
     var location: SyncFolderLocation
     var check: FolderCheck
+  }
+
+  private func checkFolder(_ folder: URL, entropy: Data) async -> Prepared? {
+    if let holdFolderCheck { await holdFolderCheck() }
+    return await Self.prepare(folder: folder, entropy: entropy)
   }
 
   @concurrent

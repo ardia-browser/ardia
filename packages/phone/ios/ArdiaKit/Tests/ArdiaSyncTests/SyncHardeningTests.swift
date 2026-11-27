@@ -182,6 +182,71 @@ import Testing
     await relaunched.close()
   }
 
+  @MainActor final class Gate {
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var opened = false
+    private(set) var arrived = 0
+
+    func wait() async {
+      guard !opened else { return }
+      arrived += 1
+      await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func open() {
+      opened = true
+      waiting.forEach { $0.resume() }
+      waiting = []
+    }
+  }
+
+  func expectOffAndReady(_ service: SyncService) {
+    #expect(service.phase == .off)
+    #expect(!service.isEnabled)
+    #expect(service.hasReadCache)
+  }
+
+  @Test func changingTheFolderWhileStoppingLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let gate = Gate()
+    j.service.holdFolderCheck = { await gate.wait() }
+    let change = Task { await j.service.changeFolder(j.sandbox.root) }
+    while gate.arrived == 0 { await Task.yield() }
+    await j.service.stopSyncing()
+    gate.open()
+    #expect(await change.value != .connected)
+    for _ in 0..<200 { await Task.yield() }
+    expectOffAndReady(j.service)
+  }
+
+  @Test func enteringThePhraseWhileStoppingLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    let gate = Gate()
+    j.service.holdFolderCheck = { await gate.wait() }
+    let words = RecoveryPhrase.words(for: j.entropy).joined(separator: " ")
+    let connect = Task { await j.service.connect(phrase: words, folder: j.sandbox.root) }
+    while gate.arrived == 0 { await Task.yield() }
+    await j.service.stopSyncing()
+    gate.open()
+    #expect(await connect.value != .connected)
+    for _ in 0..<200 { await Task.yield() }
+    expectOffAndReady(j.service)
+  }
+
+  @Test func startingAndStoppingAtOnceLeavesSyncOff() async throws {
+    let j = try await joined()
+    defer { j.sandbox.remove() }
+    await j.service.close()
+    let relaunched = makeService(j.sandbox, source: j.source, clock: j.clock)
+    relaunched.start()
+    await relaunched.stopSyncing()
+    relaunched.appBecameActive()
+    for _ in 0..<200 { await Task.yield() }
+    expectOffAndReady(relaunched)
+  }
+
   @Test func aServiceWithNoCacheToReadHasReadItAtOnce() throws {
     let sandbox = try Sandbox()
     defer { sandbox.remove() }

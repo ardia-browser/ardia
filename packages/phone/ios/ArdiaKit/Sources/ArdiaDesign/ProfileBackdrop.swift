@@ -2,7 +2,7 @@ import SwiftUI
 
 public struct DrawnBackdrop: Equatable {
   enum Kind: Equatable {
-    case theme(ThemeLook)
+    case theme(DrawnTheme)
     case gradient([LookRGB], diagonal: Bool)
   }
 
@@ -49,7 +49,7 @@ public struct ProfileBackdrop: View {
   }
 
   public static func drawn(look: ProfileLook, themeLook: ThemeLook?, themed: Bool, dark: Bool) -> DrawnBackdrop {
-    if themed, let themeLook { return DrawnBackdrop(kind: .theme(themeLook), dark: dark) }
+    if themed, let themeLook { return DrawnBackdrop(kind: .theme(themeLook.drawn(dark: dark)), dark: dark) }
     return DrawnBackdrop(kind: .gradient(look.backdropStops(dark: dark, themed: themed), diagonal: look.showsTheme(dark: dark, themed: themed)), dark: dark)
   }
 
@@ -57,13 +57,15 @@ public struct ProfileBackdrop: View {
   private func backdrop(softened: Bool) -> some View {
     let drawn = Self.drawn(look: look ?? ambientLook, themeLook: themeLook, themed: themed, dark: colorScheme == .dark)
     switch drawn.kind {
-    case .theme(let theme):
-      ThemeBackdrop(look: theme, dark: drawn.dark)
-        .overlay {
-          if softened {
-            Color.adaptive(light: .white.opacity(0.72), dark: .black.opacity(0.55))
+    case .theme:
+      if let themeLook {
+        ThemeBackdrop(look: themeLook, dark: drawn.dark)
+          .overlay {
+            if softened {
+              Color.adaptive(light: .white.opacity(0.72), dark: .black.opacity(0.55))
+            }
           }
-        }
+      }
     case .gradient(let stops, let showsTheme):
       gradientBackdrop(stops: stops, showsTheme: showsTheme, dark: drawn.dark, softened: softened)
     }

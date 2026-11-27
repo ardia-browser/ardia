@@ -163,4 +163,15 @@ import Testing
     #expect(before.drawsTheSameSpace(as: after, appDark: true))
     #expect(!before.drawsTheSameSpace(as: after, appDark: false))
   }
+
+  @Test func anOpaqueThemeIsNotStaleWhenOnlyItsIntensityChanged() {
+    func saved(intensity: Double, translucency: Double) -> LaunchLook.Recalled {
+      var look = Self.night
+      look.intensity = intensity
+      look.translucency = translucency
+      return LaunchLook.recalled(saved: ["color": "#1A0D33", "themeColors": ["#1A0D33"], "themeLooks": ["light": ["look": look.dictionary, "dark": true], "dark": ["look": look.dictionary, "dark": true]]])
+    }
+    #expect(saved(intensity: 0.2, translucency: 0).drawsTheSameSpace(as: saved(intensity: 0.9, translucency: 0), appDark: true))
+    #expect(!saved(intensity: 0.2, translucency: 1).drawsTheSameSpace(as: saved(intensity: 0.9, translucency: 1), appDark: true))
+  }
 }

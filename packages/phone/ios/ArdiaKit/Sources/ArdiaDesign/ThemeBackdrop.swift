@@ -1,6 +1,22 @@
 import CoreGraphics
 import SwiftUI
 
+public struct DrawnTheme: Equatable {
+  let under: LookRGB
+  let colors: [ThemeColor]
+  let angle: Double
+  let layerAlpha: Double
+  let texture: ThemeTexture?
+  let grainAlpha: Double
+}
+
+extension ThemeLook {
+  public func drawn(dark: Bool) -> DrawnTheme {
+    let grain = grainAlpha
+    return DrawnTheme(under: underRGB(dark: dark), colors: stops.prefix(3).map(\.color), angle: angle, layerAlpha: layerAlpha, texture: grain > 0 ? texture : nil, grainAlpha: grain)
+  }
+}
+
 public struct ThemeBackdrop: View {
   public var look: ThemeLook
   public var dark: Bool
@@ -11,13 +27,14 @@ public struct ThemeBackdrop: View {
   }
 
   public var body: some View {
+    let drawn = look.drawn(dark: dark)
     ZStack {
-      look.underRGB(dark: dark).color
+      drawn.under.color
       ThemeGradientView(look: look)
-        .opacity(look.layerAlpha)
-      if look.grainAlpha > 0 {
-        ThemeTextureView(texture: look.texture)
-          .opacity(look.grainAlpha)
+        .opacity(drawn.layerAlpha)
+      if let texture = drawn.texture {
+        ThemeTextureView(texture: texture)
+          .opacity(drawn.grainAlpha)
       }
     }
     .allowsHitTesting(false)

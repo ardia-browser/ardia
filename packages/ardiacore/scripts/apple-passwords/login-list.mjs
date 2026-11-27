@@ -127,6 +127,51 @@ export function loginListChecks({ paired, sites, engine: engineName = "webkit" }
         await tab.close();
       }
     },
+    async E7up() {
+      const tab = await open("example.localhost");
+      try {
+        const [first, second] = usersFor("example.localhost").map((user) => FIXTURES.logins.find((l) => l.user === user));
+        await tab.click("#u");
+        await tab.waitRows();
+        await tab.key("down");
+        await tab.key("down");
+        await tab.key("up");
+        await tab.key("enter");
+        const filled = await waitFor("the keyed fill", async () => {
+          const page = await tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value })`);
+          return page?.p ? page : null;
+        });
+        assert(filled.u === first.user && filled.p === first.password, `Down, Down, Up and Enter fill the first login, not ${second.user}`, { u: filled.u });
+        return { engine: engineName, filled: filled.u };
+      } finally {
+        await tab.close();
+      }
+    },
+    async E7tab() {
+      const { fake } = await paired();
+      const passwordsAsked = () => fake.requests().filter((r) => r.cmd === 5).length;
+      const tab = await open("example.localhost");
+      const page = () => tab.value(`({ u: document.getElementById("u").value, p: document.getElementById("p").value, focused: document.activeElement?.id ?? null })`);
+      try {
+        await tab.click("#u");
+        await tab.waitRows();
+        const asked = passwordsAsked();
+        await tab.key("down");
+        await tab.key("tab");
+        assert(!(await tab.noList(800)), "Tab closes the list", null);
+        const moved = await waitFor("focus on the password field", async () => {
+          const now = await page();
+          return now?.focused === "p" ? now : null;
+        }, 5000);
+        assert(!moved.u && !moved.p, "Tab fills nothing, even with a row moved onto", { u: moved.u, filled: !!moved.p });
+        await sleep(800);
+        assert(!(await tab.noList(500)), "the password field Tab lands on opens no list by itself", null);
+        assert(passwordsAsked() === asked, "Tab never asks Apple Passwords for a password", passwordsAsked() - asked);
+        return { engine: engineName, focused: moved.focused };
+      } finally {
+        await tab.close();
+      }
+    },
     async E41() {
       const shared = await paired();
       const tabs = engineName === "chromium" ? shared.chromium : shared.tabs;

@@ -8,6 +8,7 @@
 //   E3  with no helper manifest, Pairing says how to get the helper back
 //   E4  a Release build ignores the fake-helper override: the fake never starts (needs --release)
 //   E8  on Apple Passwords, Chrome keeps its offer to save on but never shows its own password list over a sign-in field
+//   E8save on Apple Passwords, signing in in a Chromium tab still gives Chrome's pending save (the save prompt fires)
 //   E5… the Login list in a WebKit tab (login-list.mjs), in one paired instance shared by those checks; E15 ends the
 //       fake's Pairing and pairs again from the Login list, leaving that instance paired
 //   E18… saving to Apple Passwords from a WebKit tab (saving.mjs), in the same paired instance; E33 saves on an http page
@@ -156,6 +157,32 @@ async function chromeListAfterAsking(tabId, url) {
   }
 }
 
+async function signInChromium(tabId, url, username, password) {
+  const page = await app.page(url);
+  try {
+    const at = async (id) => {
+      const { x, y, height } = JSON.parse(await page.eval(`JSON.stringify(document.getElementById(${JSON.stringify(id)}).getBoundingClientRect())`));
+      const point = { x: x + 20, y: y + height / 2, button: "left", clickCount: 1 };
+      await page.send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, buttons: 1 });
+      await page.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, buttons: 0 });
+    };
+    await app.eval(`return ac.webviews.get(${JSON.stringify(tabId)}).focus()`);
+    await at("u");
+    await page.send("Input.insertText", { text: username });
+    await at("p");
+    await page.send("Input.insertText", { text: password });
+    const deadline = Date.now() + 5000;
+    let ready = false;
+    while (!(ready = await page.eval(`!document.getElementById("go").disabled`)) && Date.now() < deadline) await sleep(100);
+    assert(ready === true, "the Sign in button is enabled once both fields are typed", ready);
+    await at("go");
+  } finally {
+    page.close();
+  }
+}
+
+const passwordPromptOf = (tabId) => `const p = ac.pageState.getState().pages[${JSON.stringify(tabId)}]?.passwordPrompt; return p ? { state: p.state, username: p.username, origin: p.origin } : null;`;
+
 const extensionView = `
   const s = ac.store.getState();
   const profileId = s.settings.defaultProfileId;
@@ -235,6 +262,17 @@ const CHECKS = {
     const fresh = await chromeListAfterAsking(second.tabId, second.url);
     assert(fresh.items.length === 0, "a new tab shows no Chrome password list on Apple Passwords", fresh);
     return { control: control.items.length, reloaded: reloaded.asked, fresh: fresh.asked };
+  },
+  async E8save() {
+    const fake = fakeHelper(path.join(SCRATCH, "E8save", "fake"));
+    await start("E8save", { manifest: fake.manifest });
+    await pairApplePasswords(fake);
+    const tab = await openSignIn("example.localhost");
+    const login = { username: `chromium-${Date.now()}@example.test`, password: "fixture-pw-chromium-11" };
+    await signInChromium(tab.tabId, tab.url, login.username, login.password);
+    const prompt = await until(passwordPromptOf(tab.tabId), (v) => v?.state === "save", 20_000);
+    assert(prompt.username === login.username, "Chrome holds the submitted login for the save prompt on an Apple Passwords profile", prompt);
+    return { state: prompt.state };
   },
   async E32() {
     const fake = fakeHelper(path.join(SCRATCH, "E32", "fake"));

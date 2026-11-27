@@ -170,6 +170,7 @@ void CheckStillUnpainted(NSWindow *window) {
   ArdiaWindowController *owner = [ArdiaWindowController forNSWindow:window];
   if (!owner || owner.coreWindow.window != window) return SendHeldPaintRecord(watch, nil);
   const ardia_paint_probe::Tally still = TallyWindow(window);
+  watch->_episode.Settle(still);
   SendHeldPaintRecord(watch, @{@"stillUnpainted" : @(still.unpainted), @"stillReasons" : @(still.reasons)});
 }
 

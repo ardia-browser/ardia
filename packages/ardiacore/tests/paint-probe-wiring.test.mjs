@@ -17,6 +17,12 @@ test("a later key or seen check leaves a pending blank record and its 2 s follow
   assert.match(between(probe, "void SendHeldPaintRecord", "\n}\n"), /watch->_followUp\.Drop\(\);/);
 });
 
+test("a clean 2 s follow-up closes the episode, so the window's next blank check opens a new one", () => {
+  const still = between(probe, "void CheckStillUnpainted", "\n}\n");
+  const settle = still.indexOf("watch->_episode.Settle(still);");
+  assert.ok(settle >= 0 && settle < still.indexOf("SendHeldPaintRecord(watch, @{"), "the episode is settled from the follow-up's own tally");
+});
+
 test("a lent page counts as showing only when it is drawn over the holder's own page or that page isn't shown", () => {
   const reasons = between(probe, "- (unsigned)paintProbeReasons {", "\n}\n");
   assert.match(reasons, /state\.standInShowing = ardia_paint_probe::StandInShows\(layer\);/);

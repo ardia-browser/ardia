@@ -113,6 +113,10 @@ struct Episode {
     sent = true;
     return true;
   }
+
+  void Settle(const Tally &followUp) {
+    if (followUp.unpainted == 0) sent = false;
+  }
 };
 
 struct FollowUp {

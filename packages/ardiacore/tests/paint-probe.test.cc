@@ -194,6 +194,22 @@ int main() {
   followUp.Drop();
   CHECK(!followUp.Take(closed));
 
+  Tally cleanFollowUp;
+  cleanFollowUp.Add(0);
+  Episode settled;
+  CHECK(settled.ShouldSend(stillBlank));
+  settled.Settle(cleanFollowUp);
+  CHECK(settled.ShouldSend(stillBlank));
+  Episode stillOpen;
+  CHECK(stillOpen.ShouldSend(stillBlank));
+  stillOpen.Settle(stillBlank);
+  CHECK(!stillOpen.ShouldSend(stillBlank));
+  Episode resetByPaint;
+  CHECK(resetByPaint.ShouldSend(stillBlank));
+  CHECK(!resetByPaint.ShouldSend(cleared));
+  resetByPaint.Settle(stillBlank);
+  CHECK(resetByPaint.ShouldSend(stillBlank));
+
   if (failures) return 1;
   std::printf("paint-probe: ok\n");
   return 0;

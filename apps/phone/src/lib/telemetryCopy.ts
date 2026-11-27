@@ -170,7 +170,7 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["drawn_menu_actions_chosen"],
       },
       {
-        text: "In the same daily counts: how many pages loaded again cleanly after their page process ended, whether Ardia reloaded them by itself or you reloaded them, and how many stopped working because their process ended again during that reload or within 10 seconds of it. Counts only, never which page, and never while browsing privately",
+        text: "In the same daily counts: how many pages loaded again cleanly after their page process ended, whether Ardia reloaded them by itself or you reloaded them, and how many stopped working because their process ended again during that reload or within a minute of it. Counts only, never which page, and never while browsing privately",
         fields: ["page_processes_recovered", "page_process_recoveries_failed"],
       },
       {

@@ -101,6 +101,15 @@ class PageProcessRecoveryTest {
     }
 
     @Test
+    fun pageThatDiesElevenSecondsAfterEachRecoveryStillStopsAfterOneReload() {
+        val recovery = PageProcessRecovery()
+        recovery.processEnded(shown = true, now = 0L)
+        recovery.reloadStarted()
+        recovery.loadFinished(now = 1_000L)
+        assertEquals(PageProcessRecovery.Step.ShowFailure, recovery.processEnded(shown = true, now = 12_000L))
+    }
+
+    @Test
     fun deathLongAfterTheRecoveryGetsItsOwnReload() {
         val recovery = PageProcessRecovery()
         assertEquals(PageProcessRecovery.Step.Reload, recovery.processEnded(shown = true, now = 0L))

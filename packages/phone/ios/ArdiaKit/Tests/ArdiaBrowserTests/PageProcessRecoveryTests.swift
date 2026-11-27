@@ -97,6 +97,14 @@ import Testing
     #expect(!recovery.awaitsReload && !recovery.isReloading)
   }
 
+  @Test func aPageThatDiesElevenSecondsAfterEachRecoveryStillStopsAfterOneReload() {
+    var recovery = PageProcessRecovery()
+    #expect(recovery.processEnded(shown: true, at: 0) == .reload)
+    recovery.reloadStarted()
+    #expect(recovery.loadFinished(at: 1) == .recovered)
+    #expect(recovery.processEnded(shown: true, at: 12) == .showFailure)
+  }
+
   @Test func aDeathLongAfterTheRecoveryGetsItsOwnReload() {
     var recovery = PageProcessRecovery()
     #expect(recovery.processEnded(shown: true, at: 0) == .reload)

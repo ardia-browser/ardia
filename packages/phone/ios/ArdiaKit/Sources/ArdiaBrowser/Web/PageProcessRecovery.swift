@@ -13,7 +13,7 @@ public struct PageProcessRecovery: Equatable, Sendable {
     case showFailure
   }
 
-  public static let retryWindow: TimeInterval = 10
+  public static let retryWindow: TimeInterval = 60
 
   public private(set) var awaitsReload = false
   public private(set) var isReloading = false

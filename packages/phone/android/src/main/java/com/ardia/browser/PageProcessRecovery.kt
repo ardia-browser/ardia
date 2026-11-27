@@ -50,6 +50,6 @@ internal class PageProcessRecovery {
     }
 
     companion object {
-        const val RETRY_WINDOW_MS = 10_000L
+        const val RETRY_WINDOW_MS = 60_000L
     }
 }

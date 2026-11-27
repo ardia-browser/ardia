@@ -162,7 +162,7 @@ export const passwords = defineDomain({
       windows: "absent",
     },
     applePasswordsSaveCounted: {
-      payload: "{ name: ApplePasswordsSaveCount; epoch?: string }",
+      payload: "{ name: ApplePasswordsSaveCount; engine?: LoginListEngine; epoch?: string }",
       desktop: "absent",
       mac: "custom",
       windows: "absent",

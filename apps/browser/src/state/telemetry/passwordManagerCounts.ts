@@ -96,8 +96,10 @@ const SAVE_FIELDS: Record<ApplePasswordsSaveCount, string> = {
   saved: "apple_passwords_saves_saved",
   saveFailed: "apple_passwords_saves_failed",
 };
+const saveEngineField = (name: ApplePasswordsSaveCount, engine: LoginListEngine) => `${SAVE_FIELDS[name]}_${engine}`;
+const SAVE_ENGINE_FIELDS = (Object.keys(SAVE_FIELDS) as ApplePasswordsSaveCount[]).flatMap((name) => LOGIN_LIST_ENGINES.map((engine) => saveEngineField(name, engine)));
 
-const FIELDS = [...Object.values(LOGIN_LIST_FIELDS), ...LOGIN_LIST_ENGINE_FIELDS, ...Object.values(SAVE_FIELDS), ...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
+const FIELDS = [...Object.values(LOGIN_LIST_FIELDS), ...LOGIN_LIST_ENGINE_FIELDS, ...Object.values(SAVE_FIELDS), ...SAVE_ENGINE_FIELDS, ...Object.values(PAIRING_FIELDS), ...Object.values(PAIRING_FAILURES), ...Object.values(PANEL_FIELDS).flat(), ...Object.values(PANEL_REFUSALS), ...Object.values(HINT_FIELDS), ...Object.values(CODE_FIELDS), ...Object.values(CHOICE_FIELDS), ...Object.values(ME_CARD_FIELDS), ...Object.values(OFFER_FIELDS).flatMap(Object.values), ...Object.values(ICLOUD_EXTENSION_FIELDS), RECORD_FAILED, MOVED_BACK, ...Object.values(RESTORE_FIELDS)];
 
 let counts: Record<string, number> = {};
 const bump = (field: string, consent?: ConsentToken | null, by = 1) => countFor(consentOrNow(consent), () => void (counts[field] = (counts[field] ?? 0) + by));
@@ -140,7 +142,11 @@ export function noteLoginList(name: LoginListCount, engine: string | undefined, 
   if (known) bump(loginListEngineField(name, known), consent);
 }
 
-export const noteApplePasswordsSave = (name: ApplePasswordsSaveCount, consent: ConsentToken | null) => bump(SAVE_FIELDS[name], consent);
+export function noteApplePasswordsSave(name: ApplePasswordsSaveCount, engine: string | undefined, consent: ConsentToken | null) {
+  bump(SAVE_FIELDS[name], consent);
+  const known = LOGIN_LIST_ENGINES.find((each) => each === engine);
+  if (known) bump(saveEngineField(name, known), consent);
+}
 
 export function takePasswordManagerCounts(): Record<string, number> {
   const taken = Object.fromEntries(FIELDS.map((field) => [field, counts[field] ?? 0]));

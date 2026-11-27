@@ -9,4 +9,4 @@ export const cancelApplePasswordsPairing = () => call("passwords.applePasswordsC
 export const onApplePasswordsChanged = (listener: (state: ApplePasswordsState) => void) => on("passwords.applePasswordsChanged", ({ state }) => listener(state));
 export const setApplePasswordsProfiles = (profiles: string[]) => call("passwords.setApplePasswordsProfiles", { profiles });
 export const onLoginListCounted = (listener: (e: { name: LoginListCount; engine?: LoginListEngine; epoch?: string }) => void) => on("passwords.loginListCounted", listener);
-export const onApplePasswordsSaveCounted = (listener: (e: { name: ApplePasswordsSaveCount; epoch?: string }) => void) => on("passwords.applePasswordsSaveCounted", listener);
+export const onApplePasswordsSaveCounted = (listener: (e: { name: ApplePasswordsSaveCount; engine?: LoginListEngine; epoch?: string }) => void) => on("passwords.applePasswordsSaveCounted", listener);

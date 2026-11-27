@@ -50,7 +50,7 @@ test("the Login list counts each Connect Apple Passwords row shown, each Connect
 });
 
 test("each login saved to Apple Passwords and each save it refused are counted, only while sharing is on", () => {
-  const saveCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field]) => /^apple_passwords_saves/.test(field)));
+  const saveCounts = (counts) => Object.fromEntries(Object.entries(counts).filter(([field]) => /^apple_passwords_saves/.test(field) && !/_(chromium|webkit)$/.test(field)));
   const saved = (name) => native.emitEvent("passwords.applePasswordsSaveCounted", { name, epoch: client.consentEpoch() });
   startLoginListCounts();
   client.setSharing(true, "settings");
@@ -76,6 +76,22 @@ test("each Login list count is also counted by the engine of the tab it was in, 
   assert.equal(counts.apple_passwords_login_list_filled_webkit, 0);
   assert.equal(counts.apple_passwords_fills_failed_webkit, 1);
   assert.equal(counts.apple_passwords_login_list_not_now_chromium, 1);
+  assert.ok(!Object.keys(counts).some((field) => field.includes("gecko")), "no field for an engine Ardia doesn't have");
+  client.setSharing(false, "settings");
+});
+
+test("each Apple Passwords save is also counted by the engine of the tab it came from, and an unknown engine counts only the total", () => {
+  const savedIn = (name, engine) => native.emitEvent("passwords.applePasswordsSaveCounted", { name, engine, epoch: client.consentEpoch() });
+  startLoginListCounts();
+  client.setSharing(true, "settings");
+  takePasswordManagerCounts();
+  for (const [name, engine] of [["saved", "chromium"], ["saved", "chromium"], ["saveFailed", "chromium"], ["saved", "webkit"], ["saved", "gecko"]]) savedIn(name, engine);
+  const counts = takePasswordManagerCounts();
+  assert.equal(counts.apple_passwords_saves_saved, 4);
+  assert.equal(counts.apple_passwords_saves_saved_chromium, 2);
+  assert.equal(counts.apple_passwords_saves_saved_webkit, 1);
+  assert.equal(counts.apple_passwords_saves_failed_chromium, 1);
+  assert.equal(counts.apple_passwords_saves_failed_webkit, 0);
   assert.ok(!Object.keys(counts).some((field) => field.includes("gecko")), "no field for an engine Ardia doesn't have");
   client.setSharing(false, "settings");
 });

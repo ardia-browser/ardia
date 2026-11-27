@@ -50,18 +50,17 @@ final class ApplePasswordsSaving: NSObject {
     }
   }
 
-  @objc(saveForOrigin:username:password:completion:)
-  static func save(origin: String, username: String, password: String, done: @escaping (Bool) -> Void) {
+  static func save(origin: String, username: String, password: String, engine: String, done: @escaping (Bool) -> Void) {
     dispatchPrecondition(condition: .onQueue(.main))
     guard let (scheme, host) = page(origin) else {
-      count("saveFailed")
+      count("saveFailed", engine: engine)
       return done(false)
     }
     ApplePasswordsClient.shared.save(host: host, insecure: scheme == "http", user: username, password: password) { result in
       DispatchQueue.main.async {
         let saved = (try? result.get()) != nil
         if saved { remember(scheme: scheme, host: host, user: username, password: password) }
-        count(saved ? "saved" : "saveFailed")
+        count(saved ? "saved" : "saveFailed", engine: engine)
         done(saved)
       }
     }
@@ -123,14 +122,14 @@ final class ApplePasswordsSaving: NSObject {
     held.removeObject(forKey: view)
     guard action == "save" || action == "update" else { return chrome }
     let name = username ?? login.username
-    save(origin: login.origin, username: name, password: login.password) { saved in
+    save(origin: login.origin, username: name, password: login.password, engine: "chromium") { saved in
       guard !saved else { return }
       notSaved(prompt(Self.notSaved, origin: login.origin, username: name, passwordLength: login.password.count, usernames: [name]))
     }
     return chrome
   }
 
-  private static func count(_ name: String) {
-    ArdiaEvents.emit("passwords.applePasswordsSaveCounted", data: ArdiaConsentStamp.begin().onto(["name": name]))
+  private static func count(_ name: String, engine: String) {
+    ArdiaEvents.emit("passwords.applePasswordsSaveCounted", data: ArdiaConsentStamp.begin().onto(["name": name, "engine": engine]))
   }
 }

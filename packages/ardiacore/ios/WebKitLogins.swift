@@ -528,7 +528,7 @@ final class WebKitLogins: NSObject {
     let secret = password ?? login.password
     listings.removeValue(forKey: listingKey(profile, login.origin))
     if login.applePasswords, action == "save" || action == "update" {
-      return ApplePasswordsSaving.save(origin: login.origin, username: name, password: secret) { [weak tab] saved in
+      return ApplePasswordsSaving.save(origin: login.origin, username: name, password: secret, engine: "webkit") { [weak tab] saved in
         guard !saved, let tab else { return }
         tab.emit(
           "passwordPrompt",

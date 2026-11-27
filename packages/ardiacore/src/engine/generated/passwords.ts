@@ -27,5 +27,5 @@ export type PasswordsCalls = {
 export type PasswordsEvents = {
   "passwords.applePasswordsChanged": { state: ApplePasswordsState; epoch?: string };
   "passwords.loginListCounted": { name: LoginListCount; engine?: LoginListEngine; epoch?: string };
-  "passwords.applePasswordsSaveCounted": { name: ApplePasswordsSaveCount; epoch?: string };
+  "passwords.applePasswordsSaveCounted": { name: ApplePasswordsSaveCount; engine?: LoginListEngine; epoch?: string };
 };

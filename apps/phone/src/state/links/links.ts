@@ -17,7 +17,7 @@ import { serialQueue } from "../../lib/serialQueue";
 import { countUsage } from "../telemetry/telemetry";
 import { heldLinks, holdLink, takeHeldLinks } from "./heldLinks";
 import { useBoot } from "../app/bootState";
-import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, restoredLinks, type Cover, type IncomingLink } from "./linkRules";
+import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, restoredLinks, replayed, type Cover, type IncomingLink } from "./linkRules";
 
 let started = false;
 
@@ -134,7 +134,7 @@ export function listenForLinks() {
   listening = true;
   waiting = [];
   quietlyOnDatabase(() => {
-    waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]), ...(waiting ?? [])];
+    waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]).map(replayed), ...(waiting ?? [])];
   });
   addLinkListener((link: SystemLink) => {
     if (!waiting) {
@@ -159,6 +159,6 @@ export function startLinks() {
   });
   useOnboarding.subscribe((state) => {
     if (state.showing || !heldLinks().length) return;
-    for (const link of heldAfterOnboarding(takeHeldLinks())) void inOrder((expired) => run(link, expired));
+    for (const link of heldAfterOnboarding(takeHeldLinks()).map(replayed)) void inOrder((expired) => run(link, expired));
   });
 }

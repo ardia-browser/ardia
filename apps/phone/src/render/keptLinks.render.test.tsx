@@ -26,7 +26,7 @@ jest.mock("../platform/links", () => ({
 
 test("a link sent while the import failure screen is up is kept in the store, then opens once after a later import succeeds", async () => {
   jest.useFakeTimers();
-  const opened = jest.spyOn(browse, "openPage").mockImplementation(() => undefined);
+  const opened = jest.spyOn(browse, "openPageFromAnotherApp").mockImplementation(() => undefined);
   withTabs(1);
   act(() => bootApp(() => startLinks()));
   await act(async () => mockImport.resolve({ kind: "failed", reason: "source" }));

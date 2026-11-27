@@ -1,11 +1,14 @@
-export type IncomingLink =
+export type IncomingLink = (
   | { kind: "open"; url: string; source?: string }
   | { kind: "search"; query: string | null }
   | { kind: "voiceSearch" }
   | { kind: "incognito" }
   | { kind: "tab"; id: string }
   | { kind: "macTabs" }
-  | { kind: "inbox" };
+  | { kind: "inbox" }
+) & { replayed?: boolean };
+
+export const replayed = (link: IncomingLink): IncomingLink => ({ ...link, replayed: true });
 
 export type TabKind = "open" | "private" | "archived";
 
@@ -37,7 +40,7 @@ export function linkAction(link: IncomingLink, state: LinkState): LinkAction {
         kind: "openUrl",
         url: link.url.trim(),
         origin: state.sharesAsShare && link.source === "share" ? "share" : "link",
-        fromAnotherApp: link.source !== undefined && FROM_ANOTHER_APP.has(link.source),
+        fromAnotherApp: !link.replayed && link.source !== undefined && FROM_ANOTHER_APP.has(link.source),
       };
     case "search": {
       const query = link.query?.trim() ?? "";

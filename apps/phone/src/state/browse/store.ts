@@ -180,14 +180,19 @@ export function openPage(url: string, origin: TabOrigin) {
   return tab;
 }
 
-const tabsFromOtherApps = new Set<string>();
+let tabFromAnotherApp: string | null = null;
 
 export function openPageFromAnotherApp(url: string, origin: TabOrigin) {
-  tabsFromOtherApps.add(openPage(url, origin).id);
+  tabFromAnotherApp = openPage(url, origin).id;
 }
 
+useTabs.subscribe((tabs) => {
+  if (tabFromAnotherApp !== null && tabs.selectedId !== tabFromAnotherApp) tabFromAnotherApp = null;
+});
+
 export function closeTabBackToOpeningApp(id: string): boolean {
-  if (!tabsFromOtherApps.delete(id)) return false;
+  if (tabFromAnotherApp !== id) return false;
+  tabFromAnotherApp = null;
   const closing = findTab(currentTabs(), id);
   closeTabGoingBack(id);
   if (closing && !closing.isPrivate) countUsage("tabs_returned_to_app");

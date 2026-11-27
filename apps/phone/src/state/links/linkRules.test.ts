@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, opensLaunchTray, restoredLinks, type LinkState } from "./linkRules.ts";
+import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, opensLaunchTray, replayed, restoredLinks, type LinkState } from "./linkRules.ts";
 
 const kinds: Record<string, "open" | "private" | "archived"> = { t1: "open", p1: "private", a1: "archived" };
 const browsing: LinkState = { onboarding: false, syncEnabled: true, canSearchByVoice: false, sharesAsShare: false, tabKind: (id) => kinds[id] ?? null };
@@ -18,6 +18,13 @@ test("a link another app sent is marked so Back can return to that app; Ardia's 
   for (const source of ["system", "shortcut", undefined]) {
     assert.equal((linkAction({ kind: "open", url: "https://example.com/", source }, browsing) as { fromAnotherApp: boolean }).fromAnotherApp, false);
   }
+});
+
+test("a link held through onboarding or kept across a failed start is no longer a handoff, so Back won't leave for its app", () => {
+  const held = replayed({ kind: "open", url: "https://x.com/jack/status/20", source: "web" });
+  assert.deepEqual(linkAction(held, browsing), { kind: "openUrl", url: "https://x.com/jack/status/20", origin: "link", fromAnotherApp: false });
+  assert.deepEqual(JSON.parse(keptLinks([held])), [{ kind: "open", url: "https://x.com/jack/status/20", source: "web", replayed: true }]);
+  assert.deepEqual(restoredLinks(keptLinks([held])), [{ kind: "open", url: "https://x.com/jack/status/20", source: "web" }]);
 });
 
 test("search, voice search and incognito open the tray, with the query filled when given", () => {

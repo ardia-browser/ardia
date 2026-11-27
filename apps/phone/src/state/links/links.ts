@@ -1,6 +1,6 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { addLinkListener, initialLink, type SystemLink } from "../../platform/links";
-import { openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, timesLeftScreen, useBrowse } from "../browse/store";
+import { openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { useOnboarding } from "../onboarding/store";
@@ -103,10 +103,12 @@ const LINK_DEADLINE_MS = 8_000;
 
 const inOrder = serialQueue(LINK_DEADLINE_MS, () => countUsage("links_given_up"));
 
+let timesLeftScreen = 0;
+
 const leftScreenWhenReceived = new WeakMap<IncomingLink, number>();
 
-const take = (link: IncomingLink, leftBefore = timesLeftScreen()) => {
-  void inOrder((expired) => run(timesLeftScreen() === leftBefore ? link : replayed(link), expired));
+const take = (link: IncomingLink, leftBefore = timesLeftScreen) => {
+  void inOrder((expired) => run(timesLeftScreen === leftBefore ? link : replayed(link), expired));
 };
 
 let waiting: IncomingLink[] | null = null;
@@ -136,6 +138,9 @@ let listening = false;
 export function listenForLinks() {
   if (listening) return;
   listening = true;
+  AppState.addEventListener("change", (next) => {
+    if (next !== "active") timesLeftScreen += 1;
+  });
   waiting = [];
   quietlyOnDatabase(() => {
     waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]).map(replayed), ...(waiting ?? [])];
@@ -145,7 +150,7 @@ export function listenForLinks() {
       take(link);
       return;
     }
-    leftScreenWhenReceived.set(link, timesLeftScreen());
+    leftScreenWhenReceived.set(link, timesLeftScreen);
     waiting.push(link);
     keepWaitingLinks();
   });

@@ -74,9 +74,9 @@ NSDictionary *ArdiaLoginListReport(id message) {
     @"token" : token,
     @"field" : field,
     @"typed" : [field isEqualToString:@"username"] ? Typed(d) : @"",
-    @"signIn" : @([field isEqualToString:@"username"] && Flag(d, @"signIn")),
     @"rect" : [NSValue valueWithRect:rect],
   } mutableCopy];
+  if ([field isEqualToString:@"username"]) report[@"signIn"] = @(Flag(d, @"signIn"));
   if ([field isEqualToString:@"newPassword"]) {
     report[@"maxLength"] = Length(d, @"maxLength");
     report[@"minLength"] = Length(d, @"minLength");

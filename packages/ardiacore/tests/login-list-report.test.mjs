@@ -95,7 +95,7 @@ const withinContract = (report) =>
         report.rect[3] >= 1)));
 
 test("a Login list field report keeps its event, token, field, typed value and rect", { skip: process.platform !== "darwin" }, () => {
-  const [show, typing, password, code, key, hide, passwordInput] = reports([
+  const [show, typing, password, code, key, hide, passwordInput, signIn, claimed] = reports([
     SHOW,
     { ...SHOW, event: "input", typed: "ad" },
     { ...SHOW, field: "password", typed: "fixture-pw-ada-1" },
@@ -103,9 +103,13 @@ test("a Login list field report keeps its event, token, field, typed value and r
     { event: "key", token: "3", key: "down" },
     { event: "hide" },
     { event: "passwordInput", token: "3", typed: "fixture-pw-ada-1" },
+    { ...SHOW, signIn: true },
+    { ...SHOW, field: "password", signIn: true },
   ]);
-  assert.deepEqual(show, { event: "show", token: "3", field: "username", typed: "ada", rect: [10, 20, 300, 30] });
-  assert.deepEqual(typing, { event: "input", token: "3", field: "username", typed: "ad", rect: [10, 20, 300, 30] });
+  assert.deepEqual(show, { event: "show", token: "3", field: "username", signIn: false, typed: "ada", rect: [10, 20, 300, 30] });
+  assert.deepEqual(typing, { event: "input", token: "3", field: "username", signIn: false, typed: "ad", rect: [10, 20, 300, 30] });
+  assert.equal(signIn.signIn, true, "a username field on a sign-in form says so");
+  assert.ok(!("signIn" in claimed), "only a username field carries whether its form signs in");
   assert.equal(password.typed, "", "a password field's value is never kept");
   assert.deepEqual(code, { event: "show", token: "3", field: "code", typed: "", rect: [10, 20, 300, 30] }, "a code field's value is never kept");
   assert.deepEqual(key, { event: "key", token: "3", key: "down" });

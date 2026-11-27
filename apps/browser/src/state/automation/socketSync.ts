@@ -1,4 +1,4 @@
-import { sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
+import { addRemoteProfile, removeRemoteProfile, sendTab, sendTargets, setOpenTabsSynced, setProfileSynced, setTypeSynced, syncNow, syncWritesOpen, useSync } from "../sync/engine";
 import { DATA_TYPES, type DataType } from "../sync/syncDoc";
 import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { bool, id, obj, oneOf, PROFILE, TAB } from "./socketSchema";
@@ -80,6 +80,28 @@ async function setOpenTabs(params: Record<string, unknown>) {
   return summary();
 }
 
+function remoteProfileOf(params: Record<string, unknown>, what: string) {
+  const s = writable(what);
+  const profile = s.remoteProfiles.find((p) => p.syncId === params.syncId);
+  if (!profile) throw new OpError("no_window", `There's no profile ${String(params.syncId)} on your other devices that isn't on this one (sync.status lists remoteProfiles).`);
+  return profile;
+}
+
+function addRemote(params: Record<string, unknown>) {
+  const profile = remoteProfileOf(params, "adding a profile from your other devices");
+  if (profile.waiting) throw new OpError("refused", `${profile.name} shares data with a profile that hasn't synced yet; try again after the next sync.`);
+  const added = addRemoteProfile(profile.syncId);
+  expect(!!added, `${profile.name} wasn't added.`);
+  return { profile: added, ...summary() };
+}
+
+function removeRemote(params: Record<string, unknown>) {
+  const profile = remoteProfileOf(params, "removing a profile from sync");
+  if (profile.sharedByOthers) throw new OpError("refused", `Other profiles share ${profile.name}'s data; remove them first.`);
+  expect(removeRemoteProfile(profile.syncId), `${profile.name} wasn't removed.`);
+  return { ok: true, remoteProfiles: useSync.getState().remoteProfiles };
+}
+
 function devicesFor(params: Record<string, unknown>) {
   syncing("listing devices");
   return sendTargets(profileArg(params.profile));
@@ -96,12 +118,15 @@ function send(params: Record<string, unknown>) {
 }
 
 const ON = bool("On or off");
+const SYNC_ID = id("A profile's syncId from sync.status remoteProfiles");
 
 export const SYNC_METHODS: MethodSpec[] = [
   { name: "sync.now", mutates: true, description: "Sync now, as Settings › General › Advanced › Sync Now does; answers when the cycle ends", params: obj({}), result: "{status, lastSyncedAt, pending, error, types, profiles}", run: runNow },
   { name: "sync.setType", mutates: true, description: "Choose whether a kind of data syncs, as the checklist in Settings › General does", params: obj({ type: oneOf(TYPES, "The kind of data"), on: ON }, ["type", "on"]), result: "{status, types, profiles, …}", run: setType },
   { name: "sync.setProfile", mutates: true, description: "Choose whether a profile syncs, as Settings › Profiles › Sync This Profile does", params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: "{status, types, profiles, …}", run: setProfile },
   { name: "sync.setOpenTabs", mutates: true, description: "Sync every open tab of a profile, not just pinned ones", params: obj({ profile: PROFILE, on: ON }, ["profile", "on"]), result: "{status, types, profiles, …}", run: setOpenTabs },
+  { name: "sync.addRemoteProfile", mutates: true, description: "Add a profile from your other devices to this one, as Add beside it under Settings › General › Profiles on your other devices does", params: obj({ syncId: SYNC_ID }, ["syncId"]), result: "{profile, status, types, profiles, …}", run: addRemote },
+  { name: "sync.removeRemoteProfile", mutates: true, description: "Remove a profile that's only on your other devices from sync, as Remove… beside it under Settings › General › Profiles on your other devices does", params: obj({ syncId: SYNC_ID }, ["syncId"]), result: "{ok, remoteProfiles}", run: removeRemote },
   { name: "sync.devices", mutates: false, description: "The devices a profile's tabs can be sent to", params: obj({ profile: PROFILE }), result: "[{id, name, kind}]", run: devicesFor },
   { name: "sync.sendTab", mutates: true, description: "Send a tab to another device, as the tab menu's Send to Device does", params: obj({ tab: TAB, device: id("A device id from sync.devices") }, ["tab", "device"]), result: "{ok, device}", run: send },
 ];

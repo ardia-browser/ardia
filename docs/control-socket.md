@@ -242,7 +242,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 | Extensions | installed, enabled, pinned, toolbar order, options | Chrome's extension prefs, `sync-extensions.json` | ✅ `extensions.list`, `extensions.install` (the user confirms), `extensions.configure`, `extensions.setEnabled`, `extensions.setPinned`, `extensions.reload`, `extensions.uninstall` |
 | Plugins | installed, enabled, consent, tools | `plugins.json`, `Plugins/` | ✅ `plugins`, `plugins.*` (`state/plugins/socketMethods.ts`) |
 | Media sessions | now playing per tab, PiP, shares | memory (`state/media/media.ts`) | ✅ `media.list`, `media.control` |
-| Sync | folder, devices, synced types and profiles, remote tabs | `sync.json`, sealed `sync-*.nns` | ✅ `sync.status`, `sync.now`, `sync.setType`, `sync.setProfile`, `sync.setOpenTabs`, `sync.devices`, `sync.sendTab`; ⛔ turning sync on or off, the recovery phrase |
+| Sync | folder, devices, synced types and profiles, remote tabs | `sync.json`, sealed `sync-*.nns` | ✅ `sync.status`, `sync.now`, `sync.setType`, `sync.setProfile`, `sync.setOpenTabs`, `sync.addRemoteProfile`, `sync.removeRemoteProfile`, `sync.devices`, `sync.sendTab`; ⛔ turning sync on or off, the recovery phrase |
 | Saved passwords | origin, username, password | Chrome's Login Data (keychain-sealed) | 🔍 `passwords.list` (no passwords); ⛔ reveal, see Secrets |
 | Autofill | addresses, cards | Chrome's Web Data | 🔍 `autofill.list` (no card numbers); ⛔ card numbers |
 | Cookies and site data | cookies, storage per origin | Chrome's Cookies and storage | ✅ `sites.clearData`; ⛔ cookie values |
@@ -302,7 +302,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 | sites | `sites.origins {profile?}`, `sites.get {origin, profile?}`, `sites.zoomLevels {profile?}`, `sites.adBlocker` → `{enabled, allowedSites}` | `sites.set {origin, type, value}`, `sites.reset {origin}`, `sites.setZoom {host, zoom}`, `sites.clearData {site}`, `sites.allowAds {site}` → `{site, trusted, covers, enabled, allowedSites}` and `sites.blockAds {site}` → `{site, removed, trusted, coveredBy?, enabled, allowedSites}`: the built-in uBlock Origin's trusted sites, the list Site Controls' Block Ads & Trackers switch edits (shared by every profile, from the next load). `allowAds` trusts the site and its subdomains, as the switch does (`covers` says so); the site can't be a public suffix (Chromium's list, private section included) or an IP address, so `co.uk`, `github.io` and `s3.amazonaws.com` are refused, while a name under a top-level domain the list doesn't know, like `wiki.intranet.corp`, counts as one site, as Chromium counts it. `blockAds` takes out exactly that entry (`contentBlocker.removeAllowed`): never a broader entry or one uBlock ships with; it answers `removed`, and `trusted` with `coveredBy` when a broader entry still lets the site through, and is refused naming the broader entry when the site itself isn't listed. An Ardia whose host lacks these calls (Linux until its engine has them) refuses both with `refused` |
 | extensions | `extensions.list {profile?}` | `extensions.install {profile?, webStore}` (the user adds it on the store page; `folder` is refused), `extensions.configure {id, siteAccess \| incognito \| userScripts}` (exactly one; `specificSites` is refused), `extensions.setEnabled {id, enabled}`, `extensions.setPinned`, `extensions.reload`, `extensions.uninstall` (Ardia asks the user first) |
 | media | `media.list` | `media.control {tab, action, seconds?}` |
-| sync | `sync.status`, `sync.devices {profile?}` | `sync.now`, `sync.setType {type, on}`, `sync.setProfile {profile, on}`, `sync.setOpenTabs {profile, on}`, `sync.sendTab {tab, device}` |
+| sync | `sync.status`, `sync.devices {profile?}` | `sync.now`, `sync.setType {type, on}`, `sync.setProfile {profile, on}`, `sync.setOpenTabs {profile, on}`, `sync.addRemoteProfile {syncId}`, `sync.removeRemoteProfile {syncId}`, `sync.sendTab {tab, device}` |
 | passwords, autofill | `passwords.list {profile?}`, `autofill.list {profile?}` | `passwords.remove {origin, username}` |
 | pins (tile folders) | `pins.folders {window?}` | `pins.createFolder {tabs, name?}`, `pins.renameFolder {folder, name}`, `pins.removeFolder {folder}`, `pins.addToFolder {folder, tabs}`, `pins.removeFromFolder {tabs}` |
 | favicons | `favicons.get {url, profile?}` | none |
@@ -439,14 +439,20 @@ socket's own (`socketWire.ts`, `ControlOutput.swift`), the same for every event.
 ### Sync
 
 The sync methods call `state/sync/engine.ts` as Settings does, and each refuses while sync is off, unavailable or
-locked. The writes (`sync.now` and every `sync.set*` and `sync.sendTab`) also refuse while sync is starting (its
+locked. The writes (`sync.now`, every `sync.set*`, `sync.addRemoteProfile`, `sync.removeRemoteProfile` and `sync.sendTab`) also refuse while sync is starting (its
 saved state isn't loaded yet) or turning off (Settings still shows it on during the last pass), so an `ok` is never
 dropped afterwards. `sync.now` answers after a pass that started after the call: when a pass is already running it
 waits for that one, then runs its own. Right where that pass would start it checks again: if sync began turning off
 meanwhile it answers `refused` and starts nothing (the retiring pass is the last), and if control turned off it starts
 nothing. `sync.setProfile` needs the profile's sync link (it appears on the first sync after the profile opens; the
 Settings toggle is disabled until then), and `sync.setOpenTabs` needs the profile on and Open Tabs syncing, as the
-Sync All Open Tabs toggle does. `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
+Sync All Open Tabs toggle does. `sync.addRemoteProfile` and `sync.removeRemoteProfile` take a `syncId` from
+`sync.status`'s `remoteProfiles`, the profiles on your other devices that this one doesn't have, and do what Add and
+Remove… beside each do in Settings › General: adding joins the synced profile (with the profiles it shares data with)
+instead of creating an empty one with the same name, and answers its new `profile` id; it refuses a profile still
+`waiting` for the one it shares data with. Removing takes it off the list on every device, and refuses one that other
+profiles share data with (`sharedByOthers`), as Settings disables that button. A `syncId` not on the list answers
+`no_window`. `sync.sendTab` takes an `http(s)` tab and a device from `sync.devices`, the list the
 tab menu's Send to Device shows. Turning sync on or off and the recovery phrase stay in Settings: they choose a
 folder and show or ask for the phrase, which is the user's to see.
 

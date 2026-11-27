@@ -188,6 +188,8 @@ const PARAMS = (f) => ({
   "sync.setType": { type: "history", on: false },
   "sync.setProfile": { profile: f.p2, on: true },
   "sync.setOpenTabs": { profile: f.p2, on: true },
+  "sync.addRemoteProfile": { syncId: "none" },
+  "sync.removeRemoteProfile": { syncId: "none" },
   "sync.sendTab": { tab: f.other, device: "none" },
   "extensions.install": { webStore: "a".repeat(32) },
   "extensions.configure": { id: "a".repeat(32), incognito: true },

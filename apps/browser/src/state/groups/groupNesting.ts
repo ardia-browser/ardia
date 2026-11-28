@@ -3,9 +3,13 @@ import type { TabGroup } from "../browser/types";
 export function reparent(next: Record<string, TabGroup>, was: Record<string, TabGroup>): Record<string, TabGroup> {
   for (const g of Object.values(next)) {
     if (!g.parentId || next[g.parentId]) continue;
+    const passed = new Set<string>();
     let up = was[g.parentId]?.parentId;
-    while (up && !next[up]) up = was[up]?.parentId;
-    next[g.id] = withParent(g, up);
+    while (up && !next[up] && !passed.has(up)) {
+      passed.add(up);
+      up = was[up]?.parentId;
+    }
+    next[g.id] = withParent(g, up && next[up] ? up : undefined);
   }
   return next;
 }

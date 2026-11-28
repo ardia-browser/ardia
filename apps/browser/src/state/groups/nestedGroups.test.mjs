@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { groupEntries, sidebarEntries, numberedTabs } = await import("../sidebar/entries.ts");
-const { nestGroups, orderSections } = await import("./groups.ts");
+const { nestGroups, orderSections, reparent } = await import("./groups.ts");
 const { canMoveGroup } = await import("../pins/tabGrouping.ts");
 const { liveAnchors, withLiveFolders } = await import("../sidebar/pinnedOrder.ts");
 const { createFolder, removeFolder, updateFolder, useLive } = await import("../live/store.ts");
@@ -448,6 +448,22 @@ test("nesting repair breaks a parent cycle without leaving an empty group", () =
   assert.ok(Object.values(looped).every((v) => !v.parentId || looped[v.parentId]));
   const holders = Object.values(looped).filter((v) => v.tabIds.includes(ids[1]));
   assert.ok(holders.length >= 1);
+});
+
+const group = (id, parentId) => ({ id, name: id, windowId: "w", profileId: "default", pinned: true, collapsed: false, tabIds: [`t-${id}`], createdAt: 0, ...(parentId ? { parentId } : {}) });
+
+test("a group whose removed ancestors loop back on each other is lifted to the top level instead of hanging (#3590)", () => {
+  const was = { a: group("a", "b"), b: group("b", "a"), c: group("c", "a") };
+  const next = reparent({ c: group("c", "a") }, was);
+  assert.equal(next.c.parentId, undefined);
+  const selfParented = reparent({ c: group("c", "a") }, { a: group("a", "a"), c: group("c", "a") });
+  assert.equal(selfParented.c.parentId, undefined, "a removed group that is its own parent ends the climb too");
+});
+
+test("a group whose parent is removed still moves up to the nearest ancestor that stays", () => {
+  const was = { root: group("root"), a: group("a", "root"), b: group("b", "a"), c: group("c", "b") };
+  const next = reparent({ root: group("root"), c: group("c", "b") }, was);
+  assert.equal(next.c.parentId, "root");
 });
 
 test("a live folder whose pinned anchor goes keeps its place under the item above it", () => {

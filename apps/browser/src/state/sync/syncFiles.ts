@@ -344,5 +344,7 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     });
   }
 
-  return { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, checkpoint };
+  const settleOwedReset = (consent: ConsentToken | null) => serial(() => settleReset(consent));
+
+  return { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, settleOwedReset, checkpoint };
 }

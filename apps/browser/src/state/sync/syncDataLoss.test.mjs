@@ -10,16 +10,17 @@ const folder = new Map();
 const downloading = new Set();
 const failing = { writes: 0, stateSeals: false, onWrite: null, onRead: null };
 const forgotten = [];
+const keyEvents = [];
 let ids = 0;
 globalThis.acTestNativeModules = {
   ArdiaSync: {
     newDeviceId: () => `id${++ids}`,
     deviceName: () => "Test Mac",
-    createPhrase: async () => true,
+    createPhrase: async (account) => (keyEvents.push(`create:${account}`), true),
     createChain: async () => {},
     enterPhrase: async () => ({ ok: true }),
     unlock: async () => true,
-    forget: async (account) => void forgotten.push(account),
+    forget: async (account) => void (forgotten.push(account), keyEvents.push(`forget:${account}`)),
     chainStatus: async () => "ok",
     write: async (_folder, scope, payload) => {
       failing.onWrite?.(payload);
@@ -909,8 +910,12 @@ test("#4759: Stop Syncing keeps the journal, the saved state and the key when sy
       await engineA1.stopSync();
       engineA1.setTypeSynced("history", true);
       await settle();
+      const shown = [];
+      const unwatch = engineA1.useSync.subscribe((ui) => shown.push(ui.enabled));
       const turnedOn = await engineA1.turnOnSync("/new");
+      unwatch();
       assert.match(turnedOn.error ?? "", /couldn’t save its settings/, "a new setup that can't save says so");
+      assert.equal(shown.includes(true), false, "and Settings never showed it on, so the Turn On sheet stays to show the error");
       assert.equal(engineA1.useSync.getState().enabled, false, "and sync stays off");
       await engineA1.syncNow();
       await settle();
@@ -971,4 +976,47 @@ test("#4759: a sync.json save that lands after the setup changed, or after a new
     hooks.docSaved(first, mark);
     assert.equal(S().syncMark, mark, "the save of the setup's own mark");
   });
+});
+
+test("#4759: turning sync on after a Stop that couldn't save finishes that Stop first, so its key goes before the new one is made", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?stopThenOnA1");
+  await turnOn(a, engineA1);
+  const old = JSON.parse(a.docs.get("sync.json")).deviceId;
+  shell.refusedSaves.of.add("sync.json");
+  try {
+    await a.with(() => engineA1.stopSync());
+  } finally {
+    shell.refusedSaves.of.delete("sync.json");
+  }
+  keyEvents.length = 0;
+  await a.with(async () => assert.ok("ok" in (await engineA1.turnOnSync("/new"))));
+  assert.equal(keyEvents[0], `forget:${old}`);
+  assert.match(keyEvents[1] ?? "", /^create:/);
+  assert.equal(keyEvents.filter((event) => event.startsWith("forget:")).length, 1, "nothing forgets the new key");
+});
+
+test("#4759: a Turn On whose settings can't save puts sync back off and says so, without ever showing it on", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?onRefusedA1");
+  shell.refusedSaves.of.add("sync.json");
+  try {
+    await a.with(async () => {
+      engineA1.startSync();
+      const shown = [];
+      const unwatch = engineA1.useSync.subscribe((ui) => shown.push(ui.enabled));
+      const turnedOn = await engineA1.turnOnSync("/sync");
+      unwatch();
+      assert.match(turnedOn.error ?? "", /couldn’t save its settings/);
+      assert.equal(shown.includes(true), false);
+      assert.equal(engineA1.useSync.getState().enabled, false);
+    });
+  } finally {
+    shell.refusedSaves.of.delete("sync.json");
+  }
+  assert.equal(a.docs.has("sync.json") && JSON.parse(a.docs.get("sync.json")).enabled, false, "nothing on disk says sync is on");
 });

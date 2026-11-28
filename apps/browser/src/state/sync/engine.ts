@@ -48,7 +48,7 @@ let again = false;
 let forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
-const { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, checkpoint } = syncFiles(() => doc, sessionMarkHooks(() => doc));
+const { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, settleOwedReset, checkpoint } = syncFiles(() => doc, sessionMarkHooks(() => doc));
 
 const load = () => { const loaded = read(); if (loaded) doc = loaded; };
 
@@ -261,22 +261,29 @@ async function begin(native: NonNullable<typeof SyncNative>, folder: string, dev
   const before = doc;
   const begun: SyncDoc = (doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining, deviceCheckpoints: true });
   markNewSync(begun);
-  publishUi({ status: "starting", error: null });
   const failed = await startOver(consent).then(() => null, (error: unknown) => (warnFor(consent, "[sync] couldn't save sync.json to start syncing", error), { error }));
   if (doc !== begun) return null;
-  if (!failed) return (scheduleSync(0), null);
+  if (!failed) return (publishUi({ status: "starting", error: null }), scheduleSync(0), null);
   doc = before;
   const forgetKey = async () => void (await native.forget(deviceId).catch((error: unknown) => warnFor(consent, "[sync] couldn't forget a sync key that never saved", error)));
   void startOver(consent, forgetKey).catch((again: unknown) => warnFor(consent, "[sync] couldn't save sync.json after a start that failed", again));
   publishUi({ status: "off", error: null });
-  return `Sync couldn’t save its settings on this ${PLATFORM_TERMS.computer}: ${errorText(failed.error)}`;
+  return notSavedText(failed.error);
+}
+
+const notSavedText = (error: unknown) => `Sync couldn’t save its settings on this ${PLATFORM_TERMS.computer}: ${errorText(error)}`;
+
+async function priorStopSaved(consent: ConsentToken | null): Promise<string | null> {
+  await retiring;
+  return settleOwedReset(consent).then(() => null, (error: unknown) => (warnFor(consent, "[sync] couldn't finish stopping sync before starting again", error), notSavedText(error)));
 }
 
 export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ ok: true } | { error: string }> {
   const native = SyncNative, consent = consentToken();
   if (!native) return { error: "Sync isn’t available in this build." };
   await folderOpSettled();
-  await retiring;
+  const unsaved = await priorStopSaved(consent);
+  if (unsaved) return { error: unsaved };
   const deviceId = native.newDeviceId();
   try {
     if (!(await native.createPhrase(deviceId))) return { error: `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.` };
@@ -304,7 +311,8 @@ export async function enterRecoveryPhrase(folder: string, phrase: Secret<"syncPh
     }
     return result;
   }
-  await retiring;
+  const unsaved = await priorStopSaved(consent);
+  if (unsaved) return { error: "notSaved", message: unsaved };
   const deviceId = native.newDeviceId();
   const result = await native.enterPhrase(deviceId, reveal(phrase), folder);
   if (!("ok" in result)) return result;

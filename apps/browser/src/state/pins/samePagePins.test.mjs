@@ -106,3 +106,22 @@ test("adopting a parked split whose pane the window already holds keeps the spli
   assert.ok(split, "the split comes back");
   assert.deepEqual(split.slots.map((x) => S().tabs[x.tabId].pinnedUrl ?? S().tabs[x.tabId].url), ["https://one.com", "https://two.com"]);
 });
+
+test("a parked blank pin isn't taken for another blank pin of its profile when a window brings it back", () => {
+  S().hydrate({});
+  const main = S().createWindow({});
+  const work = S().createProfile({ name: "Work" });
+  const w = S().createWindow({ profileId: work });
+  const parked = S().newTab(w, {});
+  S().pinTabs([parked], true);
+  const parkedKey = S().tabs[parked].pinKey ?? parked;
+  S().closeWindow(w);
+  assert.equal(S().parkedPins[work]?.tabs.length, 1, "the blank pin is parked");
+  const other = S().newTab(main, { profileId: work });
+  S().pinTabs([other], true);
+  const otherKey = S().tabs[other].pinKey ?? other;
+  S().createWindow({ profileId: work });
+  const keys = new Set(Object.values(S().tabs).filter((t) => t.profileId === work && t.pin).map((t) => t.pinKey ?? t.id));
+  assert.ok(keys.has(parkedKey), "the parked pin comes back as itself");
+  assert.ok(keys.has(otherKey), "and the other blank pin stays");
+});

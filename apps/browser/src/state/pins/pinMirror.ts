@@ -164,7 +164,7 @@ export function union(sections: Section[], samePages = true): Section {
         anchor = spec.items.findIndex((i) => pinKeyOf(i.tab) === key);
         continue;
       }
-      if (samePages && !item.group && !paired.has(key) && earlier.some((o) => samePage(pinHomeOf(o), pinHomeOf(item.tab)))) continue;
+      if (samePages && !item.group && !paired.has(key) && pinHomeOf(item.tab) && earlier.some((o) => samePage(pinHomeOf(o), pinHomeOf(item.tab)))) continue;
       keys.add(key);
       const host = chainOf(spec, item.group).reverse().find((k) => lastIn(k) >= 0);
       const at = host
@@ -232,7 +232,7 @@ export function conform(s: BrowserState, windowId: string, profileId: string, sp
     const key = pinKeyOf(src);
     const same = (byKey.get(key) ?? []).filter((m) => !used.has(m.id));
     let t = same.find(hasPage) ?? same[0];
-    if (!t && tile) t = mine.find((m) => m.pin && !used.has(m.id) && !wantedKeys.has(pinKeyOf(m)) && samePage(pinHomeOf(m), pinHomeOf(src)));
+    if (!t && tile && pinHomeOf(src)) t = mine.find((m) => m.pin && !used.has(m.id) && !wantedKeys.has(pinKeyOf(m)) && samePage(pinHomeOf(m), pinHomeOf(src)));
     if (!t) {
       const copy = copyOf(src, windowId, tile, profileId, keepsLastPage(s.settings, src));
       tabs[copy.id] = copy;

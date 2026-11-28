@@ -8,7 +8,7 @@ import { noteLittleArdiaFitBelowSaved } from "../telemetry/littleArdiaEscapes";
 import { isSmallWindow } from "./small";
 import { signalFullScreenExit } from "./fullScreenExits";
 import { setMenuBarShown } from "./fullScreenMenuBar";
-import { noteFullScreenMenuBarFrameKept } from "../telemetry/usage";
+import { noteFullScreenMenuBarFrameKept } from "../telemetry/windowPlacementCounts";
 import { nativeConsent } from "../telemetry/nativeConsent";
 import type { Frame } from "../browser/types";
 

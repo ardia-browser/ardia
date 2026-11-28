@@ -19,6 +19,7 @@ let pageFullScreenSlowStarts = 0;
 let unclaimedTabsAdopted = 0;
 let unclaimedTabsDropped = 0;
 let pageFullScreensEntered = 0;
+let menuBarFramesKept = 0;
 export const SLOW_PAGE_FULL_SCREEN_START_MS = 300;
 const NO_LINUX_COUNTS = {
   linux_windows_app_decorated: 0,
@@ -75,6 +76,8 @@ export const noteLinuxPageViewportRejected = (consent: ConsentToken | null) => c
 
 export const notePageFullScreenEntered = (consent: ConsentToken | null) => counted(consent, () => void pageFullScreensEntered++);
 
+export const noteFullScreenMenuBarFrameKept = (consent: ConsentToken | null) => counted(consent, () => void menuBarFramesKept++);
+
 export const noteUnclaimedTab = (outcome: "adopted" | "dropped", consent: ConsentToken | null) =>
   counted(consent, () => void (outcome === "adopted" ? unclaimedTabsAdopted++ : unclaimedTabsDropped++));
 
@@ -83,7 +86,7 @@ export function noteWindowOpenedFloating(little: boolean, consent: ConsentToken 
 }
 
 export function takeWindowPlacementCounts() {
-  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, page_full_screen_starts: pageFullScreenStarts, page_full_screen_slow_starts: pageFullScreenSlowStarts, unclaimed_tabs_adopted: unclaimedTabsAdopted, unclaimed_tabs_dropped: unclaimedTabsDropped, page_full_screens_entered: pageFullScreensEntered, ...linuxCounts };
+  const taken = { full_screen_menu_bar_frames_kept: menuBarFramesKept, window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, page_full_screen_starts: pageFullScreenStarts, page_full_screen_slow_starts: pageFullScreenSlowStarts, unclaimed_tabs_adopted: unclaimedTabsAdopted, unclaimed_tabs_dropped: unclaimedTabsDropped, page_full_screens_entered: pageFullScreensEntered, ...linuxCounts };
   linuxCounts = { ...NO_LINUX_COUNTS };
   centeredResizes = 0;
   reopenedMaximized = 0;
@@ -92,6 +95,7 @@ export function takeWindowPlacementCounts() {
   unclaimedTabsAdopted = 0;
   unclaimedTabsDropped = 0;
   pageFullScreensEntered = 0;
+  menuBarFramesKept = 0;
   titlesRead = 0;
   dragLoops = 0;
   nativeDrags = 0;

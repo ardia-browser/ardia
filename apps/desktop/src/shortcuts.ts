@@ -21,6 +21,12 @@ const keyOf = (code: string): [string, number] | null => {
   if (/^F([1-9]|1[0-9]|20)$/.test(code)) return [String.fromCharCode(0xf703 + Number(code.slice(1))), 111 + Number(code.slice(1))];
   return specialKeys[code] ?? null;
 };
+const LAYOUT_PUNCTUATION = new Set(Object.values(specialKeys).map(([value]) => value).filter((value) => /^[^\w\s]$/.test(value)));
+const layoutKey = (event: Pick<KeyboardEvent, "key" | "shiftKey">): string | null => {
+  if (/^[a-z0-9]$/i.test(event.key)) return event.key.toLowerCase();
+  if (!event.shiftKey && LAYOUT_PUNCTUATION.has(event.key)) return event.key;
+  return null;
+};
 const codeOf = (key: string): number | null => {
   if (/^[a-z0-9]$/i.test(key)) return key.toUpperCase().charCodeAt(0);
   const point = key.charCodeAt(0);
@@ -86,7 +92,7 @@ const UTILITY_SHORTCUT_COMMANDS: ReadonlySet<string> = new Set(["closeTab", "ope
 export const utilityBindings = (bindings: Binding[]) => bindings.filter((binding) => UTILITY_SHORTCUT_COMMANDS.has(binding.command));
 
 export function keyboardCombo(event: Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">) {
-  const key = keyOf(event.code)?.[0] ?? (event.key.length === 1 ? event.key.toLowerCase() : "");
+  const key = layoutKey(event) ?? keyOf(event.code)?.[0] ?? (event.key.length === 1 ? event.key.toLowerCase() : "");
   const modifiers: ShortcutModifier[] = [];
   if (COMMAND_PRESSED(event)) modifiers.push("command");
   if (CONTROL_PRESSED(event)) modifiers.push("control");

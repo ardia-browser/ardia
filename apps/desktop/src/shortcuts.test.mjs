@@ -206,3 +206,15 @@ test("a key an input method is composing with is never taken as a shortcut, Ctrl
   assert.equal(composingKey({ isComposing: false, key: "l", keyCode: 229 }), true);
   assert.equal(composingKey({ isComposing: false, key: "l", keyCode: 76 }), false);
 });
+
+test("shortcuts follow the typed letter on a remapped layout such as Colemak, and fall back to the physical key on a non-Latin one", () => {
+  const bindings = linuxBindings();
+  const colemakT = keyboardCombo({ ...event("KeyF", { ctrlKey: true }), key: "t" });
+  assert.equal(commandAt(bindings, colemakT.keyCode, colemakT.flags)?.command, "newTab");
+  const colemakSemicolon = keyboardCombo({ ...event("KeyP"), key: ";" });
+  assert.equal(colemakSemicolon.key, ";");
+  const cyrillic = keyboardCombo({ ...event("KeyT", { ctrlKey: true }), key: "е" });
+  assert.equal(commandAt(bindings, cyrillic.keyCode, cyrillic.flags)?.command, "newTab");
+  const shiftedDigit = keyboardCombo({ ...event("Digit1", { ctrlKey: true, shiftKey: true }), key: "!" });
+  assert.equal(shiftedDigit.key, "1");
+});

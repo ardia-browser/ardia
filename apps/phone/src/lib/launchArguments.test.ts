@@ -87,3 +87,10 @@ test("the lab's demo seed scale is read only in a demo session, and never below 
   assert.equal(parseLaunchArguments({ ArdiaDemoScale: "1000" }).demoScale, 0);
   assert.equal(parseLaunchArguments({ ArdiaDemo: "YES", ArdiaDemoScale: "-5" }).demoScale, 0);
 });
+
+test("-ArdiaDuoDeckEdge picks the Duo deck's edge, fit or fade in any case, and anything else is no choice", () => {
+  assert.equal(parseLaunchArguments({ ArdiaDuoDeckEdge: "fade" }).duoDeckEdge, "fade");
+  assert.equal(parseLaunchArguments({ ArdiaDuoDeckEdge: " Fit " }).duoDeckEdge, "fit");
+  assert.equal(parseLaunchArguments({ ArdiaDuoDeckEdge: "clip" }).duoDeckEdge, null);
+  assert.equal(parseLaunchArguments({}).duoDeckEdge, null);
+});

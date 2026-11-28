@@ -3,7 +3,7 @@ import { countRender } from "../../state/app/interactionPerf";
 import { PixelRatio, Platform, StyleSheet, Text, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useDerivedValue, useSharedValue, type SharedValue } from "react-native-reanimated";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { DECK, DECK_HEADER, deckArcHeaderPlacement, deckArcTitleReveal, deckBarBand, deckPileScale, deckFlyLift, deckHeaderIconReveal, deckHeaderReveal, deckLeaveFade, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckLeaving, type DeckSlots } from "../../lib/deckGeometry";
+import { DECK, DECK_HEADER, deckArcHeaderPlacement, deckArcTitleReveal, deckBarBand, deckFitFrame, deckPileScale, deckFlyLift, deckHeaderIconReveal, deckHeaderReveal, deckLeaveFade, deckStatusStrip, deckHeaderLeading, deckHeaderPlacement, deckLeading, deckSlot, deckVisibleWidth, lerp, titleReveal, type DeckGeometry, type DeckLeaving, type DeckSlots } from "../../lib/deckGeometry";
 import { pullTuck } from "../../lib/deckPull";
 import { CARD_MOVE_RESPONSE } from "../../lib/sharedMotion";
 import { useHeldPageTone } from "../../state/browse/deckHold";
@@ -280,14 +280,21 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
   }, [g, id, arcHeader]);
   const cardLayer = useAnimatedStyle(() => ({ zIndex: placed.value.z }));
   const overCardLayer = useAnimatedStyle(() => ({ zIndex: placed.value.z + 1 }));
+  const fits = g.fitsEdge;
   const cardStyle = useAnimatedStyle(() => {
     const p = placed.value.pose;
+    const opacity = covering.value === id ? 0 : p.opacity * placed.value.shown;
+    const borderRadius = p.corner / Math.max(p.scale, 0.01);
+    if (fits) {
+      const fit = placed.value.expanded ? { width: g.cardWidth, translateX: p.x - g.cardWidth / 2 } : deckFitFrame(g, p.x, p.scale);
+      return { opacity: fit.width < 0.5 ? 0 : opacity, borderRadius, width: fit.width, transform: [{ translateX: fit.translateX }, { translateY: p.y - g.cardHeight / 2 }, { scale: p.scale }] };
+    }
     return {
-      opacity: covering.value === id ? 0 : p.opacity * placed.value.shown,
-      borderRadius: p.corner / Math.max(p.scale, 0.01),
+      opacity,
+      borderRadius,
       transform: [{ translateX: p.x - g.cardWidth / 2 }, { translateY: p.y - g.cardHeight / 2 }, { scale: p.scale }],
     };
-  }, [g]);
+  }, [g, fits]);
   const titleWidth = useSharedValue(0);
   const wholeHeader = design === "redesigned" && !arcHeader;
   const headerStyle = useAnimatedStyle(() => {
@@ -313,13 +320,13 @@ export const DeckCard = memo(function DeckCard({ tab, index, geometry: g, motion
   const title = tabCardTitle(tab, host);
   const cardContents = (
     <>
-      <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, faceStyle]}>
+      <Animated.View testID="deckCardFace" style={[StyleSheet.absoluteFill, fits ? { right: undefined, bottom: undefined, width: g.cardWidth, height: g.cardHeight } : null, faceStyle]}>
         <TabFace tab={tab} title={title} host={host} tone={tone.top} roles={theme} paintedAs={`deck:${tab.id}`} />
       </Animated.View>
-      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[styles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }, bandStyle]}>
+      <Animated.View testID="deckCardBarBand" pointerEvents="none" style={[styles.band, { height: bar.height, backgroundColor: tone.bottom ?? theme.canvas }, fits ? { right: undefined, width: g.cardWidth } : null, bandStyle]}>
         {design === "original" ? <View testID="deckCardBarShade" style={[StyleSheet.absoluteFill, { backgroundColor: isDarkColor(tone.bottom ?? theme.canvas) ? tabsInk.barShadeOnDark : tabsInk.barShadeOnLight }]} /> : null}
       </Animated.View>
-      {underBars && tab.snapshotFileName ? <View testID="deckCardStatusBand" pointerEvents="none" style={[styles.statusBand, { height: (g.safeTop * g.cardWidth) / g.width, backgroundColor: tone.top ?? theme.pageSurface }]} /> : null}
+      {underBars && tab.snapshotFileName ? <View testID="deckCardStatusBand" pointerEvents="none" style={[styles.statusBand, { height: (g.safeTop * g.cardWidth) / g.width, backgroundColor: tone.top ?? theme.pageSurface }, fits ? { right: undefined, width: g.cardWidth } : null]} /> : null}
       {isUnseenReceived(tab) ? <ReceivedBadge /> : null}
     </>
   );

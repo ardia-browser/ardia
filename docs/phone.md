@@ -2670,9 +2670,19 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   it mirrors: the closed Duo's `···` stacks in the strip at 24 to 72, the open Duo's leads the header at 96 to 140.
   A plain iPhone keeps `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
   (`deckGeometry`'s `strip`, from `deckStripOf`): Arc's stack is laid out in the screen beside the strip, as if that
-  were the whole screen, so the focused card stays clear of the clock and the sensor. The cards beyond it run on
-  under the strip to the screen edge, below the camera and the clock (the owner, 2026-11-27: a hard edge at the strip
-  looked cut off). A tap on the strip lands on no card. The strip's `+`, Incognito and `···` menus are drawn by the
+  were the whole screen, so the focused card stays clear of the clock and the sensor. What the cards beyond it do at
+  the strip is under the owner's choice (2026-11-28: under the strip, with page pictures loaded, the `···` glass sat
+  over the next card's text and the Wi-Fi ring over its title), and both edges are built, picked in test builds by
+  `-ArdiaDuoDeckEdge fit|fade` (`fit` without it): `fit` narrows each card to the room before the fit edge, 8 short of
+  the strip (374 closed, 859 open), the card itself narrowing so its trailing corners, rim and shadow stay its own;
+  the next card shows as an 85-point slice closed (289 to 374), 203 open (656 to 859), and the cards past it are gone.
+  `fade` lets them run on under the strip and covers 24 points before the strip to the screen edge (358 to 466
+  closed) with a curtain of the deck's own backdrop (`DeckStripCurtain`: the deck's look, dark depth and Incognito
+  backdrop, in eight 3-point slices from 1/9 to 8/9 opacity, then solid), below the strip buttons, so it follows
+  every theme. Either way a card growing to the page or shrinking from it is never narrowed or covered, the strip on
+  the left mirrors the curtain, and no tab title runs under the strip: a card's title row ends at the edge (374 or
+  382), its title shown only once the slice has room for the favicon and some text. A tap on the strip lands on no
+  card. The strip's `+`, Incognito and `···` menus are drawn by the
   app beside the strip (`MenuTrigger`'s `drawn`), never the system menu, which grows out of the button over the
   strip's other buttons; the start page's strip `+` does the same. Closed
   (466×678, strip from 382): cards 250×364, the focused one 78 to 328, where it used to run 165 to 470. Open
@@ -3640,7 +3650,7 @@ touch:
 - `ArdiaWithoutPrivatePages` (Android only) makes the page engine act as on a WebView without multi-profile support,
   so Incognito is refused with its "Update Android System WebView for Incognito" toast;
 - motion captures, demo only: `BrowsePagerFreeze <fraction>`, `BrowsePagerScript`, `BrowseLoadFreeze <progress>`;
-- the lab's own flags, such as `ArdiaOneContainerScroll`, `ArdiaOpeningCard`, `ArdiaFlatGlass` (Android's glass as plain frost, without the Liquid Glass lens and rim, for comparing the two) and `ArdiaRedesign` (Android draws the redesigned design, for checking the page under the bar before it becomes Android's default).
+- the lab's own flags, such as `ArdiaOneContainerScroll`, `ArdiaOpeningCard`, `ArdiaFlatGlass` (Android's glass as plain frost, without the Liquid Glass lens and rim, for comparing the two) `ArdiaRedesign` (Android draws the redesigned design, for checking the page under the bar before it becomes Android's default) and `ArdiaDuoDeckEdge fit|fade` (the Duo deck's edge at the strip, for the owner's comparison).
 
 Flags take `--ez` (or any string but false, no and 0); everything else can be `--es`. The list is `LaunchArguments.kt`
 (`packages/phone/android/src/main/java/com/ardia/appmodel`).

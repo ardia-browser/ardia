@@ -22,6 +22,9 @@ import {
   redesignedBarCenterFromBottom,
   floatingBarCenter,
   deckCardAt,
+  deckCurtainSlices,
+  deckFitFrame,
+  DECK_STRIP_EDGE,
   deckHeaderLeading,
   deckHeaderPlacement,
   deckHeaderIconReveal,
@@ -399,8 +402,7 @@ test("on a Duo the arc stack lays out in the screen left of the sensor strip, so
   assert.equal(Math.round(deckLeading(closed, 0)), 78);
   assert.equal(Math.round(deckLeading(closed, 0) + closed.cardWidth), 328);
   assert.equal(Math.round(closed.cardWidth), 250);
-  assert.ok(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) > 382, "the next card runs on under the strip");
-  assert.ok(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) <= 466 + 1e-9, "and stops at the screen edge");
+  assert.ok(Math.abs(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) - 374) < 1e-9, "by default the next card's slice ends 8 short of the strip");
   const open = deckGeometry(951, 669, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 });
   assert.equal(open.cardsRight, 867);
   assert.equal(Math.round(deckLeading(open, 0)), 177);
@@ -424,4 +426,53 @@ test("with no strip the stack keeps the whole screen, so a plain iPhone upright 
   assert.ok(Math.abs(deckLeading(side, 0) - Math.max((852 - side.spacing) / 2 - side.cardWidth * DECK_ARC.focusNudge, 59 + side.cardWidth * DECK_ARC.peek)) < 1e-9);
   assert.ok(Math.abs(side.cardWidth - Math.min(852 * DECK_ARC.cardWidthRatio, (393 - 21 - 11 + 11 - 67 + 24 - (48 + 21 + 20)) / (393 / 852))) < 1e-9);
   assert.deepEqual(deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc", null), upright);
+});
+
+test("the Duo's fit edge: the next card shows as a slice ending 8 short of the strip, 374 closed and 859 open, drawn by narrowing the card itself so its trailing corners stay round, and the cards past it are gone", () => {
+  for (const [w, h, end] of [[466, 678, 374], [951, 669, 859]] as const) {
+    const g = deckGeometry(w, h, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84, edge: "fit" });
+    assert.equal(g.edge, end);
+    assert.equal(g.fitsEdge, true);
+    const next = deckFitFrame(g, deckLeading(g, 1) + g.cardWidth / 2, 1);
+    assert.ok(Math.abs(next.translateX - deckLeading(g, 1)) < 1e-9, "the slice starts where the card does");
+    assert.ok(Math.abs(next.translateX + next.width - end) < 1e-9, `the slice ends at ${end}`);
+    assert.ok(next.width > 0 && next.width < g.cardWidth);
+    assert.equal(deckFitFrame(g, deckLeading(g, 0) + g.cardWidth / 2, 1).width, g.cardWidth, "the focused card is whole");
+    assert.equal(deckFitFrame(g, deckLeading(g, 2) + g.cardWidth / 2, 1).width, 0, "the card after the slice is gone");
+    assert.ok(Math.abs(deckLeading(g, 1) + deckVisibleWidth(g, 1, true) - end) < 1e-9, "its title row stops at the slice's end");
+    assert.equal(deckCurtainSlices(g).length, 0);
+  }
+  const g = deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 });
+  const scaled = deckFitFrame(g, 300, 0.9);
+  const left = scaled.translateX + (scaled.width * (1 - 0.9)) / 2;
+  assert.ok(Math.abs(left - (300 - (g.cardWidth * 0.9) / 2)) < 1e-9, "a scaled card keeps its drawn left edge");
+  assert.ok(Math.abs(left + scaled.width * 0.9 - 374) < 1e-9, "and its drawn right edge stops at the fit edge");
+});
+
+test("the Duo's fade edge: the cards run on under the strip but their titles stop at it, and a curtain covers 24 points before the strip to the screen edge, fading in over its first 24", () => {
+  const g = deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84, edge: "fade" });
+  assert.equal(g.edge, 382);
+  assert.equal(g.fitsEdge, false);
+  assert.ok(Math.abs(deckLeading(g, 1) + deckVisibleWidth(g, 1, true) - 382) < 1e-9, "no title runs under the strip");
+  const slices = deckCurtainSlices(g);
+  assert.equal(slices.length, DECK_STRIP_EDGE.curtainSteps + 1);
+  assert.deepEqual(slices[0], { left: 358, width: 3, opacity: 1 / 9 });
+  assert.deepEqual(slices.at(-1), { left: 382, width: 84, opacity: 1 });
+  for (let i = 1; i < slices.length; i++) {
+    assert.ok(Math.abs(slices[i]!.left - (slices[i - 1]!.left + slices[i - 1]!.width)) < 1e-9, "slices tile the curtain");
+    assert.ok(slices[i]!.opacity > slices[i - 1]!.opacity, "and darken toward the strip");
+  }
+  const mirrored = deckCurtainSlices(deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "left", inset: 84, edge: "fade" }));
+  assert.deepEqual(mirrored[0], { left: 0, width: 84, opacity: 1 });
+  assert.ok(Math.abs(mirrored.at(-1)!.left + mirrored.at(-1)!.width - 108) < 1e-9);
+  assert.ok(mirrored.at(-1)!.opacity < mirrored[1]!.opacity);
+});
+
+test("with no strip the edge is the screen's, nothing narrows and there is no curtain, so a plain iPhone keeps its deck", () => {
+  for (const g of [deckGeometry(402, 874, 62, 34, 0, "ios", "redesigned", 48, 55, "arc"), deckGeometry(852, 393, 0, 21, 59, "ios", "redesigned", 48, 55, "arc"), deckGeometry(412, 915, 48, 24)]) {
+    assert.equal(g.edge, g.width);
+    assert.equal(g.fitsEdge, false);
+    assert.equal(g.stripEdge, null);
+    assert.deepEqual(deckCurtainSlices(g), []);
+  }
 });

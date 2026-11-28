@@ -14,7 +14,7 @@ import Animated, { cancelAnimation, Easing, runOnJS, runOnUI, useAnimatedProps, 
 import { countUsage } from "../../state/telemetry/telemetry";
 import { haptics } from "../../state/app/haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { labTrace, markShownFrame, traceSlice } from "../../platform/lab";
+import { isLabBuild, labTrace, markShownFrame, traceSlice } from "../../platform/lab";
 import { measuredOr } from "../../state/app/rootSize";
 import {
   DECK,
@@ -92,6 +92,9 @@ import { ArchiveIntervalCard } from "./ArchiveIntervalCard";
 import { DeckBottomBar } from "./DeckBottomBar";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 import { DeckHeader, deckHeaderBottom } from "./DeckHeader";
+import { DeckStripCurtain } from "./DeckStripCurtain";
+import { launchArguments } from "../../state/app/launchFlags";
+import type { DeckEdge } from "../../lib/deckGeometry";
 import { deckLook } from "./deckLook";
 import { tabSwitchCuts } from "../../state/browse/tabSwitch";
 import { linearGradientCss } from "../../lib/gradient";
@@ -183,7 +186,7 @@ export const TabDeck = memo(function TabDeck() {
   const stripInset = deckStrip?.inset ?? 0;
   const headerSides = deckHeaderSides(insets, chromeLayout.barSideInset, deckStrip);
   const g = useMemo(
-    () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc", stripSide ? { side: stripSide, inset: stripInset } : null)),
+    () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc", stripSide ? { side: stripSide, inset: stripInset, edge: duoDeckEdge() } : null)),
     [width, height, insets.top, insets.bottom, safeSide, design, stripSide, stripInset],
   );
   useEffect(() => labTrace(`PAGELAB deck frame ${Math.round(width)}x${Math.round(height)} window ${Math.round(window.width)}x${Math.round(window.height)} insets ${insets.top}/${insets.bottom}`), [width, height, window.width, window.height, insets.top, insets.bottom]);
@@ -1384,6 +1387,7 @@ export const TabDeck = memo(function TabDeck() {
           </GestureDetector>
         </ScrollActions>
         </StackLayer>
+        {g.stripEdge === "fade" && !grid ? <DeckStripCurtain geometry={g} expandedIndex={motion.expandedIndex} darkDepth={redesigned && darkLook} incognito={privateLook} /> : null}
         {gridAvailable && (shown || (pulls && grid)) && (grid || gridLayer) ? (
           <MotionView
             testID="tabGridLayer"
@@ -1596,6 +1600,8 @@ const DRAWN_CAP_MS = 200;
 const COVER_LOST_MS = DRAWN_CAP_MS + 300;
 const HANDED_OVER_AWAY = 100_000;
 const CARD_LANDED = 0.02;
+export const duoDeckEdge = (): DeckEdge => (isLabBuild && launchArguments().duoDeckEdge === "fade" ? "fade" : "fit");
+
 const DECK_SCREEN_CORNER = iPhoneOr(() => DECK.displayCornerRadius, () => screenCornerRadius(DECK.displayCornerRadius));
 const CHROME_BACK: MotionCurve = { type: "timing", durationMs: 0 };
 const CHROME_GLASS_MS = glassFadeMs;

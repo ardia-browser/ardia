@@ -15,6 +15,9 @@ export type DeckGeometry = {
   stack: DeckStack;
   cardsLeft: number;
   cardsRight: number;
+  edge: number;
+  fitsEdge: boolean;
+  stripEdge: DeckEdge | null;
   tail: number;
   cardCorner: number;
   cardCenterY: number;
@@ -41,7 +44,11 @@ export const DECK_REDESIGN = { barReserve: 67, chromeGap: 21, minSafeBottom: 20,
 
 export type DeckStack = "pile" | "arc";
 
-export type DeckStrip = { side: "left" | "right"; inset: number };
+export type DeckEdge = "fit" | "fade";
+
+export type DeckStrip = { side: "left" | "right"; inset: number; edge?: DeckEdge };
+
+export const DECK_STRIP_EDGE = { fitGap: 8, curtainLead: 24, curtainSteps: 8 } as const;
 
 export const DECK_ARC = { cardWidthRatio: 0.655, step: 0.844, peek: 0.264, tail: 0.091, focusNudge: 0.03, centerRatio: 0.514, cardCorner: 20, nearShrink: 0.02, farShrink: 0.07, leastScale: 0.6 } as const;
 
@@ -105,6 +112,9 @@ export function deckGeometry(width: number, height: number, safeTop: number, saf
     stack: "pile",
     cardsLeft: 0,
     cardsRight: w,
+    edge: w,
+    fitsEdge: false,
+    stripEdge: null,
     tail: 0,
     cardCorner: DECK.cardRadius,
     cardCenterY: bandTop + band / 2,
@@ -119,6 +129,9 @@ function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, 
   const cardsRight = strip?.side === "right" ? w - strip.inset : w;
   const room = Math.max(cardsRight - cardsLeft, 1);
   const pileClearance = strip ? 0 : safeSide;
+  const stripEdge = strip ? (strip.edge ?? "fit") : null;
+  const fitsEdge = strip?.side === "right" && stripEdge === "fit";
+  const edge = strip?.side === "right" ? cardsRight - (fitsEdge ? DECK_STRIP_EDGE.fitGap : 0) : w;
   const cardWidth = Math.min(room * DECK_ARC.cardWidthRatio, band / aspect);
   const cardHeight = cardWidth * aspect;
   const spacing = cardWidth * DECK_ARC.step;
@@ -139,6 +152,9 @@ function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, 
     stack: "arc",
     cardsLeft,
     cardsRight,
+    edge,
+    fitsEdge,
+    stripEdge,
     tail,
     cardCorner: DECK_ARC.cardCorner,
     cardCenterY: centred,
@@ -166,7 +182,7 @@ export function deckVisibleWidth(g: DeckGeometry, relative: number, isLast: bool
   "worklet";
   const leading = deckLeading(g, relative);
   const covered = isLast ? g.cardWidth : Math.min(g.cardWidth, Math.max(0, deckLeading(g, relative + 1) - leading));
-  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.width - leading)) : covered;
+  return g.rightReach > 0 || g.stack === "arc" ? Math.min(covered, Math.max(0, g.edge - leading)) : covered;
 }
 
 export function swiftRound(value: number): number {
@@ -199,7 +215,7 @@ export function deckShouldClose(translation: number, velocity: number, cardHeigh
 
 export function deckCardAt(g: DeckGeometry, count: number, scroll: number, x: number, y: number, mountedAround: number = scroll, mountedReach: number = Infinity): number {
   "worklet";
-  if (count <= 0 || ((g.cardsLeft > 0 || g.cardsRight < g.width) && (x < g.cardsLeft || x > g.cardsRight))) return -1;
+  if (count <= 0 || ((g.cardsLeft > 0 || g.cardsRight < g.width) && (x < g.cardsLeft || x > Math.min(g.cardsRight, g.edge)))) return -1;
   const half = g.cardHeight / 2;
   if (y < g.cardCenterY - half || y > g.cardCenterY + half) return -1;
   for (let index = count - 1; index >= 0; index--) {
@@ -392,6 +408,28 @@ export function deckSettleVelocity(g: DeckGeometry, scroll: number, target: numb
 }
 
 
+
+export function deckFitFrame(g: DeckGeometry, x: number, scale: number): { width: number; translateX: number } {
+  "worklet";
+  const left = x - (g.cardWidth * scale) / 2;
+  const width = Math.min(Math.max((g.edge - left) / Math.max(scale, 0.01), 0), g.cardWidth);
+  return { width, translateX: left - (width * (1 - scale)) / 2 };
+}
+
+export type DeckCurtainSlice = { left: number; width: number; opacity: number };
+
+export function deckCurtainSlices(g: DeckGeometry): DeckCurtainSlice[] {
+  if (g.stripEdge !== "fade") return [];
+  const steps = DECK_STRIP_EDGE.curtainSteps;
+  const step = DECK_STRIP_EDGE.curtainLead / steps;
+  const fade = Array.from({ length: steps }, (_, i) => (i + 1) / (steps + 1));
+  if (g.cardsRight < g.width) {
+    const from = g.cardsRight - DECK_STRIP_EDGE.curtainLead;
+    return [...fade.map((opacity, i) => ({ left: from + i * step, width: step, opacity })), { left: g.cardsRight, width: g.width - g.cardsRight, opacity: 1 }];
+  }
+  if (g.cardsLeft > 0) return [{ left: 0, width: g.cardsLeft, opacity: 1 }, ...fade.reverse().map((opacity, i) => ({ left: g.cardsLeft + i * step, width: step, opacity }))];
+  return [];
+}
 
 export const archiveCardEdgeY = (g: DeckGeometry, aboveBarCenter: number) => g.barCenterY - aboveBarCenter;
 

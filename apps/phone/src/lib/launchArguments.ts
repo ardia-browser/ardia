@@ -40,6 +40,7 @@ export type LaunchArguments = {
   oneContainerScroll: boolean;
   redesign: boolean;
   pillHold: boolean;
+  duoDeckEdge: "fit" | "fade" | null;
 };
 
 export const LAUNCH_TIMING = { delaySeconds: 6, stepGapSeconds: 1.5, deckOpenMs: 3000, sheetMs: 600, toastMs: 1500, deckScriptStartMs: 1200, snapWaitMs: 5000 } as const;
@@ -71,6 +72,13 @@ function number(values: Record<string, LaunchValue>, key: string): number | null
   if (value === null) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+const DECK_EDGES = ["fit", "fade"] as const;
+
+function deckEdge(values: Record<string, LaunchValue>, key: string): "fit" | "fade" | null {
+  const value = text(values, key)?.toLowerCase();
+  return DECK_EDGES.find((edge) => edge === value) ?? null;
 }
 
 const whole = (values: Record<string, LaunchValue>, key: string): number | null => {
@@ -124,6 +132,7 @@ export function parseLaunchArguments(values: Record<string, LaunchValue>): Launc
     oneContainerScroll: flag(values, "ArdiaOneContainerScroll"),
     redesign: flag(values, "ArdiaRedesign"),
     pillHold: flag(values, "ArdiaPillHold"),
+    duoDeckEdge: deckEdge(values, "ArdiaDuoDeckEdge"),
   };
 }
 

@@ -4,7 +4,7 @@
 // takes. The name is the release version itself. The code is main's release-channel formula (14a4f71f7): major·10^8 +
 // minor·10^6 + patch·10^3 + the nightly's number (999 for a stable), so every nightly of a version sorts below that
 // version's stable and above the stable before it. Limits: major ≤ 20, minor ≤ 99, patch ≤ 999, nightly 1 to 998.
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { androidRelease } from "../src/lib/androidRelease.ts";
@@ -35,7 +35,7 @@ function main(args: string[]) {
   console.log(`name=${version.name}\ncode=${version.code}\nchannel=${version.channel}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

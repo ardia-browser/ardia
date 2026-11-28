@@ -466,7 +466,9 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   @objc func fullScreenWillChange(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, let id = id(of: window), managed[id] != nil else { return }
-    sendFullScreen(window, id: id, on: notification.name == NSWindow.willEnterFullScreenNotification)
+    let entering = notification.name == NSWindow.willEnterFullScreenNotification
+    if !entering { ArdiaChromeWindowHost.stopWatchingMenuBar(of: window) }
+    sendFullScreen(window, id: id, on: entering)
   }
 
   @objc func fullScreenChanged(_ notification: Notification) {
@@ -475,7 +477,12 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard FullScreenLifecycle.shared.acceptsEnd(of: window, entering: entered) else { return }
     entry.isFullScreen = entered
     sendFullScreen(window, id: id, on: entered)
-    if entered { fullScreen.entered(id) }
+    if entered {
+      fullScreen.entered(id)
+      watchMenuBar(window, id: id)
+    } else {
+      ArdiaChromeWindowHost.stopWatchingMenuBar(of: window)
+    }
   }
 
   @objc private func screenChanged(_ notification: Notification) {
@@ -483,6 +490,14 @@ final class WindowManager: NSObject, NSWindowDelegate {
           managed[id]?.isFullScreen == true, isMainWindow(window)
     else { return }
     sendFullScreen(window, id: id, on: true)
+    watchMenuBar(window, id: id)
+  }
+
+  private func watchMenuBar(_ window: NSWindow, id: String) {
+    guard isMainWindow(window), !ArdiaChromeWindowHost.windowFullScreenIs(forPage: window) else { return }
+    ArdiaChromeWindowHost.watchMenuBar(of: window) { shown in
+      ShellEvents.send(.window, ["type": "menuBar", "id": id, "shown": shown])
+    }
   }
 
   private func sendFullScreen(_ window: NSWindow, id: String, on: Bool) {

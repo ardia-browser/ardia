@@ -7,6 +7,8 @@ import { adoptOf } from "../tabs/pageSession";
 import { noteLittleArdiaFitBelowSaved } from "../telemetry/littleArdiaEscapes";
 import { isSmallWindow } from "./small";
 import { signalFullScreenExit } from "./fullScreenExits";
+import { setMenuBarShown } from "./fullScreenMenuBar";
+import { noteFullScreenMenuBarFrameKept } from "../telemetry/usage";
 import type { Frame } from "../browser/types";
 
 const fitsBelowSaved = (frame: Frame, was: Frame | null | undefined, [width, height]: readonly [number, number]) =>
@@ -57,8 +59,15 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       if (e.type === "maximized" && !isQuitting()) s.setWindowMaximized(e.id, e.on);
       if (e.type === "fullScreen" && !isQuitting()) s.setWindowFullScreen(e.id, e.on, e.display);
       if (e.type === "fullScreen" && !e.on) signalFullScreenExit(e.id);
+      if (e.type === "fullScreen" && !e.on) setMenuBarShown(e.id, false);
+      if (e.type === "menuBar") {
+        const shown = e.shown && !!s.windows[e.id]?.fullScreen;
+        const frameRuleOn = s.settings.pageFrameZeroInFullScreen || s.settings.pageFrameZeroWhenTabsHidden;
+        if (setMenuBarShown(e.id, shown) && shown && frameRuleOn) noteFullScreenMenuBarFrameKept();
+      }
       if (e.type === "close") {
         if (isQuitting()) return;
+        setMenuBarShown(e.id, false);
         open.delete(e.id);
         s.closeWindow(e.id);
         releasePrivateProfile(e.id);

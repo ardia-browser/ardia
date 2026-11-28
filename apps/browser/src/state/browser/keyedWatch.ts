@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { changedIds } from "./changes";
 import { useBrowser, type BrowserState } from "./store";
 import { onWindowChromeChange } from "../../lib/windowChrome";
+import { onMenuBarChange } from "../windows/fullScreenMenuBar";
 
 type Readable<S> = { getState(): S; subscribe(listener: (s: S, prev: S) => void): () => void };
 type Listener = () => void;
@@ -67,7 +68,7 @@ const watchWindowSettingsInStore = keyedWatch(browser, (s: BrowserState, prev: B
   if (s.windows !== prev.windows) for (const id of changedIds(s.windows, prev.windows)) wake(id);
 });
 export const watchWindowSettings: KeyedWatch = (key, listener) => {
-  const stops = [watchWindowSettingsInStore(key, listener), onWindowChromeChange(listener)];
+  const stops = [watchWindowSettingsInStore(key, listener), onWindowChromeChange(listener), onMenuBarChange(listener)];
   return () => stops.forEach((stop) => stop());
 };
 export const useWindowSettings = <T,>(windowId: string, read: (s: BrowserState) => T): T => useKeyed(watchWindowSettings, windowId, () => read(useBrowser.getState()));

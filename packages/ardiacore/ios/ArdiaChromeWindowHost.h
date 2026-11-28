@@ -83,6 +83,13 @@ FOUNDATION_EXPORT BOOL ArdiaPerformReservedKey(NSEvent *event);
 
 @end
 
+@interface ArdiaChromeWindowHost (FullScreenMenuBar)
+
++ (void)watchMenuBarOfWindow:(NSWindow *)window changed:(void (^)(BOOL shown))changed NS_SWIFT_NAME(watchMenuBar(of:changed:));
++ (void)stopWatchingMenuBarOfWindow:(NSWindow *)window NS_SWIFT_NAME(stopWatchingMenuBar(of:));
+
+@end
+
 @interface ArdiaChromeWindowHost (LittleFit)
 
 + (nullable NSValue *)littleFrameFittingLandingOf:(NSWindow *)window

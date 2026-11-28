@@ -1,4 +1,4 @@
-import { probes } from "../../state/app/launchFlags";
+import { launchArguments, probes } from "../../state/app/launchFlags";
 import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { labLog, labTrace, markShownFrame, traceSlice } from "../../platform/lab";
 import { hardwareKeyboardShown, system, type KeyboardWarmUp } from "@ardia/phone-native";
@@ -143,11 +143,12 @@ function FirstKeyboardWarmUp() {
       attempts += 1;
       const result: KeyboardWarmUp = searchState().open ? { outcome: "searchOpen" } : await system.warmKeyboard();
       if (stopped) return;
-      labLog(`PAGELAB search warm keyboard ${result.outcome}${typeof result.ms === "number" ? ` ${Math.round(result.ms)}ms` : ""} attempt ${attempts}`);
+      labLog(`PAGELAB search warm keyboard ${result.outcome}${typeof result.ms === "number" ? ` ${Math.round(result.ms)}ms` : ""}${result.holder ? ` ${result.holder}` : ""} attempt ${attempts}`);
       if (KEYBOARD_WARM_FINAL.has(result.outcome) || attempts >= KEYBOARD_WARM_ATTEMPTS) return;
       timer = setTimeout(attempt, KEYBOARD_WARM_RETRY_MS);
     };
-    timer = setTimeout(attempt, KEYBOARD_WARM_AFTER_LAUNCH_MS);
+    const delaySeconds = launchArguments().keyboardWarmDelaySeconds;
+    timer = setTimeout(attempt, delaySeconds === null ? KEYBOARD_WARM_AFTER_LAUNCH_MS : delaySeconds * 1000);
     return () => {
       stopped = true;
       if (timer !== null) clearTimeout(timer);

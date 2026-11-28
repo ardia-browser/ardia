@@ -4283,9 +4283,9 @@ The first time anything takes focus in a launch, UIKit sets the keyboard up: the
 `FirstKeyboardWarmUp` in `SearchTray.tsx` asks `KeyboardWarmUp.attempt()` (`packages/phone/ios/KeyboardWarmUp.swift`) to do that work at an idle moment after launch. On the main thread, a hidden 1 pt `UITextField` in the main window takes focus and resigns in the same call. Nothing is drawn.
 
 It skips, and JavaScript tries again 1.5 s later (six tries from 2.5 s after launch, then it gives up), when:
-- anything in any of the app's windows is first responder, a page's form in WebKit included;
+- anything holds focus. UIKit is asked directly, with a nil-targeted action that reaches the first responder in any window (a page's form in WebKit included), and every window's views are checked as well;
 - the app isn't active, or the key window isn't the main window;
-- a finger is down (a passive recognizer on the main window counts touches and never claims them);
+- a finger is down, or was lifted less than a second ago. A passive recognizer on the main window counts touches and never claims them; it is attached when the scene first becomes active, and until it is, the warm-up reports `notWatching` and waits. WebKit focuses a tapped form field a moment after the touch ends, so without the quiet second the warm-up could land in that gap;
 - the run loop is tracking a drag or a deceleration;
 - a view controller is presented or mid-transition.
 
@@ -5061,7 +5061,7 @@ starts in that space. Captures without touch: `-BrowseQuery <text>`, `-BrowseSur
 `-ArdiaOnboarding YES`, `-ArdiaOpenSheet archive|spaces|history|bookmarks|downloads`, `-BrowsePlus`,
 `-BrowseOverlay <text>`, `-BrowseCollapsed`, `-BrowseOpen <url>`, `-ArdiaRestingStart`, `-ArdiaColor <name>`,
 `-ArdiaInterfaceStyle glass|classic`, `-ArdiaColorScheme light|dark`, `-ArdiaSettingsPage <route>`,
-`-ArdiaNoSitePermissions`, `-ArdiaDeckQuery <text>` and `-ArdiaDuoCanvas open|half`. Browse for Me's: `-BrowseResearch <query>`,
+`-ArdiaNoSitePermissions`, `-ArdiaDeckQuery <text>`, `-ArdiaDuoCanvas open|half` and, with `-ArdiaDemo`, `-ArdiaKeyboardWarmDelay <s>` (when the keyboard warm-up first tries; for testing it against a focused page form). Browse for Me's: `-BrowseResearch <query>`,
 `-ArdiaResearchWriter excerpts`, `-ArdiaChatGPTIssuer <url>`,
 `-ArdiaChatGPTAPI <url>` and `-ArdiaVoiceHeard <text>` ("Browse for Me (iPhone only)" above). Motion captures:
 `-BrowsePagerFreeze <fraction>`, `-BrowsePagerScript` and `-BrowseLoadFreeze <progress>`. `-BrowseDeckPull <n>`

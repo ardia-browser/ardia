@@ -132,6 +132,7 @@ public final class SystemModule: Module {
 
     OnCreate {
       PhoneExits.shared.follow(sharing: UsageConsent.state().sharing)
+      DispatchQueue.main.async { MainActor.assumeIsolated { KeyboardWarmUp.watchTouches() } }
     }
 
     Events("onSystemLink")

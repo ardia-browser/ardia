@@ -4,13 +4,26 @@ import UIKit
 @MainActor
 enum KeyboardWarmUp {
   private static var warmed = false
+  private static let quietAfterTouch: CFTimeInterval = 1
   private static var watcher: TouchWatcher?
 
+  private static var activation: NSObjectProtocol?
+
   static func watchTouches() {
-    guard watcher == nil, let window = mainWindow() else { return }
+    guard watcher == nil else { return }
+    guard let window = mainWindow() else { return watchWhenActive() }
     let touches = TouchWatcher()
     window.addGestureRecognizer(touches)
     watcher = touches
+    if let activation { NotificationCenter.default.removeObserver(activation) }
+    activation = nil
+  }
+
+  private static func watchWhenActive() {
+    guard activation == nil else { return }
+    activation = NotificationCenter.default.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { _ in
+      MainActor.assumeIsolated { watchTouches() }
+    }
   }
 
   static func attempt() -> [String: Any] {
@@ -18,9 +31,11 @@ enum KeyboardWarmUp {
     guard UIApplication.shared.applicationState == .active else { return ["outcome": "inactive"] }
     guard let scene = activeScene(), let main = mainWindow(in: scene), scene.keyWindow === main else { return ["outcome": "notMainWindow"] }
     watchTouches()
-    if scene.windows.contains(where: { holdsFocus($0) }) { return ["outcome": "focused"] }
+    guard let watcher else { return ["outcome": "notWatching"] }
+    if let holder = focusHolder(in: scene) { return ["outcome": "focused", "holder": String(describing: type(of: holder))] }
     if RunLoop.main.currentMode == .tracking { return ["outcome": "scrolling"] }
-    if (watcher?.down ?? 0) > 0 { return ["outcome": "touching"] }
+    if watcher.down > 0 { return ["outcome": "touching"] }
+    if let ended = watcher.lastEnded, CACurrentMediaTime() - ended < quietAfterTouch { return ["outcome": "recentTouch"] }
     if presenting(main.rootViewController) { return ["outcome": "presenting"] }
     let started = CACurrentMediaTime()
     let field = UITextField(frame: CGRect(x: -100, y: -100, width: 1, height: 1))
@@ -50,9 +65,26 @@ enum KeyboardWarmUp {
     return scene.windows.first { !$0.isHidden && $0.windowLevel == .normal }
   }
 
-  private static func holdsFocus(_ view: UIView) -> Bool {
-    if view.isFirstResponder { return true }
-    return view.subviews.contains { holdsFocus($0) }
+  fileprivate static var answered: UIResponder?
+
+  private static func focusHolder(in scene: UIWindowScene) -> UIResponder? {
+    answered = nil
+    UIApplication.shared.sendAction(#selector(UIResponder.ardiaAnswerFocusProbe(_:)), to: nil, from: nil, for: nil)
+    let first = answered
+    answered = nil
+    if let first, !(first is UIWindow), !(first is UIApplication), !(first is UIApplicationDelegate) { return first }
+    for window in scene.windows {
+      if let view = firstResponderView(in: window) { return view }
+    }
+    return nil
+  }
+
+  private static func firstResponderView(in view: UIView) -> UIView? {
+    if view.isFirstResponder { return view }
+    for subview in view.subviews {
+      if let found = firstResponderView(in: subview) { return found }
+    }
+    return nil
   }
 
   private static func presenting(_ controller: UIViewController?) -> Bool {
@@ -62,8 +94,15 @@ enum KeyboardWarmUp {
   }
 }
 
+extension UIResponder {
+  @objc func ardiaAnswerFocusProbe(_ sender: Any?) {
+    MainActor.assumeIsolated { KeyboardWarmUp.answered = self }
+  }
+}
+
 final class TouchWatcher: UIGestureRecognizer, UIGestureRecognizerDelegate {
   private(set) var down = 0
+  private(set) var lastEnded: CFTimeInterval?
 
   init() {
     super.init(target: nil, action: nil)
@@ -88,6 +127,7 @@ final class TouchWatcher: UIGestureRecognizer, UIGestureRecognizerDelegate {
 
   private func release(_ count: Int, _ event: UIEvent) {
     down = max(0, down - count)
+    lastEnded = CACurrentMediaTime()
     if down == 0 { state = .failed }
   }
 

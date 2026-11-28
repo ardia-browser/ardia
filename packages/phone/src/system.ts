@@ -15,7 +15,7 @@ export type SystemLink = (
 
 type NativeLink = Omit<SystemLink, "query"> & { query?: string };
 
-export type KeyboardWarmUp = { outcome: string; ms?: number };
+export type KeyboardWarmUp = { outcome: string; ms?: number; holder?: string };
 
 type SystemNative = {
   labLog?: (line: string) => void;

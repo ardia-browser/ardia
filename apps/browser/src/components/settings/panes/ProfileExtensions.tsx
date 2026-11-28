@@ -84,8 +84,9 @@ export function ExtensionsSection({ profileId }: { profileId: string }) {
             }
             description={ext.errors.length && !ext.enabled ? ext.errors[0] : ext.description}
             onPress={() => openExtensionDetails(profileId, ext.id)}
+            accessibilityLabel={ext.errors.length && !ext.enabled ? `${ext.name}, ${ext.errors[0]}` : ext.name}
           >
-            <Toggle value={ext.enabled} onChange={(on) => void setEnabled(profile, ext.id, on)} />
+            <Toggle value={ext.enabled} accessibilityLabel={ext.name} onChange={(on) => void setEnabled(profile, ext.id, on)} />
           </Row>
         ))}
         <Row anchor="profiles.webStore">
@@ -128,7 +129,7 @@ function ExtensionDetails({ ext, profile }: { ext: InstalledExtension; profile: 
             }
             description={`Version ${ext.version}${ext.fromWebStore ? " · Chrome Web Store" : " · Unpacked"}`}
           >
-            <Toggle value={ext.enabled} onChange={(on) => void setEnabled(profile, ext.id, on)} />
+            <Toggle value={ext.enabled} accessibilityLabel={ext.name} onChange={(on) => void setEnabled(profile, ext.id, on)} />
           </Row>
         </Group>
       </Box>

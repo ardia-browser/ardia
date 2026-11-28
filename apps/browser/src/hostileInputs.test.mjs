@@ -1318,3 +1318,51 @@ test("a trustedInput message is only a same-origin stamp, and the age native han
   }
   for (const value of [5000, -1, NaN, Infinity, "10", [10], { valueOf: () => 10 }, true]) assert.equal(embedInputAge(value), null, show(value));
 });
+
+test("socket settings.open: a hostile pane or profile never reaches the Settings window", async () => {
+  S().hydrate({});
+  S().updateSettings({ cliControl: true });
+  startAutomation();
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  for (let i = 0; i < 5 && !stub.controlSocket.running; i++) await tick();
+  await tick();
+  S().createWindow({ url: "https://a.example/" });
+  const { shellNativeModules } = await import("./test-native/shell.ts");
+  const { useSettingsNav } = await import("./state/settings/settingsWindows.ts");
+  const appWindows = shellNativeModules.ArdiaAppWindows;
+  const openWindow = appWindows.openWindow;
+  const opened = [];
+  appWindows.openWindow = (id, options) => {
+    if (id === "settings") opened.push(useSettingsNav.getState().pane);
+    return openWindow(id, options);
+  };
+  let nextId = 900;
+  const conn = 89;
+  const socketCall = async (params) => {
+    const id = ++nextId;
+    const before = stub.controlSocket.replies.length;
+    stub.emitControlRequest({ connection: conn, generation: stub.controlSocket.generation, line: JSON.stringify({ id, method: "settings.open", params }) });
+    for (let i = 0; i < 200 && !stub.controlSocket.replies.slice(before).some((r) => r.connection === conn); i++) await tick();
+    const replies = stub.controlSocket.replies.slice(before).filter((r) => r.connection === conn);
+    assert.equal(replies.length, 1);
+    return JSON.parse(replies[0].line);
+  };
+  try {
+    const control = await socketCall({ pane: "advanced" });
+    assert.equal(control.error, undefined, "positive control reaches the Settings window");
+    assert.deepEqual(opened, ["advanced"]);
+    const paneBefore = useSettingsNav.getState().pane;
+    opened.length = 0;
+    for (const value of [...HOSTILE_VALUES.map((h) => h.value), ...PROTOTYPE_KEYS].filter((v) => v !== undefined)) {
+      const asPane = await socketCall({ pane: value });
+      assert.ok(asPane.error, `pane ${show(value)} is refused`);
+      const asProfile = await socketCall({ pane: "profiles", profile: value });
+      assert.ok(asProfile.error, `profile ${show(value)} is refused`);
+    }
+    assert.deepEqual(opened, [], "no hostile value opened the window");
+    assert.equal(useSettingsNav.getState().pane, paneBefore, "no hostile value moved Settings");
+  } finally {
+    appWindows.openWindow = openWindow;
+    S().updateSettings({ cliControl: false });
+  }
+});

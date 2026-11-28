@@ -5,6 +5,8 @@ import { useTheme } from "./theme";
 import { radius, space } from "./tokens";
 import { HoverFill } from "./HoverFill";
 
+const ACCESSIBILITY_PRESS = { nativeEvent: {} } as GestureResponderEvent;
+
 export type ListRowState = { hovered: boolean; pressed: boolean; selected: boolean };
 
 export function ListRow({
@@ -14,6 +16,7 @@ export function ListRow({
   onPress,
   onPressIn,
   onHover,
+  accessibilityLabel,
   children,
 }: {
   selected?: boolean;
@@ -22,6 +25,7 @@ export function ListRow({
   onPress?: (event: GestureResponderEvent) => void;
   onPressIn?: (event: GestureResponderEvent) => void;
   onHover?: (hovered: boolean) => void;
+  accessibilityLabel?: string;
   children: ReactNode | ((state: ListRowState) => ReactNode);
 }) {
   const theme = useTheme();
@@ -42,7 +46,7 @@ export function ListRow({
   );
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress} onPressIn={onPressIn}>
+      <Pressable onPress={onPress} onPressIn={onPressIn} {...(accessibilityLabel ? { accessibilityRole: "button", accessibilityLabel, accessibilityState: { selected }, onAccessibilityTap: onPress ? () => onPress(ACCESSIBILITY_PRESS) : undefined } : {})}>
         {({ pressed }) => (
           <View
             style={{

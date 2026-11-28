@@ -4,6 +4,7 @@ import { curve, duration } from "./motion";
 import { useTheme } from "./theme";
 import { ink, opacity } from "./tokens";
 import { useNativeForm } from "./nativeForm";
+import { useControlLabel } from "./controlLabel";
 
 type SwitchLook = {
   width: number;
@@ -55,6 +56,13 @@ function Switch({
 
   useEffect(() => (animateExternalChanges || Date.now() - pressedAt.current < USER_CHANGE_WINDOW_MS ? slideTo(value) : jumpTo(value)));
 
+  const flip = () => {
+    const next = !target.current;
+    pressedAt.current = Date.now();
+    if (!asksFirst) slideTo(next);
+    const settled = onChange(next);
+    if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
+  };
   const travel = look.width - look.knob - look.inset * 2;
   const radius = look.height / 2;
   return (
@@ -64,13 +72,8 @@ function Switch({
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: value, disabled: !!disabled }}
-      onPress={() => {
-        const next = !target.current;
-        pressedAt.current = Date.now();
-        if (!asksFirst) slideTo(next);
-        const settled = onChange(next);
-        if (settled instanceof Promise) void settled.finally(() => slideTo(shown.current));
-      }}
+      onPress={flip}
+      onAccessibilityTap={disabled ? undefined : flip}
       style={{ opacity: disabled ? opacity.disabled : 1 }}
     >
       <View pointerEvents="none" style={{ width: look.width, height: look.height, borderRadius: radius, backgroundColor: look.offColor, overflow: "hidden" }}>
@@ -116,13 +119,14 @@ export function Toggle({
 }) {
   const theme = useTheme();
   const native = useNativeForm();
+  const label = useControlLabel(accessibilityLabel);
   if (look === "panel")
     return (
       <Switch
         value={value}
         onChange={onChange}
         disabled={disabled}
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={label}
         asksFirst={asksFirst}
         look={{ width: 30, height: 17, knob: 14, inset: 1.5, offColor: theme.toggleOff, onColor: theme.accent, duration: duration.base, easing: curve.enter }}
       />
@@ -132,7 +136,7 @@ export function Toggle({
       value={value}
       onChange={onChange}
       disabled={disabled}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={label}
       asksFirst={asksFirst}
       animateExternalChanges={false}
       look={{ ...(native ? NATIVE_FORM_SWITCH : FORM_SWITCH), offColor: theme.switchOff, onColor: theme.formAccent, knobBorder: theme.knobBorder, duration: duration.base, easing: curve.enter }}

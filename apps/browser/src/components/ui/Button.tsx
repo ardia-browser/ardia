@@ -106,6 +106,7 @@ export const Button = memo(function Button(props: ButtonProps) {
   }
 });
 
+const ACCESSIBILITY_PRESS = { nativeEvent: {} } as GestureResponderEvent;
 const ROW_GLYPH = 13;
 const EXTENSION_GLYPH = 14;
 const IMAGE_SIZE = 16;
@@ -170,7 +171,7 @@ function IconButtonView(props: IconProps) {
   if (!props.toolbar)
     return (
       <View tooltip={tip} style={style} {...hoverProps}>
-        <Pressable onPress={props.onPress} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={disabled} accessibilityRole="button" accessibilityLabel={tooltip} style={hit ? { width: hit.width, height: hit.height } : undefined}>
+        <Pressable onPress={props.onPress} onAccessibilityTap={disabled || !props.onPress ? undefined : () => props.onPress?.(ACCESSIBILITY_PRESS)} onPressIn={handlePressIn} onPressOut={handlePressOut} disabled={disabled} accessibilityRole="button" accessibilityLabel={tooltip} style={hit ? { width: hit.width, height: hit.height } : undefined}>
           {({ pressed }) => plate(pressed)}
         </Pressable>
       </View>
@@ -179,6 +180,7 @@ function IconButtonView(props: IconProps) {
   const button = (
     <Pressable
       onPress={(e) => onPress?.(modifiersOf(e))}
+      onAccessibilityTap={disabled || !onPress ? undefined : () => onPress(modifiersOf(undefined))}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onLongPress={onLongPress}

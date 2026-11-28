@@ -3,10 +3,13 @@ import { isConfigSettingKey } from "../settings/configAllowlist";
 import { controllingSearchExtension, DEFAULT_SETTINGS, defaultSearchEngine, SETTING_KEYS, SETTING_SPECS, searchEngines, type SettingKey, type Settings } from "../settings/settings";
 import { chooseTabLayout } from "../settings/actions";
 import { tabLayoutOf } from "../browser/model";
-import type { MethodSpec } from "./socketCatalog";
+import type { MethodSpec, SocketCall } from "./socketCatalog";
 import { checkedByRules, hasSocketRule, searchProblem } from "./socketSettingRules";
-import { id, ids, obj, text } from "./socketSchema";
-import { expect, now } from "./socketTargets";
+import { id, ids, obj, oneOf, PROFILE, text } from "./socketSchema";
+import { expect, now, profileArg } from "./socketTargets";
+import { closeWindow, windowIds } from "../../platform/windows";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
+import { openSettings, SETTINGS_PANES, SETTINGS_WINDOW_ID, shownSettingsProfile, useSettingsNav, type SettingsPane } from "../settings/settingsWindows";
 import { OpError } from "./workspaceTargets";
 
 const OWN_METHOD: Partial<Record<SettingKey, string>> = {
@@ -141,6 +144,82 @@ function removeEngine(params: Record<string, unknown>) {
   return { ok: true };
 }
 
+const SETTINGS_WINDOW_WAIT_MS = 3000;
+const SETTINGS_WINDOW_POLL_MS = 50;
+
+function refuseWithoutSettingsWindowControl() {
+  if (!PLATFORM_FEATURES.settingsWindowControl) throw new OpError("refused", "Ardia can't show or drive its Settings window from the ardia command on this platform yet.");
+}
+
+async function settingsWindowOpen() {
+  const ids = await windowIds().catch(() => {
+    throw new OpError("failed", "Ardia couldn't list its windows.");
+  });
+  return ids.includes(SETTINGS_WINDOW_ID);
+}
+
+function settingsPlaceRow(open: boolean) {
+  const place = useSettingsNav.getState();
+  return { open, pane: place.pane, profile: place.pane === "profiles" ? shownSettingsProfile(place) : place.profileId, detail: place.detail, panes: SETTINGS_PANES };
+}
+
+async function settingsWindowRow() {
+  refuseWithoutSettingsWindowControl();
+  return settingsPlaceRow(await settingsWindowOpen());
+}
+
+async function waitFor(done: () => Promise<boolean>) {
+  const deadline = Date.now() + SETTINGS_WINDOW_WAIT_MS;
+  while (!(await done()) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, SETTINGS_WINDOW_POLL_MS));
+}
+
+let settingsWindowChange: Promise<unknown> = Promise.resolve();
+
+function oneSettingsChangeAtATime<T>(change: () => Promise<T>): Promise<T> {
+  const next = settingsWindowChange.catch(() => undefined).then(change);
+  settingsWindowChange = next;
+  return next;
+}
+
+function openSettingsWindow(params: Record<string, unknown>, call: SocketCall) {
+  refuseWithoutSettingsWindowControl();
+  const pane = params.pane as SettingsPane | undefined;
+  if (params.profile !== undefined && pane !== "profiles") throw new OpError("bad_request", "Only the profiles pane takes a profile.");
+  if (params.profile !== undefined) profileArg(params.profile);
+  return oneSettingsChangeAtATime(async () => {
+    call.stillServing();
+    const profile = params.profile === undefined ? null : profileArg(params.profile);
+    if (pane) openSettings(pane, profile);
+    else openSettings();
+    const { pane: wantedPane, profileId: wantedProfile, detail: wantedDetail } = useSettingsNav.getState();
+    const atPlace = () => {
+      const nav = useSettingsNav.getState();
+      const profileShown = !profile || (Object.hasOwn(now().profiles, profile) && shownSettingsProfile(nav) === profile);
+      return nav.pane === wantedPane && nav.profileId === wantedProfile && nav.detail === wantedDetail && (!pane || nav.pane === pane) && profileShown;
+    };
+    expect(atPlace(), `Settings didn't go to ${pane}.`);
+    await waitFor(settingsWindowOpen);
+    expect(await settingsWindowOpen(), "the Settings window didn't open.");
+    expect(atPlace(), `Settings moved away from ${wantedPane} while it opened.`);
+    return settingsPlaceRow(true);
+  });
+}
+
+function closeSettingsWindow(_params: Record<string, unknown>, call: SocketCall) {
+  refuseWithoutSettingsWindowControl();
+  return oneSettingsChangeAtATime(async () => {
+    if (await settingsWindowOpen()) {
+      call.stillServing();
+      await closeWindow(SETTINGS_WINDOW_ID);
+    }
+    await waitFor(async () => !(await settingsWindowOpen()));
+    expect(!(await settingsWindowOpen()), "the Settings window is still open.");
+    return settingsPlaceRow(false);
+  });
+}
+
+const SETTINGS_WINDOW_RESULT = "{open, pane, profile, detail, panes}";
+
 const ENGINE_FIELDS = { name: text("Its name"), keyword: text("The keyword that searches it from the address bar"), url: text("Its search URL, with %s for the query") };
 
 export const SETTINGS_METHODS: MethodSpec[] = [
@@ -155,6 +234,16 @@ export const SETTINGS_METHODS: MethodSpec[] = [
     run: (p) => apply(p.values as Record<string, unknown>, "settings.set"),
   },
   { name: "settings.reset", mutates: true, description: "Put settings back to their defaults", params: obj({ keys: ids("Setting keys", 200) }, ["keys"]), result: "{changed, values}", run: reset },
+  { name: "settings.window", mutates: false, description: "Whether the Settings window is open, and the pane, profile and page Settings is at (where it reopens when closed)", params: obj({}), result: SETTINGS_WINDOW_RESULT, run: settingsWindowRow },
+  {
+    name: "settings.open",
+    mutates: true,
+    description: "Open the Settings window, or bring it forward, at a pane (the profiles pane at a profile); without a pane it comes back where it was. Answers once the window is open and Settings is at that place; it doesn't wait for the pane to draw",
+    params: obj({ pane: oneOf(SETTINGS_PANES, "The pane to show; the one it showed last when left out"), profile: PROFILE }),
+    result: SETTINGS_WINDOW_RESULT,
+    run: openSettingsWindow,
+  },
+  { name: "settings.close", mutates: true, description: "Close the Settings window", params: obj({}), result: SETTINGS_WINDOW_RESULT, run: closeSettingsWindow },
   { name: "search.engines", mutates: false, description: "Search engines: built in, added in Settings and from extensions; default marks the one searches use, and controlledBy names the extension that set it", params: obj({}), result: "[{id, name, keyword, url, custom, default, controlledBy?}]", run: engineRows },
   {
     name: "search.setDefault",

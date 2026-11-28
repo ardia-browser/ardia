@@ -13,6 +13,7 @@ import { useTheme } from "../ui/theme";
 import { lineHeight, proseLineHeight, radius as radii, space, perLook } from "../ui/tokens";
 import { findSetting, sectionEntries, setting, unshownSettings, type SettingEntry, type SettingId } from "./settingsIndex";
 import { Toggle } from "../ui/Switch";
+import { ControlLabelContext } from "../ui/controlLabel";
 import { liquidGlass } from "../ui/Glass";
 import { PopUp } from "../ui/Field";
 import { Text } from "../ui/Text";
@@ -130,6 +131,7 @@ export function Row({
   icon,
   onPress,
   anchor,
+  accessibilityLabel,
 }: {
   title?: ReactNode;
   description?: ReactNode;
@@ -137,10 +139,11 @@ export function Row({
   icon?: ReactNode;
   onPress?: () => void;
   anchor?: SettingId;
+  accessibilityLabel?: string;
 }) {
   const entry = anchor ? setting(anchor) : undefined;
   const row = (
-    <PlainRow title={title ?? entry?.title} description={description === undefined ? (entry?.explained ? entry.description : undefined) : description} icon={icon} onPress={onPress}>
+    <PlainRow title={title ?? entry?.title} description={description === undefined ? (entry?.explained ? entry.description : undefined) : description} icon={icon} onPress={onPress} accessibilityLabel={accessibilityLabel}>
       {children}
     </PlainRow>
   );
@@ -187,7 +190,7 @@ export function FormField({ label, inline, children }: { label: string; inline?:
       <Text size="caption" tone="textSecondary" style={inline ? undefined : FIELD_LABEL}>
         {label}
       </Text>
-      {children}
+      <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider>
     </View>
   );
 }

@@ -1326,9 +1326,10 @@
   {
    "id": "socket-family:settings",
    "source": "socket",
-   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules (D3: any same-user process is the owner)",
+   "guard": "Native listener checks the peer UID and a 0600 socket; params checked against the method's JSON schema (socketSchema.schemaProblem); URLs through openableUrl; settings through socketSettingRules; settings.open takes only a pane from SETTINGS_PANES (the schema's enum) and a profile through profileArg, and re-checks the connection before it opens or closes the window (D3: any same-user process is the owner)",
    "checks": [
-    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem"
+    "apps/browser/src/state/automation/socketSchema.ts#schemaProblem",
+    "apps/browser/src/state/automation/socketTargets.ts#profileArg"
    ],
    "findings": [
     "D3"

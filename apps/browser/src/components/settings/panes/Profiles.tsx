@@ -175,7 +175,7 @@ function ThisProfileSection({ profileId }: { profileId: string }) {
   return (
     <>
       <Box gap="ml" style={DETAILS_HEAD}>
-        <Pressable onPress={() => pickIcon(badge.current)} tooltip="Change Icon">
+        <Pressable onPress={() => pickIcon(badge.current)} onAccessibilityTap={() => pickIcon(badge.current)} accessibilityRole="button" accessibilityLabel="Change Icon" tooltip="Change Icon">
           <View ref={badge} collapsable={false}>
             <ProfileBadge profile={profile} size={64} />
           </View>

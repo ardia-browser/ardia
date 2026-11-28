@@ -145,6 +145,8 @@ const PARAMS = (f) => ({
   "downloads.setSettings": { askWhereToSave: true },
   "settings.set": { values: { appearance: "light" } },
   "settings.reset": { keys: ["appearance"] },
+  "settings.open": { pane: "general" },
+  "settings.close": {},
   "search.setDefault": { id: f.search },
   "search.add": { name: "Ex2", keyword: "ex2", url: "https://ex2.example/?q=%s" },
   "search.update": { id: f.search, name: "Renamed" },

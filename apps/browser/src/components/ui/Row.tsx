@@ -7,11 +7,30 @@ import { lineHeight, radius, space, font as typeScale } from "./tokens";
 import { useHover } from "./useHover";
 import { HoverFill } from "./HoverFill";
 import { useNativeForm } from "./nativeForm";
+import { ControlLabelContext } from "./controlLabel";
 
-export function Row({ title, description, children, icon, onPress }: { title?: ReactNode; description?: ReactNode; children?: ReactNode; icon?: ReactNode; onPress?: () => void }) {
+export function Row({
+  title,
+  description,
+  children,
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  children?: ReactNode;
+  icon?: ReactNode;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+}) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const native = useNativeForm();
+  const label = accessibilityLabel ?? (typeof title === "string" ? title : undefined);
+  const plainText = typeof title === "string" && (description === undefined || description === null || typeof description === "string");
+  const pressLabel = accessibilityLabel ?? (plainText ? [title, description].filter(Boolean).join(", ") : undefined);
+  const hasControls = children !== undefined && children !== null && children !== false;
   const body = (
     <View
       style={{
@@ -35,14 +54,21 @@ export function Row({ title, description, children, icon, onPress }: { title?: R
           )
         ) : null}
       </View>
-      {children}
+      {hasControls ? <ControlLabelContext.Provider value={label}>{children}</ControlLabelContext.Provider> : null}
       {onPress && <Symbol name="chevron.right" size={11} weight="semibold" color={theme.textTertiary} style={{ width: 12, height: 14 }} />}
     </View>
   );
   if (!onPress) return body;
   return (
     <View {...hoverProps}>
-      <Pressable onPress={onPress}>{body}</Pressable>
+      <Pressable
+        onPress={onPress}
+        accessibilityLabel={pressLabel}
+        onAccessibilityTap={onPress}
+        {...(hasControls ? {} : { accessibilityRole: "button" as const })}
+      >
+        {body}
+      </Pressable>
     </View>
   );
 }

@@ -13,11 +13,11 @@ import { currentTabs, useTabs } from "../tabs/store";
 import { findTab } from "../tabs/tabsState";
 import { countUsage } from "../telemetry/telemetry";
 import { useVoice } from "../voice/store";
-import { frontMediaOnSide, miniPlayerShows, shelve, withPending, type Dismissal, type MediaShelf, type PendingState, type PlayingMedia, type SkipControl } from "./nowPlaying";
+import { frontMediaOnSide, miniPlayerShows, sessionsAfter, shelve, withPending, withSession, type MediaShelf, type PendingState, type PlayingMedia, type Sessions, type SkipControl } from "./nowPlaying";
 
-type MediaState = { shelf: MediaShelf; pending: Readonly<Record<string, PendingState>>; dismissed: Dismissal; counted: string | null };
+type MediaState = { shelf: MediaShelf; pending: Readonly<Record<string, PendingState>>; dismissed: Sessions; counted: Sessions };
 
-export const useMedia = create<MediaState>()(() => ({ shelf: {}, pending: {}, dismissed: null, counted: null }));
+export const useMedia = create<MediaState>()(() => ({ shelf: {}, pending: {}, dismissed: {}, counted: {} }));
 
 export const PENDING_CONFIRM_MS = 2_000;
 
@@ -39,8 +39,10 @@ export const setMiniPlayerRoom = (room: number) => {
 export function takeMediaEvent(event: PageMediaEvent) {
   useMedia.setState((state) => {
     const shelf = shelve(state.shelf, event);
+    const dismissed = sessionsAfter(state.dismissed, event);
+    const counted = sessionsAfter(state.counted, event);
     const { [event.pageId]: _answered, ...pending } = state.pending;
-    return shelf === state.shelf && !state.pending[event.pageId] ? state : { shelf, pending };
+    return shelf === state.shelf && !state.pending[event.pageId] && dismissed === state.dismissed && counted === state.counted ? state : { shelf, pending, dismissed, counted };
   });
 }
 
@@ -92,7 +94,7 @@ export function floatMedia(media: PlayingMedia) {
 }
 
 export function closeMiniPlayer(media: PlayingMedia) {
-  useMedia.setState({ dismissed: { pageId: media.pageId, startedAt: media.startedAt } });
+  useMedia.setState((state) => ({ dismissed: withSession(state.dismissed, media) }));
   countFor(media, "mini_player_closed");
 }
 
@@ -102,9 +104,9 @@ export function openMiniPlayerTab(media: PlayingMedia) {
 }
 
 export function noteMiniPlayerShown(media: PlayingMedia) {
-  const session = `${media.pageId}:${media.startedAt}`;
-  if (useMedia.getState().counted === session) return;
-  useMedia.setState({ counted: session });
+  const { counted } = useMedia.getState();
+  if (counted[media.pageId] === media.startedAt) return;
+  useMedia.setState({ counted: withSession(counted, media) });
   countFor(media, "mini_player_shown");
 }
 

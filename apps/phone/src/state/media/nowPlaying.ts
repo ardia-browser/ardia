@@ -21,7 +21,7 @@ export type PlayingMedia = {
 
 export type MediaShelf = Readonly<Record<string, PlayingMedia>>;
 
-export type Dismissal = { pageId: string; startedAt: number } | null;
+export type Sessions = Readonly<Record<string, number>>;
 
 const finiteOr = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
 
@@ -50,6 +50,17 @@ export function mediaFromEvent(event: PageMediaEvent): PlayingMedia | null {
   };
 }
 
+export function sessionsAfter(sessions: Sessions, event: PageMediaEvent): Sessions {
+  const kept = sessions[event.pageId];
+  if (kept === undefined || mediaFromEvent(event)?.startedAt === kept) return sessions;
+  const { [event.pageId]: _ended, ...rest } = sessions;
+  return rest;
+}
+
+export function withSession(sessions: Sessions, media: PlayingMedia): Sessions {
+  return sessions[media.pageId] === media.startedAt ? sessions : { ...sessions, [media.pageId]: media.startedAt };
+}
+
 export function shelve(shelf: MediaShelf, event: PageMediaEvent): MediaShelf {
   const media = mediaFromEvent(event);
   if (media) return { ...shelf, [event.pageId]: media };
@@ -76,14 +87,14 @@ export type MiniPlayerScene = {
   covered: boolean;
   incognito: boolean;
   tabExists: boolean;
-  dismissed: Dismissal;
+  dismissed: Sessions;
 };
 
 export function miniPlayerShows(media: PlayingMedia | null, scene: MiniPlayerScene): boolean {
   if (!media || !scene.enabled || scene.covered || !scene.tabExists) return false;
   if (media.isPrivate !== scene.incognito) return false;
   if (scene.surface === "browsing" && scene.selectedId === media.pageId) return false;
-  if (scene.dismissed && scene.dismissed.pageId === media.pageId && scene.dismissed.startedAt === media.startedAt) return false;
+  if (scene.dismissed[media.pageId] === media.startedAt) return false;
   return true;
 }
 

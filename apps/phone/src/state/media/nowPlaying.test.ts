@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PageMediaEvent } from "@ardia/phone-native";
-import { controlsThatFit, frontMedia, frontMediaOnSide, mediaFromEvent, withPending, miniPlayerLines, miniPlayerShows, positionAt, shelve, skipControls, withOptimisticState, type MiniPlayerScene, type PlayingMedia } from "./nowPlaying.ts";
+import { controlsThatFit, frontMedia, frontMediaOnSide, mediaFromEvent, withPending, miniPlayerLines, miniPlayerShows, positionAt, sessionsAfter, shelve, skipControls, withOptimisticState, withSession, type MiniPlayerScene, type PlayingMedia } from "./nowPlaying.ts";
 
 const event = (pageId: string, fields: Partial<PageMediaEvent> = {}): PageMediaEvent => ({
   name: "pages.media",
@@ -26,7 +26,7 @@ const event = (pageId: string, fields: Partial<PageMediaEvent> = {}): PageMediaE
 
 const media = (pageId: string, fields: Partial<PageMediaEvent> = {}) => mediaFromEvent(event(pageId, fields))!;
 
-const scene = (fields: Partial<MiniPlayerScene> = {}): MiniPlayerScene => ({ enabled: true, surface: "browsing", selectedId: "other", covered: false, incognito: false, tabExists: true, dismissed: null, ...fields });
+const scene = (fields: Partial<MiniPlayerScene> = {}): MiniPlayerScene => ({ enabled: true, surface: "browsing", selectedId: "other", covered: false, incognito: false, tabExists: true, dismissed: {}, ...fields });
 
 test("a page that stops reporting media leaves the shelf, and one that never reported is left alone", () => {
   const shelf = shelve({}, event("a"));
@@ -82,9 +82,9 @@ test("Incognito media shows only on the Incognito side and other media only on t
 
 test("closing it hides it for that playing session only, and a new start brings it back", () => {
   const playing = media("a", { startedAt: 500 });
-  assert.equal(miniPlayerShows(playing, scene({ dismissed: { pageId: "a", startedAt: 500 } })), false);
-  assert.equal(miniPlayerShows(media("a", { startedAt: 900 }), scene({ dismissed: { pageId: "a", startedAt: 500 } })), true);
-  assert.equal(miniPlayerShows(media("b", { startedAt: 500 }), scene({ dismissed: { pageId: "a", startedAt: 500 } })), true);
+  assert.equal(miniPlayerShows(playing, scene({ dismissed: { a: 500 } })), false);
+  assert.equal(miniPlayerShows(media("a", { startedAt: 900 }), scene({ dismissed: { a: 500 } })), true);
+  assert.equal(miniPlayerShows(media("b", { startedAt: 500 }), scene({ dismissed: { a: 500 } })), true);
 });
 
 test("skip buttons use the site's previous and next tracks when it has them, else the chosen seconds, and none for live streams", () => {
@@ -137,4 +137,21 @@ test("a pressed state shows at once, gives way to the page's next report, and la
   assert.equal(withPending(shelf, { a: { state: "paused", until: 2_000 } }, 2_500), shelf);
   assert.equal(withPending(shelf, { a: { state: "playing", until: 2_000 } }, 1_000), shelf);
   assert.equal(withPending(shelf, { gone: { state: "paused", until: 2_000 } }, 1_000), shelf);
+});
+
+test("closing one page's player leaves another page's close in place, on either side and in any space", () => {
+  const a = media("a", { startedAt: 500 });
+  const b = media("b", { startedAt: 700, isPrivate: true });
+  const dismissed = withSession(withSession({}, a), b);
+  assert.equal(miniPlayerShows(a, scene({ surface: "deck", dismissed })), false);
+  assert.equal(miniPlayerShows(b, scene({ surface: "deck", incognito: true, dismissed })), false);
+  assert.equal(withSession(dismissed, a), dismissed);
+});
+
+test("a page's close and its shown count last for its session and end with it", () => {
+  const sessions = { a: 500, b: 700 };
+  assert.equal(sessionsAfter(sessions, event("a", { startedAt: 500, state: "paused" })), sessions);
+  assert.equal(sessionsAfter(sessions, event("c", { startedAt: 900 })), sessions);
+  assert.deepEqual(sessionsAfter(sessions, event("a", { startedAt: 900 })), { b: 700 });
+  assert.deepEqual(sessionsAfter(sessions, event("b", { state: "none" })), { a: 500 });
 });

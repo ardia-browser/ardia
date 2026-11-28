@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { resetZoom, setDesktopSite, setNightShadeOn, siteSettingsInMenu, zoomIn, zoomOut } from "../../state/page/actions";
+import { openSiteSettingsRoute, resetZoom, setDesktopSite, setNightShadeOn, siteSettingsInMenu, zoomIn, zoomOut } from "../../state/page/actions";
 import { useMenuModel } from "../../state/page/hooks";
 import type { MenuModel } from "../../state/page/pageMenu";
 import { usePageUi } from "../../state/page/store";
@@ -12,19 +12,20 @@ import { useMaterialTheme } from "../ui/materialTheme";
 import { materialShape, materialSize, materialType } from "../ui/materialTokens";
 import { MaterialSettingsLeading } from "./MaterialSettingsKit";
 import { Divider, Group, IconTile, ToggleRow } from "./SettingsKit";
+import { AllowedSites, SiteSettingsGroups } from "./SitePages";
+import { siteOrigin } from "../../lib/siteOrigin";
 
-export const THIS_SITE_FOOTER = "Desktop Site applies to this tab.";
 export const THIS_SITE_FALLBACK = "This Site";
 
-export function useThisSite(): { tabId: string; host: string; model: MenuModel } | null {
+export function useThisSite({ whileClosed = false }: { whileClosed?: boolean } = {}): { tabId: string; host: string; origin: string | null; model: MenuModel } | null {
   const tabId = useSelectedTabId() ?? "";
   const model = useMenuModel(tabId);
   const url = usePages((s) => s.navigation[tabId]?.url) ?? null;
   const tabUrl = useTabs((s) => s.open.find((t) => t.id === tabId)?.url ?? s.privates.find((t) => t.id === tabId)?.url ?? null);
   const inMenu = usePageUi(siteSettingsInMenu);
-  if (!inMenu || !tabId || !model.pageRows || !model.isWebPage) return null;
+  if ((!inMenu && !whileClosed) || !tabId || !model.pageRows || !model.isWebPage) return null;
   const shown = url ?? tabUrl;
-  return { tabId, host: (shown && display(shown).host) || THIS_SITE_FALLBACK, model };
+  return { tabId, host: (shown && display(shown).host) || THIS_SITE_FALLBACK, origin: siteOrigin(shown), model };
 }
 
 export function ThisSiteGroup() {
@@ -32,11 +33,24 @@ export function ThisSiteGroup() {
   if (!site) return null;
   const { host, model } = site;
   return (
-    <Group header={host} footer={THIS_SITE_FOOTER}>
+    <Group header={host}>
       <ToggleRow title="Night Shade" icon="moonFill" tint={settingsTint.nightShade} value={model.nightShadeOn} disabled={!model.siteSwitches} divider onChange={setNightShadeOn} />
       <ZoomRow model={model} />
       <ToggleRow title="Desktop Site" icon="desktop" tint={settingsTint.neutral} value={model.desktopSite} onChange={setDesktopSite} />
     </Group>
+  );
+}
+
+export function ThisSiteSections() {
+  const site = useThisSite();
+  const isPrivate = useTabs((s) => s.privates.some((tab) => tab.id === site?.tabId));
+  if (!site) return null;
+  return (
+    <>
+      <ThisSiteGroup />
+      {isPrivate || !site.origin ? null : <AllowedSites origin={site.origin} />}
+      <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
+    </>
   );
 }
 

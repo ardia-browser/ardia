@@ -92,7 +92,6 @@ if [ ! -d "$cachedApp" ] || [ "$(cat "$cache/native.hash" 2>/dev/null)" != "$has
     needsFree 10 "a native build from nothing"
   fi
   echo "native inputs $hashBefore differ from the cached build: running xcodebuild"
-  rm -rf "$cachedApp" "$cache/native.hash"
   export LANG=en_US.UTF-8
   "$root/packages/core-rs/scripts/build-xcframework.sh"
   (cd "$root" && scripts/agent/locked xcodebuild --wait 540 --as build-sim-app -- xcodebuild -workspace apps/phone/ios/Ardia.xcworkspace -scheme Ardia -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$cache/dd" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= ARDIA_TEST_BUILD=YES SKIP_BUNDLING=1 build) > "$work/xcodebuild.log" 2>&1 || {
@@ -101,6 +100,7 @@ if [ ! -d "$cachedApp" ] || [ "$(cat "$cache/native.hash" 2>/dev/null)" != "$has
     cp "$work/xcodebuild.log" "$out/$name.xcodebuild.log"
     exit 1
   }
+  rm -rf "$cachedApp" "$cache/native.hash"
   cp -R "$cache/dd/Build/Products/Release-iphonesimulator/Ardia.app" "$cachedApp"
   rm -f "$cachedApp/main.jsbundle"
   echo "$hashBefore" > "$cache/native.hash"

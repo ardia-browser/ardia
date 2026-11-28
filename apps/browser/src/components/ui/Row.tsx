@@ -51,15 +51,23 @@ const NATIVE_ROW_HEIGHT = 34;
 
 export function Group({ children }: { children: ReactNode }) {
   const theme = useTheme();
-  const rows = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
   return (
     <View style={{ borderRadius: radius.panel, backgroundColor: theme.groupFill, borderWidth: StyleSheet.hairlineWidth * 2, borderColor: theme.groupBorder, overflow: "hidden" }}>
+      <GroupRows>{children}</GroupRows>
+    </View>
+  );
+}
+
+export function GroupRows({ children }: { children: ReactNode }) {
+  const rows = (Array.isArray(children) ? children.flat() : [children]).filter(Boolean);
+  return (
+    <>
       {rows.map((row, i) => (
         <View key={i}>
           {i > 0 && <Divider thick inset="l" />}
           {row}
         </View>
       ))}
-    </View>
+    </>
   );
 }

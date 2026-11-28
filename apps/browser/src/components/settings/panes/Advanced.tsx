@@ -18,7 +18,7 @@ import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/s
 import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { Favicon } from "../../favicon/Favicon";
-import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
+import { FormField, Group, GroupRows, Row, SectionHeader, SettingToggle } from "../Form";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { useAutomationRuleRows } from "./AutomationRules";
@@ -212,7 +212,7 @@ function ProgramsRows() {
   const plugins = usePluginsWithPrograms();
   const registryUnreadable = useProgramRegistry((s) => s.failClosed);
   return (
-    <>
+    <GroupRows>
       <ProgramControlRow />
       {PLATFORM_FEATURES.controlDoorbell ? <AllowedProgramsRows /> : null}
       <Row
@@ -233,7 +233,7 @@ function ProgramsRows() {
       {plugins.map((p) => (
         <PluginProgramsRow key={p.name} name={p.name} title={p.title} />
       ))}
-    </>
+    </GroupRows>
   );
 }
 

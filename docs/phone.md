@@ -3995,10 +3995,16 @@ titles and phrases that post links instead.
   Show in every space is on, and lifts toasts above itself. Its glass samples the page's source over a page and the
   start page's on the start page, as the bar's does; the default surfaces source can't see a web view and drew clear
   glass with the page's text through it. It floats over the page without changing the page's inset: changing it moved
-  the page about two lines each time it came or went. It fades and rises 8 pt in 180 ms and leaves in 150 ms, opacity
-  only with Reduce Motion, all on the UI thread; play/pause flips at once and the page's report confirms it. Measured on
-  the simulator over a static page at 60 fps: out 9 frames (150 ms), in 7 frames to 94% (117 ms) and at rest by about
-  180 ms, both monotonic with no overshoot, resting 10 pt above the bar. A close lasts until the media starts again: its
+  the page about two lines each time it came or went. It fades and rises 8 pt in 180 ms and leaves in 150 ms, all on the UI
+  thread; play/pause flips at once and the page's report confirms it. Under Reduce Motion it fades in place with the
+  same timings (`ReduceMotion.Never` on the opacity: Reanimated otherwise jumps to the end, which made it pop), and
+  only the glass's own frost, which `GlassView` doesn't fade under Reduce Motion, goes at once on the way out. The card
+  stays mounted while its side has media, hidden at opacity 0, so coming back doesn't build its glass mid-fade; the
+  glass is hidden with the bar's `shown` flag while the card is. Measured on the final #4751 head over a moving page at
+  60 fps: out 8 frames (133 ms), in 9 frames (to 0.97 at 117 ms, at rest by about 150 ms), both monotonic with no
+  overshoot, resting 10 pt above the bar; under Reduce Motion in about 10 frames with no rise, out 8 frames after the
+  frost drops in the first. Over a still page `simctl recordVideo` skips frames and the fade reads as a pop (see the
+  frames step below). A close lasts until the media starts again: its
   start time is fixed per start, and the play that undoes WebKit's pause on leaving keeps the old one. Every button is a
   44 pt target; when the title would get under 96 pt (more at large text, which stops growing at 1.35x here), skip back
   goes first, then skip forward, then Picture in Picture, and what is hidden stays as a VoiceOver action on the card.
@@ -4051,6 +4057,10 @@ Watch your own frames before you hand a change on. The loop, for any agent:
    - Pull 60 fps frames: `ffmpeg -i run.mp4 -vf fps=60 frames/f%04d.png`.
    - Or a sheet: `-vf "fps=60,select='between(n,START,END)',scale=134:291,tile=18x2" -frames:v 1 sheet.png`.
    - Measure positions, sizes and opacity from the pixels, not by eye.
+   - Time motion over a page that moves every frame (a `requestAnimationFrame` box is enough). Over a still screen
+     `recordVideo` stops writing frames, gaps of up to 0.75 s in one #4751 run, so a 180 ms fade landed in one or two
+     frames and read as a pop; over a moving page the same build had no gaps and a 9-frame fade. Check the frame
+     times with `ffprobe -show_frames -select_streams v -show_entries frame=pts_time` before trusting a count.
 6. **Main's SwiftUI app,** the reference for the iPhone redesign.
    - It has the same bundle id, so uninstall one app before installing the other
      (`xcrun simctl --set ~/.simlock/devices/ios uninstall <udid> com.ardia.browser.ios`).

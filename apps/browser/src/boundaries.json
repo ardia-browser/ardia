@@ -2199,7 +2199,7 @@
   {
    "id": "page-pixels:copyScreenshot",
    "source": "page",
-   "guard": "Copy Screenshot copies only pixels: the page's own compositor frame from ArdiaCoreTab copyPicture (a WebKit tab: WKWebView takeSnapshot) of the tab view the user is looking at, refused when the view has no tab, no window, is hidden or still awaits its first document; nothing the page returns, no markup and no script result reaches the pasteboard. The image is redrawn into sRGB by NSBitmapImageRep and written as PNG and TIFF only, and a write the pasteboard refuses is reported as a failure",
+   "guard": "Copy Screenshot copies only pixels: the page's own compositor frame from ArdiaCoreTab copyPicture (a WebKit tab: WKWebView takeSnapshot) of the tab view the user is looking at, refused for a Chromium tab when the view has no tab, no window, is hidden or still awaits its first document, and for a WebKit tab when it has no web view or window or is hidden; nothing the page returns, no markup and no script result reaches the pasteboard. The image is redrawn into sRGB by NSBitmapImageRep and written as PNG and TIFF only, and a write the pasteboard refuses is reported as a failure",
    "checks": [
     "packages/ardiacore/ios/ArdiaWebView+PageCommands.mm#copyPagePicture",
     "packages/ardiacore/ios/WebKitTab+PageTab.swift#copyScreenshot",

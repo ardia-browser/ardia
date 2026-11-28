@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+# Exits 0 when the Pods project lists exactly the Swift files packages/phone/ios has, 1 (naming the difference) when a file was added or removed since the last pod install.
+#
+#   apps/phone/scripts/pod-sources-current
+import pathlib
+import re
+import sys
+
+if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+    print("".join(line[2:] for line in open(__file__).readlines()[1:4]), end="")
+    sys.exit(0)
+
+root = pathlib.Path(__file__).resolve().parents[3]
+project = root / "apps/phone/ios/Pods/Pods.xcodeproj/project.pbxproj"
+if not project.exists():
+    print("no Pods project: run pod install for apps/phone/ios", file=sys.stderr)
+    sys.exit(1)
+text = project.read_text()
+group = re.search(r"children = \(([^)]*)\);\s*name = ArdiaPhoneNative;\s*path = \.\./\.\./\.\./\.\./packages/phone/ios;", text)
+if not group:
+    print("the Pods project has no ArdiaPhoneNative group for packages/phone/ios: run pod install", file=sys.stderr)
+    sys.exit(1)
+listed = set(re.findall(r"/\* ([^*/]+\.swift) \*/", group.group(1)))
+present = {path.name for path in (root / "packages/phone/ios").glob("*.swift")}
+added, removed = sorted(present - listed), sorted(listed - present)
+if added or removed:
+    print(f"pod sources changed since pod install: added {added}, removed {removed}", file=sys.stderr)
+    sys.exit(1)

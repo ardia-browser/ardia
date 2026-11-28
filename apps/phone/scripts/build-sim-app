@@ -94,6 +94,11 @@ if [ ! -d "$cachedApp" ] || [ "$(cat "$cache/native.hash" 2>/dev/null)" != "$has
   echo "native inputs $hashBefore differ from the cached build: running xcodebuild"
   rm -rf "$cachedApp" "$cache/native.hash"
   export LANG=en_US.UTF-8
+  if ! "$here/pod-sources-current"; then
+    echo "running pod install so the Pods project lists packages/phone/ios's Swift files"
+    (cd "$root" && scripts/agent/locked pod -- bash -c 'cd apps/phone/ios && pod install') > "$work/pod-install.log" 2>&1 || { tail -20 "$work/pod-install.log" >&2; echo "pod install failed" >&2; exit 1; }
+    "$here/pod-sources-current"
+  fi
   "$root/packages/core-rs/scripts/build-xcframework.sh"
   (cd "$root" && scripts/agent/locked xcodebuild --wait 540 --as build-sim-app -- xcodebuild -workspace apps/phone/ios/Ardia.xcworkspace -scheme Ardia -configuration Release -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath "$cache/dd" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER= ARDIA_TEST_BUILD=YES SKIP_BUNDLING=1 build) > "$work/xcodebuild.log" 2>&1 || {
     grep -E "error:|BUILD FAILED" "$work/xcodebuild.log" | head -20 >&2

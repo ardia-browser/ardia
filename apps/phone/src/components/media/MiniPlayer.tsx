@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Image, Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { floatingBarCenter } from "../../lib/deckGeometry";
 import { display } from "../../state/search/omnibox";
@@ -44,12 +44,12 @@ export function MiniPlayer() {
   useEffect(() => {
     labTrace(`MEDIALAB mini ${shows ? "in" : "out"} from ${shown.value.toFixed(2)} present=${present} media=${hasMedia}`);
     if (shows) {
-      shown.value = withTiming(1, { duration: MINI_PLAYER.inMs, easing: entering }, (finished) => {
+      shown.value = withTiming(1, { duration: MINI_PLAYER.inMs, easing: entering, reduceMotion: ReduceMotion.Never }, (finished) => {
         runOnJS(labTrace)(`MEDIALAB mini in finished=${finished}`);
       });
       return;
     }
-    shown.value = withTiming(0, { duration: MINI_PLAYER.outMs, easing: leaving }, (finished) => {
+    shown.value = withTiming(0, { duration: MINI_PLAYER.outMs, easing: leaving, reduceMotion: ReduceMotion.Never }, (finished) => {
       runOnJS(labTrace)(`MEDIALAB mini out finished=${finished}`);
       if (finished && !hasMedia) runOnJS(setPresent)(false);
     });

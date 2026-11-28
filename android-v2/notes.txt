@@ -43,3 +43,13 @@ Final build 0e399b6:
 - r1-pixel9-ardia-0e399b6-shadow-page.png and -shadow-editor.png: the shadow-root fixed badge shows once, in the screen that was taken, and in no other tile (4.4 s, ended complete).
 - r1-f4-0e399b6-smoke-scroll-pull-menu-find-deck-private-miui.mp4: F4 on the final build: scrolling, pull, page menu (Print, no capture row), Find ("Tagus"), the tab deck, a new Incognito tab, the MIUI screenshot and MIUI Scroll stitching the whole private page.
 Test pictures were deleted from both devices.
+
+FINAL PASS on the PR head fc5bc16 (scrollcap-fc5bc16.apk, commit fc5bc16126ca8a3da5a2490a0c40a1415080e86a), mini load about 5:
+- final-fc5bc16-pixel9-pass.mp4: the whole emulator pass, two adb chunks joined: Wikipedia through Save, the sticky page, the shadow-root page, the body shadow-root page and a private tab.
+- final-fc5bc16-wikipedia-page.png / -editor.png / -saved.png: "started at 9754", "ended complete after 8 tile(s) in 2842 ms; restored the styles and the scroll to 9754". Saved 1080x7080, fully opaque, continuous, Related Articles loaded this time; the page came back exactly (0 differing pixels).
+- final-fc5bc16-sticky-page.png / -editor.png: "ended complete after 8 tile(s) in 2300 ms"; the header and badge show once.
+- final-fc5bc16-shadow-page.png / -editor.png: a fixed badge in an open shadow root: "ended complete after 8 tile(s) in 2151 ms"; the badge shows once.
+- final-fc5bc16-bodyshadow-page.png / -editor.png: a fixed badge in an open shadow root attached to <body> itself: "ended complete after 8 tile(s) in 3018 ms"; the badge shows once, in the screen that was taken only.
+- final-fc5bc16-private-page.png / -private-screenshot-ui.png: an Incognito tab: Share and Edit only, no Capture more; SystemUI logged "No scrollable targets found in window".
+- final-fc5bc16-f4-smoke.mp4: F4 scrolling, pull, the page menu (Print, no capture row), Find ("Tagus"), the tab deck, a new Incognito tab and MIUI Scroll stitching the whole private page.
+Test pictures were deleted from both devices; the F4 is released and the emulator closed with shutdown.

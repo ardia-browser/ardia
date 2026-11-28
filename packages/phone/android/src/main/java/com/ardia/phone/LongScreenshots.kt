@@ -52,6 +52,8 @@ internal object LongScreenshots {
     private const val SHOT = "shot.png"
     private const val SETTLE_MILLIS = 120L
     private const val WARM_DWELL_MILLIS = 300L
+    private const val WARM_DEADLINE_MILLIS = 6_000L
+    private const val WARM_PAINT_WAIT_MILLIS = 100L
     private const val VISUAL_STATE_WAIT_MILLIS = 500L
     private const val FRAME_WAIT_MILLIS = 100L
     private const val SCRIPT_WAIT_MILLIS = 2_000L
@@ -105,21 +107,29 @@ internal object LongScreenshots {
         val started = SystemClock.uptimeMillis()
         val held = Held(web, web.scrollX, web.scrollY, web.isVerticalScrollBarEnabled)
         discardAll(context)
-        if (evaluateNumber(web, script(MARK, held)) != 1) throw failure("The page didn't answer")
+        var dropped = false
+        var written: Written? = null
+        var published = false
         try {
+            if (evaluateNumber(web, script(MARK, held)) != 1) throw failure("The page didn't answer")
             val stitched = try {
                 stitch(context, page, held)
             } finally {
                 withContext(NonCancellable) { restore(held) }
             }
             val captured = SystemClock.uptimeMillis()
-            try {
-                val result = write(context, stitched) { ownsDocument(held) }
-                lab { "captured ${stitched.screens} screen(s)${if (stitched.complete) "" else ", stopped early,"} into ${stitched.bitmap.width}x${stitched.bitmap.height} at scale ${"%.3f".format(stitched.scale)} in ${captured - started} ms, written in ${SystemClock.uptimeMillis() - captured} ms (${(result["tiles"] as List<*>).size} tile(s))" }
-                return result
+            val ready = try {
+                write(context, stitched).also { written = it }
             } finally {
                 stitched.bitmap.recycle()
             }
+            val gate = evaluateNumber(web, script(DROP, held))
+            dropped = true
+            if (gate != 1) throw changed()
+            current = ready.session
+            published = true
+            lab { "captured ${stitched.screens} screen(s)${if (stitched.complete) "" else ", stopped early,"} into ${ready.session.width}x${ready.session.height} at scale ${"%.3f".format(stitched.scale)} in ${captured - started} ms, written in ${SystemClock.uptimeMillis() - captured} ms (${(ready.result["tiles"] as List<*>).size} tile(s))" }
+            return ready.result
         } catch (error: CodedException) {
             lab { "failed: ${error.message}" }
             throw error
@@ -130,9 +140,19 @@ internal object LongScreenshots {
             lab { "failed: ${error.javaClass.simpleName}" }
             throw failure("The screenshot couldn't be written")
         } finally {
-            withContext(NonCancellable) { evaluateNumber(web, script(DROP, held)) }
+            withContext(NonCancellable) {
+                if (!dropped) evaluateNumber(web, script(DROP, held))
+                val unpublished = written?.session?.takeIf { !published }
+                if (unpublished != null) {
+                    if (current?.id == unpublished.id) current = null
+                    withContext(Dispatchers.IO) { unpublished.file.parentFile?.deleteRecursively() }
+                    lab { "deleted the unpublished capture's files" }
+                }
+            }
         }
     }
+
+    private class Written(val session: Session, val result: Map<String, Any?>)
 
     private class Stitched(val bitmap: Bitmap, val screens: Int, val scale: Double, val complete: Boolean)
 
@@ -141,6 +161,30 @@ internal object LongScreenshots {
     private class Step(val shot: Bitmap, val pixels: IntArray, val scrolled: Int) {
         val height = shot.height
         val width = shot.width
+        var shotLive = true
+        var pixelsLive = true
+    }
+
+    private fun dropShot(step: Step, copies: LongScreenshotPlan.Copies) {
+        if (!step.shotLive) return
+        step.shotLive = false
+        step.shot.recycle()
+        copies.give()
+    }
+
+    private fun drop(step: Step?, copies: LongScreenshotPlan.Copies) {
+        step ?: return
+        dropShot(step, copies)
+        if (!step.pixelsLive) return
+        step.pixelsLive = false
+        copies.give()
+    }
+
+    private fun keep(step: Step, position: Int, previous: Seen?, copies: LongScreenshotPlan.Copies): Seen {
+        dropShot(step, copies)
+        if (previous != null) copies.give()
+        step.pixelsLive = false
+        return Seen(step.pixels, step.height, step.scrolled, position)
     }
 
     private suspend fun stitch(context: Context, page: Page, held: Held): Stitched {
@@ -149,7 +193,9 @@ internal object LongScreenshots {
         val viewport = web.height
         web.isVerticalScrollBarEnabled = false
         warm(page, held, width, viewport)
-        val pageHeight = LongScreenshotPlan.pageHeight(reportedHeight(web), viewport)
+        val reported = reportedHeight(web)
+        val pageHeight = LongScreenshotPlan.pageHeight(reported, viewport)
+        val capped = LongScreenshotPlan.capped(reported, viewport)
         val budget = LongScreenshotPlan.outputBudget(available(context), width, viewport) ?: throw failure("Not enough memory for a long screenshot")
         val output = LongScreenshotPlan.output(width, pageHeight, budget) ?: throw failure("The page has no size")
         val bitmap = try {
@@ -165,72 +211,76 @@ internal object LongScreenshots {
             var filled = 0
             var steps = 0
             var target = 0
-            var atBottom = false
             var hidden = false
             var previous: Seen? = null
+            val copies = LongScreenshotPlan.Copies()
             while (filled < pageHeight && steps < maxSteps) {
                 steps += 1
                 scrollOwned(page, held, width, target)
                 val before = previous
-                var step = settledStep(page, held, width)
+                var step: Step? = settledStep(page, held, width, copies)
                 try {
+                    var current = step!!
                     var moved: Int? = 0
                     if (before != null) {
-                        val scrollSaid = step.scrolled - before.scrolled
+                        val scrollSaid = current.scrolled - before.scrolled
                         val expected = if (scrollSaid > 0) scrollSaid else stride
-                        moved = match(before, step, expected)
-                        if (moved == null) {
-                            step.shot.recycle()
+                        moved = match(before, current, expected)
+                        if (LongScreenshotPlan.drawAgain(moved, scrollSaid)) {
+                            drop(current, copies)
+                            step = null
                             awaitPaint(web)
                             delay(SETTLE_MILLIS)
-                            step = settledStep(page, held, width)
-                            moved = match(before, step, expected)
+                            current = settledStep(page, held, width, copies)
+                            step = current
+                            moved = match(before, current, expected)
                         }
-                        lab { "step $steps: scrolled ${before.scrolled} -> ${step.scrolled}, matched a move of ${moved ?: "nothing"} (scroll said $scrollSaid)" }
+                        lab { "step $steps: scrolled ${before.scrolled} -> ${current.scrolled}, matched a move of ${moved ?: "nothing"} (scroll said $scrollSaid)" }
                         if (moved == null) break
                     }
                     val position = (before?.position ?: 0) + (moved ?: 0)
-                    val slice = LongScreenshotPlan.slice(position, filled, step.height, pageHeight)
-                    if (slice == null) {
-                        atBottom = moved == 0 && !web.canScrollVertically(1)
-                        break
-                    }
+                    val slice = LongScreenshotPlan.slice(position, filled, current.height, pageHeight)
+                    if (slice == null) break
                     canvas.drawBitmap(
-                        step.shot,
-                        Rect(0, slice.sourceTop, step.width, slice.sourceBottom),
+                        current.shot,
+                        Rect(0, slice.sourceTop, current.width, slice.sourceBottom),
                         Rect(0, LongScreenshotPlan.rowIn(output, slice.pageTop), output.width, LongScreenshotPlan.rowIn(output, slice.pageBottom)),
                         paint,
                     )
                     filled = slice.pageBottom
                     target = position + stride
                     previous = if (hidden) {
-                        Seen(step.pixels, step.height, step.scrolled, position)
+                        keep(current, position, before, copies)
                     } else {
                         hidden = true
                         if (evaluateNumber(web, script(HIDE_FIXED, held))?.let { it >= 0 } != true) throw changed()
+                        drop(current, copies)
+                        step = null
                         awaitPaint(web)
-                        val again = settledStep(page, held, width)
-                        again.shot.recycle()
-                        Seen(again.pixels, again.height, again.scrolled, position)
+                        val again = settledStep(page, held, width, copies)
+                        step = again
+                        keep(again, position, before, copies)
                     }
                 } finally {
-                    step.shot.recycle()
+                    drop(step, copies)
                 }
             }
-            val ending = LongScreenshotPlan.ending(filled, pageHeight, viewport, atBottom)
-            lab { "ended ${ending.name.lowercase()}: $filled of $pageHeight rows${if (atBottom) ", at the bottom" else ""}" }
+            if (previous != null) copies.give()
+            lab { "peak working copies ${copies.peak} of ${LongScreenshotPlan.WORKING_COPIES} budgeted" }
+            val ending = LongScreenshotPlan.ending(filled, pageHeight, viewport)
+            lab { "ended ${ending.name.lowercase()}: $filled of $pageHeight rows${if (capped) ", the page goes on past the cap" else ""}" }
             if (ending == LongScreenshotPlan.Ending.Failed) throw failure("Only the first screen of this page lined up")
             val height = LongScreenshotPlan.rowIn(output, filled)
             if (height <= 0) throw failure("Nothing was captured")
             if (height < bitmap.height) bitmap.reconfigure(bitmap.width, height, Bitmap.Config.ARGB_8888)
-            return Stitched(bitmap, LongScreenshotPlan.screens(filled, viewport), output.scale, ending == LongScreenshotPlan.Ending.Complete)
+            return Stitched(bitmap, LongScreenshotPlan.screens(filled, viewport), output.scale, ending == LongScreenshotPlan.Ending.Complete && !capped)
         } catch (error: Throwable) {
             bitmap.recycle()
             throw error
         }
     }
 
-    private suspend fun settledStep(page: Page, held: Held, width: Int): Step {
+    private suspend fun settledStep(page: Page, held: Held, width: Int, copies: LongScreenshotPlan.Copies): Step {
         val web = held.web
         awaitPaint(web)
         delay(SETTLE_MILLIS)
@@ -238,13 +288,16 @@ internal object LongScreenshots {
         ensureSameView(page, held, width)
         val scrolled = web.scrollY
         val shot = drawn(web) ?: throw failure("The page didn't draw")
+        copies.take()
         val pixels = try {
             withContext(Dispatchers.Default) { PageCapture.pixels(shot) }
         } catch (error: Throwable) {
             shot.recycle()
+            copies.give()
             if (error is OutOfMemoryError) throw failure("Not enough memory for a long screenshot")
             throw error
         }
+        copies.take()
         return Step(shot, pixels, scrolled)
     }
 
@@ -256,42 +309,49 @@ internal object LongScreenshots {
     private fun reportedHeight(web: WebView): Double = web.contentHeight.toDouble() * web.scale
 
     private suspend fun warm(page: Page, held: Held, width: Int, viewport: Int) {
+        val started = SystemClock.uptimeMillis()
         val stops = LongScreenshotPlan.warmStops(LongScreenshotPlan.pageHeight(reportedHeight(held.web), viewport), viewport)
-        for (stop in stops) {
-            scrollOwned(page, held, width, stop)
-            awaitPaint(held.web)
-        }
-        if (stops.isNotEmpty()) delay(WARM_DWELL_MILLIS)
+        var reached = 0
+        val finished = withTimeoutOrNull(WARM_DEADLINE_MILLIS) {
+            for (stop in stops) {
+                scrollOwned(page, held, width, stop)
+                awaitPaint(held.web, WARM_PAINT_WAIT_MILLIS)
+                reached += 1
+            }
+            if (stops.isNotEmpty()) delay(WARM_DWELL_MILLIS)
+            true
+        } ?: false
         scrollOwned(page, held, width, 0)
         delay(SETTLE_MILLIS)
-        lab { "warmed ${stops.size} step(s) down to ${stops.lastOrNull() ?: 0}" }
+        lab { "warmed $reached of ${stops.size} step(s) in ${SystemClock.uptimeMillis() - started} ms${if (finished) "" else ", stopped at the deadline"}" }
     }
 
     private suspend fun scrollOwned(page: Page, held: Held, width: Int, y: Int) {
         ensureSameView(page, held, width)
-        if (!ownsDocument(held)) throw changed()
-        held.web.scrollTo(held.x, y)
+        val landed = evaluateNumber(held.web, script(SCROLL, held, y)) ?: throw changed()
+        if (landed < 0) throw changed()
     }
-
-    private suspend fun ownsDocument(held: Held): Boolean = evaluateNumber(held.web, script(OWNS, held)) == 1
 
     private suspend fun restore(held: Held) {
         val web = held.web
         web.isVerticalScrollBarEnabled = held.scrollBar
-        val shown = evaluateNumber(web, script(SHOW_FIXED, held))
+        val shown = evaluateNumber(web, script(SHOW_FIXED, held, held.y))
         if (shown == null || shown < 0) {
             lab { "the page changed: its scroll is left alone" }
             return
         }
-        web.scrollTo(held.x, held.y)
-        lab { "restored the scroll to ${held.y}" }
+        lab { "restored the styles and the scroll to ${held.y}" }
     }
 
-    private fun script(source: String, held: Held): String = source.replace(KEY_PLACEHOLDER, held.key)
+    @Suppress("DEPRECATION")
+    private fun cssPixels(web: WebView, y: Int): String = LongScreenshotPlan.cssPixels(y, web.scale.toDouble())
+
+    private fun script(source: String, held: Held, y: Int? = null): String =
+        source.replace(KEY_PLACEHOLDER, held.key).replace(SCROLL_PLACEHOLDER, y?.let { cssPixels(held.web, it) } ?: "null")
 
     private fun changed() = failure("The page changed while it was captured")
 
-    private suspend fun write(context: Context, stitched: Stitched, stillSame: suspend () -> Boolean): Map<String, Any?> {
+    private suspend fun write(context: Context, stitched: Stitched): Written {
         val bitmap = stitched.bitmap
         val id = UUID.randomUUID().toString()
         val folder = File(File(context.cacheDir, FOLDER), id)
@@ -318,9 +378,7 @@ internal object LongScreenshots {
                 pieces.await()
             }
             currentCoroutineContext().ensureActive()
-            if (!stillSame()) throw changed()
-            current = Session(id, file, bitmap.width, bitmap.height)
-            return mapOf(
+            return Written(Session(id, file, bitmap.width, bitmap.height), mapOf(
                 "id" to id,
                 "uri" to Uri.fromFile(file).toString(),
                 "path" to file.absolutePath,
@@ -329,7 +387,7 @@ internal object LongScreenshots {
                 "screens" to stitched.screens.toDouble(),
                 "complete" to stitched.complete,
                 "tiles" to tiles,
-            )
+            ))
         } catch (error: Throwable) {
             withContext(NonCancellable + Dispatchers.IO) { folder.deleteRecursively() }
             throw error
@@ -436,9 +494,9 @@ internal object LongScreenshots {
     }
 
     @SuppressLint("RequiresFeature")
-    private suspend fun awaitPaint(web: WebView) {
+    private suspend fun awaitPaint(web: WebView, wait: Long = VISUAL_STATE_WAIT_MILLIS) {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.VISUAL_STATE_CALLBACK)) {
-            withTimeoutOrNull(VISUAL_STATE_WAIT_MILLIS) {
+            withTimeoutOrNull(wait) {
                 suspendCancellableCoroutine { continuation ->
                     WebViewCompat.postVisualStateCallback(web, visualRequests++) { if (continuation.isActive) continuation.resume(Unit) }
                 }
@@ -476,13 +534,15 @@ internal object LongScreenshots {
 
     private const val KEY_PLACEHOLDER = "ARDIA_CAPTURE_KEY"
 
-    private const val MARK = """(function(k){var t=Symbol.for(k);if(Object.prototype.hasOwnProperty.call(window,t))return 0;Object.defineProperty(window,t,{value:{list:[]},configurable:true,enumerable:false,writable:false});return 1;})('ARDIA_CAPTURE_KEY')"""
+    private const val SCROLL_PLACEHOLDER = "ARDIA_SCROLL_Y"
 
-    private const val OWNS = """(function(k){return Object.prototype.hasOwnProperty.call(window,Symbol.for(k))?1:0;})('ARDIA_CAPTURE_KEY')"""
+    private const val MARK = """(function(k){var t=Symbol.for(k);if(Object.prototype.hasOwnProperty.call(window,t))return 0;Object.defineProperty(window,t,{value:{list:[]},configurable:true,enumerable:false,writable:false});return 1;})('ARDIA_CAPTURE_KEY')"""
 
     private const val HIDE_FIXED = """(function(k){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var list=window[t].list;var all=document.querySelectorAll('body *');for(var i=0;i<all.length;i++){var e=all[i],p=getComputedStyle(e).position;if(p!=='fixed'&&p!=='sticky')continue;list.push([e,e.getAttribute('style')]);e.style.setProperty('transition','none','important');if(p==='fixed'){e.style.setProperty('opacity','0','important');}else{e.style.setProperty('position','relative','important');e.style.setProperty('inset','auto','important');}}return list.length;})('ARDIA_CAPTURE_KEY')"""
 
-    private const val SHOW_FIXED = """(function(k){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var list=window[t].list,n=list.length;for(var i=0;i<n;i++){var e=list[i][0],v=list[i][1];if(v===null)e.removeAttribute('style');else e.setAttribute('style',v);}list.length=0;return n;})('ARDIA_CAPTURE_KEY')"""
+    private const val SCROLL = """(function(k,y){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var se=document.scrollingElement||document.documentElement,a=se.getAttribute('style');se.style.setProperty('scroll-behavior','auto','important');se.scrollTop=y;if(a===null)se.removeAttribute('style');else se.setAttribute('style',a);return Math.round(se.scrollTop);})('ARDIA_CAPTURE_KEY',ARDIA_SCROLL_Y)"""
+
+    private const val SHOW_FIXED = """(function(k,y){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var list=window[t].list,n=list.length;for(var i=0;i<n;i++){var e=list[i][0],v=list[i][1];if(v===null)e.removeAttribute('style');else e.setAttribute('style',v);}list.length=0;if(y!==null){var se=document.scrollingElement||document.documentElement,a=se.getAttribute('style');se.style.setProperty('scroll-behavior','auto','important');se.scrollTop=y;if(a===null)se.removeAttribute('style');else se.setAttribute('style',a);}return n;})('ARDIA_CAPTURE_KEY',ARDIA_SCROLL_Y)"""
 
     private const val DROP = """(function(k){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return 0;delete window[t];return 1;})('ARDIA_CAPTURE_KEY')"""
 }

@@ -4,6 +4,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -93,5 +96,21 @@ class CaptureSlotTest {
         val next = slot.start { page.capture("B") }
         advanceUntilIdle()
         assertEquals("B", next.await())
+    }
+
+    @Test
+    fun onAnImmediateDispatcherTheFirstRequestIsRegisteredBeforeItRunsAndIsNotRejected() = runTest {
+        val immediate = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+        val slot = CaptureSlot<String>(immediate)
+        val page = Page()
+        val first = slot.start { page.capture("A") }
+        advanceUntilIdle()
+        assertEquals("A", first.await())
+        val gate = CompletableDeferred<Unit>()
+        val second = slot.start { page.capture("B", gate) }
+        assertTrue(slot.waiting)
+        slot.cancel()?.join()
+        assertTrue(second.isCancelled)
+        assertEquals(listOf("A scrolls", "A restores", "B scrolls", "B restores"), page.log)
     }
 }

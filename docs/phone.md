@@ -2122,14 +2122,18 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   content match (ties go to the move `scrollY` reports). On the F4, `scrollY` on English Wikipedia's Lisbon article
   once lagged a step behind the page (it said 1,262 px for a 1,740 px move), which stitched a repeated block and
   dropped another before matching. A step whose rows match nothing is drawn once more after another paint and matched
-  again; if it still matches nothing the capture ends there rather than leave a seam. A capture is complete only when
-  its rows cover the page's height (within 24 px) or its last step stood at the page's bottom and could not scroll
-  further (`LongScreenshotPlan.ending`); anything else is partial, which the preview says ("Stopped after 3 screens",
-  `complete: false` from the module), and only one screen on a taller page is a failure with its toast. Before
+  again; if it still matches nothing the capture ends there rather than leave a seam. A step that matches no move
+  although the scroll moved is a stale frame and is drawn again the same way (`LongScreenshotPlan.drawAgain`). A capture
+  is complete only when its rows cover the page's height within 24 px (`LongScreenshotPlan.ending`); anything else is
+  partial, which the preview says ("Stopped after 3 screens", `complete: false` from the module), and only one screen
+  on a taller page is a failure with its toast. A page longer than 20 screens is captured to the cap and reported
+  partial too (`LongScreenshotPlan.capped`), so the preview says "First 20 screens" rather than pass the cap off as
+  the whole page. Before
   the first step a quick pass scrolls to the bottom and back, so lazily loaded images and
   Wikipedia's Related Articles are in place before anything is drawn; without it they appeared between two steps and
   the last match failed, ending the picture above them. The pass moves an eighth of a screen at a time and waits for
-  each position to paint (`LongScreenshotPlan.warmStops`), then rests 300 ms at the bottom: loaders that fire only when
+  each position to paint, at most 100 ms a stop (`LongScreenshotPlan.warmStops`), then rests 300 ms at the bottom; the
+  whole pass stops at 6 s and the capture goes on with what has loaded (the lab line gives its time). Loaders that fire only when
   an element crosses the screen's bottom edge need it to be on that edge in some painted frame. Wikipedia's Related
   Articles is one (an `IntersectionObserver` with `rootMargin: -100% 0% 0% 0%` on a 320 px box); with three-quarter
   screen jumps the box never straddled the edge, so its space stayed blank in every capture of a freshly loaded
@@ -2146,17 +2150,20 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
 - **Cancel, background and page changes.** Captures go through one slot (`CaptureSlot.kt`) that holds the newest
   requested capture. Starting one cancels whatever waits there, and a new capture waits (without being able to skip
   it) for the previous one to finish restoring the page before it touches anything, then checks it is still the newest.
-  Each capture starts atomically, so one cancelled before it ever ran still waits out its predecessor; without that, a
-  retry replaced before it started let the next one scroll while the first was still restoring (`CaptureSlotTest`
-  caught it).
+  A request is registered before its coroutine starts, so on an immediate dispatcher the first one is not rejected, and
+  a separate joiner that cannot be cancelled waits for each capture and its predecessor, so one cancelled before it ever
+  ran still holds the next one back until the page is restored (`CaptureSlotTest` caught both).
   Back, Cancel, a tab switch and the app going to the background cancel the newest request, waiting or running
   (`cancelLongScreenshot`, and `OnActivityEntersBackground` natively); joining it waits for every older capture's
   cleanup, so a retry never runs alongside a restore and two retries never both start (`CaptureSlotTest`). A cancelled
   capture stops stepping and restores the scroll position, the scroll bar and the styles at once.
 - **Which document.** At the start the capture sets a token on `window` under a `Symbol.for` key made for that capture,
-  and treats the page as the same document exactly while that token is there. Every scroll checks it first, hiding and
-  restoring the styles check it in the same script, and the result is published only if it is still there after the
-  files are written. A reload, a redirect or another page drops the window and the token, so the capture fails and
+  and treats the page as the same document exactly while that token is there. Every scroll happens in the same script
+  as the check (`SCROLL`: `scrollTop` on the scrolling element with `scroll-behavior` forced to `auto` for that one
+  assignment and the page's own `style` attribute put back, never through the page's `window.scrollTo`), and the
+  restore puts back the styles and the scroll in one script too. The result is published only if `DROP`, which removes
+  the token, found it there; on any other outcome (a cancel, a timeout, a missing token) the files are deleted and
+  nothing stays published. A reload, a redirect or another page drops the window and the token, so the capture fails and
   cleanup leaves the new document's scroll alone (restoring the styles is a no-op there); an address change inside the
   page (`pushState`, a fragment) keeps the token and the capture goes on. The token is removed when the capture ends.
   JS drops a result that lands after its tab stopped being the current one.
@@ -2164,8 +2171,9 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   process-wide and must be called before any WebView exists, so every page in the app would pay for it. Stitching keeps
   the normal draw path and costs only while a capture runs.
 - **Caps.** At most 20 screens. The budget is an eighth of the memory the system reports free, kept between 48 and
-  160 MB; the viewport picture and the two pixel arrays matching needs come out of it first, and the stitched bitmap
-  gets the rest. If less than 16 MB is left (a 4,000 × 4,000 viewport's working copies alone fill the cap) the capture
+  160 MB; the viewport picture and the two pixel arrays matching needs (the last step's and the current one's) come out
+  of it first, and the stitched bitmap gets the rest. Each step's picture and pixels are released before a redraw
+  allocates their replacement, so three copies is the real peak; the lab line logs the peak the stitch counted. If less than 16 MB is left (a 4,000 × 4,000 viewport's working copies alone fill the cap) the capture
   is refused with its toast, so the total never exceeds the cap. A taller page is scaled down to fit (on the F4, 1080 × 2320 with memory to spare, a page keeps full size up
   to about 31,900 px).
   The page's height comes only from the WebView (`contentHeight` times its scale), clamped to one to 20 screens; a page

@@ -9,7 +9,7 @@ internal object LongScreenshotPlan {
     const val MIN_BUDGET_BYTES = 48L * 1024 * 1024
     const val MAX_BUDGET_BYTES = 160L * 1024 * 1024
     const val MIN_OUTPUT_BYTES = 16L * 1024 * 1024
-    private const val WORKING_COPIES = 3
+    const val WORKING_COPIES = 3
     const val COMPLETE_TOLERANCE = 24
     const val TILE_HEIGHT = 2048
     private const val BYTES_PER_PIXEL = 4
@@ -22,6 +22,22 @@ internal object LongScreenshotPlan {
     private const val MIN_SCORE = 0.6
     private const val TIE = 0.01
     private const val CHANNEL_TOLERANCE = 6
+
+    class Copies {
+        var live = 0
+            private set
+        var peak = 0
+            private set
+
+        fun take() {
+            live += 1
+            peak = maxOf(peak, live)
+        }
+
+        fun give() {
+            if (live > 0) live -= 1
+        }
+    }
 
     data class Output(val width: Int, val height: Int, val scale: Double)
 
@@ -36,6 +52,8 @@ internal object LongScreenshotPlan {
         return minOf(floor(reported).toLong(), cap).toInt()
     }
 
+    fun capped(reported: Double, viewport: Int): Boolean = viewport > 0 && reported.isFinite() && reported > viewport.toLong() * MAX_SCREENS + COMPLETE_TOLERANCE
+
     fun budget(availableBytes: Long): Long = (availableBytes / 8).coerceIn(MIN_BUDGET_BYTES, MAX_BUDGET_BYTES)
 
     fun workingBytes(width: Int, viewport: Int): Long = maxOf(0, width).toLong() * maxOf(0, viewport) * BYTES_PER_PIXEL * WORKING_COPIES
@@ -44,11 +62,17 @@ internal object LongScreenshotPlan {
 
     enum class Ending { Complete, Stopped, Failed }
 
-    fun ending(filled: Int, pageHeight: Int, viewport: Int, atBottom: Boolean): Ending = when {
+    fun ending(filled: Int, pageHeight: Int, viewport: Int): Ending = when {
         filled >= pageHeight - COMPLETE_TOLERANCE -> Ending.Complete
-        atBottom && filled > viewport -> Ending.Complete
         filled <= viewport -> Ending.Failed
         else -> Ending.Stopped
+    }
+
+    fun drawAgain(moved: Int?, scrollSaid: Int): Boolean = moved == null || (moved == 0 && scrollSaid != 0)
+
+    fun cssPixels(y: Int, scale: Double): String {
+        val css = if (scale.isFinite() && scale > 0) y / scale else y.toDouble()
+        return if (css.isFinite()) String.format(java.util.Locale.US, "%.3f", maxOf(0.0, css)) else "0"
     }
 
     fun output(width: Int, pageHeight: Int, budgetBytes: Long): Output? {

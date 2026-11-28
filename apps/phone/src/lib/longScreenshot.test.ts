@@ -137,4 +137,6 @@ test("a capture that stopped early says so with its screen count", () => {
   assert.equal(shotLabel({ ...shot, screens: 1 }), "1 screen");
   assert.equal(shotLabel({ ...shot, complete: false }), "Stopped after 3 screens");
   assert.equal(shotLabel({ ...shot, screens: 1, complete: false }), "Stopped after 1 screen");
+  assert.equal(shotLabel({ ...shot, screens: 20, complete: false }), "First 20 screens");
+  assert.equal(shotLabel({ ...shot, screens: 20, complete: true }), "20 screens");
 });

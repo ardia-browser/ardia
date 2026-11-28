@@ -15,9 +15,10 @@ const shipped = (name: string) => {
 const KEY_A = "ardia-long-shot-6f1c2d3e-0a4b-4c5d-8e9f-a0b1c2d3e4f5";
 const KEY_B = "ardia-long-shot-11111111-2222-4333-8444-555555555555";
 
-const scriptFor = (name: string) => (key: string) => shipped(name).replaceAll("ARDIA_CAPTURE_KEY", key);
+const scriptFor = (name: string) => (key: string, y: number | null = null) => shipped(name).replaceAll("ARDIA_CAPTURE_KEY", key).replaceAll("ARDIA_SCROLL_Y", y === null ? "null" : String(y));
 const mark = scriptFor("MARK");
-const owns = scriptFor("OWNS");
+const scroll = scriptFor("SCROLL");
+const owns = (key: string) => `(${scroll(key, 0)}) >= 0 ? 1 : 0`;
 const hide = scriptFor("HIDE_FIXED");
 const show = scriptFor("SHOW_FIXED");
 const drop = scriptFor("DROP");
@@ -108,4 +109,21 @@ test("the page sees no marker attribute and no enumerable property while it is c
   run(hide(KEY_A));
   assert.equal(dom.window.document.querySelectorAll("[data-ardia-long-shot]").length, 0);
   assert.equal(Object.keys(dom.window).some((key) => key.includes("ardia")), false);
+});
+
+test("a scroll runs only in the capture's own document, in the same script as the check, and leaves the page's own style attribute as it was", () => {
+  const { run, dom } = page('<div style="height: 5000px">tall</div>');
+  const root = dom.window.document.documentElement;
+  root.setAttribute("style", "scroll-behavior: smooth; color: red");
+  assert.equal(run(scroll(KEY_A, 300)), -1, "no token, no scroll");
+  run(mark(KEY_A));
+  assert.ok(run(scroll(KEY_A, 300)) >= 0);
+  assert.equal(root.getAttribute("style"), "scroll-behavior: smooth; color: red");
+  root.removeAttribute("style");
+  run(scroll(KEY_A, 0));
+  assert.equal(root.hasAttribute("style"), false, "a page without a style attribute keeps none");
+  assert.equal(run(show(KEY_A, 0)), 0, "restoring with a scroll still answers for the token");
+  assert.equal(run(drop(KEY_A)), 1, "drop says the token was there");
+  assert.equal(run(drop(KEY_A)), 0, "and only once");
+  assert.equal(run(scroll(KEY_A, 300)), -1);
 });

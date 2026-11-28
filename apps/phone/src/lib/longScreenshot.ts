@@ -61,7 +61,10 @@ export function shotOf(raw: unknown): Shot | null {
 
 const screensWord = (screens: number) => (screens === 1 ? "1 screen" : `${screens} screens`);
 
-export const shotLabel = (shot: Pick<Shot, "screens" | "complete">) => (shot.complete ? screensWord(shot.screens) : `Stopped after ${screensWord(shot.screens)}`);
+export const shotLabel = (shot: Pick<Shot, "screens" | "complete">) => {
+  if (shot.complete) return screensWord(shot.screens);
+  return shot.screens >= MAX_SHOT_SCREENS ? `First ${screensWord(shot.screens)}` : `Stopped after ${screensWord(shot.screens)}`;
+};
 
 export function savedShotOf(raw: unknown): SavedShot | null {
   const fields = record(raw);

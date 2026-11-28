@@ -19,6 +19,13 @@ class LongScreenshotPlanTest {
         }
         assertEquals(viewport * LongScreenshotPlan.MAX_SCREENS, LongScreenshotPlan.pageHeight(1e300, viewport))
         assertEquals(0, LongScreenshotPlan.pageHeight(5_000.0, 0))
+        val cap = viewport * LongScreenshotPlan.MAX_SCREENS
+        assertEquals(true, LongScreenshotPlan.capped(9_000_000.0, viewport))
+        assertEquals(false, LongScreenshotPlan.capped(cap.toDouble(), viewport))
+        assertEquals(false, LongScreenshotPlan.capped(cap + LongScreenshotPlan.COMPLETE_TOLERANCE.toDouble(), viewport))
+        assertEquals(true, LongScreenshotPlan.capped(cap + LongScreenshotPlan.COMPLETE_TOLERANCE + 1.0, viewport))
+        for (hostile in listOf(Double.NaN, Double.POSITIVE_INFINITY, -1.0)) assertEquals("$hostile", false, LongScreenshotPlan.capped(hostile, viewport))
+        assertEquals(false, LongScreenshotPlan.capped(9_000_000.0, 0))
     }
 
     @Test
@@ -102,19 +109,67 @@ class LongScreenshotPlanTest {
     }
 
     @Test
-    fun aCaptureIsCompleteOnlyWhenItCoversThePageOrReachedItsBottom() {
-        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport, atBottom = false))
-        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500 - LongScreenshotPlan.COMPLETE_TOLERANCE, 5_500, viewport, atBottom = false))
-        assertEquals("steps ran out", LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(3_000, 5_500, viewport, atBottom = false))
-        assertEquals("the page ended sooner than it said", LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(3_000, 5_500, viewport, atBottom = true))
-        assertEquals("a taller page that never moved", LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport, atBottom = true))
-        assertEquals(LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport, atBottom = false))
-        assertEquals("a page one screen tall", LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(viewport, viewport, viewport, atBottom = false))
+    fun aCaptureIsCompleteOnlyWhenItsRowsCoverThePage() {
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport))
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500 - LongScreenshotPlan.COMPLETE_TOLERANCE, 5_500, viewport))
+        assertEquals(LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(5_500 - LongScreenshotPlan.COMPLETE_TOLERANCE - 1, 5_500, viewport))
+        assertEquals("steps ran out", LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(3_000, 5_500, viewport))
+        assertEquals("a taller page that never moved", LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport))
+        assertEquals("a page one screen tall", LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(viewport, viewport, viewport))
+    }
+
+    @Test
+    fun aStaleFrameAtTheBottomIsDrawnAgainAndNeverReportsAShortPictureComplete() {
+        val shortViewport = 200
+        val pageHeight = 850
+        val filled = LongScreenshotPlan.slice(600, 650, shortViewport, pageHeight)!!.pageBottom
+        assertEquals(800, filled)
+        assertTrue("the scroll moved 600 -> 650 but the frame did not", LongScreenshotPlan.drawAgain(moved = 0, scrollSaid = 50))
+        assertNull("the stale frame adds no rows", LongScreenshotPlan.slice(600, filled, shortViewport, pageHeight))
+        assertEquals("800 of 850 rows is 50 short", LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(filled, pageHeight, shortViewport))
+        assertEquals("the redrawn frame at 650 fills the page", 850, LongScreenshotPlan.slice(650, filled, shortViewport, pageHeight)!!.pageBottom)
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(850, pageHeight, shortViewport))
+        assertFalse("a real bottom: nothing moved", LongScreenshotPlan.drawAgain(moved = 0, scrollSaid = 0))
+        assertTrue(LongScreenshotPlan.drawAgain(moved = null, scrollSaid = 0))
+        assertFalse(LongScreenshotPlan.drawAgain(moved = 150, scrollSaid = 150))
+    }
+
+    @Test
+    fun scrollPositionsGoToThePageInCssPixels() {
+        assertEquals("1165.818", LongScreenshotPlan.cssPixels(3_206, 2.75))
+        assertEquals("0.000", LongScreenshotPlan.cssPixels(-5, 2.75))
+        assertEquals("100.000", LongScreenshotPlan.cssPixels(100, Double.NaN))
+        assertEquals("100.000", LongScreenshotPlan.cssPixels(100, 0.0))
+    }
+
+    @Test
+    fun theStitchNeverHoldsMoreViewportCopiesThanTheBudgetCounts() {
+        val copies = LongScreenshotPlan.Copies()
+        copies.take()
+        copies.take()
+        copies.give()
+        copies.give()
+        copies.take()
+        copies.take()
+        copies.give()
+        repeat(3) {
+            copies.take()
+            copies.take()
+            copies.give()
+            copies.give()
+            copies.take()
+            copies.take()
+            copies.give()
+            copies.give()
+        }
+        copies.give()
+        assertEquals("first screen, its redraw without the fixed elements, then steps that each draw again once", LongScreenshotPlan.WORKING_COPIES, copies.peak)
+        assertEquals(0, copies.live)
     }
 
     @Test
     fun theViewportPictureAndBothPixelArraysComeOutOfTheBudgetAndTooBigAViewportIsRefused() {
-        assertEquals(1080L * 2400 * 4 * 3, LongScreenshotPlan.workingBytes(1080, 2400))
+        assertEquals(1080L * 2400 * 4 * LongScreenshotPlan.WORKING_COPIES, LongScreenshotPlan.workingBytes(1080, 2400))
         val plenty = 16L * 1024 * 1024 * 1024
         assertEquals(LongScreenshotPlan.MAX_BUDGET_BYTES - LongScreenshotPlan.workingBytes(1080, 2400), LongScreenshotPlan.outputBudget(plenty, 1080, 2400))
         assertNull("4000 x 4000 needs more than the whole cap for its working copies", LongScreenshotPlan.outputBudget(plenty, 4_000, 4_000))

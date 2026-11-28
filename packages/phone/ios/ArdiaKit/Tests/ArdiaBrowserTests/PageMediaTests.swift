@@ -85,6 +85,13 @@ struct PageMediaReportTests {
     #expect(try #require(PageMediaReport.parse(fields)).duration == nil)
   }
 
+  @Test func framesAnnounceThemselvesAndLeaveWithTheirToken() {
+    #expect(PageMediaMessage.parse(["type": "hello", "token": "abc123def0"]) == .hello(token: "abc123def0"))
+    #expect(PageMediaMessage.parse(["type": "gone", "token": "abc123def0"]) == .gone(token: "abc123def0"))
+    #expect(PageMediaMessage.parse(["type": "hello", "token": "ABC"]) == nil)
+    #expect(PageMediaMessage.parse(["type": "hello"]) == nil)
+  }
+
   @Test func leaveOutcomesNeedAKnownOutcome() {
     #expect(PageMediaMessage.parse(["type": "left", "token": "abc123def0", "outcome": "resumed"]) == .left(token: "abc123def0", outcome: .resumed))
     #expect(PageMediaMessage.parse(["type": "left", "token": "abc123def0", "outcome": "stolen"]) == nil)
@@ -188,7 +195,7 @@ struct PageMediaScriptTests {
     Object.defineProperty(proto, "paused", { configurable: true, get() { return state(this).paused; } });
     Object.defineProperty(proto, "duration", { configurable: true, get() { return 8; } });
     Object.defineProperty(proto, "currentTime", { configurable: true, get() { return state(this).time; }, set(value) { state(this).time = Math.min(Math.max(0, Number(value) || 0), 8); } });
-    proto.play = function () { state(this).paused = false; this.dispatchEvent(new Event("play")); this.dispatchEvent(new Event("playing")); return Promise.resolve(); };
+    proto.play = function () { if (this.dataset.refuse) return Promise.reject(new Error("refused")); state(this).paused = false; this.dispatchEvent(new Event("play")); this.dispatchEvent(new Event("playing")); return Promise.resolve(); };
     proto.pause = function () { if (state(this).paused) return; state(this).paused = true; this.dispatchEvent(new Event("pause")); };
   })();
   """
@@ -292,6 +299,38 @@ struct PageMediaScriptTests {
     #expect(try await run(webView, "return [document.visibilityState, String(window.seen.length)]") as? [String] == ["hidden", "1"])
   }
 
+  func helloToken(_ messages: MediaMessages) async throws -> String {
+    try await until { messages.bodies.contains { $0["type"] as? String == "hello" } }
+    return try #require(messages.bodies.first { $0["type"] as? String == "hello" }?["token"] as? String)
+  }
+
+  @Test func aLoadedPageTakesTheSettingBeforeItEverPlays() async throws {
+    let (offPage, offMessages) = try await load(keepsPlaying: true)
+    try await command(offPage, .keepPlaying, token: try await helloToken(offMessages), seconds: 0)
+    _ = try await startPlaying(offPage, offMessages)
+    _ = try await run(offPage, "document.dispatchEvent(new Event('visibilitychange', { bubbles: true })); return true;")
+    #expect(try await run(offPage, "return [document.visibilityState, String(window.seen.length)]") as? [String] == ["hidden", "1"])
+
+    let (onPage, onMessages) = try await load(keepsPlaying: false)
+    try await command(onPage, .keepPlaying, token: try await helloToken(onMessages), seconds: 1)
+    _ = try await startPlaying(onPage, onMessages)
+    _ = try await run(onPage, "document.dispatchEvent(new Event('visibilitychange', { bubbles: true })); return true;")
+    #expect(try await run(onPage, "return [document.visibilityState, String(window.seen.length)]") as? [String] == ["visible", "0"])
+  }
+
+  @Test func aRefusedPlayReportsThePausedStateAgain() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    let report = try await startPlaying(webView, messages)
+    try await command(webView, .pause, token: report.token)
+    try await until { messages.reports().last?.state == .paused }
+    let before = messages.reports().count
+    _ = try await run(webView, "document.getElementById('a').dataset.refuse = '1'; return true;")
+    try await command(webView, .play, token: report.token)
+    try await until { messages.reports().count > before }
+    #expect(messages.reports().count > before)
+    #expect(messages.reports().last?.state == .paused)
+  }
+
   @Test func aMutedSoundIsNotOffered() async throws {
     let (webView, messages) = try await load(keepsPlaying: true)
     _ = try await run(webView, "const a = document.getElementById('a'); a.muted = true; await a.play(); return true;")
@@ -303,5 +342,56 @@ struct PageMediaScriptTests {
     let (webView, _) = try await load(keepsPlaying: true)
     let kept = try await run(webView, "try { window.__ardiaMediaCommand = () => 'mine'; } catch (_) {} return window.__ardiaMediaCommand('zzzzzzzzzz', 'play', 0) === false;") as? Bool
     #expect(kept == true)
+  }
+}
+
+struct PageMediaRetentionTests {
+  typealias Candidate = PageMediaRetention.Candidate
+
+  @Test func playingPagesComeBeforeNewerPausedOnes() {
+    let kept = PageMediaRetention.kept([
+      Candidate(id: "a", audible: true, startedAt: 10, pausedAt: nil),
+      Candidate(id: "b", audible: false, startedAt: 20, pausedAt: 25),
+      Candidate(id: "c", audible: false, startedAt: 30, pausedAt: 35),
+    ], now: 40)
+    #expect(kept.audible == ["a"])
+    #expect(kept.paused == ["c"])
+    #expect(kept.nextExpiry == 35 + PageMediaRetention.pausedFor)
+  }
+
+  @Test func pausedPagesExpire() {
+    let kept = PageMediaRetention.kept([Candidate(id: "b", audible: false, startedAt: 0, pausedAt: 0)], now: PageMediaRetention.pausedFor + 1)
+    #expect(kept.audible.isEmpty && kept.paused.isEmpty && kept.nextExpiry == nil)
+  }
+
+  @Test func twoAudiblePagesLeaveNoRoomForPausedOnes() {
+    let kept = PageMediaRetention.kept([
+      Candidate(id: "a", audible: true, startedAt: 1, pausedAt: nil),
+      Candidate(id: "b", audible: true, startedAt: 2, pausedAt: nil),
+      Candidate(id: "c", audible: true, startedAt: 3, pausedAt: nil),
+      Candidate(id: "d", audible: false, startedAt: 4, pausedAt: 5),
+    ], now: 6)
+    #expect(kept.audible == ["c", "b"])
+    #expect(kept.paused.isEmpty)
+  }
+}
+
+@MainActor
+struct MediaRosterTests {
+  @Test func anAudiblePageOutlivesTheLimitAndMemoryPressureWhileAPausedOneOnlyOutlivesTheLimit() {
+    let roster = LivePageRoster<FakePage>(limit: 6)
+    let ids = (0..<8).map { _ in UUID() }
+    let pages = ids.map { _ in FakePage() }
+    for (id, page) in zip(ids, pages) { roster.register(page, for: id) }
+    roster.kept = [ids[0]]
+    roster.keptWhileMemoryAllows = [ids[1]]
+    for id in ids { roster.activate(id) }
+    #expect(pages[0].isLive)
+    #expect(pages[1].isLive)
+    #expect(roster.liveIDs.count == 6)
+    roster.discardAll(keeping: [ids[7]])
+    #expect(pages[0].isLive)
+    #expect(!pages[1].isLive)
+    #expect(pages[7].isLive)
   }
 }

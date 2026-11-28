@@ -122,9 +122,14 @@ public enum PageMediaLeaveOutcome: String, Sendable {
 public enum PageMediaMessage: Sendable, Equatable {
   case report(PageMediaReport)
   case left(token: String, outcome: PageMediaLeaveOutcome)
+  case hello(token: String)
+  case gone(token: String)
 
   public static func parse(_ body: Any?) -> PageMediaMessage? {
     if let report = PageMediaReport.parse(body) { return .report(report) }
+    if let fields = body as? [String: Any], let kind = fields["type"] as? String, kind == "hello" || kind == "gone", let token = token(fields["token"]) {
+      return kind == "hello" ? .hello(token: token) : .gone(token: token)
+    }
     guard let fields = body as? [String: Any], fields["type"] as? String == "left", let token = token(fields["token"]),
           let outcome = (fields["outcome"] as? String).flatMap(PageMediaLeaveOutcome.init(rawValue:)) else { return nil }
     return .left(token: token, outcome: outcome)
@@ -363,15 +368,26 @@ public enum PageMediaScript {
       if (reallyHidden()) document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
     };
 
-    const resume = (element, why) => {
-      if (!element || !isPaused(element) || !leaving || leaving.element !== element || leaving.resumed) return;
-      leaving.resumed = true;
+    const RESUME_RETRIES_MS = [60, 150, 400];
+    const resume = (element, attempt) => {
+      const trip = leaving;
+      if (!element || !trip || trip.element !== element || trip.resumed || trip.resuming || !isPaused(element)) return;
+      trip.resuming = true;
+      const failed = () => {
+        trip.resuming = false;
+        const wait = RESUME_RETRIES_MS[attempt];
+        if (wait !== undefined && leaving === trip && Date.now() < trip.until) setTimeout(() => resume(element, attempt + 1), wait);
+        else send({ type: "left", token, outcome: "refused" });
+      };
       let answer;
       try { answer = originalPlay.call(element); } catch (_) { answer = null; }
       if (answer && typeof answer.then === "function") {
-        answer.then(() => send({ type: "left", token, outcome: "resumed" }), () => send({ type: "left", token, outcome: "refused" }));
+        answer.then(() => { trip.resuming = false; trip.resumed = true; send({ type: "left", token, outcome: "resumed" }); }, failed);
       } else if (answer === null) {
-        send({ type: "left", token, outcome: "refused" });
+        failed();
+      } else {
+        trip.resuming = false;
+        trip.resumed = true;
       }
     };
 
@@ -403,7 +419,7 @@ public enum PageMediaScript {
           heard.add(element);
           becameCurrent(element);
         } else if (kind === "pause" && leaving && leaving.element === element && Date.now() < leaving.until) {
-          setTimeout(() => resume(element, "pause"), 250);
+          queueMicrotask(() => resume(element, 0));
         } else if (kind === "ended" && element === current && held) {
           setTimeout(() => { if (held && element === current && isEnded(element)) release(); }, 1000);
         } else if (kind === "pause" && element === current && held && !(leaving && Date.now() < leaving.until)) {
@@ -477,7 +493,7 @@ public enum PageMediaScript {
           held = true;
           event.stopImmediatePropagation();
           send({ type: "left", token, outcome: "held" });
-          if (leaving && isPaused(leaving.element)) setTimeout(() => resume(leaving && leaving.element, "hidden"), 250);
+          if (leaving && isPaused(leaving.element)) resume(leaving.element, 0);
         } else if (held) {
           event.stopImmediatePropagation();
         }
@@ -487,8 +503,8 @@ public enum PageMediaScript {
       }
     };
     window.addEventListener("visibilitychange", onVisibility, true);
-    window.addEventListener("pagehide", () => { held = false; leaving = null; lastSent = ""; send({ type: "media", token, state: "none", plays }); }, true);
-    window.addEventListener("pageshow", (event) => { if (event.persisted) schedule(); }, true);
+    window.addEventListener("pagehide", () => { held = false; leaving = null; lastSent = ""; send({ type: "media", token, state: "none", plays }); send({ type: "gone", token }); }, true);
+    window.addEventListener("pageshow", (event) => { if (event.persisted) { send({ type: "hello", token }); schedule(); } }, true);
     window.addEventListener("webkitvisibilitychange", (event) => { if (held) event.stopImmediatePropagation(); }, true);
 
     const command = (from, name, seconds) => {
@@ -522,9 +538,13 @@ public enum PageMediaScript {
       }
       if (!element) return false;
       switch (name) {
-        case "play":
-          try { originalPlay.call(element); } catch (_) {}
+        case "play": {
+          const refused = () => { lastSent = ""; schedule(); };
+          let answer;
+          try { answer = originalPlay.call(element); } catch (_) { refused(); return false; }
+          if (answer && typeof answer.catch === "function") answer.catch(refused);
           return true;
+        }
         case "pause":
           leaving = null;
           try { originalPause.call(element); } catch (_) {}
@@ -556,6 +576,40 @@ public enum PageMediaScript {
       return false;
     };
     Object.defineProperty(window, COMMAND, { value: command, configurable: false, enumerable: false, writable: false });
+    send({ type: "hello", token });
   })();
   """#
+}
+
+public enum PageMediaRetention {
+  public struct Candidate: Sendable, Equatable {
+    public var id: String
+    public var audible: Bool
+    public var startedAt: TimeInterval
+    public var pausedAt: TimeInterval?
+
+    public init(id: String, audible: Bool, startedAt: TimeInterval, pausedAt: TimeInterval?) {
+      self.id = id
+      self.audible = audible
+      self.startedAt = startedAt
+      self.pausedAt = pausedAt
+    }
+  }
+
+  public struct Kept: Sendable, Equatable {
+    public var audible: [String]
+    public var paused: [String]
+    public var nextExpiry: TimeInterval?
+  }
+
+  public static let slots = 2
+  public static let pausedFor: TimeInterval = 600
+
+  public static func kept(_ candidates: [Candidate], now: TimeInterval) -> Kept {
+    let audible = candidates.filter(\.audible).sorted { $0.startedAt > $1.startedAt }.prefix(slots).map(\.id)
+    let fresh = candidates.filter { !$0.audible && now - ($0.pausedAt ?? now) < pausedFor }.sorted { ($0.pausedAt ?? 0) > ($1.pausedAt ?? 0) }
+    let paused = fresh.prefix(max(0, slots - audible.count))
+    let nextExpiry = paused.compactMap(\.pausedAt).map { $0 + pausedFor }.min()
+    return Kept(audible: Array(audible), paused: paused.map(\.id), nextExpiry: nextExpiry)
+  }
 }

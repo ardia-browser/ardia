@@ -13,6 +13,7 @@ final class LivePageRoster<Page: DiscardablePage> {
   private(set) var recency: [UUID] = []
   private var pages: [UUID: Page] = [:]
   var kept: Set<UUID> = []
+  var keptWhileMemoryAllows: Set<UUID> = []
 
   init(limit: Int) {
     self.limit = max(1, limit)
@@ -49,7 +50,7 @@ final class LivePageRoster<Page: DiscardablePage> {
 
   private func trim(keeping kept: UUID) {
     var live = liveIDs
-    while live.count > limit, let oldest = live.first(where: { $0 != kept && !self.kept.contains($0) }) {
+    while live.count > limit, let oldest = live.first(where: { $0 != kept && !self.kept.contains($0) && !keptWhileMemoryAllows.contains($0) }) {
       pages[oldest]?.discard()
       recency.removeAll { $0 == oldest }
       live.removeAll { $0 == oldest }

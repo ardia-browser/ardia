@@ -215,6 +215,11 @@ public final class WebEngine {
     set { roster.kept = newValue }
   }
 
+  public var keepsLiveWhileMemoryAllows: Set<UUID> {
+    get { roster.keptWhileMemoryAllows }
+    set { roster.keptWhileMemoryAllows = newValue }
+  }
+
   public func setExtraPageScripts(_ scripts: [WKUserScript]) {
     extraPageScripts = scripts
     for controller in pageScriptControllers.allObjects {

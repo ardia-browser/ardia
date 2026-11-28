@@ -34,7 +34,8 @@ const isAppUrl = (url: string | null | undefined) => !!url && /^ardia:\/\/[^/?#]
 function appUrlParts(url: string): { host: string; path: string; query: string; hash: string } | null {
   if (!isAppUrl(url)) return null;
   const parts = split(url, APP_PREFIX)!;
-  const m = /^([^?#]*)(\?[^#]*)?(#.*)?$/.exec(parts.rest)!;
+  const m = /^([^?#]*)(\?[^#]*)?(#.*)?$/.exec(parts.rest);
+  if (!m) return null;
   return { host: parts.host, path: m[1] ?? "", query: m[2] ?? "", hash: m[3] ?? "" };
 }
 

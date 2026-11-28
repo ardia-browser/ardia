@@ -36,6 +36,22 @@ test("devices, their tabs and other Macs' profiles with malformed records drop o
   assert.deepEqual(summary.remoteProfiles.map((p) => p.syncId), ["x"]);
 });
 
+test("another Mac's recent tabs list only its web pages, and a Mac with none drops out", () => {
+  const doc = { ...emptyDoc(), enabled: true, deviceId: "devA", profiles: { default: { syncId: "s1", enabled: true } } };
+  doc.scopes.app = { ...emptyScope(), records: { "dev:devB": record({ n: "B" }), "dev:devC": record({ n: "C" }) } };
+  const tabs = (...urls) => urls.map((u, i) => ({ u, t: `T${i}` }));
+  doc.scopes["p:s1"] = {
+    ...emptyScope(),
+    records: {
+      "tabs:devB": record({ n: "B", tabs: tabs("file:///Users/me/notes.txt", "https://b.example/", "javascript:alert(1)", "http://localhost:3000/", "chrome://settings") }),
+      "tabs:devC": record({ n: "C", tabs: tabs("file:///etc/hosts", "data:text/html,x") }),
+    },
+  };
+  const summary = summarize(doc);
+  assert.deepEqual(summary.remoteTabs.default.map((d) => d.deviceId), ["devB"]);
+  assert.deepEqual(summary.remoteTabs.default[0].tabs.map((t) => t.url), ["https://b.example/", "http://localhost:3000/"]);
+});
+
 test("decoders keep records written by older and newer Macs that carry the fields we read", () => {
   assert.ok(records.profileRecord({ n: "Personal", c: "plum" }));
   assert.ok(records.profileRecord({ n: "Personal", c: "plum", i: null, d: true, th: null, extra: 1 }));

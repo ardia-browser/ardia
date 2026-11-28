@@ -157,7 +157,6 @@
   },
   "expiring-skip": {
     "apps/browser/scripts/sim/known.json": 2,
-    "apps/browser/src/hostileInputs.test.mjs": 1,
     "apps/desktop/src/hostMedia.test.mjs": 1
   }
 }

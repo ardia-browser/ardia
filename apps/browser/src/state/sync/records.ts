@@ -1,6 +1,7 @@
 import type { BookmarkValue, DeviceTabs, HistoryValue, SendRecord } from "../../platform/sync";
 import type { ProfileRecord } from "./profileAdapters";
 import { isFields, isNumber, isString, type Fields } from "../../lib/decode";
+import { webUrl } from "../../lib/urlParts";
 
 export type { BookmarkValue, DeviceTabs, HistoryValue, SendRecord };
 export type ShareRecord = { o: string };
@@ -35,7 +36,18 @@ export const shareRecord = decoder<ShareRecord>((v) => isString(v.o));
 
 export const deviceRecord = decoder<DeviceRecord>((v) => isString(v.n));
 
-export const deviceTabs = decoder<DeviceTabs>((v) => isString(v.n) && Array.isArray(v.tabs) && v.tabs.every((t) => isFields(t) && isString(t.u) && isString(t.t)));
+const MAX_SYNCED_URL = 8_192;
+const utf8 = new TextEncoder();
+
+export const syncedWebUrl = (url: unknown): url is string => typeof url === "string" && url.length <= MAX_SYNCED_URL && utf8.encode(url).length <= MAX_SYNCED_URL && webUrl(url) !== null;
+
+export function deviceTabs(v: unknown): DeviceTabs | null {
+  if (!isFields(v) || !isString(v.n) || !Array.isArray(v.tabs)) return null;
+  const all = v.tabs as unknown[];
+  if (!all.every((t) => isFields(t) && isString(t.u) && isString(t.t))) return null;
+  const tabs = (all as DeviceTabs["tabs"]).filter((t) => syncedWebUrl(t.u));
+  return tabs.length || !all.length ? ({ ...v, tabs } as DeviceTabs) : null;
+}
 
 export const bookmarkValue = decoder<BookmarkValue>(
   (v) => (v.k === "u" || v.k === "f") && isString(v.p) && isString(v.t) && (v.u === undefined || isString(v.u)) && isNumber(v.a) && isString(v.pos),

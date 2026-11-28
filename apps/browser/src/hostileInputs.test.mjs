@@ -366,11 +366,25 @@ test("sync record decoders hand on only the shapes they declare", () => {
   }
 });
 
-test("C5: a synced pinned group home or a recent-device tab with a non-web address is refused", { todo: "C5 open, #3569: synced homes and recent-device tabs take any address" }, () => {
+test("C5: a synced pinned group home or a recent-device tab with a non-web address is refused", () => {
   for (const name of ["javascript", "data", "file", "chrome", "extension"]) {
     assert.equal(syncedHome(URL_SCHEMES[name]), undefined, name);
     assert.equal(deviceTabs({ n: "d", tabs: [{ u: URL_SCHEMES[name], t: "t" }] }), null, name);
   }
+  for (const [name, url] of Object.entries(URL_SCHEMES)) {
+    assert.equal(syncedHome(url), undefined, name);
+    assert.deepEqual(deviceTabs({ n: "d", tabs: [{ u: url, t: "bad" }, { u: "https://kept.example/", t: "kept" }] })?.tabs, [{ u: "https://kept.example/", t: "kept" }], `${name}: the device's web tabs stay`);
+  }
+  for (const { id, value } of HOSTILE_VALUES) {
+    const home = syncedHome(value);
+    if (home !== undefined) assert.match(home, /^(https?:\/\/[^\s/]|ardia:\/\/(history|bookmarks|downloads|settings)\b)/i, `${id}: a synced home is a web address or a listed Ardia page`);
+  }
+  assert.equal(syncedHome(`https://long.example/${"a".repeat(8_192)}`), undefined, "an overlong home");
+  assert.equal(syncedHome(`https://long.example/${"é".repeat(4_100)}`), undefined, "a home over 8 KB once encoded");
+  assert.equal(syncedHome(`https://long.example/${"é".repeat(4_000)}`), `https://long.example/${"é".repeat(4_000)}`, "a long non-ASCII home under 8 KB");
+  for (const home of ["https://start.example/", "HTTP://LOCALHOST:3000/a?b#c", "ardia://history", "ardia://bookmarks?q=x", "ardia://downloads", "ardia://settings"]) assert.equal(syncedHome(home), home, home);
+  for (const home of ["ardia://newtab", "ardia://game", "ardia://plugins/x", "about:blank", "", "ardia://history#x\ny", "ardia://settings#a\nb"]) assert.equal(syncedHome(home), undefined, JSON.stringify(home));
+  assert.deepEqual(deviceTabs({ n: "d", tabs: [] }), { n: "d", tabs: [] }, "a device with no open tabs is still a device");
 });
 
 test("B1 R3: a page's own Reader helper can't change the Reader look the user chose", async () => {

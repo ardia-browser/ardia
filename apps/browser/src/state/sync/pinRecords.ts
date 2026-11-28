@@ -1,5 +1,7 @@
 import type { TabGroup, TabPin } from "../browser/types";
 import { TILE_PIN } from "../browser/model";
+import { appUrlRoute } from "@ardia/core";
+import { syncedWebUrl } from "./records";
 
 export type PinValue = { g: string | null; u: string; t: string | null; i: string | null; ti: string; pos: string };
 export type PinGroupValue = { n: string; i: string | null; c: TabGroup["color"]; pos: string };
@@ -26,7 +28,10 @@ export const PIN_HOME = "pgh:";
 
 export const PIN_LETTERS = "plet:";
 
-export const syncedHome = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+const HOME_APP_PAGES = new Set(["page", "settings"]);
+const appPageHome = (url: string) => HOME_APP_PAGES.has(appUrlRoute(url)?.kind ?? "");
+
+export const syncedHome = (value: unknown): string | undefined => (typeof value === "string" && (syncedWebUrl(value) || appPageHome(value)) ? value : undefined);
 export const syncedHomeIn = (base: (key: string) => unknown, key: string) => syncedHome(base(`${PIN_HOME}${key}`));
 
 export const TILE_FOLDER = "tilefold:";

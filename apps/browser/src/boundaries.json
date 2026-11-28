@@ -858,12 +858,9 @@
   {
    "id": "sync-adapter:adapters.ts#deviceTabsAdapter",
    "source": "sync",
-   "guard": "deviceTabs decoder. Open: recent-device tab URLs take any scheme (C5, #3569)",
+   "guard": "deviceTabs decoder keeps only tabs whose URL is canonical http(s) (syncedWebUrl, 8 KB at most) and drops the rest",
    "checks": [
     "apps/browser/src/state/sync/adapters.ts#deviceTabsAdapter"
-   ],
-   "findings": [
-    "C5"
    ]
   },
   {
@@ -936,12 +933,9 @@
   {
    "id": "sync-adapter:pinnedHomesAdapter.ts#pinnedHomesAdapter",
    "source": "sync",
-   "guard": "syncedHome takes any non-empty string. Open: group homes need a web-only policy (C5, #3569)",
+   "guard": "syncedHome takes only a canonical http(s) URL or a listed Ardia page (history, bookmarks, downloads, settings); anything else leaves the local home alone",
    "checks": [
     "apps/browser/src/state/sync/pinnedHomesAdapter.ts#pinnedHomesAdapter"
-   ],
-   "findings": [
-    "C5"
    ]
   },
   {

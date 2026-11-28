@@ -1,6 +1,8 @@
 import { actionWords } from "./sharedWords.ts";
 export type CopyPlatform = "android" | "ios";
 
+const MAC_BROWSER_CREDIT = "The Mac browser this app syncs with, as shipped: its engine carries Helium’s GPL patches. Ardia’s own source is Apache 2.0.";
+
 export type DefaultBrowserSteps = { title: string; subtitle: string; steps: string[]; action: string };
 
 export type ImportFailedCopy = { title: string; body: string; tryAgain: string; startWithout: string; startWithoutNote: string };
@@ -19,7 +21,7 @@ export type PlatformCopy = {
   chooseFolderDetail: string;
   historyClears: string;
   privacy: string;
-  ardiaCredit: string;
+  macBrowserCredit: string | null;
   cantScanTitle: string;
   alreadyPinnedToast: string;
   filterRulesUnsupported: string;
@@ -60,7 +62,7 @@ const ANDROID: PlatformCopy = {
   chooseFolderDetail: "Choose the Ardia Sync folder your Mac syncs to.",
   historyClears: "History clears from this phone. Your Mac’s history stays on your Mac.",
   privacy: "No accounts. Your data stays on your devices and in the sync folder you choose.",
-  ardiaCredit: "This app, and the Mac browser it syncs with.",
+  macBrowserCredit: MAC_BROWSER_CREDIT,
   cantScanTitle: "Can’t Scan on This Phone",
   alreadyPinnedToast: "Pinned to Your Mac",
   filterRulesUnsupported: "Some rules need features Ardia can’t run.",
@@ -101,7 +103,7 @@ const IOS: PlatformCopy = {
   chooseFolderDetail: "Choose the Ardia Sync folder in iCloud Drive.",
   historyClears: "History clears from this iPhone. Your Mac’s history stays on your Mac.",
   privacy: "No accounts. Your data stays on your devices and in your iCloud Drive.",
-  ardiaCredit: "This app, and the Mac browser it syncs with.",
+  macBrowserCredit: MAC_BROWSER_CREDIT,
   cantScanTitle: "Can’t Scan on This iPhone",
   alreadyPinnedToast: "Already Pinned to Your Mac",
   filterRulesUnsupported: "Some rules need features Safari can’t run.",
@@ -133,9 +135,9 @@ let current: PlatformCopy = ANDROID;
 
 export const copyTable = (platform: CopyPlatform): PlatformCopy => TABLES[platform];
 
-const SYNC_FREE: Record<CopyPlatform, Pick<PlatformCopy, "historyClears" | "privacy" | "ardiaCredit">> = {
-  android: { historyClears: "History clears from this phone.", privacy: "No accounts. Your data stays on this phone.", ardiaCredit: "This app." },
-  ios: { historyClears: "History clears from this iPhone.", privacy: "No accounts. Your data stays on this iPhone.", ardiaCredit: "This app." },
+const SYNC_FREE: Record<CopyPlatform, Pick<PlatformCopy, "historyClears" | "privacy" | "macBrowserCredit">> = {
+  android: { historyClears: "History clears from this phone.", privacy: "No accounts. Your data stays on this phone.", macBrowserCredit: null },
+  ios: { historyClears: "History clears from this iPhone.", privacy: "No accounts. Your data stays on this iPhone.", macBrowserCredit: null },
 };
 
 export function selectCopy(os: string, offersSync = true) {

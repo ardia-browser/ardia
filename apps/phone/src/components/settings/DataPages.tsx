@@ -122,8 +122,13 @@ export function AboutPage() {
   );
 }
 
+const ARDIA_SOURCE = "https://github.com/ardia-browser/ardia";
+
+const macBrowserCredits = (use: string | null) => (use ? [{ name: "Ardia for Mac", use, license: "GNU General Public License 3.0", url: ARDIA_SOURCE }] : []);
+
 export const dataCredits = () => [
-  { name: "Ardia", use: copy().ardiaCredit, license: "Apache License 2.0", url: "https://github.com/ardia-browser/ardia" },
+  { name: "Ardia", use: "This app.", license: "Apache License 2.0", url: ARDIA_SOURCE },
+  ...macBrowserCredits(copy().macBrowserCredit),
   { name: "EasyList", use: "The list behind Block Ads.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
   { name: "EasyPrivacy", use: "The list behind Block Trackers.", license: "CC BY-SA 3.0 or GPLv3", url: "https://easylist.to" },
   { name: "Fanboy’s Cookie Monster List", use: "The list behind Block Cookie Banners.", license: "CC BY-SA 3.0 or GPLv3", url: "https://secure.fanboy.co.nz" },

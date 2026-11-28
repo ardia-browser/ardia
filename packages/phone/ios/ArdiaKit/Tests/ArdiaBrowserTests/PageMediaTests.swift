@@ -268,6 +268,7 @@ struct PageMediaScriptTests {
     #expect(try await run(webView, "return [document.visibilityState, String(document.hidden), String(window.seen.length)]") as? [String] == ["visible", "false", "0"])
     #expect(messages.bodies.contains { $0["type"] as? String == "left" && $0["outcome"] as? String == "held" })
     _ = try await run(webView, "document.getElementById('a').pause(); return true;")
+    #expect(try await run(webView, "return [document.visibilityState, String(window.seen.length)]") as? [String] == ["visible", "0"])
     try await until { (try? await run(webView, "return window.seen.length")) as? Int == 1 }
     #expect(try await run(webView, "return [document.visibilityState, window.seen[0]]") as? [String] == ["hidden", "hidden"])
   }

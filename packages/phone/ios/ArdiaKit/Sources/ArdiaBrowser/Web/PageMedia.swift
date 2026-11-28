@@ -406,7 +406,7 @@ public enum PageMediaScript {
         } else if (kind === "pause" && leaving && leaving.element === element && Date.now() < leaving.until) {
           setTimeout(() => resume(element, "pause"), 250);
         } else if ((kind === "pause" || kind === "ended") && element === current && held && !(leaving && Date.now() < leaving.until)) {
-          release();
+          setTimeout(() => { if (held && element === current && isPaused(element) && !(leaving && Date.now() < leaving.until)) release(); }, 1000);
         } else if (kind === "emptied" && element === current && !element.currentSrc) {
           current = null;
         }
@@ -496,11 +496,15 @@ public enum PageMediaScript {
         case "leave": {
           const playing = isPlaying(element);
           leaving = playing && keepsPlaying ? { element, until: Date.now() + 4000, resumed: false } : null;
+          lastSent = "";
+          schedule();
           return playing;
         }
         case "returned":
           leaving = null;
           if (held && !reallyHidden()) held = false;
+          lastSent = "";
+          schedule();
           return true;
         case "keepPlaying":
           keepsPlaying = Number(seconds) === 1;

@@ -327,6 +327,16 @@ void NewestCopyIsSynced(SyncCore& core) {
   if (!save) return;
   auto opened = core.OpenLogin(*save);
   CHECK(opened && opened->login.password == Fixture("profile"));
+  LoginRead oversized{true, {}};
+  oversized.logins.emplace_back(origin, "ann", Fixture("older"), 0);
+  oversized.logins.back().modified_ms = 10;
+  oversized.logins.emplace_back(origin, "ann", std::string(kMaxLoginPasswordBytes + 1, 'p'), 0);
+  oversized.logins.back().modified_ms = 20;
+  auto held = core.SealLogins(std::move(oversized));
+  CHECK(held.ok && held.value.items.size() == 1);
+  if (!held.ok || held.value.items.size() != 1) return;
+  CHECK(held.value.items[0].Find("passwordless") && held.value.items[0].Find("passwordless")->flag);
+  CHECK(!held.value.items[0].Find("sealed"));
 }
 
 void Core(const std::string& scratch) {

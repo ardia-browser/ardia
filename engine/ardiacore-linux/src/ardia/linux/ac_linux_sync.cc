@@ -590,8 +590,7 @@ Outcome SyncCore::SealLogins(LoginRead read) {
   std::map<std::pair<std::string, std::string>, size_t> newest;
   for (size_t index = 0; index < read.logins.size(); ++index) {
     const StoredLogin& login = read.logins[index];
-    origins.push_back(login.password.empty() || login.password.size() > kMaxLoginPasswordBytes ||
-                              login.username.size() > kMaxLoginUsernameBytes
+    origins.push_back(login.password.empty() || login.username.size() > kMaxLoginUsernameBytes
                           ? std::nullopt
                           : LoginOrigin(login.realm));
     if (!origins.back()) continue;
@@ -603,6 +602,14 @@ Outcome SyncCore::SealLogins(LoginRead read) {
     const std::optional<std::string>& origin = origins[index];
     if (!origin || newest[{*origin, login.username}] != index) {
       Wipe(login.password);
+      continue;
+    }
+    if (login.password.size() > kMaxLoginPasswordBytes) {
+      Wipe(login.password);
+      logins.Append(JsonValue::Object({{"origin", JsonValue::String(*origin)},
+                                       {"username", JsonValue::String(login.username)},
+                                       {"passwordless", JsonValue::Bool(true)},
+                                       {"created", JsonValue::Number(login.created_ms)}}));
       continue;
     }
     auto sealed = keys_->SealPassword(login.password, *origin, login.username);

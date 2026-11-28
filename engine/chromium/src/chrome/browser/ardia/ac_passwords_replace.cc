@@ -41,7 +41,7 @@ using password_manager::StoredCredential;
 using Credentials = std::vector<StoredCredential>;
 using CredentialsOrError = base::expected<Credentials, PasswordStoreBackendError>;
 
-constexpr size_t kMaxReplaceArgsBytes = 64 * 1024;
+constexpr size_t kMaxReplaceArgsBytes = 256 * 1024;
 constexpr base::TimeDelta kReplaceTimeout = base::Seconds(30);
 
 struct Login {

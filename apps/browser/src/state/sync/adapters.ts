@@ -15,7 +15,7 @@ import { BOOKMARK, DEVICE, DEVICE_TABS, RECEIVES_TABS, SHARE, bookmarkValue, pas
 import { isAsleep } from "../tabs/pageSession";
 import { withSyncWorkCounts } from "../telemetry/workCounts";
 import { consentToken } from "../telemetry/consentPeriod";
-import { notePasswordReplace } from "../telemetry/syncSafetyCounts";
+import { notePasswordAdd, notePasswordReplace } from "../telemetry/syncSafetyCounts";
 
 const store = () => useBrowser.getState();
 
@@ -267,7 +267,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
         if (v) {
           if (have?.s === v.s) continue;
           const saved = await logins.save(profile(), v.o, v.u, v.s, have?.s ?? "").catch(orWarn(false));
-          if (have) notePasswordReplace(consent, saved);
+          (have ? notePasswordReplace : notePasswordAdd)(consent, saved);
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {

@@ -234,6 +234,7 @@ function SwitcherList({ ids, index, viewport, width, overflows, visible }: { ids
       ref={scroll}
       testID={TAB_SWITCHER_LIST_ID}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
       scrollEnabled={overflows}
       scrollEventThrottle={16}
       contentOffset={opening}

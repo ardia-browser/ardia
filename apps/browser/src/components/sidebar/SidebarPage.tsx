@@ -225,6 +225,7 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           showsVerticalScrollIndicator={false}
                           scrollEventThrottle={16}
                           onScroll={onScroll}
+                          alwaysBounceVertical={false}
                           onContentSizeChange={(_, content) => {
                             scrollEdgeBelow.measure({ content });
                             selectedRow.relocate();

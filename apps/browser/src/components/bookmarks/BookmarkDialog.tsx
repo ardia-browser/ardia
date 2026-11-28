@@ -4,7 +4,7 @@ import { useSidebarOpen, useSidebarSide, useWindowId } from "../../state/browser
 import { useSidebarWidth } from "../../state/sidebar/hooks";
 import { Button, Dialog, DialogActions, layout, Text, TextField } from "../ui";
 import { FormField } from "../settings/Form";
-import { addBookmarkFolder, addBookmarkTree, closeBookmarkDialog, moveBookmark, profileOfBookmark, removeBookmark, updateBookmark, useBookmarkDialog, type BookmarkDialogState } from "../../state/bookmarks/actions";
+import { addBookmarkFolder, addBookmarkTree, closeBookmarkDialog, moveBookmark, removeBookmark, updateBookmark, useBookmarkDialog, type BookmarkDialogState } from "../../state/bookmarks/actions";
 import { useBookmarks } from "../../state/bookmarks/hooks";
 import { currentBookmarkRoots, currentBookmarks } from "../../state/browser/current";
 import { FolderPicker } from "./DialogParts";
@@ -32,7 +32,7 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
   const cardRight = sidebarRight && sidebarOpen ? sidebarWidth + frame.dockGap : frame.inset;
   const toolbarHeight = useToolbarRow().height;
   const bookmark = useBookmarks((b) => (state.kind === "page" ? b.nodes[state.bookmarkId] : undefined));
-  const profileId = state.kind === "page" ? profileOfBookmark(state.bookmarkId) : state.profileId;
+  const profileId = state.profileId;
   const [name, setName] = useState(() => (state.kind === "page" ? (bookmark?.title ?? "") : ""));
   const [folderId, setFolderId] = useState<string | null>(() =>
     state.kind === "page" ? (bookmark?.parentId ?? null) : (currentBookmarkRoots(state.profileId)?.bar ?? null),
@@ -67,7 +67,7 @@ function DialogPanel({ state }: { state: BookmarkDialogState }) {
     setFolderId(id);
   };
 
-  const heading = state.kind === "allTabs" ? `Bookmark ${state.tabs.length} Tabs` : "Bookmark Added";
+  const heading = state.kind === "allTabs" ? `Bookmark ${state.tabs.length} Tabs` : state.added ? "Bookmark Added" : "Edit Bookmark";
 
   return (
     <Dialog

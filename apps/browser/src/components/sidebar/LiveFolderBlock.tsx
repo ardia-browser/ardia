@@ -3,10 +3,11 @@ import { Animated, Pressable, View } from "react-native";
 import { errorText, manualRefresh, statusText } from "../../state/live/engine";
 import { folderRows, type FolderRow } from "../../state/live/rows";
 import { updateFolder, useLive } from "../../state/live/store";
+import { hideShownTabs } from "../../state/live/shownTabs";
 import type { LiveItem } from "../../state/live/types";
-import { usePageProfileId, useTab } from "../../state/browser/hooks";
-import { useLiveActiveTab, useLiveStrays } from "../../state/sidebar/hooks";
-import { liveFolderKeep } from "../../state/sidebar/liveRows";
+import { usePageProfileId } from "../../state/browser/hooks";
+import { noteLiveFolderHeaderHide } from "../../state/telemetry/usage";
+import { useLiveFolderKeep, useLiveStrays } from "../../state/sidebar/hooks";
 import { Badge, Button, ContextMenuArea, clippedContinuousCorners, Dot, ink, space, Symbol, useHover } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { useLiveColors } from "../live/tokens";
@@ -60,11 +61,10 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
   const hiddenIds = useMemo(() => new Set([...hiddenList, ...repoHiddenList].map((i) => i.id)), [hiddenList, repoHiddenList]);
   const profileId = usePageProfileId();
   const strays = useLiveStrays(windowId, profileId, folderId, itemIds, hiddenIds);
-  const activeTab = useLiveActiveTab(windowId, profileId, folderId, itemIds, hiddenIds);
-  const activeItem = useTab(activeTab ?? undefined, (t) => t?.liveItem?.itemId ?? null);
+  const { keep, showsExtra } = useLiveFolderKeep(windowId, profileId, folderId, collapsed, rows, strays, itemIds, hiddenIds);
   const completed = useCompletedShown(folderId).length > 0;
   const fold = useFold(collapsed);
-  const foldedHeight = () => GROUP_BORDER * 2 + layout.rowHeight + (activeTab ? layout.rowHeight + PAD : 0);
+  const foldedHeight = () => GROUP_BORDER * 2 + layout.rowHeight + (keep.length ? keep.length * layout.rowHeight + PAD : 0);
   const { wrapper, handle, headerRef } = useDragItem(entryKey("live", folderId), { kind: "live", tabIds: NONE, section: "pinnedGroups", liveFolderId: folderId, collapsed: !!folder?.collapsed, foldedHeight });
   const box = useGroupHover(windowId, `livefolder|${folderId}`);
   const boxOpacity = useHoverFade(box.hovered || groupBoxAtRest(folder?.color));
@@ -76,7 +76,6 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
     : [{ key: "note", node: <FolderNote folderId={folderId} windowId={windowId} /> }];
   for (const id of strays) entries.push({ key: `stray:${id}`, node: <TabRow tabId={id} /> });
   if (completed) entries.push({ key: "completed", node: <CompletedFooter folderId={folderId} windowId={windowId} /> });
-  const keep = liveFolderKeep(rows, strays, activeTab, activeItem);
 
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style}>
@@ -86,7 +85,7 @@ export const LiveFolderBlock = memo(function LiveFolderBlock({ folderId, windowI
           style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, ...clippedContinuousCorners(GROUP_RADIUS), backgroundColor: fill, borderWidth: GROUP_BORDER, borderColor: stroke, opacity: boxOpacity }}
         />
         <View ref={headerRef} {...handle} style={HEADER_ROOM}>
-          <FolderHeader folderId={folderId} windowId={windowId} collapsed={collapsed} />
+          <FolderHeader folderId={folderId} windowId={windowId} collapsed={collapsed} showsExtra={showsExtra} />
         </View>
         <Fold fold={fold} collapsed={collapsed} entries={entries} keep={keep} padBottom={PAD} />
       </View>
@@ -117,7 +116,7 @@ function FolderNote({ folderId, windowId }: { folderId: string; windowId: string
   return <NoteRow text={kind === "pullRequests" ? "No open pull requests" : "No recent documents"} />;
 }
 
-function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; windowId: string; collapsed: boolean }) {
+function FolderHeader({ folderId, windowId, collapsed, showsExtra }: { folderId: string; windowId: string; collapsed: boolean; showsExtra: boolean }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const colors = useLiveColors();
@@ -146,7 +145,9 @@ function FolderHeader({ folderId, windowId, collapsed }: { folderId: string; win
           onPressOut={squish.onPressOut}
           onPress={() => {
             dismissHover();
-            updateFolder(folderId, { collapsed: !collapsed });
+            if (!showsExtra) return updateFolder(folderId, { collapsed: !collapsed });
+            noteLiveFolderHeaderHide();
+            hideShownTabs(folderId, windowId);
           }}
         >
           {() => (

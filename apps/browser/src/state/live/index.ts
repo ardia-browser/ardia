@@ -3,11 +3,13 @@ import * as calendar from "./calendar";
 import * as engine from "./engine";
 import * as googleAuth from "./googleAuth";
 import * as meetingGroups from "./meetingGroups";
+import * as shownTabs from "./shownTabs";
 import * as sources from "./sources";
 import * as store from "./store";
 
 export function startLive() {
   engine.startLiveEngine();
+  shownTabs.startLiveShownTabs();
   calendar.startCalendar();
   meetingGroups.startMeetingGroups();
   alerts.startMeetingAlerts();

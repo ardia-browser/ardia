@@ -47,6 +47,7 @@ type LiveState = {
   status: Record<string, FolderStatus>;
   expandedStacks: Record<string, boolean>;
   showAll: Record<string, boolean>;
+  shownTabs: Record<string, string[]>;
   accounts: Partial<Record<LiveSourceId, LiveAccount>>;
   config: LiveConfig;
   calendar: CalendarSettings;
@@ -89,6 +90,7 @@ export const useLive = create<LiveState>()(() => ({
   status: {},
   expandedStacks: saved.expandedStacks ?? {},
   showAll: {},
+  shownTabs: {},
   accounts: saved.accounts ?? {},
   config: { ...DEFAULT_CONFIG, ...saved.config },
   calendar: { ...DEFAULT_CALENDAR, ...saved.calendar },

@@ -3,7 +3,8 @@ import { useBrowser } from "../browser/store";
 import { activeTabId, isPinnedRow, tabTitle } from "../browser/model";
 import { liveTabOpen, stackMembers } from "../live/rows";
 import { useLive } from "../live/store";
-import { liveActiveTab, liveItemTab, liveStrays } from "./liveRows";
+import { liveFolderKeep, liveFolderShowsExtra, liveItemTab, liveKeptTabs, liveStrays } from "./liveRows";
+import type { FolderRow } from "../live/rows";
 import type { Tab } from "../browser/types";
 import { awayFromPin } from "../pins/organize";
 import { groupLabel } from "../pins/tabGrouping";
@@ -96,8 +97,13 @@ export const useClosedGroups = () => useBrowser((s) => s.closedGroups);
 export const useLiveStrays = (windowId: string, profileId: string, folderId: string, itemIds: Set<string>, hiddenIds: Set<string>) =>
   useBrowser(useShallow((s) => liveStrays(s, windowId, profileId, folderId, itemIds, hiddenIds)));
 
-export const useLiveActiveTab = (windowId: string, profileId: string, folderId: string, itemIds: Set<string>, hiddenIds: Set<string>) =>
-  useBrowser((s) => liveActiveTab(s, windowId, profileId, folderId, itemIds, hiddenIds));
+export function useLiveFolderKeep(windowId: string, profileId: string, folderId: string, collapsed: boolean, rows: FolderRow[], strays: string[], itemIds: Set<string>, hiddenIds: Set<string>) {
+  const shown = useLive((l) => l.shownTabs[folderId] ?? NO_TABS);
+  const kept = useBrowser(useShallow((s) => (collapsed ? liveKeptTabs(s, windowId, profileId, folderId, shown, itemIds, hiddenIds) : NO_TABS)));
+  const keep = useBrowser(useShallow((s) => (kept.length ? liveFolderKeep(rows, strays, kept, s.tabs) : NO_TABS)));
+  const showsExtra = useBrowser((s) => liveFolderShowsExtra(rows, strays, kept, activeTabId(s, windowId, profileId), s.tabs));
+  return { keep, showsExtra };
+}
 
 export const useLiveItemTab = (windowId: string, profileId: string, folderId: string, itemId: string) => useBrowser((s) => liveItemTab(s, windowId, profileId, folderId, itemId));
 

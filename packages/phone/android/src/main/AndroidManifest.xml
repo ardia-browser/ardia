@@ -48,5 +48,15 @@
         <receiver
             android:name="com.ardia.phone.AppUpdateInstallReceiver"
             android:exported="false" />
+        <receiver
+            android:name="com.ardia.phone.DownloadNoticeReceiver"
+            android:exported="false" />
+        <activity
+            android:name="com.ardia.phone.DownloadOpenActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 </manifest>

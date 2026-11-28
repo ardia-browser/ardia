@@ -174,7 +174,7 @@ function Lab() {
       blocking.addListener((event) => setBlockingState(event.state)),
       downloads.addListener((event) => {
         if (event.name === "downloads.progress") setActive(event.downloads);
-        else {
+        else if (event.name === "downloads.finished") {
           setFinished(event);
           note(`download finished ${event.fileName} ${event.uri ?? event.failure}`);
         }

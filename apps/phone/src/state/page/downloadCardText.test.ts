@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { DOWNLOAD_FAILURE_WHY, downloadedDetail, downloadFailedToast, downloadFailureWhy, downloadHost, downloadRetries, downloadsCompleteDetail, downloadsCompleteTitle } from "./pagePrompts.ts";
 import { clearChoice, clearedDetail } from "../settings/settingsRules.ts";
@@ -50,4 +52,11 @@ test("a sent tab names its site unless it came from a private tab, and a failed 
   assert.equal(sentDetail("example.com", true), null);
   assert.equal(sentDetail(null, false), null);
   assert.equal(COULD_NOT_SEND_DETAIL, "Check your connection and try again.");
+});
+
+test("Android's download notifications give the same reasons as the cards, word for word", () => {
+  const kotlin = readFileSync(fileURLToPath(new URL("../../../../../packages/phone/android/src/main/java/com/ardia/phone/DownloadNotices.kt", import.meta.url)), "utf8");
+  const native = Object.fromEntries([...kotlin.matchAll(/DownloadFailure\.(\w+) to "([^"]+)"/g)].map(([, name, text]) => [name!.charAt(0).toLowerCase() + name!.slice(1), text]));
+  assert.deepEqual(native, DOWNLOAD_FAILURE_WHY);
+  assert.match(kotlin, new RegExp(`"${downloadFailedToast("").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
 });

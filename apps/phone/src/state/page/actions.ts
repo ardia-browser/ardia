@@ -16,7 +16,7 @@ import { isSyncableUrl, type BrowserTab } from "../tabs/tabModels";
 import { findTab } from "../tabs/tabsState";
 import { blockersToast, searchQuery, translationAsks, translationUrl, type NightShadeMode } from "./pageMenu";
 import { backLayer, pressPlan, stoppedPrivateDownloadsToast, type PressAction, type Request } from "./pagePrompts";
-import { downloadDropped, downloadFinished, downloadsProgressed, downloadStarted } from "./downloadCards";
+import { downloadCancelledElsewhere, downloadDropped, downloadFinished, downloadRetryRequested, downloadsProgressed, downloadStarted } from "./downloadCards";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSettings } from "../settings/actions";
 import { closeSettings, openSettings, openSettingsPage, popSettings, pushSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
@@ -741,6 +741,14 @@ function notePrivateDownloadStopped() {
 function downloadEvent(event: DownloadEvent) {
   if (event.name === "downloads.progress") {
     downloadsProgressed(event.downloads);
+    return;
+  }
+  if (event.name === "downloads.cancelled") {
+    downloadCancelledElsewhere(event.id);
+    return;
+  }
+  if (event.name === "downloads.retryRequested") {
+    downloadRetryRequested(event.id);
     return;
   }
   if (event.failure === "privateSessionEnded") {

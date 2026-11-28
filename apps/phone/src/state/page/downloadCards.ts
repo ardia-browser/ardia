@@ -32,6 +32,9 @@ type Completed = { key: string; names: string[] };
 const tracked = new Map<string, Tracked>();
 const cancelled = new Set<string>();
 const retrying = new Map<string, { fileName: string; key: string }>();
+const retryRuns = new Map<string, () => void>();
+const KEEP_RETRY_RUNS = 32;
+let askedForNotifications = false;
 
 const retryKey = (pageId: string, url: string) => `${pageId} ${url}`;
 let completed: Completed | null = null;
@@ -67,6 +70,24 @@ export function cancelDownload(id: string) {
   quietly(() => downloads.cancel(id));
 }
 
+export function downloadCancelledElsewhere(id: string) {
+  cancelled.add(id);
+  tracked.delete(id);
+  noteDownloadEnded(id);
+}
+
+export function downloadRetryRequested(id: string) {
+  const run = retryRuns.get(id);
+  retryRuns.delete(id);
+  run?.();
+}
+
+function askForNotificationsOnce() {
+  if (askedForNotifications || Platform.OS !== "android") return;
+  askedForNotifications = true;
+  quietly(() => downloads.askForDownloadNotifications());
+}
+
 export async function refreshRunningDownloads() {
   const reported = await settled(() => downloads.active(), []);
   noteDownloadsReported(reported);
@@ -90,6 +111,7 @@ export function downloadStarted(event: PageDownload) {
     total: event.contentLength !== null && event.contentLength > 0 ? event.contentLength : null,
   };
   tracked.set(id, download);
+  askForNotificationsOnce();
   noteDownloadStarted(id, download.fileName, download.isPrivate, download.total);
 }
 
@@ -131,8 +153,16 @@ function retryAction(download: Tracked | null, failure: Finished["failure"]): To
   };
 }
 
+function rememberRetry(id: string, action: ToastAction | null) {
+  if (!action) return;
+  retryRuns.set(id, action.run);
+  while (retryRuns.size > KEEP_RETRY_RUNS) retryRuns.delete(retryRuns.keys().next().value as string);
+}
+
 function showFailure(event: Finished, download: Tracked | null) {
   const key = download?.key ?? `download:failed:${event.fileName}`;
+  const retry = retryAction(download, event.failure);
+  if (download) rememberRetry(download.id, retry);
   if (counted(download) && currentToastKey() === key) countUsage("download_cards_updated");
   if (completed?.key === key) completed = null;
   showToast({
@@ -141,7 +171,7 @@ function showFailure(event: Finished, download: Tracked | null) {
     detail: downloadFailureWhy(event.failure),
     tile: { kind: "icon", icon: "warning" },
     icon: "warning",
-    action: retryAction(download, event.failure),
+    action: retry,
     titleLines: 2,
     stage: "failed",
   });
@@ -206,5 +236,7 @@ export function forgetDownloadCards() {
   tracked.clear();
   cancelled.clear();
   retrying.clear();
+  retryRuns.clear();
+  askedForNotifications = false;
   completed = null;
 }

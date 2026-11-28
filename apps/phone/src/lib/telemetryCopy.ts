@@ -197,6 +197,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         text: "In the same daily counts: how often a download’s popup updated in place instead of showing a second one, how often finished downloads were grouped into one popup, how often you retried a download from its popup, cancelled one in Downloads, or opened Downloads from the download ring in the address bar, never while browsing privately. Counts only, never which file or site",
         fields: ["download_cards_updated", "download_cards_grouped", "downloads_retried", "downloads_cancelled", "download_indicator_opened"],
       },
+      {
+        text: "In the same daily counts on Android: how often you opened a finished download from its notification and how often you cancelled a download from its notification, never for a private download. Counts only, never which file or site",
+        fields: ["download_notifications_opened", "download_notification_cancels"],
+      },
     ],
   },
 ];

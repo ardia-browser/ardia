@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { act } from "react-test-renderer";
 import { ToastHost } from "../components/toasts/ToastHost";
 import { downloads } from "../platform/downloads";
@@ -213,4 +214,48 @@ test("ending incognito with three private downloads in flight gives one toast fo
   finished({ id: "99", failure: "network", uri: null });
   expect(toast()?.title).toBe("Couldn’t download otter.pdf");
   unsubscribe();
+});
+
+const notice = (name: string, id: string) => act(() => downloadListeners.forEach((listener) => listener({ name, id })));
+
+test("Cancel in a download's Android notification ends it like the Downloads row: the ring lets it go and no failure card follows", () => {
+  page({});
+  wait(DOWNLOAD_INDICATOR_DELAY_MS);
+  expect(useRunningDownloads.getState().running.map((row) => row.id)).toEqual(["17"]);
+  notice("downloads.cancelled", "17");
+  expect(useRunningDownloads.getState().running).toEqual([]);
+  finished({ failure: "network", uri: null });
+  expect(toast()).toBeNull();
+});
+
+test("Retry in a failed download's notification runs the card's own retry, once, keeping the file's name", async () => {
+  page({});
+  finished({ failure: "server", uri: null });
+  act(() => dismissToast());
+  notice("downloads.retryRequested", "17");
+  await settle();
+  expect(retried).toHaveBeenCalledWith("t0", "https://files.example/otter.pdf");
+  notice("downloads.retryRequested", "17");
+  await settle();
+  expect(retried).toHaveBeenCalledTimes(1);
+  page({ downloadId: "18", fileName: "otter" });
+  finished({ id: "18", fileName: "otter", failure: "server", uri: null });
+  expect(toast()!.title).toBe("Couldn’t download otter.pdf");
+});
+
+test("a download that can't be retried ignores a retry request", async () => {
+  page({ isPrivate: true });
+  finished({ failure: "network", uri: null });
+  notice("downloads.retryRequested", "17");
+  await settle();
+  expect(retried).not.toHaveBeenCalled();
+});
+
+test("on Android the first download asks once for notifications, the way an app update does, and never again", async () => {
+  const asked = jest.spyOn(downloads, "askForDownloadNotifications").mockImplementation(() => Promise.resolve(true));
+  asked.mockClear();
+  page({});
+  page({ downloadId: "18", fileName: "b.zip" });
+  await settle();
+  expect(asked).toHaveBeenCalledTimes(Platform.OS === "android" ? 1 : 0);
 });

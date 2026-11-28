@@ -4,17 +4,26 @@ import UIKit
 @MainActor
 enum KeyboardWarmUp {
   private static var warmed = false
+  private static var finished = false
   private static let quietAfterTouch: CFTimeInterval = 1
   private static var watcher: TouchWatcher?
 
   private static var activation: NSObjectProtocol?
 
   static func watchTouches() {
-    guard watcher == nil else { return }
+    guard watcher == nil, !finished else { return }
     guard let window = mainWindow() else { return watchWhenActive() }
     let touches = TouchWatcher()
     window.addGestureRecognizer(touches)
     watcher = touches
+    if let activation { NotificationCenter.default.removeObserver(activation) }
+    activation = nil
+  }
+
+  static func finish() {
+    finished = true
+    if let watcher { watcher.view?.removeGestureRecognizer(watcher) }
+    watcher = nil
     if let activation { NotificationCenter.default.removeObserver(activation) }
     activation = nil
   }
@@ -27,13 +36,13 @@ enum KeyboardWarmUp {
   }
 
   static func attempt() -> [String: Any] {
-    if warmed { return ["outcome": "done"] }
+    if warmed || finished { return ["outcome": "done"] }
     guard UIApplication.shared.applicationState == .active else { return ["outcome": "inactive"] }
     guard let scene = activeScene(), let main = mainWindow(in: scene), scene.keyWindow === main else { return ["outcome": "notMainWindow"] }
     watchTouches()
     guard let watcher else { return ["outcome": "notWatching"] }
     if let holder = focusHolder(in: scene) { return ["outcome": "focused", "holder": String(describing: type(of: holder))] }
-    if RunLoop.main.currentMode == .tracking { return ["outcome": "scrolling"] }
+    if RunLoop.main.currentMode == .tracking || scene.windows.contains(where: { scrolling($0) }) { return ["outcome": "scrolling"] }
     if watcher.down > 0 { return ["outcome": "touching"] }
     if let ended = watcher.lastEnded, CACurrentMediaTime() - ended < quietAfterTouch { return ["outcome": "recentTouch"] }
     if presenting(main.rootViewController) { return ["outcome": "presenting"] }
@@ -48,6 +57,7 @@ enum KeyboardWarmUp {
     field.resignFirstResponder()
     field.removeFromSuperview()
     warmed = took
+    if took { finish() }
     return ["outcome": took ? "warmed" : "refused", "ms": (CACurrentMediaTime() - started) * 1000]
   }
 
@@ -85,6 +95,11 @@ enum KeyboardWarmUp {
       if let found = firstResponderView(in: subview) { return found }
     }
     return nil
+  }
+
+  private static func scrolling(_ view: UIView) -> Bool {
+    if let scroll = view as? UIScrollView, scroll.isDragging || scroll.isDecelerating { return true }
+    return view.subviews.contains { scrolling($0) }
   }
 
   private static func presenting(_ controller: UIViewController?) -> Bool {

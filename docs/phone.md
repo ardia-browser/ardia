@@ -4286,8 +4286,11 @@ It skips, and JavaScript tries again 1.5 s later (six tries from 2.5 s after lau
 - anything holds focus. UIKit is asked directly, with a nil-targeted action that reaches the first responder in any window (a page's form in WebKit included), and every window's views are checked as well;
 - the app isn't active, or the key window isn't the main window;
 - a finger is down, or was lifted less than a second ago. A passive recognizer on the main window counts touches and never claims them; it is attached when the scene first becomes active, and until it is, the warm-up reports `notWatching` and waits. WebKit focuses a tapped form field a moment after the touch ends, so without the quiet second the warm-up could land in that gap;
-- the run loop is tracking a drag or a deceleration;
-- a view controller is presented or mid-transition.
+- something is scrolling: the run loop is tracking, or any scroll view in the app's windows is dragging or decelerating (a fling coasts on after the finger lifts), the pages' WebKit scroll views and React Native's included;
+- a view controller is presented or mid-transition;
+- something of the app's own is over the page: search, the page menu (the redesigned one is drawn in the view tree, not presented), Find, the reader, Library, Settings, onboarding, a sheet, or the deck (`overlay`, decided in JavaScript from `pageCovered()`, `findOpen` and the deck surface).
+
+The touch watcher is removed once the warm-up succeeds, gives up after six tries, or its component unmounts.
 
 Lab builds print `PAGELAB search warm keyboard <outcome> [<ms>] attempt <n>`, where `<ms>` is the main-thread time of the warm-up itself.
 

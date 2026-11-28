@@ -200,6 +200,10 @@ public final class SystemModule: Module {
     AsyncFunction("warmKeyboard") { () -> [String: Any] in
       MainActor.assumeIsolated { KeyboardWarmUp.attempt() }
     }.runOnQueue(.main)
+
+    AsyncFunction("endKeyboardWarmUp") { () in
+      MainActor.assumeIsolated { KeyboardWarmUp.finish() }
+    }.runOnQueue(.main)
   }
 }
 

@@ -4,6 +4,7 @@ import { SearchTray } from "../components/search/SearchTray";
 import { DesignProvider } from "../components/ui";
 import * as perf from "../state/app/interactionPerf";
 import * as browse from "../state/browse/store";
+import { usePageUi } from "../state/page/store";
 import { presentSearch } from "../state/search/store";
 import { useStageBar } from "../state/search/stageBar";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
@@ -12,6 +13,7 @@ type StageEvents = { onLift?: (lift: { lift: number; up: boolean; predicted?: bo
 
 const mockSeen: { props: StageEvents | null } = { props: null };
 const mockWarm = jest.fn<Promise<{ outcome: string; ms?: number }>, []>();
+const mockEnd = jest.fn<void, []>();
 
 jest.mock("@ardia/phone-native", () => {
   const actual = jest.requireActual("@ardia/phone-native");
@@ -30,7 +32,7 @@ jest.mock("@ardia/phone-native", () => {
     return React.createElement(native.View, { testID: "completingField" });
   });
   const onIPhone = () => native.Platform.OS === "ios";
-  const system = { ...actual.system, prepareKeyboardWarmUp: () => undefined, warmKeyboard: () => mockWarm() };
+  const system = { ...actual.system, prepareKeyboardWarmUp: () => undefined, warmKeyboard: () => mockWarm(), endKeyboardWarmUp: () => mockEnd() };
   return { ...actual, system, searchStageIsNative: onIPhone, SearchStage, SearchStagePanel: (props: object) => React.createElement(native.View, props), completingFieldIsNative: onIPhone, CompletingField };
 });
 
@@ -45,6 +47,8 @@ beforeEach(() => {
   useStageBar.setState({ onScreen: false, presented: false, morphs: false, landed: false, pills: 0 });
   lines = [];
   mockWarm.mockReset();
+  mockEnd.mockReset();
+  usePageUi.setState({ menuOpen: false, findOpen: false });
   jest.spyOn(console, "log").mockImplementation((line: unknown) => void lines.push(String(line)));
   jest.spyOn(perf, "countRender").mockImplementation(() => undefined);
 });
@@ -78,6 +82,7 @@ onIPhone("the keyboard is warmed once, 2.5 s after launch, so the first search f
   await settle(1);
   expect(mockWarm).toHaveBeenCalledTimes(1);
   expect(lines).toContain("PAGELAB search warm keyboard warmed 91ms attempt 1");
+  expect(mockEnd).toHaveBeenCalledTimes(1);
   await settle(30_000);
   expect(mockWarm).toHaveBeenCalledTimes(1);
   unmount(root);
@@ -99,7 +104,32 @@ onIPhone("a busy moment (focus held, a touch, a scroll, a sheet) waits for a lat
   await settle(2500);
   for (let step = 0; step < 10; step += 1) await settle(1500);
   expect(mockWarm).toHaveBeenCalledTimes(6);
+  expect(mockEnd).toHaveBeenCalled();
   unmount(busy);
+});
+
+onIPhone("while the page menu, Find or the deck is up, UIKit isn't asked, and leaving the screen lets the touch watcher go", async () => {
+  mockWarm.mockResolvedValue({ outcome: "warmed", ms: 80 });
+  usePageUi.setState({ menuOpen: true });
+  const root = tray();
+  await settle(2500);
+  expect(mockWarm).not.toHaveBeenCalled();
+  expect(lines).toContain("PAGELAB search warm keyboard overlay attempt 1");
+  usePageUi.setState({ menuOpen: false, findOpen: true });
+  await settle(1500);
+  expect(mockWarm).not.toHaveBeenCalled();
+  usePageUi.setState({ findOpen: false });
+  browse.useBrowse.setState({ surface: "deck" });
+  await settle(1500);
+  expect(mockWarm).not.toHaveBeenCalled();
+  browse.useBrowse.setState({ surface: "browsing" });
+  await settle(1500);
+  expect(mockWarm).toHaveBeenCalledTimes(1);
+  unmount(root);
+  mockEnd.mockReset();
+  const early = tray();
+  unmount(early);
+  expect(mockEnd).toHaveBeenCalledTimes(1);
 });
 
 onIPhone("nothing is asked of UIKit while search is open", async () => {

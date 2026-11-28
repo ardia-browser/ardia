@@ -1,7 +1,7 @@
 import { createContext, useContext, useLayoutEffect, type RefObject } from "react";
 import { hostSupports, INPUT_REGIONS_METHOD, invokeHost, reportHostError, type ArdiaHost } from "./host.ts";
 import { createInputRegions, type InputRegionsRegistry, type RegionDeps, type RegionShape } from "./inputRegions.ts";
-import { clippedRectOf } from "./hostViewport.ts";
+import { clippedRectOf, isMotionAnimation, receivesAnyPointer } from "./hostViewport.ts";
 import { createPageHoles, type PageHoles } from "./pageHoles.ts";
 import { PEEK_MOVING_ATTRIBUTE } from "./peekStageMotion.ts";
 import { startShellGlass } from "./shellGlass.ts";
@@ -42,7 +42,8 @@ export function domRegionDeps(host: ArdiaHost): Omit<RegionDeps, "conceal"> {
     },
     animating: (elements) => !!document.getAnimations?.().some((animation) => {
       const target = (animation.effect as KeyframeEffect | null)?.target;
-      return animation.playState === "running" && !!target && elements.some((element) => element.contains(target) || target.contains(element));
+      if (animation.playState !== "running" || !target || !isMotionAnimation(animation, false)) return false;
+      return elements.some((element) => (element.contains(target) && (target === element || receivesAnyPointer(target))) || target.contains(element));
     }),
     microtask: (run) => queueMicrotask(run),
     frame: (run) => void requestAnimationFrame(run),
@@ -83,6 +84,10 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
   holes = painter;
   regions = registry;
   const refresh = () => registry.refresh();
+  const scrolled = (event: Event) => {
+    if (typeof Node === "function" && event.target instanceof Node && event.target !== document && !registry.affects(event.target)) return;
+    refresh();
+  };
   const resized = () => {
     registry.refresh();
     painter.windowChanged();
@@ -90,11 +95,11 @@ export function startShellAbove(host: ArdiaHost, root: HTMLElement = document.bo
   const stagesMoving = new MutationObserver(resized);
   stagesMoving.observe(root, { subtree: true, attributes: true, attributeFilter: [PEEK_MOVING_ATTRIBUTE] });
   window.addEventListener("resize", resized);
-  window.addEventListener("scroll", refresh, true);
+  window.addEventListener("scroll", scrolled, true);
   return () => {
     stagesMoving.disconnect();
     window.removeEventListener("resize", resized);
-    window.removeEventListener("scroll", refresh, true);
+    window.removeEventListener("scroll", scrolled, true);
     document.documentElement.classList.remove(SHELL_ABOVE_CLASS);
     glass.stop();
     stopCorners();

@@ -118,3 +118,47 @@ test("a shift-held mouse wheel pages profiles like a sideways wheel, since Chrom
   assert.equal(up.defaultPrevented, true);
   assert.equal(plain.defaultPrevented, false);
 });
+
+test("precise vertical wheel scrolling outside swipe targets avoids layout walks and gap timers", () => {
+  const outside = Object.assign(new HTMLElement(), { parentElement: null });
+  const prevSetTimeout = globalThis.setTimeout;
+  const prevStyle = globalThis.getComputedStyle;
+  let timers = 0;
+  let styleCalls = 0;
+  globalThis.setTimeout = (...args) => {
+    timers++;
+    return prevSetTimeout(...args);
+  };
+  globalThis.getComputedStyle = (el) => {
+    styleCalls++;
+    return prevStyle(el);
+  };
+  const remove = addSwipeTarget(target([], { back: true, forward: true }));
+  try {
+    const event = {
+      deltaX: 0,
+      deltaY: 40,
+      deltaMode: 0,
+      wheelDeltaX: 0,
+      wheelDeltaY: -40,
+      shiftKey: false,
+      ctrlKey: false,
+      clientX: 100,
+      clientY: 100,
+      timeStamp: 20_000,
+      target: outside,
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+    };
+    wheelListeners.forEach((listener) => listener(event));
+    assert.equal(styleCalls, 0);
+    assert.equal(timers, 0);
+    assert.equal(event.defaultPrevented, false);
+  } finally {
+    globalThis.setTimeout = prevSetTimeout;
+    globalThis.getComputedStyle = prevStyle;
+    remove();
+  }
+});

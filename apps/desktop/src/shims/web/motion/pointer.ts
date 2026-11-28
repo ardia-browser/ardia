@@ -5,9 +5,24 @@ type Watcher = (sample: PointerSample | null) => void;
 const watchers = new Set<Watcher>();
 let last: PointerSample | null = null;
 let installed = false;
+let frame = 0;
 
 const publish = () => {
+  if (frame) {
+    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(frame);
+    frame = 0;
+  }
   for (const watcher of [...watchers]) watcher(last);
+};
+
+const schedulePublish = () => {
+  if (!watchers.size || !last) return;
+  if (typeof requestAnimationFrame !== "function") return publish();
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    publish();
+  });
 };
 
 function sample(e: MouseEvent): PointerSample {
@@ -33,8 +48,8 @@ function install() {
   window.addEventListener("pointerdown", move, true);
   window.addEventListener("pointerup", move, true);
   document.addEventListener("mouseout", out, true);
-  window.addEventListener("scroll", publish, true);
-  window.addEventListener("resize", publish);
+  window.addEventListener("scroll", schedulePublish, true);
+  window.addEventListener("resize", schedulePublish);
 }
 
 install();

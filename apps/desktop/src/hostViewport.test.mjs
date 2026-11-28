@@ -515,3 +515,69 @@ test("a show coalesced away by a hide never opens the cutout when the hide is ac
     s.restore();
   }
 });
+
+test("hidden tabs skip layout reads and rAF scheduling, overlaySnapshot caches across probes, and non-motion overlay animations do not spin", () => {
+  let active = false;
+  let rectReads = 0;
+  let overlayMeasures = 0;
+  let dismissQueries = 0;
+  const tab = {
+    isConnected: true,
+    parentElement: null,
+    getBoundingClientRect: () => {
+      rectReads++;
+      return box(200, 50, 800, 600);
+    },
+    contains: (node) => node === tab,
+  };
+  const overlay = { contains: (node) => node === spinner };
+  const spinner = { children: [], contains: (node) => node === spinner };
+  let animations = [];
+  const s = stage({
+    elementFromPoint: () => tab,
+    querySelector: () => {
+      dismissQueries++;
+      return null;
+    },
+    getAnimations: () => animations,
+  });
+  const savedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (node) => ({
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    pointerEvents: node === spinner ? "none" : "auto",
+  });
+  try {
+    const updates = [];
+    const coverMock = {
+      overlayAt: () => false,
+      overlaySnapshot: () => {
+        overlayMeasures++;
+        return () => false;
+      },
+      overlayElements: () => [overlay],
+    };
+    const stop = watchTabViewport(tab, () => active, (update) => updates.push(update), coverMock);
+    assert.equal(rectReads, 0);
+    assert.equal(updates.at(-1).visible, false);
+    s.mutate();
+    assert.equal(s.frames.length, 0);
+    assert.equal(rectReads, 0);
+
+    active = true;
+    animations = [
+      { playState: "running", effect: { target: overlay, getKeyframes: () => [{ opacity: 0 }, { opacity: 1 }] } },
+      { playState: "running", effect: { target: spinner, getKeyframes: () => [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }] } },
+    ];
+    s.events.document.dispatchEvent(new Event("visibilitychange"));
+    assert.equal(updates.at(-1).visible, true);
+    assert.equal(overlayMeasures, 1);
+    assert.equal(dismissQueries, 0);
+    assert.equal(s.frames.length, 0);
+    stop();
+  } finally {
+    globalThis.getComputedStyle = savedStyle;
+    s.restore();
+  }
+});

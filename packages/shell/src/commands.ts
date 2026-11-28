@@ -7,6 +7,7 @@ export type CommandEvent = {
   focusGeneration?: number | null;
   mouseButton?: MouseShortcutButton | null;
   mouseGesture?: MouseGestureAction | null;
+  gestureTabId?: string | null;
   epoch?: string;
 };
 

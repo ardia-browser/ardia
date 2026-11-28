@@ -5,6 +5,7 @@ const { menuState } = await import("./menuState.ts");
 const { settingsSnapshot } = await import("../telemetry/settingsSnapshot.ts");
 const { noteMouseGestureRun, takeMouseGestureCounts } = await import("../telemetry/mouseGestureCounts.ts");
 const { isConfigSettingKey } = await import("../settings/configAllowlist.ts");
+const { SETTING_SPECS } = await import("../settings/settings.ts");
 await import("../../test-native/index.ts");
 const client = await import("../telemetry/client.ts");
 after(() => client.setSharing(false, "settings"));
@@ -23,6 +24,7 @@ test("mouse gestures are off until turned on, and the menu state tells the Mac w
 });
 
 test("the setting syncs, can be set from the config file and is in the daily snapshot", () => {
+  assert.equal(SETTING_SPECS.mouseGestures.synced, true);
   assert.ok(isConfigSettingKey("mouseGestures"));
   assert.equal(settingsSnapshot({ ...S().settings, mouseGestures: true }).setting_mouseGestures, "true");
   assert.equal(settingsSnapshot({ ...S().settings, mouseGestures: false }).default_mouseGestures, "false");

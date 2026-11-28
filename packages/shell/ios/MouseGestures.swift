@@ -6,18 +6,23 @@ final class MouseGestures {
 
   private var enabled = false
   private var monitor: Any?
+  private var resigning: NSObjectProtocol?
+  private var closing: NSObjectProtocol?
   private var press: NSEvent?
+  private var pageTab: String?
   private weak var window: NSWindow?
   private var strokes = MouseGestureStrokes(start: .zero)
+  private var cancelled = false
   private var trail: MouseGestureTrail?
-  private var replaying = false
+  private var replays: [NSEvent] = []
   private(set) var lastOutcome = "none"
 
   var isTracking: Bool { press != nil }
 
   func update(_ on: Bool) {
     enabled = on
-    if on { install() } else if press == nil { uninstall() }
+    if on { return install() }
+    if press == nil { uninstall() } else { cancel() }
   }
 
   private func install() {
@@ -26,16 +31,24 @@ final class MouseGestures {
       guard let self else { return event }
       return self.filter(event)
     }
+    resigning = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.cancel()
+    }
   }
 
   private func uninstall() {
-    guard let monitor else { return }
-    NSEvent.removeMonitor(monitor)
-    self.monitor = nil
+    if let monitor { NSEvent.removeMonitor(monitor) }
+    if let resigning { NotificationCenter.default.removeObserver(resigning) }
+    monitor = nil
+    resigning = nil
+    replays = []
   }
 
   private func filter(_ event: NSEvent) -> NSEvent? {
-    if replaying { return event }
+    if let replay = replays.first, replay.type == event.type, replay.timestamp == event.timestamp {
+      replays.removeFirst()
+      return event
+    }
     switch event.type {
     case .rightMouseDown: return began(event)
     case .rightMouseDragged:
@@ -51,46 +64,73 @@ final class MouseGestures {
 
   private static let ignoredModifiers: NSEvent.ModifierFlags = [.capsLock, .numericPad, .function]
 
+  private static func overPeek(_ event: NSEvent, in window: NSWindow) -> Bool {
+    if PeekInputRoute.routed?.timestamp == event.timestamp { return true }
+    return PeekStage.stages.allObjects.contains { stage in
+      guard stage.window === window, let parent = stage.superview else { return false }
+      return stage.hitTest(parent.convert(event.locationInWindow, from: nil)) != nil
+    }
+  }
+
   private func began(_ event: NSEvent) -> NSEvent? {
     finish()
+    replays.removeAll { event.timestamp - $0.timestamp > 1 }
     guard enabled, !ShortcutRecorder.shared.isRecording,
       event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(Self.ignoredModifiers).isEmpty,
-      let window = event.window, MouseShortcuts.browserWindowId(of: window) != nil,
-      ArdiaWebView.hasPage(at: event.locationInWindow, in: window)
+      let window = event.window, MouseShortcuts.browserWindowId(of: window) != nil, !Self.overPeek(event, in: window),
+      let tab = ArdiaWebView.pageTabId(at: event.locationInWindow, in: window)
     else {
       lastOutcome = "passed"
       return event
     }
     press = event
+    pageTab = tab
     self.window = window
     strokes = MouseGestureStrokes(start: window.convertPoint(toScreen: event.locationInWindow))
+    closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+      self?.cancel()
+    }
     return nil
   }
 
   private func screenPoint(_ event: NSEvent) -> NSPoint {
-    guard let window = event.window ?? window else { return event.locationInWindow }
+    guard let window = event.window else { return event.locationInWindow }
     return window.convertPoint(toScreen: event.locationInWindow)
   }
 
   private func moved(_ event: NSEvent) {
-    guard strokes.add(screenPoint(event)), strokes.isGesture, let window else { return }
+    guard !cancelled, strokes.add(screenPoint(event)), strokes.isGesture, let window else { return }
     if trail == nil { trail = MouseGestureTrail(over: window) }
     trail?.draw(strokes.points, title: strokes.action?.title)
   }
 
+  private func cancel() {
+    guard press != nil else { return }
+    cancelled = true
+    trail?.close()
+    trail = nil
+  }
+
   private func ended(_ event: NSEvent) -> NSEvent? {
     strokes.add(screenPoint(event))
-    let press = self.press, window = self.window, strokes = self.strokes
+    let press = self.press, window = self.window, pageTab = self.pageTab, strokes = self.strokes, cancelled = self.cancelled
     finish()
+    if cancelled {
+      lastOutcome = "cancelled"
+      return nil
+    }
+    guard let press, let window, let pageTab, window.isVisible, ArdiaWebView.pageTabId(at: press.locationInWindow, in: window) == pageTab else {
+      lastOutcome = "pageGone"
+      return nil
+    }
     guard strokes.isGesture else {
       lastOutcome = "menu"
-      guard let press else { return event }
-      replaying = true
-      NSApp.sendEvent(press)
-      replaying = false
-      return event
+      replays = [press, event]
+      NSApp.postEvent(event, atStart: true)
+      NSApp.postEvent(press, atStart: true)
+      return nil
     }
-    guard let action = strokes.action, let window, let windowId = MouseShortcuts.browserWindowId(of: window),
+    guard let action = strokes.action, let windowId = MouseShortcuts.browserWindowId(of: window),
       let item = MainMenu.commandItem(shortcutId: action.command)
     else {
       lastOutcome = "unrecognized"
@@ -101,14 +141,18 @@ final class MouseGestures {
       return nil
     }
     lastOutcome = action.command
-    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry)
+    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: pageTab.isEmpty ? nil : pageTab)
     return nil
   }
 
   private func finish() {
     press = nil
+    pageTab = nil
+    cancelled = false
     trail?.close()
     trail = nil
+    if let closing { NotificationCenter.default.removeObserver(closing) }
+    closing = nil
     if !enabled { uninstall() }
   }
 
@@ -136,14 +180,19 @@ final class MouseGestures {
     if release, let last = located.last { send(.rightMouseUp, last) }
     return [
       "outcome": release ? lastOutcome : "tracking", "tracking": isTracking, "installed": monitor != nil,
-      "trailWindow": trailWindow as Any, "title": title as Any,
+      "trailWindow": trailWindow as Any, "title": title as Any, "pageTab": pageTab as Any,
     ]
   }
   #endif
 }
 
 final class MouseGestureTrail {
-  private let panel: NSPanel
+  private final class Panel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+  }
+
+  private let panel: Panel
   private let line = CAShapeLayer()
   private let badge = NSView()
   private let label = NSTextField(labelWithString: "")
@@ -152,7 +201,7 @@ final class MouseGestureTrail {
   var title: String? { badge.isHidden ? nil : label.stringValue }
 
   init(over window: NSWindow) {
-    panel = NSPanel(contentRect: window.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    panel = Panel(contentRect: window.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     panel.isReleasedWhenClosed = false
     panel.isOpaque = false
     panel.backgroundColor = .clear
@@ -166,7 +215,6 @@ final class MouseGestureTrail {
     line.lineWidth = 4
     line.lineCap = .round
     line.lineJoin = .round
-    line.contentsScale = window.backingScaleFactor
     content.layer?.addSublayer(line)
     badge.wantsLayer = true
     badge.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor

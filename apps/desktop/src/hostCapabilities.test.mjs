@@ -42,11 +42,11 @@ test("a host that advertises a system backend is called through instead of being
 test("Linux capabilities come from the host contract, and WebKit is never offered", () => {
   assert.deepEqual(linuxCapabilities(fakeHost().host), {
     defaultBrowser: false, launchAtLogin: false, thinScrollBars: false, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: false, performanceRecording: false, taskManager: false, busyTabWatch: false, videoUpscaling: false,
-    commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false,
+    commandScrollZoom: false, mouseGestures: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false,
     unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, selfUpdate: false,
   });
   const full = linuxCapabilities(fakeHost(["ArdiaSystem.isDefaultBrowser", "ArdiaSystem.setAsDefaultBrowser", "ArdiaSystem.launchAtLoginStatus", "ArdiaSystem.setLaunchAtLogin", "ArdiaSystem.setThinScrollBars", "engine.beginTracing", "engine.endTracing", "engine.isTracing", "engine.openTaskManager", "ArdiaApp.openExternalURL"]).host);
-  assert.deepEqual(full, { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: true, performanceRecording: true, taskManager: true, busyTabWatch: false, videoUpscaling: false, commandScrollZoom: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false, unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, selfUpdate: false });
+  assert.deepEqual(full, { defaultBrowser: true, launchAtLogin: true, thinScrollBars: true, webkit: false, cliControl: false, cliInstall: false, userScripts: false, externalLinks: true, performanceRecording: true, taskManager: true, busyTabWatch: false, videoUpscaling: false, commandScrollZoom: false, mouseGestures: false, littleArdiaNewTabLinks: false, peekOtherSites: false, popupsOpenAsTabs: false, haptics: false, linksFromOtherApps: false, dictation: false, fullScreen: false, pageEdits: false, unloadIdleProfiles: false, hiddenElements: false, blockAutoplayEverywhere: false, selfUpdate: false });
   const routed = linuxCapabilities(fakeHost(["webView.setCommandScrollZoom", "webView.setLittleArdiaOpensNewTabLinks", "webView.setPeekOtherSiteTabs", "ArdiaSystem.hapticTick", LINKS_FROM_OTHER_APPS, DICTATION_METHOD]).host);
   assert.deepEqual([routed.commandScrollZoom, routed.littleArdiaNewTabLinks, routed.peekOtherSites, routed.haptics, routed.linksFromOtherApps, routed.dictation], [true, true, true, true, true, true]);
   assert.equal(linuxCapabilities(undefined).taskManager, false);
@@ -68,14 +68,14 @@ test("unavailable choices map to exact settings ids and the Web engine rows", ()
   const routedRows = { commandScrollZoom: true, littleArdiaNewTabLinks: true, peekOtherSites: true, popupsOpenAsTabs: true, linksFromOtherApps: true };
   const webEngine = ["advanced.pageEngine", "advanced.websiteEngines"];
   const none = linuxCapabilities(fakeHost().host);
-  assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "tabs.videoUpscaling"].sort());
+  assert.deepEqual([...unavailableSettingIds(none, ids)].sort(), [...unrouted, ...webEngine, "advanced.ardiaCommand", "advanced.compactCliPill", "advanced.showCliPill", "general.autoUpdate", "general.defaultBrowser", "general.openAtLogin", "shortcuts.mouseGestures", "tabs.videoUpscaling"].sort());
   for (const [capability, rows] of Object.entries({ commandScrollZoom: ["advanced.commandScrollZoom"], littleArdiaNewTabLinks: ["tabs.littleArdiaOpensNewTabLinks"], peekOtherSites: ["tabs.peekLinksToOtherSites"], popupsOpenAsTabs: ["tabs.popupsOpenAsTabs"], linksFromOtherApps: ["tabs.openLinksInLittleArdia", "tabs.appLinksFirst"] })) {
     const shown = unavailableSettingIds({ ...none, [capability]: true }, ids);
     assert.deepEqual(unrouted.filter((id) => !shown.has(id)), rows, capability);
   }
   assert.deepEqual([...unavailableSettingIds({ ...none, webkit: true }, ids)].filter((id) => webEngine.includes(id)), []);
   assert.deepEqual([...unavailableSettingIds(none, ["general.defaultBrowser"])].filter((id) => webEngine.includes(id)), []);
-  assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, cliControl: true, cliInstall: true, videoUpscaling: true, ...routedRows }, ids)].sort(), [...webEngine, "general.autoUpdate"]);
+  assert.deepEqual([...unavailableSettingIds({ ...none, defaultBrowser: true, launchAtLogin: true, cliControl: true, cliInstall: true, videoUpscaling: true, ...routedRows }, ids)].sort(), [...webEngine, "general.autoUpdate", "shortcuts.mouseGestures"].sort());
   assert.equal(unavailableSettingIds({ ...none, selfUpdate: true }, ids).has("general.autoUpdate"), false, "an engine that installs updates lets Settings decide from the install kind");
   const cliRows = (capabilities) => [...unavailableSettingIds(capabilities, ids)].filter((id) => id === "advanced.ardiaCommand" || id === "advanced.showCliPill" || id === "advanced.compactCliPill").sort();
   assert.deepEqual(cliRows({ ...none, cliControl: true }), []);

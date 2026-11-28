@@ -43,6 +43,19 @@ final class MouseGestureStrokesTests: XCTestCase {
     XCTAssertEqual(wobbly.action?.title, "Back")
   }
 
+  func testANearlyStraightDiagonalNeverTurnsIntoTwoStrokes() {
+    var diagonal = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    for point in [CGPoint(x: 24, y: 23), CGPoint(x: 47, y: 47), CGPoint(x: 71, y: 70)] { diagonal.add(point) }
+    XCTAssertTrue(diagonal.isGesture)
+    XCTAssertEqual(diagonal.directions, [])
+    XCTAssertNil(diagonal.action)
+  }
+
+  func testAStrokeThatLeansUnderAThirdOfAnAxisStillCounts() {
+    XCTAssertEqual(strokes([(-120, 40)]).action?.command, "back")
+    XCTAssertEqual(strokes([(0, -100), (100, -30)]).action?.command, "closeTab")
+  }
+
   func testAShapeWithNoActionOrTooManyStrokesRunsNothingButIsStillAGesture() {
     let unknown = strokes([(0, -100), (0, 100)])
     XCTAssertTrue(unknown.isGesture)

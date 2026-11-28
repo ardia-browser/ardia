@@ -184,8 +184,25 @@ NSWindow *AppWindowAt(NSPoint screen) {
   }];
 }
 
-+ (BOOL)hasPageAt:(NSPoint)locationInWindow window:(NSWindow *)window {
-  return window && EnginePageViewAt(window, locationInWindow) != nil;
++ (nullable NSString *)pageTabIdAt:(NSPoint)locationInWindow window:(NSWindow *)window {
+  NSView *content = window.contentView;
+  NSView *hit = content ? [content hitTest:[content.superview convertPoint:locationInWindow fromView:nil]] : nil;
+  for (NSView *view = hit; view; view = view.superview) {
+    if ([view isKindOfClass:ArdiaWebView.class]) {
+      ArdiaWebView *page = (ArdiaWebView *)view;
+      if (page->_devtoolsView && [hit isDescendantOf:page->_devtoolsView]) return nil;
+      return page.transferKey ?: @"";
+    }
+    if ([view respondsToSelector:@selector(zoomByCommandScroll:)]) {
+      for (NSView *owner = view; owner; owner = owner.superview) {
+        if (![owner respondsToSelector:@selector(transferKey)]) continue;
+        id key = [owner valueForKey:@"transferKey"];
+        return [key isKindOfClass:NSString.class] ? key : @"";
+      }
+      return @"";
+    }
+  }
+  return nil;
 }
 
 + (void)setCommandScrollZoomEnabled:(BOOL)enabled {

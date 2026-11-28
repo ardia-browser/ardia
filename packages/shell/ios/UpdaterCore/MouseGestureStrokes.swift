@@ -11,6 +11,7 @@ struct MouseGestureStrokes {
 
   static let stepDistance = 24.0
   static let maxStrokes = 2
+  static let dominance = 1.5
 
   static let actions: [[Direction]: Action] = [
     [.left]: Action(command: "back", title: "Back", telemetry: "back"),
@@ -25,14 +26,13 @@ struct MouseGestureStrokes {
 
   private(set) var points: [CGPoint]
   private(set) var directions: [Direction] = []
+  private(set) var isGesture = false
   private var anchor: CGPoint
 
   init(start: CGPoint) {
     points = [start]
     anchor = start
   }
-
-  var isGesture: Bool { !directions.isEmpty }
 
   var action: Action? { directions.count <= Self.maxStrokes ? Self.actions[directions] : nil }
 
@@ -41,8 +41,11 @@ struct MouseGestureStrokes {
     guard point != points.last else { return false }
     points.append(point)
     let dx = Double(point.x - anchor.x), dy = Double(point.y - anchor.y)
-    guard max(abs(dx), abs(dy)) >= Self.stepDistance else { return true }
+    let major = max(abs(dx), abs(dy)), minor = min(abs(dx), abs(dy))
+    guard major >= Self.stepDistance else { return true }
     anchor = point
+    isGesture = true
+    guard major >= Self.dominance * minor else { return true }
     let direction: Direction = abs(dx) >= abs(dy) ? (dx < 0 ? .left : .right) : (dy > 0 ? .up : .down)
     if directions.last != direction { directions.append(direction) }
     return true

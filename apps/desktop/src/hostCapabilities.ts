@@ -15,6 +15,7 @@ export type LinuxCapabilities = {
   busyTabWatch: boolean;
   videoUpscaling: boolean;
   commandScrollZoom: boolean;
+  mouseGestures: boolean;
   littleArdiaNewTabLinks: boolean;
   peekOtherSites: boolean;
   popupsOpenAsTabs: boolean;
@@ -70,6 +71,7 @@ export function linuxCapabilities(host: ArdiaHost | undefined = ardiaHost): Linu
     busyTabWatch: has("engine.childProcessCpu"),
     videoUpscaling: false,
     commandScrollZoom: has("webView.setCommandScrollZoom"),
+    mouseGestures: false,
     littleArdiaNewTabLinks: has("webView.setLittleArdiaOpensNewTabLinks"),
     peekOtherSites: has("webView.setPeekOtherSiteTabs"),
     popupsOpenAsTabs: has("webView.setPopupsOpenAsTabs"),
@@ -105,6 +107,7 @@ export function unavailableSettingIds(capabilities: LinuxCapabilities, settingId
   if (!capabilities.videoUpscaling) ids.add("tabs.videoUpscaling");
   if (!capabilities.cliControl) for (const id of ["advanced.ardiaCommand", "advanced.showCliPill", "advanced.compactCliPill"]) ids.add(id);
   if (!capabilities.commandScrollZoom) ids.add("advanced.commandScrollZoom");
+  if (!capabilities.mouseGestures) ids.add("shortcuts.mouseGestures");
   if (!capabilities.peekOtherSites) ids.add("tabs.peekLinksToOtherSites");
   if (!capabilities.popupsOpenAsTabs) ids.add("tabs.popupsOpenAsTabs");
   if (!capabilities.littleArdiaNewTabLinks) ids.add("tabs.littleArdiaOpensNewTabLinks");

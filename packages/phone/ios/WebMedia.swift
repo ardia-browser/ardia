@@ -293,25 +293,53 @@ final class WebMedia {
     let floating = settings.automaticPictureInPicture && Self.pictureInPictureSupported && !WebVideoFloat.isPresentingWebVideo
       ? playing.filter({ $0.1.report.hasVideo && $0.1.report.canPictureInPicture && !$0.1.report.inPictureInPicture && !$0.1.report.isFullscreen && host.webView($0.0)?.window != nil }).max(by: { $0.1.startedAt < $1.1.startedAt })
       : nil
+    let floatingFrame = floating.map { PageMediaDeparture.Frame(pageID: $0.0, token: $0.1.report.token) }
+    let departed = departure
+    if let floatingFrame { automatic = (floatingFrame.pageID, floatingFrame.token, departed) }
     if settings.keepsPlaying {
       for (pageID, frame) in playing { run(.leave, pageID: pageID, token: frame.report.token, seconds: nil) }
+      if let floatingFrame, !run(.pictureInPicture, pageID: floatingFrame.pageID, token: floatingFrame.token, seconds: nil) { automatic = nil }
     } else {
-      let departing = playing.map { PageMediaDeparture.Playing(pageID: $0.0, token: $0.1.report.token, inPictureInPicture: $0.1.report.inPictureInPicture, isFullscreen: $0.1.report.isFullscreen) }
-      let floatingOne = floating.map { PageMediaDeparture.Playing(pageID: $0.0, token: $0.1.report.token) }
-      for one in PageMediaDeparture.pauses(departing, keepsPlaying: false, pictureInPictureSupported: Self.pictureInPictureSupported, floating: floatingOne) where run(.pause, pageID: one.pageID, token: one.token, seconds: nil) {
-        report(.pausedOnLeaving, pageID: one.pageID)
+      let everyFrame = knownFrames()
+      Task { @MainActor [weak self] in
+        guard let self else { return }
+        var accepted = false
+        if let floatingFrame { accepted = await self.answer(.pictureInPicture, pageID: floatingFrame.pageID, token: floatingFrame.token, seconds: nil) as? Bool == true }
+        await self.depart(PageMediaDeparture.orders(everyFrame, keepsPlaying: false, pictureInPictureSupported: Self.pictureInPictureSupported, floating: floatingFrame, floatAccepted: accepted))
       }
     }
-    guard let (pageID, frame) = floating else { return }
-    guard run(.pictureInPicture, pageID: pageID, token: frame.report.token, seconds: nil) else { return }
-    let departed = departure
-    automatic = (pageID, frame.report.token, departed)
+    guard let floatingFrame else { return }
     Task { @MainActor [weak self] in
       try? await Task.sleep(for: .seconds(Self.pictureInPictureAnswerLimit))
       guard let self, let automatic = self.automatic, automatic.departure == departed else { return }
       let started = self.frames[automatic.pageID]?[automatic.token]?.report.inPictureInPicture == true
       self.report(started ? .pictureInPictureStarted : .pictureInPictureRefused, pageID: automatic.pageID)
+      let inFront = UIApplication.shared.applicationState == .active
+      if let order = PageMediaDeparture.afterFloatCheck(floatingFrame, floated: started || WebVideoFloat.isPresentingWebVideo, keepsPlaying: self.settings.keepsPlaying, inFront: inFront, pictureInPictureSupported: Self.pictureInPictureSupported) {
+        await self.depart([order])
+      }
     }
+  }
+
+  private func knownFrames() -> [PageMediaDeparture.Frame] {
+    let reporting = frames.flatMap { pageID, pageFrames in pageFrames.keys.map { PageMediaDeparture.Frame(pageID: pageID, token: $0) } }
+    let announced = known.flatMap { pageID, pageFrames in pageFrames.keys.map { PageMediaDeparture.Frame(pageID: pageID, token: $0) } }
+    return reporting + announced
+  }
+
+  private func answer(_ command: PageMediaCommand, pageID: String, token: String, seconds: Int?) async -> Any? {
+    guard let (webView, frame, script) = prepare(command, pageID: pageID, token: token, seconds: seconds) else { return nil }
+    return try? await webView.evaluateJavaScript(script, in: frame, contentWorld: .page)
+  }
+
+  private func depart(_ orders: [PageMediaDeparture.Order]) async {
+    var pausedPages: [String] = []
+    for order in orders {
+      let paused = (await answer(.depart, pageID: order.frame.pageID, token: order.frame.token, seconds: order.argument) as? NSNumber)?.intValue ?? 0
+      Self.trace("departed \(order.frame.pageID) \(order.frame.token) paused=\(paused)")
+      if paused > 0, !pausedPages.contains(order.frame.pageID) { pausedPages.append(order.frame.pageID) }
+    }
+    for pageID in pausedPages { report(.pausedOnLeaving, pageID: pageID) }
   }
 
   private func left() {

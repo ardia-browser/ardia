@@ -160,6 +160,7 @@ public enum PageMediaCommand: String, CaseIterable, Sendable {
   case leave
   case returned
   case keepPlaying
+  case depart
 
   public static let skipChoices: [Int] = [10, 15, 30]
   public static let standardSkip = 15
@@ -172,8 +173,10 @@ public enum PageMediaCommand: String, CaseIterable, Sendable {
   public func script(token: String, seconds: Int?) -> String? {
     guard PageMediaMessage.token(token) != nil else { return nil }
     if self == .skip, seconds == nil { return nil }
-    let argument = self == .skip || self == .keepPlaying ? String(seconds ?? 0) : "0"
-    return "typeof window.\(PageMediaScript.commandName) === \"function\" && window.\(PageMediaScript.commandName)(\"\(token)\", \"\(rawValue)\", \(argument)) === true"
+    let argument = self == .skip || self == .keepPlaying || self == .depart ? String(seconds ?? 0) : "0"
+    let call = "window.\(PageMediaScript.commandName)(\"\(token)\", \"\(rawValue)\", \(argument))"
+    if self == .depart { return "typeof window.\(PageMediaScript.commandName) === \"function\" ? (Number(\(call)) || 0) : 0" }
+    return "typeof window.\(PageMediaScript.commandName) === \"function\" && \(call) === true"
   }
 }
 
@@ -288,6 +291,7 @@ public enum PageMediaScript {
     let plays = 0;
     let current = null;
     const recent = [];
+    const playingNow = new Set();
     const wired = new WeakMap();
     const heard = new WeakSet();
     const fresh = new WeakSet();
@@ -447,7 +451,11 @@ public enum PageMediaScript {
       const at = recent.indexOf(element);
       if (at >= 0) recent.splice(at, 1);
       recent.push(element);
-      if (recent.length > RECENT_LIMIT) recent.shift();
+      while (recent.length > RECENT_LIMIT) {
+        const idle = recent.findIndex((one) => !(isPlaying(one) && controllable(one)));
+        if (idle < 0) break;
+        recent.splice(idle, 1);
+      }
       if (recovering.has(element)) { recovering.delete(element); return; }
       if (current !== element || lastSent.indexOf('"state":"paused"') >= 0) fresh.add(element);
     };
@@ -464,6 +472,8 @@ public enum PageMediaScript {
       if (known) return known;
       const changed = (event) => {
         const kind = event.type;
+        if (isPlaying(element)) playingNow.add(element);
+        else playingNow.delete(element);
         if (kind === "playing" || kind === "play") {
           if (hasAudio(element)) heard.add(element);
           else if (kind === "playing") listenForSound(element);
@@ -577,6 +587,20 @@ public enum PageMediaScript {
           keepsPlaying = Number(seconds) === 1;
           if (!keepsPlaying) { leaving = null; release(); }
           return true;
+        case "depart": {
+          const flags = Number(seconds) || 0;
+          const spared = flags & 1 ? element : null;
+          const everyOne = new Set(playingNow);
+          try { document.querySelectorAll("audio, video").forEach((one) => everyOne.add(one)); } catch (_) {}
+          let paused = 0;
+          everyOne.forEach((one) => {
+            if (!isPlaying(one)) { playingNow.delete(one); return; }
+            if (one === spared || inPictureInPicture(one) || (flags & 2 && one.webkitDisplayingFullscreen === true)) return;
+            try { originalPause.call(one); paused += 1; } catch (_) {}
+          });
+          leaving = null;
+          return paused;
+        }
         case "previous":
         case "next": {
           const handler = actions.get(name === "previous" ? "previoustrack" : "nexttrack");
@@ -631,26 +655,35 @@ public enum PageMediaScript {
 }
 
 public enum PageMediaDeparture {
-  public struct Playing: Sendable, Equatable {
+  public struct Frame: Hashable, Sendable {
     public var pageID: String
     public var token: String
-    public var inPictureInPicture: Bool
-    public var isFullscreen: Bool
 
-    public init(pageID: String, token: String, inPictureInPicture: Bool = false, isFullscreen: Bool = false) {
+    public init(pageID: String, token: String) {
       self.pageID = pageID
       self.token = token
-      self.inPictureInPicture = inPictureInPicture
-      self.isFullscreen = isFullscreen
     }
   }
 
-  public static func pauses(_ playing: [Playing], keepsPlaying: Bool, pictureInPictureSupported: Bool, floating: Playing?) -> [Playing] {
+  public struct Order: Equatable, Sendable {
+    public var frame: Frame
+    public var sparesPicked: Bool
+    public var sparesFullscreen: Bool
+
+    public var argument: Int { (sparesPicked ? 1 : 0) | (sparesFullscreen ? 2 : 0) }
+  }
+
+  public static func orders(_ frames: [Frame], keepsPlaying: Bool, pictureInPictureSupported: Bool, floating: Frame?, floatAccepted: Bool) -> [Order] {
     guard !keepsPlaying else { return [] }
-    return playing.filter { one in
-      let goesIntoPictureInPicture = one.inPictureInPicture || (pictureInPictureSupported && one.isFullscreen) || (one.pageID == floating?.pageID && one.token == floating?.token)
-      return !goesIntoPictureInPicture
+    var seen = Set<Frame>()
+    return frames.filter { seen.insert($0).inserted }.map { frame in
+      Order(frame: frame, sparesPicked: frame == floating && floatAccepted, sparesFullscreen: pictureInPictureSupported)
     }
+  }
+
+  public static func afterFloatCheck(_ floating: Frame, floated: Bool, keepsPlaying: Bool, inFront: Bool, pictureInPictureSupported: Bool) -> Order? {
+    guard !keepsPlaying, !floated, !inFront else { return nil }
+    return Order(frame: floating, sparesPicked: false, sparesFullscreen: pictureInPictureSupported)
   }
 }
 

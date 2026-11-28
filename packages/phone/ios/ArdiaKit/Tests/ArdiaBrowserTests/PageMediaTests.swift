@@ -456,6 +456,52 @@ struct PageMediaScriptTests {
     #expect(try await seen(webView) == ["hidden", "1"])
   }
 
+  func depart(_ webView: WKWebView, token: String, flags: Int) async throws -> Int {
+    try await webView.evaluateJavaScript(try #require(PageMediaCommand.depart.script(token: token, seconds: flags)), in: nil, contentWorld: .page) as? Int ?? -1
+  }
+
+  func paused(_ webView: WKWebView, _ ids: [String]) async throws -> [Bool] {
+    let reads = ids.map { "document.getElementById('\($0)').paused" }.joined(separator: ", ")
+    return try await run(webView, "return [\(reads)]") as? [Bool] ?? []
+  }
+
+  @Test func departingPausesEveryPlayingElementIncludingOnesNeverReported() async throws {
+    let (webView, messages) = try await load(keepsPlaying: false)
+    let report = try await startPlaying(webView, messages)
+    _ = try await run(webView, "const beep = document.getElementById('beep'); beep.loop = true; await beep.play(); await document.getElementById('b').play(); return true;")
+    try await until { messages.reports().last?.duration.map { abs($0 - 9) < 0.1 } == true }
+    #expect(try await paused(webView, ["a", "b", "beep"]) == [false, false, false])
+    #expect(try await depart(webView, token: report.token, flags: 0) == 3)
+    #expect(try await paused(webView, ["a", "b", "beep"]) == [true, true, true])
+    #expect(try await depart(webView, token: report.token, flags: 0) == 0)
+  }
+
+  @Test func departingSparesThePickedElementOnlyWhenAskedAndOneAlreadyFloating() async throws {
+    let (webView, messages) = try await load(keepsPlaying: false)
+    let report = try await startPlaying(webView, messages)
+    _ = try await run(webView, "await document.getElementById('b').play(); Object.defineProperty(document.getElementById('beep'), 'webkitPresentationMode', { value: 'picture-in-picture' }); await document.getElementById('beep').play(); return true;")
+    try await until { messages.reports().last?.duration.map { abs($0 - 9) < 0.1 } == true }
+    #expect(try await depart(webView, token: report.token, flags: 1) == 1)
+    #expect(try await paused(webView, ["a", "b", "beep"]) == [true, false, false])
+    #expect(try await depart(webView, token: "zzzzzzzzzz", flags: 0) == 0)
+  }
+
+  @Test func shortSoundsNeverPushOutALongOneStillPlaying() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    _ = try await startPlaying(webView, messages)
+    _ = try await run(webView, """
+      for (let i = 0; i < 9; i++) { const ding = document.createElement('audio'); ding.dataset.duration = '1'; document.body.appendChild(ding); await ding.play(); await ding.pause(); }
+      await document.getElementById('b').play();
+      return true;
+      """)
+    try await until { messages.reports().last?.duration.map { abs($0 - 9) < 0.1 } == true }
+    _ = try await run(webView, "document.getElementById('b').pause(); return true;")
+    try await until { messages.reports().last?.duration.map { abs($0 - 8) < 0.1 } == true }
+    #expect(messages.reports().last?.state == .playing)
+    try await hide(webView)
+    #expect(try await seen(webView) == ["visible", "0"])
+  }
+
   @Test func thePageCannotTakeTheCommandEntry() async throws {
     let (webView, _) = try await load(keepsPlaying: true)
     let kept = try await run(webView, "try { window.__ardiaMediaCommand = () => 'mine'; } catch (_) {} return window.__ardiaMediaCommand('zzzzzzzzzz', 'play', 0) === false;") as? Bool
@@ -533,19 +579,31 @@ struct MediaRosterTests {
 }
 
 struct PageMediaDepartureTests {
-  typealias Playing = PageMediaDeparture.Playing
+  typealias Frame = PageMediaDeparture.Frame
 
-  @Test func withTheSettingOffLeavingPausesEverythingPlayingButAVideoGoingIntoPictureInPicture() {
-    let song = Playing(pageID: "music", token: "aaaaaa")
-    let floated = Playing(pageID: "video", token: "bbbbbb")
-    let alreadyFloating = Playing(pageID: "pip", token: "cccccc", inPictureInPicture: true)
-    let fullScreen = Playing(pageID: "full", token: "dddddd", isFullscreen: true)
-    let all = [song, floated, alreadyFloating, fullScreen]
-    #expect(PageMediaDeparture.pauses(all, keepsPlaying: false, pictureInPictureSupported: true, floating: Playing(pageID: "video", token: "bbbbbb")) == [song])
-    #expect(PageMediaDeparture.pauses(all, keepsPlaying: false, pictureInPictureSupported: false, floating: nil) == [song, floated, fullScreen])
+  @Test func withTheSettingOffEveryKnownFrameIsToldToPauseAndOnlyAnAcceptedFloatIsSpared() {
+    let music = Frame(pageID: "music", token: "aaaaaa")
+    let video = Frame(pageID: "video", token: "bbbbbb")
+    let quiet = Frame(pageID: "quiet", token: "cccccc")
+    let accepted = PageMediaDeparture.orders([music, video, quiet, music], keepsPlaying: false, pictureInPictureSupported: true, floating: video, floatAccepted: true)
+    #expect(accepted.map(\.frame) == [music, video, quiet])
+    #expect(accepted.map(\.argument) == [2, 3, 2])
+    let refused = PageMediaDeparture.orders([music, video], keepsPlaying: false, pictureInPictureSupported: false, floating: video, floatAccepted: false)
+    #expect(refused.map(\.argument) == [0, 0])
+    #expect(PageMediaDeparture.orders([music], keepsPlaying: true, pictureInPictureSupported: true, floating: nil, floatAccepted: false).isEmpty)
   }
 
-  @Test func withTheSettingOnLeavingPausesNothing() {
-    #expect(PageMediaDeparture.pauses([Playing(pageID: "music", token: "aaaaaa")], keepsPlaying: true, pictureInPictureSupported: false, floating: nil).isEmpty)
+  @Test func aFloatThatNeverStartedIsPausedOnlyWhileStillAwayWithTheSettingOff() {
+    let video = Frame(pageID: "video", token: "bbbbbb")
+    #expect(PageMediaDeparture.afterFloatCheck(video, floated: false, keepsPlaying: false, inFront: false, pictureInPictureSupported: true) == PageMediaDeparture.Order(frame: video, sparesPicked: false, sparesFullscreen: true))
+    #expect(PageMediaDeparture.afterFloatCheck(video, floated: true, keepsPlaying: false, inFront: false, pictureInPictureSupported: true) == nil)
+    #expect(PageMediaDeparture.afterFloatCheck(video, floated: false, keepsPlaying: false, inFront: true, pictureInPictureSupported: true) == nil)
+    #expect(PageMediaDeparture.afterFloatCheck(video, floated: false, keepsPlaying: true, inFront: false, pictureInPictureSupported: true) == nil)
+  }
+
+  @Test func theDepartScriptReturnsANumber() throws {
+    let script = try #require(PageMediaCommand.depart.script(token: "abc123def0", seconds: 3))
+    #expect(script.contains("\"depart\", 3)"))
+    #expect(script.hasSuffix(": 0"))
   }
 }

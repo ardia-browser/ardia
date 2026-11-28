@@ -1,6 +1,6 @@
 export type ShotTile = { uri: string; top: number; height: number };
 
-export type Shot = { id: string; uri: string; width: number; height: number; screens: number; complete: boolean; tiles: ShotTile[] };
+export type Shot = { id: string; uri: string; width: number; height: number; screens: number; complete: boolean; capped: boolean; tiles: ShotTile[] };
 
 export type SavedShot = { uri: string; width: number; height: number };
 
@@ -41,7 +41,7 @@ function tileOf(raw: unknown, folder: string, index: number): ShotTile | null {
 
 export function shotOf(raw: unknown): Shot | null {
   const fields = record(raw);
-  if (!fields || typeof fields.id !== "string" || !ID.test(fields.id) || typeof fields.uri !== "string" || typeof fields.complete !== "boolean") return null;
+  if (!fields || typeof fields.id !== "string" || !ID.test(fields.id) || typeof fields.uri !== "string" || typeof fields.complete !== "boolean" || typeof fields.capped !== "boolean" || (fields.complete && fields.capped)) return null;
   const folder = captureFolder(fields.uri, fields.id);
   const width = side(fields.width);
   const height = side(fields.height);
@@ -56,14 +56,14 @@ export function shotOf(raw: unknown): Shot | null {
     next = tile.top + tile.height;
   }
   if (next !== height) return null;
-  return { id: fields.id, uri: fields.uri, width, height, screens, complete: fields.complete, tiles };
+  return { id: fields.id, uri: fields.uri, width, height, screens, complete: fields.complete, capped: fields.capped, tiles };
 }
 
 const screensWord = (screens: number) => (screens === 1 ? "1 screen" : `${screens} screens`);
 
-export const shotLabel = (shot: Pick<Shot, "screens" | "complete">) => {
+export const shotLabel = (shot: Pick<Shot, "screens" | "complete" | "capped">) => {
   if (shot.complete) return screensWord(shot.screens);
-  return shot.screens >= MAX_SHOT_SCREENS ? `First ${screensWord(shot.screens)}` : `Stopped after ${screensWord(shot.screens)}`;
+  return shot.capped ? `First ${screensWord(shot.screens)}` : `Stopped after ${screensWord(shot.screens)}`;
 };
 
 export function savedShotOf(raw: unknown): SavedShot | null {

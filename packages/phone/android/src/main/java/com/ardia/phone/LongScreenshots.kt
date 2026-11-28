@@ -111,7 +111,11 @@ internal object LongScreenshots {
         var written: Written? = null
         var published = false
         try {
-            if (evaluateNumber(web, script(MARK, held)) != 1) throw failure("The page didn't answer")
+            when (evaluateNumber(web, script(MARK, held))) {
+                1 -> Unit
+                2 -> throw failure("Zoom out to take a long screenshot")
+                else -> throw failure("The page didn't answer")
+            }
             val stitched = try {
                 stitch(context, page, held)
             } finally {
@@ -154,7 +158,7 @@ internal object LongScreenshots {
 
     private class Written(val session: Session, val result: Map<String, Any?>)
 
-    private class Stitched(val bitmap: Bitmap, val screens: Int, val scale: Double, val complete: Boolean)
+    private class Stitched(val bitmap: Bitmap, val screens: Int, val scale: Double, val complete: Boolean, val capped: Boolean)
 
     private class Seen(val pixels: IntArray, val height: Int, val scrolled: Int, val position: Int)
 
@@ -273,7 +277,7 @@ internal object LongScreenshots {
             val height = LongScreenshotPlan.rowIn(output, filled)
             if (height <= 0) throw failure("Nothing was captured")
             if (height < bitmap.height) bitmap.reconfigure(bitmap.width, height, Bitmap.Config.ARGB_8888)
-            return Stitched(bitmap, LongScreenshotPlan.screens(filled, viewport), output.scale, ending == LongScreenshotPlan.Ending.Complete && !capped)
+            return Stitched(bitmap, LongScreenshotPlan.screens(filled, viewport), output.scale, ending == LongScreenshotPlan.Ending.Complete && !capped, capped && ending == LongScreenshotPlan.Ending.Complete)
         } catch (error: Throwable) {
             bitmap.recycle()
             throw error
@@ -386,6 +390,7 @@ internal object LongScreenshots {
                 "height" to bitmap.height.toDouble(),
                 "screens" to stitched.screens.toDouble(),
                 "complete" to stitched.complete,
+                "capped" to stitched.capped,
                 "tiles" to tiles,
             ))
         } catch (error: Throwable) {
@@ -536,13 +541,13 @@ internal object LongScreenshots {
 
     private const val SCROLL_PLACEHOLDER = "ARDIA_SCROLL_Y"
 
-    private const val MARK = """(function(k){var t=Symbol.for(k);if(Object.prototype.hasOwnProperty.call(window,t))return 0;Object.defineProperty(window,t,{value:{list:[]},configurable:true,enumerable:false,writable:false});return 1;})('ARDIA_CAPTURE_KEY')"""
+    private const val MARK = """(function(k){var t=Symbol.for(k);if(Object.prototype.hasOwnProperty.call(window,t))return 0;if(window.visualViewport&&window.visualViewport.scale>1.01)return 2;Object.defineProperty(window,t,{value:{list:[]},configurable:true,enumerable:false,writable:false});return 1;})('ARDIA_CAPTURE_KEY')"""
 
     private const val HIDE_FIXED = """(function(k){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var list=window[t].list;var all=document.querySelectorAll('body *');for(var i=0;i<all.length;i++){var e=all[i],p=getComputedStyle(e).position;if(p!=='fixed'&&p!=='sticky')continue;list.push([e,e.getAttribute('style')]);e.style.setProperty('transition','none','important');if(p==='fixed'){e.style.setProperty('opacity','0','important');}else{e.style.setProperty('position','relative','important');e.style.setProperty('inset','auto','important');}}return list.length;})('ARDIA_CAPTURE_KEY')"""
 
-    private const val SCROLL = """(function(k,y){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var se=document.scrollingElement||document.documentElement,a=se.getAttribute('style');se.style.setProperty('scroll-behavior','auto','important');se.scrollTop=y;if(a===null)se.removeAttribute('style');else se.setAttribute('style',a);return Math.round(se.scrollTop);})('ARDIA_CAPTURE_KEY',ARDIA_SCROLL_Y)"""
+    private const val SCROLL = """(function(k,y){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var se=document.scrollingElement||document.documentElement,r=document.documentElement,els=r===se?[r]:[r,se],kept=[];for(var j=0;j<els.length;j++){kept.push(els[j].getAttribute('style'));els[j].style.setProperty('scroll-behavior','auto','important');}se.scrollTop=y;for(var j=0;j<els.length;j++){if(kept[j]===null)els[j].removeAttribute('style');else els[j].setAttribute('style',kept[j]);}return Math.round(se.scrollTop);})('ARDIA_CAPTURE_KEY',ARDIA_SCROLL_Y)"""
 
-    private const val SHOW_FIXED = """(function(k,y){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var list=window[t].list,n=list.length;for(var i=0;i<n;i++){var e=list[i][0],v=list[i][1];if(v===null)e.removeAttribute('style');else e.setAttribute('style',v);}list.length=0;if(y!==null){var se=document.scrollingElement||document.documentElement,a=se.getAttribute('style');se.style.setProperty('scroll-behavior','auto','important');se.scrollTop=y;if(a===null)se.removeAttribute('style');else se.setAttribute('style',a);}return n;})('ARDIA_CAPTURE_KEY',ARDIA_SCROLL_Y)"""
+    private const val SHOW_FIXED = """(function(k,y){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return -1;var list=window[t].list,n=list.length;for(var i=0;i<n;i++){var e=list[i][0],v=list[i][1];if(v===null)e.removeAttribute('style');else e.setAttribute('style',v);}list.length=0;if(y!==null){var se=document.scrollingElement||document.documentElement,r=document.documentElement,els=r===se?[r]:[r,se],kept=[];for(var j=0;j<els.length;j++){kept.push(els[j].getAttribute('style'));els[j].style.setProperty('scroll-behavior','auto','important');}se.scrollTop=y;for(var j=0;j<els.length;j++){if(kept[j]===null)els[j].removeAttribute('style');else els[j].setAttribute('style',kept[j]);}}return n;})('ARDIA_CAPTURE_KEY',ARDIA_SCROLL_Y)"""
 
     private const val DROP = """(function(k){var t=Symbol.for(k);if(!Object.prototype.hasOwnProperty.call(window,t))return 0;delete window[t];return 1;})('ARDIA_CAPTURE_KEY')"""
 }

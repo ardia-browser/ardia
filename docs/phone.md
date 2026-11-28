@@ -2127,8 +2127,11 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   is complete only when its rows cover the page's height within 24 px (`LongScreenshotPlan.ending`); anything else is
   partial, which the preview says ("Stopped after 3 screens", `complete: false` from the module), and only one screen
   on a taller page is a failure with its toast. A page longer than 20 screens is captured to the cap and reported
-  partial too (`LongScreenshotPlan.capped`), so the preview says "First 20 screens" rather than pass the cap off as
-  the whole page. Before
+  partial too (`LongScreenshotPlan.capped`, sent as `capped: true`), so the preview says "First 20 screens" rather
+  than pass the cap off as the whole page; a stitch that stops just short of the cap still says "Stopped after 20
+  screens". A pinch-zoomed page (`visualViewport.scale` above 1.01) is refused before it is marked, with "Zoom out to
+  take a long screenshot": the scripts move the layout viewport, which at 2× leaves the bottom of the page and the
+  restored position off by the visual viewport's offset. Before
   the first step a quick pass scrolls to the bottom and back, so lazily loaded images and
   Wikipedia's Related Articles are in place before anything is drawn; without it they appeared between two steps and
   the last match failed, ending the picture above them. The pass moves an eighth of a screen at a time and waits for
@@ -2159,8 +2162,9 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   capture stops stepping and restores the scroll position, the scroll bar and the styles at once.
 - **Which document.** At the start the capture sets a token on `window` under a `Symbol.for` key made for that capture,
   and treats the page as the same document exactly while that token is there. Every scroll happens in the same script
-  as the check (`SCROLL`: `scrollTop` on the scrolling element with `scroll-behavior` forced to `auto` for that one
-  assignment and the page's own `style` attribute put back, never through the page's `window.scrollTo`), and the
+  as the check (`SCROLL`: `scrollTop` on the scrolling element with `scroll-behavior` forced to `auto` on it and on the root
+  element for that one assignment, since the viewport follows the root's value even in quirks mode where the body
+  scrolls, and each element's own `style` attribute put back, never through the page's `window.scrollTo`), and the
   restore puts back the styles and the scroll in one script too. The result is published only if `DROP`, which removes
   the token, found it there; on any other outcome (a cancel, a timeout, a missing token) the files are deleted and
   nothing stays published. A reload, a redirect or another page drops the window and the token, so the capture fails and

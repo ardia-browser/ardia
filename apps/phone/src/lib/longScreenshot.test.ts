@@ -13,6 +13,7 @@ const native = {
   height: 5000,
   screens: 3,
   complete: true,
+  capped: false,
   tiles: [
     { uri: `${dir}/tile-0.jpg`, top: 0, height: 2048 },
     { uri: `${dir}/tile-1.jpg`, top: 2048, height: 2048 },
@@ -23,7 +24,7 @@ const native = {
 const shot = shotOf(native)!;
 
 test("a capture from the module becomes a shot whose tiles cover it top to bottom", () => {
-  assert.deepEqual(shot, { id: ID, uri: native.uri, width: 1080, height: 5000, screens: 3, complete: true, tiles: native.tiles });
+  assert.deepEqual(shot, { id: ID, uri: native.uri, width: 1080, height: 5000, screens: 3, complete: true, capped: false, tiles: native.tiles });
 });
 
 test("a capture that is malformed in any field is refused whole", () => {
@@ -48,6 +49,9 @@ test("a capture that is malformed in any field is refused whole", () => {
     { ...native, width: Number.POSITIVE_INFINITY },
     { ...native, complete: "yes" },
     { ...native, complete: undefined },
+    { ...native, capped: undefined },
+    { ...native, capped: "yes" },
+    { ...native, complete: true, capped: true },
   ];
   for (const raw of broken) assert.equal(shotOf(raw), null, JSON.stringify(raw));
 });
@@ -112,12 +116,12 @@ test("tiles must be this capture's own numbered files, each once, so no other fi
 
 test("the shared hostile list never reaches Image: every field of the capture refuses each value, at the sink the tiles feed", () => {
   assert.notEqual(shotOf(native), null, "positive control");
-  const fields = ["id", "uri", "width", "height", "screens", "complete", "tiles"] as const;
+  const fields = ["id", "uri", "width", "height", "screens", "complete", "capped", "tiles"] as const;
   for (const { id, value } of HOSTILE_VALUES) {
     for (const field of fields) {
       const tileUris = shotOf({ ...native, [field]: value })?.tiles.map((tile) => tile.uri) ?? [];
       assert.ok(tileUris.every((uri) => native.tiles.some((tile) => tile.uri === uri)), `${field} ${id}`);
-      if (field !== "complete" || typeof value !== "boolean") assert.equal(shotOf({ ...native, [field]: value }), null, `${field} ${id}`);
+      if ((field !== "complete" && field !== "capped") || typeof value !== "boolean") assert.equal(shotOf({ ...native, [field]: value }), null, `${field} ${id}`);
     }
     for (const key of ["uri", "top", "height"] as const) {
       const tiles = native.tiles.map((tile, index) => (index === 1 ? { ...tile, [key]: value } : tile));
@@ -137,6 +141,7 @@ test("a capture that stopped early says so with its screen count", () => {
   assert.equal(shotLabel({ ...shot, screens: 1 }), "1 screen");
   assert.equal(shotLabel({ ...shot, complete: false }), "Stopped after 3 screens");
   assert.equal(shotLabel({ ...shot, screens: 1, complete: false }), "Stopped after 1 screen");
-  assert.equal(shotLabel({ ...shot, screens: 20, complete: false }), "First 20 screens");
+  assert.equal(shotLabel({ ...shot, screens: 20, complete: false, capped: true }), "First 20 screens");
+  assert.equal(shotLabel({ ...shot, screens: 20, complete: false, capped: false }), "Stopped after 20 screens", "a stitch that stops just short of the cap rounds up to 20 screens but did not reach it");
   assert.equal(shotLabel({ ...shot, screens: 20, complete: true }), "20 screens");
 });

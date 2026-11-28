@@ -31,6 +31,7 @@ const SHOT = {
   height: 5000,
   screens: 3,
   complete: true,
+  capped: false,
   tiles: [
     { uri: `${dir}/tile-0.jpg`, top: 0, height: 2048 },
     { uri: `${dir}/tile-1.jpg`, top: 2048, height: 2048 },

@@ -127,3 +127,28 @@ test("a scroll runs only in the capture's own document, in the same script as th
   assert.equal(run(drop(KEY_A)), 0, "and only once");
   assert.equal(run(scroll(KEY_A, 300)), -1);
 });
+
+test("a scroll overrides smooth scrolling on the root element even when the body scrolls the page, and puts both style attributes back", () => {
+  const dom = new JSDOM(`<html style="scroll-behavior: smooth"><body style="margin: 0"><div style="height: 5000px">tall</div></body></html>`, { runScripts: "outside-only", url: "https://example.com/q" });
+  const run = (script: string) => dom.window.eval(script) as number;
+  const doc = dom.window.document;
+  Object.defineProperty(doc, "scrollingElement", { value: doc.body, configurable: true });
+  const seen: string[] = [];
+  Object.defineProperty(doc.body, "scrollTop", { configurable: true, get: () => 0, set: () => seen.push(`${doc.documentElement.style.getPropertyValue("scroll-behavior")} ${doc.body.style.getPropertyValue("scroll-behavior")}`) });
+  run(mark(KEY_A));
+  run(scroll(KEY_A, 300));
+  run(show(KEY_A, 0));
+  assert.deepEqual(seen, ["auto auto", "auto auto"]);
+  assert.equal(doc.documentElement.getAttribute("style"), "scroll-behavior: smooth");
+  assert.equal(doc.body.getAttribute("style"), "margin: 0");
+});
+
+test("a pinch-zoomed page is refused before it is marked, so nothing is scrolled or left behind", () => {
+  const { run, dom } = page('<div style="height: 5000px">tall</div>');
+  Object.defineProperty(dom.window, "visualViewport", { value: { scale: 2 }, configurable: true });
+  assert.equal(run(mark(KEY_A)), 2);
+  assert.equal(run(owns(KEY_A)), 0);
+  assert.equal(run(drop(KEY_A)), 0);
+  Object.defineProperty(dom.window, "visualViewport", { value: { scale: 1 }, configurable: true });
+  assert.equal(run(mark(KEY_A)), 1);
+});

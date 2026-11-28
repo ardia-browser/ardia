@@ -39,7 +39,7 @@ export type OffscreenCapture = { fileName: string; path: string; title: string |
 
 export type LongScreenshotTile = { uri: string; top: number; height: number };
 
-export type LongScreenshot = { id: string; uri: string; path: string; width: number; height: number; screens: number; complete: boolean; tiles: LongScreenshotTile[] };
+export type LongScreenshot = { id: string; uri: string; path: string; width: number; height: number; screens: number; complete: boolean; capped: boolean; tiles: LongScreenshotTile[] };
 
 export type SavedLongScreenshot = { uri: string; width: number; height: number };
 

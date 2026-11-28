@@ -86,3 +86,27 @@ test("a window resize repaints the page holes as well as the regions", async () 
   assert.match(cleanup, /window\.removeEventListener\("resize", resized\);/);
   assert.doesNotMatch(body, /addEventListener\("resize", refresh\)/);
 });
+
+test("paint-only and pointer-events: none descendant animations inside an overlay do not keep animating", () => {
+  const previousDoc = globalThis.document;
+  const previousStyle = globalThis.getComputedStyle;
+  const { overlay, row } = tree();
+  const spinner = { parentElement: row, children: [], contains: (n) => n === spinner };
+  let running = [];
+  globalThis.document = { getAnimations: () => running };
+  globalThis.getComputedStyle = (node) => ({ pointerEvents: node === spinner ? "none" : "auto" });
+  try {
+    const animating = domRegionDeps(host).animating;
+    running = [{ playState: "running", effect: { target: overlay, getKeyframes: () => [{ opacity: 0 }, { opacity: 1 }] } }];
+    assert.equal(animating([overlay]), false);
+    running = [{ playState: "running", effect: { target: spinner, getKeyframes: () => [{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }] } }];
+    assert.equal(animating([overlay]), false);
+    running = [{ playState: "running", effect: { target: row, getKeyframes: () => [{ transform: "translateY(0px)" }, { transform: "translateY(10px)" }] } }];
+    assert.equal(animating([overlay]), true);
+  } finally {
+    if (previousDoc === undefined) delete globalThis.document;
+    else globalThis.document = previousDoc;
+    if (previousStyle === undefined) delete globalThis.getComputedStyle;
+    else globalThis.getComputedStyle = previousStyle;
+  }
+});

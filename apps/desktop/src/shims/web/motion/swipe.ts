@@ -104,9 +104,10 @@ function targetAt(x: number, y: number, hit: Element | null, tabId?: string): Sw
     if (tabId !== undefined && target.tabId?.() !== tabId) continue;
     const node = target.node();
     const container = node?.parentElement;
-    if (!node || !container || !visible(node) || !container.contains(hit)) continue;
+    if (!node || !container || !container.contains(hit)) continue;
     const r = node.getBoundingClientRect();
     if (x < r.left || x >= r.right || y < r.top || y >= r.bottom) continue;
+    if (!visible(node)) continue;
     if (!best || (bestContainer && bestContainer !== container && bestContainer.contains(container))) {
       best = target;
       bestContainer = container;
@@ -205,11 +206,10 @@ function shouldTrack() {
   return true;
 }
 
-export function begin(x: number, y: number, hit: Element | null, timestamp: number, tabId?: string) {
+function beginTarget(target: SwipeTarget | null, hit: Element | null, timestamp: number) {
   if (gesture.state === "tracking") pagerInput(gesture.target, "abandon", timestamp);
   gesture = blank();
   pageGesture = null;
-  const target = targetAt(x, y, hit, tabId);
   if (!target) {
     gesture.state = "ignored";
     releasePrepared(timestamp);
@@ -222,12 +222,19 @@ export function begin(x: number, y: number, hit: Element | null, timestamp: numb
   gesture.startedAt = timestamp;
 }
 
-export function prepare(x: number, y: number, hit: Element | null, timestamp: number, tabId?: string) {
+function prepareTarget(target: SwipeTarget | null, timestamp: number) {
   releasePrepared(timestamp);
-  const target = targetAt(x, y, hit, tabId);
   if (!target || !hasNativePager(target)) return;
   prepared = target;
   pagerInput(target, "prepare", timestamp);
+}
+
+export function begin(x: number, y: number, hit: Element | null, timestamp: number, tabId?: string) {
+  beginTarget(targetAt(x, y, hit, tabId), hit, timestamp);
+}
+
+export function prepare(x: number, y: number, hit: Element | null, timestamp: number, tabId?: string) {
+  prepareTarget(targetAt(x, y, hit, tabId), timestamp);
 }
 
 export function update(dx: number, dy: number, timestamp: number): boolean {
@@ -352,6 +359,7 @@ function onWheel(e: WheelEvent) {
   lastEventAt = t;
   lastMagnitude = magnitude;
   clearTimeout(gapTimer);
+  gapTimer = undefined;
   if (swallowing) {
     e.preventDefault();
     return;
@@ -360,8 +368,9 @@ function onWheel(e: WheelEvent) {
     if (gesture.state === "pending" || gesture.state === "tracking") end(false, t);
     magnitudes = [];
     const hit = e.target instanceof Element ? e.target : null;
-    prepare(e.clientX, e.clientY, hit, t);
-    begin(e.clientX, e.clientY, hit, t);
+    const target = targetAt(e.clientX, e.clientY, hit);
+    prepareTarget(target, t);
+    beginTarget(target, hit, t);
   }
   magnitudes.push({ t, m: magnitude });
   if (magnitudes.length > 12) magnitudes.shift();
@@ -372,7 +381,7 @@ function onWheel(e: WheelEvent) {
     return;
   }
   const handled = update(scrollingDx, scrollingDy, t);
-  if (gesture.state !== "idle") gapTimer = setTimeout(releaseByGap, releaseGap() * 1000);
+  if (gesture.state === "pending" || gesture.state === "tracking") gapTimer = setTimeout(releaseByGap, releaseGap() * 1000);
   if (handled) e.preventDefault();
 }
 

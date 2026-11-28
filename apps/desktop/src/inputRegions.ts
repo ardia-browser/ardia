@@ -263,6 +263,19 @@ export function createInputRegions(deps: RegionDeps) {
       for (const [element, overlay] of overlays) if (measureOverlay(element, overlay.shape).some((rect) => x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height)) return true;
       return false;
     },
+    overlaySnapshot() {
+      let cached: Rect[][] | null = null;
+      return (x: number, y: number) => {
+        cached ??= [...overlays].map(([element, overlay]) => measureOverlay(element, overlay.shape));
+        return cached.some((rects) => rects.some((rect) => x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height));
+      };
+    },
+    affects(target: unknown) {
+      const has = (container: unknown, node: unknown) => typeof (container as { contains?: unknown } | null)?.contains === "function" && (container as { contains: (other: unknown) => boolean }).contains(node);
+      for (const element of overlays.keys()) if (has(target, element) || has(element, target)) return true;
+      for (const slot of pages.keys()) if (has(target, slot) || has(slot, target)) return true;
+      return false;
+    },
     refresh: schedule,
     status: () => ({ supported: !!deps.send, sent: sentKey ? (JSON.parse(sentKey) as HostInputRegions) : null, sequence, acked: ackedSequence, overlays: overlays.size, pages: pages.size }),
     flushNow: flush,

@@ -805,3 +805,32 @@ test("a page at a fractional edge cuts its hole on the whole points the engine p
     globalThis.MutationObserver = saved.MutationObserver;
   }
 });
+
+test("overlaySnapshot measures overlays once per snapshot and affects filters unrelated scroll targets", () => {
+  const h = harness();
+  let reads = 0;
+  const boxNode = {
+    rect: { x: 10, y: 10, width: 100, height: 40 },
+    contains: (other) => other === boxNode,
+    getBoundingClientRect: () => {
+      reads++;
+      return boxNode.rect;
+    },
+  };
+  const pageNode = {
+    rect: { x: 120, y: 10, width: 400, height: 400 },
+    isConnected: true,
+    contains: (other) => other === pageNode,
+  };
+  const unrelated = { contains: () => false };
+  h.registry.setPage(pageNode, true);
+  h.registry.addOverlay(boxNode);
+  const snap = h.registry.overlaySnapshot();
+  assert.equal(snap(20, 20), true);
+  assert.equal(snap(200, 200), false);
+  assert.equal(snap(50, 30), true);
+  assert.equal(h.registry.affects(unrelated), false);
+  assert.equal(h.registry.affects(boxNode), true);
+  assert.equal(h.registry.affects(pageNode), true);
+  assert.equal(reads, 0);
+});

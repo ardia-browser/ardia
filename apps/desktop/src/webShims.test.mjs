@@ -370,3 +370,42 @@ test("scrolled glass keeps main's frosted surface, fades only its glass layer an
   assert.match(surface, /inset 0 1px 0\.5px rgba\(255,255,255,0\.2\), inset 0 0 0 0\.5px rgba\(255,255,255,0\.1\), 0 1px 3px rgba\(0,0,0,0\.26\)/, "dark scrolled glass keeps main's hairline edge");
   assert.match(surface, /inset 0 1px 0\.5px rgba\(255,255,255,0\.82\), inset 0 0 0 0\.5px rgba\(255,255,255,0\.48\), 0 1px 3px rgba\(0,0,0,0\.07\)/, "light scrolled glass keeps main's hairline edge");
 });
+
+test("pointer scroll and resize notifications coalesce to one animation frame and skip when no pointer is active", () => {
+  const frames = [];
+  const prevRaf = globalThis.requestAnimationFrame;
+  const prevCancel = globalThis.cancelAnimationFrame;
+  globalThis.requestAnimationFrame = (cb) => frames.push(cb);
+  globalThis.cancelAnimationFrame = () => {};
+  let rectReads = 0;
+  const box = { left: 0, top: 0, right: 100, bottom: 50, width: 100, height: 50 };
+  const node = {
+    isConnected: true,
+    getBoundingClientRect: () => {
+      rectReads++;
+      return box;
+    },
+    closest: () => null,
+  };
+  const stop = trackHover(hoverEntry(node, [], "row"));
+  try {
+    documentListeners.get("mouseout")({ relatedTarget: null });
+    frames.length = 0;
+    rectReads = 0;
+    windowListeners.get("scroll")();
+    assert.equal(frames.length, 0);
+    windowListeners.get("pointermove")({ clientX: 20, clientY: 20, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false });
+    rectReads = 0;
+    windowListeners.get("scroll")();
+    windowListeners.get("scroll")();
+    windowListeners.get("resize")();
+    assert.equal(frames.length, 1);
+    assert.equal(rectReads, 0);
+    frames.shift()();
+    assert.equal(rectReads, 1);
+  } finally {
+    stop();
+    globalThis.requestAnimationFrame = prevRaf;
+    globalThis.cancelAnimationFrame = prevCancel;
+  }
+});

@@ -9,6 +9,7 @@
 
 #include "ardia/core/ac_hooks.h"
 #include "ardia/desktop/ac_desktop_webui_process_policy.h"
+#include "ardia/linux/ac_linux_site_controls_service.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/launch_guard.h"
 #include "ardia/win/main.h"
@@ -213,6 +214,19 @@ void StartWithProfile(base::ListValue urls, Profile* profile) {
   }
   NoteForTest("webui shell: opening; UI from " +
               webui::AssetDirectory().AsUTF8Unsafe());
+  ardia::StartLinuxSiteControls(
+      base::BindRepeating([](Profile* changed, base::Value stats) {
+        for (webui::ShellHostView* host : WindowRegistry::Get().Hosts()) {
+          if (!host->app_profile() ||
+              host->app_profile()->GetOriginalProfile() != changed) {
+            continue;
+          }
+          host->Emit("ArdiaContentBlocker", "contentBlocker",
+                     base::Value(base::DictValue()
+                                     .Set("name", "contentBlocker.changed")
+                                     .Set("data", stats.Clone())));
+        }
+      }));
   WindowRegistry::Get().Start(profile, std::move(urls));
 }
 

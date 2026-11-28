@@ -489,6 +489,37 @@ The bullets below that name the React Native app describe what it did, for an up
   reader, which keeps a decoded scratch copy of a string with escapes (a password with a backslash), and its
   serializer, which can free a smaller buffer while it grows, are not wiped.
 
+## The content blocker (#2913)
+
+Windows blocks ads with the same uBlock Origin build and the same native code as Linux. Helium's own uBlock Origin is
+never built (`chromium-helium-ublock-off.patch`), so until #2913 a Windows build blocked nothing: Settings showed the
+blocker while every `contentBlocker.*` call failed with `ERR_UNKNOWN_CALL`.
+
+- **Native side.** `//ardia/win` compiles the Linux layer's site controls as they are (`ac_linux_site_controls*`,
+  `ac_linux_navigation_hold*`, `ac_linux_profiles*`): the blocker loads `extensions\ublock` beside `Ardia.exe` as a
+  component extension, talks to it through its hidden bridge page, holds a profile's first navigations until it is
+  ready (2 s at most) and copies the default profile's settings to isolated profiles. `linux_layer_bridge.cc` answers
+  the two Linux profile lookups it makes from the Windows registry (loaded profiles only; it never creates one) and
+  `ac_engine_call` from the Windows call table. `webui_shell.cc` starts the site controls before the first window;
+  each `ShellHostView` starts the blocker for its app and page profiles and for each companion window's profile,
+  routes the content blocker calls (and only those: `sites.*` stays unserved here) to `LinuxSiteControlsCall`, and
+  advertises them. `chromium-win-content-blocker-restricted.patch` keeps the extension off restricted pages in every
+  process.
+- **Packaging.** `scripts/windows/fetch-ubo.ps1` runs the shared `packages/ardiacore/scripts/ubo.sh` under Git for
+  Windows' bash, which has no `lockf` (`UBO_LOCKED` skips its lock) or `shasum` (a stand-in runs `sha256sum`) and whose
+  `python3` is the Store stub (a stand-in runs the real Python), and prints `packages\ardiacore\vendor\ubo\ext`. Its
+  output is byte-for-byte the Linux one, and CI caches it as Linux and the Mac do. `assemble-webui.ps1 -ContentBlocker <that folder>` copies it to
+  `extensions\ublock` with the bridge files from `engine/ardiacore-linux/content-blocker`, and `-Shippable` refuses
+  to assemble without it. It then seeds the copy as `package.py` does on Linux: `scripts/windows/ubo-seed.mjs` runs
+  `scripts/linux/ubo-seed.mjs`'s seed on the assembled build as a hidden test instance (the `Ardia.test-build` marker
+  is there only while it runs) and saves uBlock Origin's compiled engine to `ardia-seed/storage.json`, so a new
+  profile filters from its first page; `-NoUboSeed` skips it, like `--no-ubo-seed`. `extensions\ublock` is a
+  WebUI-owned folder, so its files go in the install manifest and an update replaces them whole.
+- **Checks.** `pnpm -C packages/hostapi test` holds the wiring; `shell-layout.test.ps1` the packaging;
+  `scripts/windows/webui-pilot/content-blocker-check.ps1` loads `content-blocker-fixture.mjs` in an assembled test
+  build and fails unless the blocker is ready, EasyList's fake ads are hidden, the ad requests never reach the server
+  and ordinary content and its script still load. CI runs it after the test gate.
+
 ## Updates
 
 - The updates live on the GitHub prerelease `windows-alpha`: `Ardia-Setup-x64.exe`, `Ardia-Setup-arm64.exe`, the

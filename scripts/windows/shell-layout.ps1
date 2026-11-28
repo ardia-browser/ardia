@@ -10,6 +10,8 @@ $ShellLayout = @{
   UpdateVerifier = "ardia-update-verify.exe"
   UpdateKey = "windows-update.pem"
   TestMarker = "Ardia.test-build"
+  ContentBlocker = "extensions\ublock"
+  ContentBlockerFiles = @("extensions\ublock\manifest.json", "extensions\ublock\ardia-linux-bridge.html")
   WebUISwitch = "--ardia-shell=webui"
   AppUserModelId = "Ardia.Browser"
 }
@@ -43,7 +45,7 @@ $ShellOwned = @{
 
 $ShellOwnedFolders = @{
   rnw = @("Bundle", "Microsoft.UI.Xaml", "NpuDetect")
-  webui = @("ardia-ui")
+  webui = @("ardia-ui", "extensions\ublock")
 }
 
 $ShellKept = @("Ardia.exe", "Ardia.ico", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "chrome.dll", "chrome_elf.dll", "locales\", "unins000.exe", "unins000.dat")
@@ -172,7 +174,7 @@ function Get-ShellDocumentCommand([string]$exe, [string]$shell) {
 }
 
 function Get-ShellInstalledFiles([string]$shell) {
-  if ($shell -eq "webui") { return @($ShellLayout.Launcher, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey, "unins000.exe", $ShellLayout.UiEntry, $ShellLayout.Migrator, (Get-ShellManifestName "webui")) }
+  if ($shell -eq "webui") { return @($ShellLayout.Launcher, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey, "unins000.exe", $ShellLayout.UiEntry, $ShellLayout.Migrator) + $ShellLayout.ContentBlockerFiles + @(Get-ShellManifestName "webui") }
   return @($ShellLayout.Launcher, $ShellLayout.RnwLibrary, $ShellLayout.Engine, "Ardia.ico", "Ardia.build.json", $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey, "unins000.exe", (Get-ShellManifestName "rnw"))
 }
 
@@ -193,6 +195,9 @@ function Get-ShellLayoutProblems([string]$root, [string]$shell, [switch]$AllowTe
     if (-not (Test-Path -LiteralPath (Join-Path $root $ShellLayout.BuildIdentity) -PathType Leaf)) { $problems += "it has no $($ShellLayout.BuildIdentity), so updates can't tell its version and build" }
     foreach ($name in $ShellLayout.UpdateVerifier, $ShellLayout.UpdateKey) {
       if (-not (Test-Path -LiteralPath (Join-Path $root $name) -PathType Leaf)) { $problems += "it has no $name, so it can't verify the updates it downloads" }
+    }
+    foreach ($name in $ShellLayout.ContentBlockerFiles) {
+      if (-not (Test-Path -LiteralPath (Join-Path $root $name) -PathType Leaf)) { $problems += "it has no $name, so it blocks no ads" }
     }
     if (Test-Path -LiteralPath (Join-Path $root $ShellLayout.EngineLauncher)) { $problems += "it still holds $($ShellLayout.EngineLauncher) beside $($ShellLayout.Launcher)" }
   } elseif (-not (Test-Path -LiteralPath (Join-Path $root $ShellLayout.RnwLibrary) -PathType Leaf)) {

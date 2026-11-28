@@ -67,6 +67,7 @@ test("the WebUI job builds the UI and the migrator, assembles a shippable build 
     "Build the desktop UI for Windows",
     "Build the migrator",
     "Build the update verifier",
+    "Prepare the content blocker",
     "Fetch the engine",
     "Assemble the shippable WebUI build",
     "Every DLL the WebUI build needs is in it or in a clean Windows 11",
@@ -74,6 +75,7 @@ test("the WebUI job builds the UI and the migrator, assembles a shippable build 
     "Install and uninstall the WebUI build",
     "Tour the WebUI build",
     "Check the WebUI test gate",
+    "Check the WebUI content blocker",
   ];
   const at = order.map((name) => job.indexOf(`name: ${name}\n`));
   assert.ok(at.every((index) => index > 0), "every WebUI step is there");
@@ -88,6 +90,19 @@ test("the WebUI job builds the UI and the migrator, assembles a shippable build 
   assert.match(assemble, /assemble-webui\.ps1 -Engine .* -Ui apps\/desktop\/dist\/win -Out .* -MigrateBin \$env:MIGRATOR -UpdateVerify .* -Shippable -Version \$env:VERSION -Build \$env:BUILD/);
   assert.ok(stepNamed(job, "Build the update verifier").includes('run: scripts/windows/update-verify.ps1 -Cpu $env:SLUG -Out "${{ runner.temp }}/update-verify"'), "the verifier is built for the build's CPU");
   assert.ok(assemble.includes('-UpdateVerify "${{ runner.temp }}/update-verify/ardia-update-verify.exe"'), "the shippable WebUI build carries the update verifier and the pinned key");
+  assert.ok(stepNamed(job, "Prepare the content blocker").includes("scripts/windows/fetch-ubo.ps1"), "the pinned uBlock Origin is prepared on the runner");
+  const fetchCheck = stepNamed(job, "Check the uBlock Origin fetch script");
+  assert.ok(fetchCheck.includes("shell: pwsh\n") && fetchCheck.includes("run: scripts/windows/fetch-ubo.test.ps1"), "the fetch script's checks run beside the other packaging scripts' checks");
+  assert.ok(job.indexOf("name: Check the Windows update verifier packaging script\n") < job.indexOf("name: Check the uBlock Origin fetch script\n"), "after the update verifier's checks");
+  assert.ok(assemble.includes('-ContentBlocker "${{ steps.blocker.outputs.dir }}"'), "the shippable WebUI build carries the content blocker");
+  assert.ok(!assemble.includes("-NoUboSeed"), "the shippable WebUI build's blocker is seeded, as the Linux package's is");
+  const blocking = stepNamed(job, "Check the WebUI content blocker");
+  assert.ok(blocking.includes("scripts/windows/webui-pilot/content-blocker-check.ps1 -App $copy"), "the assembled build's blocker is checked on real pages");
+  assert.ok(blocking.includes('New-Item -ItemType File -Path (Join-Path $copy "Ardia.test-build")'), "the check marks a copy, never the shippable build");
+  assert.ok(blocking.includes('$copy = "${{ runner.temp }}/ArdiaWebUI-tour"') && blocking.includes("if (-not (Test-Path -LiteralPath $copy))"), "the check reuses the tour's marked copy instead of copying the build again");
+  const cached = job.indexOf("path: packages/ardiacore/vendor/ubo\n");
+  assert.ok(cached > 0 && cached < job.indexOf("name: Prepare the content blocker\n"), "the prepared uBlock Origin is cached before it is prepared, as on Linux and the Mac");
+  assert.ok(job.includes("key: ubo-windows-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}"), "the cache follows ubo.sh, which pins the build");
   assert.ok(!assemble.includes("-TestBuild"), "the shippable build carries no test marker");
   assert.ok(stepNamed(job, "Fetch the engine").includes("github.event.pull_request.head.repo.full_name == github.repository"), "a fork's pull request never gets the engine token");
 });
@@ -178,7 +193,7 @@ test("removals never pass through a link, take exact paths from manifests, and k
   for (const name of ["same-shell-update-removes-stale-files", "same-shell-update-never-follows-links", "same-shell-update-keeps-unlisted-files", "same-shell-update-layout"]) assert.ok(harness.includes(`'${name}'`), `the installed harness checks ${name}`);
   const layout = read("scripts/windows/shell-layout.ps1");
   assert.ok(layout.includes('webui = @("ardia-ui\\index.html", "ardia-webui-migrate.exe")'));
-  assert.ok(layout.includes('webui = @("ardia-ui")'));
+  assert.ok(layout.includes('webui = @("ardia-ui", "extensions\\ublock")'), "the WebUI shell owns its UI and its content blocker, so an update replaces both whole");
   const installer = read("scripts/windows/make-installer.ps1");
   assert.ok(installer.includes("Write-RetiredShellList $shellKind $retired"));
   assert.ok(installer.includes("Write-ShellManifest $sourceRoot $shellKind $manifest"));

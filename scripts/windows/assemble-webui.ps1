@@ -4,6 +4,8 @@ param(
   [Parameter(Mandatory = $true)][string]$Out,
   [string]$MigrateBin,
   [string]$UpdateVerify,
+  [string]$ContentBlocker,
+  [switch]$NoUboSeed,
   [switch]$TestBuild,
   [switch]$Shippable,
   [string]$LauncherName = "",
@@ -48,6 +50,7 @@ if ($Shippable -and $Build -le 0) { throw "a shippable WebUI build needs -Build 
 if ($Shippable -and (Find-TestMarkers $engineRoot).Count) { throw "the engine '$Engine' carries $testMarker; a shippable WebUI build is assembled from an engine without one" }
 if ($Shippable -and -not $MigrateBin) { throw "a shippable WebUI build needs -MigrateBin: without $migratorName an upgrade from the React Native shell would open empty" }
 if ($Shippable -and -not $UpdateVerify) { throw "a shippable WebUI build needs -UpdateVerify: without $verifierName and $keyName beside $($ShellLayout.Launcher) it never updates itself" }
+if ($Shippable -and -not $ContentBlocker) { throw "a shippable WebUI build needs -ContentBlocker: without uBlock Origin in $($ShellLayout.ContentBlocker) it blocks no ads" }
 if ($branded -and -not (Test-Path -LiteralPath $AppIcon -PathType Leaf)) { throw "the app icon '$AppIcon' is not a file" }
 $migrateSource = $null
 if ($PSBoundParameters.ContainsKey('MigrateBin') -or $MigrateBin) {
@@ -63,6 +66,18 @@ if ($PSBoundParameters.ContainsKey('UpdateVerify') -or $UpdateVerify) {
   }
   if (-not (Test-Path -LiteralPath $pinnedKey -PathType Leaf)) { throw "the pinned update key $pinnedKey is missing" }
   $verifierSource = (Resolve-Path -LiteralPath $UpdateVerify).Path
+}
+$blockerSource = $null
+$blockerBridge = Join-Path $repository "engine\ardiacore-linux\content-blocker"
+if ($PSBoundParameters.ContainsKey('ContentBlocker') -or $ContentBlocker) {
+  $blockerSource = Resolve-Folder $ContentBlocker "The content blocker" "manifest.json"
+  $blockerManifest = Get-Content -LiteralPath (Join-Path $blockerSource "manifest.json") -Raw | ConvertFrom-Json
+  if (-not ($blockerManifest.key -is [string]) -or $blockerManifest.manifest_version -ne 2) { throw "The content blocker '$ContentBlocker' is not the keyed uBlock Origin build from scripts/windows/fetch-ubo.ps1" }
+  $bridgePage = Join-Path $blockerBridge "ardia-linux-bridge.html"
+  if (-not (Test-Path -LiteralPath $bridgePage -PathType Leaf)) { throw "the content blocker's bridge page is missing from $blockerBridge" }
+  $bridgeScripts = [regex]::Matches((Get-Content -LiteralPath $bridgePage -Raw), '<script src="([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+  $missingScripts = @($bridgeScripts | Where-Object { -not (Test-Path -LiteralPath (Join-Path $blockerBridge $_) -PathType Leaf) -and -not (Test-Path -LiteralPath (Join-Path $blockerSource $_) -PathType Leaf) })
+  if ($missingScripts.Count) { throw "The content blocker '$ContentBlocker' lacks $($missingScripts -join ', '), which its bridge page loads" }
 }
 if (Test-Path -LiteralPath $Out) {
   if (Get-ChildItem -LiteralPath $Out -Force | Select-Object -First 1) { throw "'$Out' is not empty" }
@@ -84,6 +99,16 @@ if ($migrateSource) {
 if ($verifierSource) {
   Copy-Item -LiteralPath $verifierSource -Destination (Join-Path $outRoot $verifierName) -Force
   Copy-Item -LiteralPath $pinnedKey -Destination (Join-Path $outRoot $keyName) -Force
+}
+if ($blockerSource) {
+  $blockerRoot = Join-Path $outRoot $ShellLayout.ContentBlocker
+  New-Item -ItemType Directory -Force -Path $blockerRoot | Out-Null
+  Get-ChildItem -LiteralPath $blockerSource -Force | Where-Object { $_.Name -ne "_metadata" } | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination $blockerRoot -Recurse
+  }
+  Get-ChildItem -LiteralPath $blockerBridge -File | ForEach-Object {
+    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $blockerRoot $_.Name) -Force
+  }
 }
 
 $launcherPath = Join-Path $outRoot $LauncherName
@@ -108,6 +133,18 @@ if ($Shippable -or $VcRedist) {
   }
   Add-VcRuntime $outRoot $launcherImage.Cpu $VcRedist
 }
+if ($blockerSource -and -not $NoUboSeed) {
+  $seedMarker = Join-Path $outRoot $testMarker
+  $seedExit = 1
+  New-Item -ItemType File -Path $seedMarker -Force | Out-Null
+  try {
+    & node (Join-Path $repository "scripts\windows\ubo-seed.mjs") --app $outRoot | ForEach-Object { Write-Output "assemble-webui: $_" }
+    $seedExit = $LASTEXITCODE
+  } finally {
+    Remove-Item -LiteralPath $seedMarker -Force -ErrorAction SilentlyContinue
+  }
+  if ($seedExit -ne 0) { throw "seeding the content blocker failed (exit $seedExit), so a new profile's first pages would load before uBlock Origin is ready; assemble with -NoUboSeed to skip it" }
+}
 if ($Build -gt 0) {
   if (-not $Version) { $Version = & (Join-Path $PSScriptRoot "project-version.ps1") }
   $identity = [ordered]@{ version = $Version; build = $Build; shell = "webui" } | ConvertTo-Json -Compress
@@ -126,5 +163,6 @@ if ($Shippable) {
 $uiFiles = @(Get-ChildItem -LiteralPath (Join-Path $outRoot $uiFolder) -Recurse -File).Count
 $migratorNote = if ($migrateSource) { ", bundled $migratorName" } else { "" }
 if ($verifierSource) { $migratorNote += ", bundled $verifierName and $keyName" }
+if ($blockerSource) { $migratorNote += ", bundled uBlock Origin $($blockerManifest.version) in $($ShellLayout.ContentBlocker)" }
 $kind = if ($Shippable) { "shippable " } else { "" }
 Write-Output "WebUI shell assembled ${kind}in $outRoot ($uiFiles UI files in $uiFolder$migratorNote); start it with: $LauncherName $($ShellLayout.WebUISwitch)"

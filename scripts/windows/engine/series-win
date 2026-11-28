@@ -56,3 +56,4 @@ chromium chromium-win-hosted-theme-change.patch
 chromium chromium-win-renderer-efficiency.patch
 chromium chromium-win-app-user-model-id.patch
 chromium chromium-win-companion-fullscreen.patch
+chromium chromium-win-content-blocker-restricted.patch

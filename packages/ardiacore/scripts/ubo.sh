@@ -31,7 +31,7 @@ if ! installed; then
 import json, os, sys
 ext, key, level = sys.argv[1], sys.argv[2], sys.argv[3]
 path = os.path.join(ext, "manifest.json")
-manifest = json.load(open(path))
+manifest = json.load(open(path, encoding="utf-8", newline=""))
 manifest["key"] = key
 manifest["version_name"] = manifest["version"]
 manifest["version"] = f"{manifest['version']}.{level}"
@@ -51,13 +51,13 @@ if not isinstance(storage, dict) or "managed_schema" not in storage:
 del storage["managed_schema"]
 if not storage:
     del manifest["storage"]
-json.dump(manifest, open(path, "w"), indent=2)
+json.dump(manifest, open(path, "w", encoding="utf-8", newline=""), indent=2)
 def patch(rel, old, new):
     path = os.path.join(ext, rel)
-    source = open(path).read()
+    source = open(path, encoding="utf-8", newline="").read()
     if source.count(old) != 1:
         sys.exit(f"ubo.sh: {rel} no longer has exactly one {old.strip().splitlines()[0]!r}")
-    open(path, "w").write(source.replace(old, new))
+    open(path, "w", encoding="utf-8", newline="").write(source.replace(old, new))
 patch("js/background.js", "prefetchingDisabled: true,", "prefetchingDisabled: false,")
 patch("js/background.js", "    noDashboard: false,", "    noDashboard: true,")
 patch("js/background.js", "    autoUpdateDelayAfterLaunch: 37,", "    autoUpdateDelayAfterLaunch: 600,")

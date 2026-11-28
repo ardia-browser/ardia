@@ -203,6 +203,10 @@ jobs:
         if: env.SLUG == 'x64'
         shell: pwsh
         run: scripts/windows/update-verify.test.ps1
+      - name: Check the uBlock Origin fetch script
+        if: env.SLUG == 'x64'
+        shell: pwsh
+        run: scripts/windows/fetch-ubo.test.ps1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
@@ -240,6 +244,16 @@ jobs:
       - name: Build the update verifier
         shell: pwsh
         run: scripts/windows/update-verify.ps1 -Cpu $env:SLUG -Out "${{ runner.temp }}/update-verify"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: packages/ardiacore/vendor/ubo
+          key: ubo-windows-${{ hashFiles('packages/ardiacore/scripts/ubo.sh') }}
+      - name: Prepare the content blocker
+        id: blocker
+        shell: pwsh
+        run: |
+          $dir = scripts/windows/fetch-ubo.ps1
+          "dir=$dir" >> $env:GITHUB_OUTPUT
       - name: Fetch the engine
         id: engine
         if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
@@ -251,7 +265,7 @@ jobs:
         id: assemble
         if: ${{ !cancelled() && steps.engine.outcome == 'success' }}
         shell: pwsh
-        run: scripts/windows/assemble-webui.ps1 -Engine "${{ runner.temp }}/engine" -Ui apps/desktop/dist/win -Out "${{ runner.temp }}/ArdiaWebUI" -MigrateBin $env:MIGRATOR -UpdateVerify "${{ runner.temp }}/update-verify/ardia-update-verify.exe" -Shippable -Version $env:VERSION -Build $env:BUILD
+        run: scripts/windows/assemble-webui.ps1 -Engine "${{ runner.temp }}/engine" -Ui apps/desktop/dist/win -Out "${{ runner.temp }}/ArdiaWebUI" -MigrateBin $env:MIGRATOR -UpdateVerify "${{ runner.temp }}/update-verify/ardia-update-verify.exe" -ContentBlocker "${{ steps.blocker.outputs.dir }}" -Shippable -Version $env:VERSION -Build $env:BUILD
       - name: Every DLL the WebUI build needs is in it or in a clean Windows 11
         if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
         shell: pwsh
@@ -285,6 +299,21 @@ jobs:
           scripts/windows/webui-pilot/test-gate-check.ps1 -App "${{ runner.temp }}/ArdiaWebUI" -Out "${{ runner.temp }}/test-gate-webui" -RequireRealProfile
           $code = $LASTEXITCODE
           if (Test-Path "${{ runner.temp }}/test-gate-webui/test-gate-webui.md") { Get-Content "${{ runner.temp }}/test-gate-webui/test-gate-webui.md" >> $env:GITHUB_STEP_SUMMARY }
+          exit $code
+      - name: Check the WebUI content blocker
+        if: ${{ !cancelled() && steps.assemble.outcome == 'success' && env.TOUR == 'true' }}
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $copy = "${{ runner.temp }}/ArdiaWebUI-tour"
+          if (-not (Test-Path -LiteralPath $copy)) {
+            $copy = "${{ runner.temp }}/ArdiaWebUI-blocker"
+            Copy-Item -LiteralPath "${{ runner.temp }}/ArdiaWebUI" -Destination $copy -Recurse
+            New-Item -ItemType File -Path (Join-Path $copy "Ardia.test-build") | Out-Null
+          }
+          scripts/windows/webui-pilot/content-blocker-check.ps1 -App $copy -Out "${{ runner.temp }}/content-blocker-webui"
+          $code = $LASTEXITCODE
+          if (Test-Path "${{ runner.temp }}/content-blocker-webui/content-blocker-webui.md") { Get-Content "${{ runner.temp }}/content-blocker-webui/content-blocker-webui.md" >> $env:GITHUB_STEP_SUMMARY }
           exit $code
       - name: Name it for a release
         id: release-files

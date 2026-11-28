@@ -1,7 +1,8 @@
 import { forwardRef, memo, useMemo, useRef, type ReactNode } from "react";
 import { Animated, PanResponder, Pressable, StyleSheet, View } from "react-native";
 import { useBookmarkProfileId, useBookmarks, useSidebarEdge } from "../../state/bookmarks/hooks";
-import { openModeFor, openUrl } from "../../state/bookmarks/actions";
+import { openBookmark, openModeFor } from "../../state/bookmarks/actions";
+import { consentToken } from "../../state/telemetry/client";
 import { barDragging, beginBookmarkDrag, endBookmarkDrag, moveBookmarkDrag, useBarDrag } from "../../state/bookmarks/barDrag";
 import { folderMenuOpen, openFolderMenu, toggleFolderMenu, useFolderMenus } from "../../state/bookmarks/folderMenus";
 import { useWindowId } from "../../state/browser/hooks";
@@ -89,7 +90,7 @@ export const BarItem = memo(function BarItem({
       if (toggle) toggleFolderMenu(windowId, { parentId: id, fromIndex: 0, anchor });
       else openFolderMenu(windowId, { parentId: id, fromIndex: 0, anchor, level: 0 });
     });
-  const open = (e: ClickMods & { middle?: boolean }) => (node.kind === "url" ? openUrl(node.url, windowId, openModeFor(e)) : openMenu(true));
+  const open = (e: ClickMods & { middle?: boolean }) => (node.kind === "url" ? openBookmark(node.url, windowId, openModeFor(e), consentToken()) : openMenu(true));
 
   return (
     <Animated.View

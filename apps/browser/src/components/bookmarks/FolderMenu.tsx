@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { useBookmarkProfileId, useBookmarks, useSidebarEdge } from "../../state/bookmarks/hooks";
-import { openFolder, openModeFor, openUrl } from "../../state/bookmarks/actions";
+import { openBookmark, openFolder, openModeFor } from "../../state/bookmarks/actions";
+import { consentToken } from "../../state/telemetry/client";
 import { addFolderToSidebar, makesGroup } from "../../state/bookmarks/bookmarkGroups";
 import { folderLinks } from "../../state/bookmarks/bookmarks";
 import { registerDropZone, useBarDrag } from "../../state/bookmarks/barDrag";
@@ -288,7 +289,7 @@ function FolderRow({
     if (node.kind === "folder") return onOpenChild(id);
     const mode = openModeFor(e);
     if (mode !== "background") closeFolderMenus();
-    openUrl(node.url, windowId, mode);
+    openBookmark(node.url, windowId, mode, consentToken());
   };
   return (
     <Animated.View

@@ -21,7 +21,12 @@ enum PageSummaryMotion {
   static let settle: TimeInterval = 0.7
   static let leave: TimeInterval = 0.45
   static let cancel: TimeInterval = 0.3
-  static let footerHeight: CGFloat = 57
+  static let barControl: CGFloat = 48
+  static let barGap: CGFloat = 8
+  static let barBottomGap: CGFloat = 21.5
+  static let barSideInset: CGFloat = 24
+  static let textFade: CGFloat = 48
+  static var barReserve: CGFloat { barBottomGap + barControl }
   static let dismissPull: CGFloat = 100
 }
 
@@ -216,8 +221,11 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
 
   let model: PageSummaryStageModel
   var onClose: (() -> Void)?
+  var onShared: (() -> Void)?
   private(set) var phase = Phase.held
   private let backdrop: UIHostingController<PageSummaryBackdrop>
+  private let textClip = UIView()
+  private let textFade = CAGradientLayer()
   private let scroll = UIScrollView()
   private let titleLabel = UILabel()
   private let statusLabel = UILabel()
@@ -234,9 +242,9 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
     model = PageSummaryStageModel(look: look)
     backdrop = UIHostingController(rootView: PageSummaryBackdrop(model: model))
     text = UIHostingController(rootView: PageSummaryText(model: model))
-    footer = UIHostingController(rootView: PageSummaryFooter(model: model, onClose: {}))
+    footer = UIHostingController(rootView: PageSummaryFooter(model: model, onClose: {}, onShare: {}))
     super.init(frame: .zero)
-    footer.rootView = PageSummaryFooter(model: model) { [weak self] in self?.onClose?() }
+    footer.rootView = PageSummaryFooter(model: model, onClose: { [weak self] in self?.onClose?() }, onShare: { [weak self] in self?.share() })
     backgroundColor = .clear
     overrideUserInterfaceStyle = look.inkIsLight ? .dark : .light
     backdrop.safeAreaRegions = []
@@ -253,7 +261,9 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
     scroll.delegate = self
     scroll.isScrollEnabled = false
     scroll.clipsToBounds = false
-    addSubview(scroll)
+    textClip.addSubview(scroll)
+    addSubview(textClip)
+    textFade.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
 
     titleLabel.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .systemFont(ofSize: 13, weight: .semibold), maximumPointSize: 20)
     titleLabel.textColor = .label
@@ -347,21 +357,60 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
   private func placeText() {
     let width = bounds.width
     text.view.frame = CGRect(x: 0, y: crease(.settled) + 26, width: width, height: max(ceil(model.textHeight), 1))
-    let bottom = safeAreaInsets.bottom + PageSummaryMotion.footerHeight
-    scroll.contentSize = CGSize(width: width, height: text.view.frame.maxY + bottom + 28)
+    let bottom = PageSummaryMotion.barReserve + PageSummaryMotion.textFade + 16
+    scroll.contentSize = CGSize(width: width, height: text.view.frame.maxY + bottom)
   }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     backdrop.view.frame = bounds
-    scroll.frame = bounds
-    let footerHeight = PageSummaryMotion.footerHeight + safeAreaInsets.bottom
-    footer.view.frame = CGRect(x: 0, y: bounds.height - footerHeight, width: bounds.width, height: footerHeight)
+    textClip.frame = bounds
+    scroll.frame = textClip.bounds
+    placeTextFade()
+    let footerHeight = PageSummaryMotion.barReserve + 16
+    let sides = max(safeAreaInsets.left, safeAreaInsets.right)
+    footer.view.frame = CGRect(x: sides, y: bounds.height - footerHeight, width: bounds.width - sides * 2, height: footerHeight)
     guard laidOutSize != bounds.size else { return }
     laidOutSize = bounds.size
     if phase == .loading || phase == .settled { place(phase) }
   }
 
+
+  private func placeTextFade() {
+    let height = max(bounds.height, 1)
+    let clear = height - PageSummaryMotion.barBottomGap - PageSummaryMotion.barControl / 2
+    let solid = clear - PageSummaryMotion.barControl / 2 - PageSummaryMotion.textFade
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    textFade.frame = textClip.bounds
+    textFade.locations = [0, NSNumber(value: Double(max(solid, 0) / height)), NSNumber(value: Double(max(clear, 0) / height))]
+    CATransaction.commit()
+  }
+
+  private func fadesText(_ on: Bool) {
+    guard on != (textClip.layer.mask === textFade) else { return }
+    textClip.layer.mask = on ? textFade : nil
+  }
+
+  private func share() {
+    guard let session = model.session, session.isShareable, let window else { return }
+    var items: [Any] = [session.sharedText]
+    if let address = session.address { items.append(address) }
+    let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+    controller.completionWithItemsHandler = { [weak self] _, completed, _, _ in
+      if completed { self?.onShared?() }
+    }
+    if let popover = controller.popoverPresentationController {
+      popover.sourceView = footer.view
+      popover.sourceRect = CGRect(x: PageSummaryMotion.barSideInset, y: 0, width: PageSummaryMotion.barControl, height: PageSummaryMotion.barControl)
+    }
+    guard var top = window.rootViewController else { return }
+    while let presented = top.presentedViewController, !presented.isBeingDismissed { top = presented }
+    top.present(controller, animated: true)
+    if let container = controller.presentationController?.containerView, let holder = container.superview, holder === superview {
+      holder.bringSubviewToFront(container)
+    }
+  }
 
   func hold(over pageFrame: CGRect, transform: CGAffineTransform, fold: CGFloat, glow: CGFloat, corner: CGFloat) {
     guard phase == .held else { return }
@@ -469,6 +518,7 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
     phase = .settled
     card.wobble(false)
     scroll.isScrollEnabled = true
+    fadesText(true)
     text.view.alpha = 1
     model.showsText = true
     if reduced {
@@ -499,6 +549,7 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
     if reduced { return fadeOut(done) }
     card.center = scroll.convert(card.center, to: self)
     addSubview(card)
+    fadesText(false)
     let target = CGPoint(x: pageFrame.midX, y: pageFrame.midY)
     card.flatten(duration: PageSummaryMotion.leave, reduced: false)
     UIView.animate(withDuration: 0.15) {

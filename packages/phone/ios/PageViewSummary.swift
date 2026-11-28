@@ -305,6 +305,9 @@ extension PageView {
     session.onSettled = { settled in
       PhonePages.shared.send(pageID, "page.summarySettled", ["trigger": settled.trigger.rawValue, "outcome": settled.outcome, "isPrivate": isPrivate])
     }
+    stage.onShared = {
+      PhonePages.shared.send(pageID, "page.summaryShared", ["isPrivate": isPrivate])
+    }
     summarySession = session
     stage.commit(session)
     session.start(page)

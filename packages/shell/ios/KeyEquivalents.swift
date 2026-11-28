@@ -317,7 +317,7 @@ enum KeyEquivalents {
     return root.accessibilityLabel() == label && !root.visibleRect.isEmpty ? root : nil
   }
 
-  static func pageViews(in window: NSWindow) -> [NSView] {
+  private static func pageViews(in window: NSWindow) -> [NSView] {
     var views: [NSView] = []
     func walk(_ view: NSView) {
       guard !view.isHidden, view.alphaValue > 0 else { return }

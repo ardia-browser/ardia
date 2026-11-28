@@ -158,12 +158,12 @@ final class MouseGestures {
 
   #if DEBUG
   func devDrive(windowId: String, points: [[Double]], release: Bool) -> [String: Any] {
-    guard let window = WindowManager.shared.window(windowId), let page = KeyEquivalents.pageViews(in: window).first else {
-      return ["error": "no page in \(windowId)"]
+    guard let window = WindowManager.shared.window(windowId), let root = SyntheticInput.root(of: window) else {
+      return ["error": "no window \(windowId)"]
     }
     let located = points.compactMap { xy -> NSPoint? in
       guard xy.count == 2 else { return nil }
-      return page.convert(SyntheticInput.localPoint(x: xy[0], top: xy[1], in: page), to: nil)
+      return root.convert(SyntheticInput.localPoint(x: xy[0], top: xy[1], in: root), to: nil)
     }
     func send(_ type: NSEvent.EventType, _ point: NSPoint) {
       guard let event = NSEvent.mouseEvent(

@@ -24,6 +24,7 @@ import { togglePageEngine } from "../engines/actions";
 import { ENGINE_NAMES, otherEngine, switchableEngine, tabEngine } from "../engines/engines";
 import { groupItems, hintWhen, profileItems, sections, windowItems, withAlternate, type Destination } from "./menuParts";
 import { openMultiMenu } from "./multiTabMenu";
+import { boostTarget, newBoostForTab } from "../boostUi/actions";
 import { tileFolderOf } from "../pins/tileFolders";
 import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
@@ -183,7 +184,7 @@ function customizeItem(s: BrowserState, tab: Tab, f: Facts): MenuItem {
             { id: "reopenAtPin", title: "Reopen at Pinned URL", symbol: "arrow.uturn.backward", checked: reopensAtPinnedUrl(s.settings, tab) },
           ]
         : [],
-      [...(engine ? [{ id: "engine", title: `Open in ${engine}`, symbol: "globe" }] : []), ...unreadItems(s, tab)],
+      [...(boostTarget(tab.id) ? [{ id: "boost", title: "Boost This Site", symbol: "paintbrush" }] : []), ...(engine ? [{ id: "engine", title: `Open in ${engine}`, symbol: "globe" }] : []), ...unreadItems(s, tab)],
     ),
   };
 }
@@ -314,6 +315,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "siteUnread") toggleSiteUnread(tab.id);
   else if (choice === "allUnread") showUnreadCounts(true);
   else if (choice === "engine") void togglePageEngine(tab.id);
+  else if (choice === "boost") newBoostForTab(windowId, tab.id);
   else if (choice === "copy") copyUrls([tab.id], false);
   else if (choice === "copyMd") copyUrls([tab.id], true);
   else if (choice === "bookmark") bookmarkTab(windowId, tab.id);

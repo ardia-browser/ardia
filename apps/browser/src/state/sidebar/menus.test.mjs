@@ -85,6 +85,7 @@ test("a shown tab's menu: quick actions, then organize, customize and close, wit
     "  Rename… [pencil]",
     "  Change Icon… [photo]",
     "  ---",
+    "  Boost This Site [paintbrush]",
     "  Open in WebKit [globe]",
     "---",
     "Close Tab [xmark] ⌘W",
@@ -168,6 +169,7 @@ test("a Top Apps tile: unpin, Move to Pinned or a folder, pinned URL edits under
     "  Edit Pinned URL… [link]",
     "  Reopen at Pinned URL [arrow.uturn.backward] ✓",
     "  ---",
+    "  Boost This Site [paintbrush]",
     "  Open in WebKit [globe]",
   ]);
 });

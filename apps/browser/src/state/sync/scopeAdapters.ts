@@ -6,6 +6,7 @@ import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileT
 import { settingsAdapter } from "./settingsAdapter";
 import { withSettingEdits } from "./settingEdits";
 import { pinnedAreaAdapters } from "./pinned";
+import { boostsAdapter } from "./boostsAdapter";
 import { extensionsAdapterFor, watchExtensionIntents } from "./extensions";
 import { engineProfile } from "../browser/model";
 import { profileOpened } from "../profiles/profileLoading";
@@ -20,6 +21,8 @@ import { alsoDeleting, removedDeviceKeys } from "./deviceRemoval";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 
 const fromSession = (adapter: Adapter): Adapter => ({ ...adapter, sessionBacked: true });
+
+export { watchBoosts } from "./boostsAdapter";
 
 export const deviceName = () => SyncNative?.deviceName() ?? `This ${PLATFORM_TERMS.computerTitle}`;
 
@@ -117,5 +120,6 @@ export function profileAdapters(doc: SyncDoc, profileId: string, retiring: boole
     sentTabsAdapter(id, () => sendLedger(doc, profileScope(doc.profiles[profileId]!.syncId)), (arrived) => deliverSentTabs(doc, profileId, arrived)),
     ...(synced("passwords") ? [passwords(forcePasswords)] : []),
     ...(synced("extensions") ? [extensionsOf(profileId)] : []),
+    ...(synced("boosts") ? [boostsAdapter(profileId)] : []),
   ];
 }

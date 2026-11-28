@@ -19,6 +19,8 @@ export const PROFILE_TOP_APPS = "pta:";
 export const PROFILE_OPEN_TABS = "ptab:";
 export const BOOKMARK = "bm:";
 export const HISTORY = "h:";
+export const BOOST = "boost:";
+
 export const SEND = "send:";
 
 export const RECEIVES_TABS = "send";

@@ -1,6 +1,7 @@
 import type { WindowRequest } from "../tabs";
 import type { AutofillCalls, AutofillEvents } from "./generated/autofill";
 import type { BookmarksCalls, BookmarksEvents } from "./generated/bookmarks";
+import type { BoostsCalls, BoostsEvents } from "./generated/boosts";
 import type { ContentBlockerCalls, ContentBlockerEvents } from "./generated/contentBlocker";
 import type { DownloadsCalls, DownloadsEvents } from "./generated/downloads";
 import type { EngineCalls as EngineDomainCalls, EngineEvents as EngineDomainEvents } from "./generated/engine";
@@ -18,9 +19,9 @@ import type { WebKitCalls, WebKitEvents } from "./generated/webKit";
 import type { WebViewCalls, WebViewEvents } from "./generated/webView";
 import type { WindowsCalls, WindowsEvents } from "./generated/windows";
 
-export type EngineCalls = AutofillCalls & BookmarksCalls & ContentBlockerCalls & DownloadsCalls & EngineDomainCalls & ExtensionsCalls & FaviconsCalls & HistoryCalls & MediaCalls & PasswordsCalls & PermissionsCalls & ProfilesCalls & SearchCalls & SitesCalls & TabsCalls & WebKitCalls & WebViewCalls & WindowsCalls;
+export type EngineCalls = AutofillCalls & BookmarksCalls & BoostsCalls & ContentBlockerCalls & DownloadsCalls & EngineDomainCalls & ExtensionsCalls & FaviconsCalls & HistoryCalls & MediaCalls & PasswordsCalls & PermissionsCalls & ProfilesCalls & SearchCalls & SitesCalls & TabsCalls & WebKitCalls & WebViewCalls & WindowsCalls;
 
-export type EngineEvents = AutofillEvents & BookmarksEvents & ContentBlockerEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & MediaEvents & PasswordsEvents & PermissionsEvents & ProfilesEvents & SearchEvents & SitesEvents & TabsEvents & WebKitEvents & WebViewEvents & WindowsEvents;
+export type EngineEvents = AutofillEvents & BookmarksEvents & BoostsEvents & ContentBlockerEvents & DownloadsEvents & EngineDomainEvents & ExtensionsEvents & FaviconsEvents & HistoryEvents & MediaEvents & PasswordsEvents & PermissionsEvents & ProfilesEvents & SearchEvents & SitesEvents & TabsEvents & WebKitEvents & WebViewEvents & WindowsEvents;
 
 export type WindowsHostEvents = {
   "tabs.windowRequest": WindowRequest;

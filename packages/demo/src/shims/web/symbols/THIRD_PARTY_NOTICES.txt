@@ -4,7 +4,7 @@ The demo draws its icons from the open icon sets below, rescaled and repositione
 
 ==============================================================================
 Lucide (lucide-static 1.56.0, ISC) https://lucide.dev
-Icons used: arrow-left-right, arrow-up-down, car-front, check, chevrons-up-down, circle-equal, circle-question-mark, clock-9, coffee, command, ellipsis, film, flag, flame, git-merge, hammer, hard-drive, key-round, leaf, lightbulb, message-square, messages-square, moon, navigation, newspaper, option, orbit, package, paintbrush, palette, pin, pin-off, plug, plus, shopping-cart, square-plus, sun, target, test-tubes, trophy, umbrella, undo-2, unfold-vertical, user, video
+Icons used: a-large-small, arrow-left-right, arrow-up-down, car-front, check, chevrons-up-down, circle-equal, circle-question-mark, clock-9, coffee, command, ellipsis, film, flag, flame, git-merge, hammer, hard-drive, key-round, leaf, lightbulb, message-square, messages-square, moon, navigation, newspaper, option, orbit, package, paintbrush, palette, pin, pin-off, plug, plus, shopping-cart, square-plus, sun, target, test-tubes, trophy, umbrella, undo-2, unfold-vertical, user, video
 ------------------------------------------------------------------------------
 ISC License
 
@@ -130,7 +130,7 @@ SOFTWARE.
 
 ==============================================================================
 Material Design Icons (Pictogrammers) (@mdi/svg 7.4.47, Apache-2.0) https://pictogrammers.com/library/mdi
-Icons used: account, account-multiple, account-multiple-outline, account-outline, alarm, arrow-collapse-left, arrow-collapse-vertical, bicycle, brain, briefcase, bug-outline, camera, cloud-off-outline, coffee-outline, cursor-default, dock-left, folder, hammer, hand-back-right-off-outline, hand-back-right-outline, headphones, home, image-filter-hdr, image-outline, lightbulb, menu, music-note, pause, pause-circle, pencil-outline, piano, pin, play-box-outline, record-circle-outline, run, shield-check, shield-check-outline, shield-half-full, shield-lock-outline, silverware-fork-knife, skip-next, skip-previous, soccer, soccer-field, star, star-outline, stop-circle-outline, television-play, web, zip-box-outline
+Icons used: account, account-multiple, account-multiple-outline, account-outline, alarm, arrow-collapse-left, arrow-collapse-vertical, bicycle, brain, briefcase, brush, bug-outline, camera, cloud-off-outline, coffee-outline, cursor-default, dock-left, folder, hammer, hand-back-right-off-outline, hand-back-right-outline, headphones, home, image-filter-hdr, image-outline, lightbulb, lightbulb-off-outline, menu, music-note, pause, pause-circle, pencil-outline, piano, pin, play-box-outline, record-circle-outline, run, shield-check, shield-check-outline, shield-half-full, shield-lock-outline, silverware-fork-knife, skip-next, skip-previous, soccer, soccer-field, star, star-outline, stop-circle-outline, television-play, web, zip-box-outline
 ------------------------------------------------------------------------------
 Pictogrammers Free License
 --------------------------

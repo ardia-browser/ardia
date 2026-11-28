@@ -1,4 +1,8 @@
 import { hostOf } from "@ardia/core";
+import { currentTab } from "../browser/current";
+import { showImportBoost } from "../boosts/importSheet";
+import { boostCodeFromLink } from "../boosts/share";
+import { openSettings } from "../settings/settingsWindows";
 import type { PageEngine } from "../../platform/tabs";
 import { dismissPermissions } from "../site/permissions";
 import { answerExternalApp } from "../site/prompts";
@@ -18,6 +22,7 @@ import { forgetVerificationCodes } from "../site/verificationCodes";
 import { useBrowser } from "../browser/store";
 import { siteOf } from "../engines/engines";
 import { navigationOf } from "./pageSession";
+export { deliverZapPicked } from "../boostUi/zap";
 
 export function leftPage(tabId: string, url: string, previousPage: string, engine: PageEngine) {
   if (pageOf(tabId).externalApp && hostOf(url) !== hostOf(previousPage)) answerExternalApp(tabId, false);
@@ -29,6 +34,7 @@ export function leftPage(tabId: string, url: string, previousPage: string, engin
   patchPage(tabId, { popups: [], passwordPrompt: null, crashed: null, status: "" });
   revealToolbar(tabId);
   followSiteChoice(tabId, engine, url, previousPage);
+  openBoostLink(tabId, url);
 }
 
 export function arrivedOnFirstPage(tabId: string, url: string, engine: PageEngine) {
@@ -39,6 +45,13 @@ export function arrivedOnFirstPage(tabId: string, url: string, engine: PageEngin
   }
   const askedSite = siteOf(navigationOf(t)?.url);
   if (askedSite && siteOf(url) && askedSite !== siteOf(url)) followSiteChoice(tabId, engine, url, "");
+}
+
+export function openBoostLink(tabId: string, url: string) {
+  const shareCode = boostCodeFromLink(url);
+  if (!shareCode) return;
+  showImportBoost(shareCode);
+  openSettings("profiles", currentTab(tabId)?.profileId);
 }
 
 export function pageEnded(tabId: string) {

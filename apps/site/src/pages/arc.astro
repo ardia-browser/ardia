@@ -106,7 +106,8 @@ const timeline = [
       <div class="wrap">
         <h2 class="poster" id="missing-title">What doesn’t</h2>
         <ul class="plain">
-          <li><strong>Boosts and Easels.</strong> Neither is built in.</li>
+          <li><strong>Easels.</strong> There are no Easels.</li>
+          <li><strong>Your Arc Boosts.</strong> Ardia has Boosts of its own on Mac, but it can’t read Arc’s share links or bring your Boosts over. Rebuild one in a minute with the editor.</li>
           <li><strong>Arc Max.</strong> Ardia has no AI built in, on purpose.</li>
           <li><strong>Intel Macs.</strong> Mac needs Apple Silicon and {MIN_MACOS}+. Windows has an early nightly, not signed yet.</li>
         </ul>
@@ -139,6 +140,11 @@ const timeline = [
           }
         </dl>
         <p class="note">Import before December 22, while Arc still opens and unlocks your saved data.</p>
+        <p class="note">
+          <strong>Save your Boosts before December 22.</strong> Arc keeps them on its servers, and those go away with your account. Open each
+          Boost and copy its CSS and JavaScript somewhere safe, and note the colours, font, size, text case and zapped elements you picked. In Ardia, Boost This Site rebuilds it, and Copy
+          share code hands a JavaScript-free Boost to anyone with Ardia.
+        </p>
       </div>
     </section>
 
@@ -257,6 +263,10 @@ const timeline = [
     margin-top: 20px;
     max-width: 40rem;
     color: var(--ink-2);
+  }
+  .note strong {
+    color: var(--ink);
+    font-weight: 620;
   }
   .block.last {
     margin-bottom: var(--section);

@@ -1,5 +1,6 @@
 import { autofill } from "./autofill.ts";
 import { bookmarks } from "./bookmarks.ts";
+import { boosts } from "./boosts.ts";
 import { contentBlocker } from "./contentBlocker.ts";
 import { downloads } from "./downloads.ts";
 import { engine } from "./engine.ts";
@@ -21,7 +22,7 @@ import { webKit } from "./webKit.ts";
 import { webView } from "./webView.ts";
 import { windows } from "./windows.ts";
 
-export const domains = { autofill, bookmarks, contentBlocker, downloads, engine, extensions, favicons, history, media, passwords, permissions, profiles, search, sites, tabs, webKit, webView, windows };
+export const domains = { autofill, bookmarks, boosts, contentBlocker, downloads, engine, extensions, favicons, history, media, passwords, permissions, profiles, search, sites, tabs, webKit, webView, windows };
 
 export const moduleDomains = { shaders, shell, sync, import: importModules };
 

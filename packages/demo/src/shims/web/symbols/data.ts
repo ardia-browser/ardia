@@ -357,6 +357,9 @@ const BODIES: readonly string[] = [
   "<circle cx=\"16\" cy=\"16\" r=\"10.96\"/><path d=\"M9.78 12.91L22.22 12.91\"/><path d=\"M11.48 16.8L20.52 16.8\"/><path d=\"M13.28 20.69L18.72 20.69\"/>",
   "<rect x=\"5.69\" y=\"5.65\" width=\"20.63\" height=\"20.7\" rx=\"2.21\"/><path d=\"M16 5.65H7.89A2.21 2.21 0 0 0 5.69 7.86V24.14A2.21 2.21 0 0 0 7.89 26.35H16Z\" fill=\"currentColor\"/>",
   "<rect x=\"5.56\" y=\"5.64\" width=\"20.89\" height=\"20.72\" rx=\"2.39\"/><path d=\"M16 5.64H7.95A2.39 2.39 0 0 0 5.56 8.03V23.97A2.39 2.39 0 0 0 7.95 26.36H16Z\" fill=\"currentColor\"/>",
+  "<path d=\"M12,2C9.76,2 7.78,3.05 6.5,4.68L7.93,6.11C8.84,4.84 10.32,4 12,4A5,5 0 0,1 17,9C17,10.68 16.16,12.16 14.89,13.06L16.31,14.5C17.94,13.21 19,11.24 19,9A7,7 0 0,0 12,2M3.28,4L2,5.27L5.04,8.3C5,8.53 5,8.76 5,9C5,11.38 6.19,13.47 8,14.74V17A1,1 0 0,0 9,18H14.73L18.73,22L20,20.72L3.28,4M7.23,10.5L12.73,16H10V13.58C8.68,13 7.66,11.88 7.23,10.5M9,20V21A1,1 0 0,0 10,22H14A1,1 0 0,0 15,21V20H9Z\" />",
+  "<path d=\"M20.71,4.63L19.37,3.29C19,2.9 18.35,2.9 17.96,3.29L9,12.25L11.75,15L20.71,6.04C21.1,5.65 21.1,5 20.71,4.63M7,14A3,3 0 0,0 4,17C4,18.31 2.84,19 2,19C2.92,20.22 4.5,21 6,21A4,4 0 0,0 10,17A3,3 0 0,0 7,14Z\" />",
+  "<path d=\"m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16\" /><path d=\"M15.697 14h5.606\" /><path d=\"m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16\" /><path d=\"M3.304 13h6.392\" />",
 ];
 
 const ENCODED: Record<string, readonly EncodedLayer[]> = {
@@ -686,6 +689,9 @@ const ENCODED: Record<string, readonly EncodedLayer[]> = {
   "slider.horizontal.2.square": [[208,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
   "play.tv": [[75,24,1,1,0,[[1.3069,0.9975,0.0197,-0.0059,0,0,1],[1.3069,1.0375,0.0009,-0.0246,0,0,1],[1.3106,1.0325,0.0047,-0.0077,0,0,1],[1.3163,1.035,0.0113,-0.0265,0,0,1],[1.3256,1.03,0.0216,-0.0415,0.012,0,1]]]],
   "puzzlepiece.fill": [[341,256,1,1,0,[[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1],[1.35,1,0,0,0,0,1]]]],
+  "lightbulb.slash.fill": [[353,24,1,1,0,[[0.7958,0.8875,0.016,-0.0588,0.2115,0,1],[0.8445,0.905,0.0348,-0.0701,0.2033,0,1],[0.8145,0.885,0.046,-0.0813,0.2348,0,1],[0.867,0.9,0.0189,-0.0494,0.2168,0,1],[0.8783,0.8975,0.0264,-0.0644,0.222,0,1]]]],
+  "paintbrush.fill": [[354,24,1,1,0,[[0.5833,0.925,-0.0494,0.0717,0.5558,0,1],[0.5983,0.94,-0.0344,0.0942,0.5618,0,1],[0.6171,0.94,-0.0644,0.0877,0.5678,0,1],[0.6133,0.94,-0.0644,0.0792,0.5768,0,1],[0.5983,0.94,-0.0194,0.0792,0.6023,0,1]]]],
+  "textformat.size": [[355,24,0,1,0,[[1.0663,1.07,-0.0445,0.0722,0.1835,0,1],[1.0887,1.08,-0.0408,0.0685,0.1895,0,1],[1.1862,1.02,-0.052,0.0835,0.2143,0,1],[1.1712,1.0775,-0.0726,0.0928,0.2203,0,1],[1.1788,1.065,-0.0323,0.076,0.251,0,1]]]],
 };
 
 const WEIGHTS: readonly SymbolWeight[] = ["light","regular","medium","semibold","bold"];
@@ -1044,6 +1050,9 @@ const NUDGES: Record<string, string> = {
   "slider.horizontal.2.square": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   "play.tv": "c9g9debbeabegacfdfabfebb9bcfafbb9bbccf8fdcdaegbb8edbebcf8bdfbec9a9cdadcdbf8fdbc9efbb8fdbfbbf8acebfcbacdfafbfcg9gdcciefbc8gdc6bbg8bdfbfdjbjdfaf5f",
   "puzzlepiece.fill": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "lightbulb.slash.fill": "cf8aceeb89dd8gdc9fda9ed9dgdfdedddbdacf8aceeb8hdc9gdb9fdi9edhdgdfdedc5j5ifcb7faa8cdg9cch7dahde8abb9b7c6dcdae8fdbggba8ceg9dc9feaade8bcbacgdedceaf9",
+  "paintbrush.fill": "g9d3i6c3e8j3f6k0g3d5h0e3f0g0h0i0k0l0j9g3k6f3h9m3j6g0l3h6m0j3l0m0o3i0o0o0j9gcl7f4i9e4j6g9l4i6n1j4l1n0o4i1o0o0g9dc96cce9b3f6c9g3d6h9e3f0g6h3i0j0c3",
+  "textformat.size": "kch9eehdkch8mdjbo8ldoan7o9obodo7oaocfbk8iclbn9l6ibn8l5oao7oco5o7o9obo4o6iao7lboaj8o5nao6obo8o5oao3o5o6o8o1o3haf7lcfai9gelbj7ocm9k6obldo6o8o9obo5",
 };
 
 export function symbolNudge(name: string, weight: SymbolWeight, pointSize: number): readonly [number, number] {

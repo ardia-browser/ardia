@@ -40,7 +40,7 @@ import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type Fie
 import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { hoverStatus } from "../../state/tabs/hoverStatus";
 import { endPageDocument, forgetPageDocument, notePageDocument } from "../../state/plugins/pageBarDocuments";
-import { arrivedOnFirstPage, leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
+import { arrivedOnFirstPage, deliverZapPicked, leftPage, pageAskedToClose, pageEnded } from "../../state/tabs/pageEvents";
 import { copyLinkToSelection, searchSelection, setPageSelection } from "../../state/site/selection";
 import { shareFromPage } from "../../state/site/share";
 import { navigateFromPage } from "../../state/tabs/pageCommands";
@@ -73,7 +73,6 @@ import { consumedCallbackUrl } from "../../state/tabs/callbackUrls";
 const webViewTab = (t: Tab | undefined) => ({ navigation: navigationOf(t), adoptId: adoptOf(t), profileId: t?.profileId ?? "", shownUrl: t?.url ?? "" });
 
 type TabWebViewProps = { tabId: string; visible: boolean; selected?: boolean; warm: boolean; peekOf?: string };
-
 const ARRIVING = [StyleSheet.absoluteFill, { opacity: 0 }];
 
 export const TabWebView = memo(function TabWebView(props: TabWebViewProps) {
@@ -215,6 +214,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       pageColor={pageColor}
       contentsBackgroundColor={backdrop}
       shownUrl={shownUrl}
+      onZapPicked={(pick) => deliverZapPicked(tabId, pick)}
       onReady={() => {
         if (peekOf === undefined) notePeekRecipient(tabId);
         markTabReady(tabId);

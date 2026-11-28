@@ -36,6 +36,7 @@ const ANSWERS: Record<string, Record<string, unknown>> = {
     loadHealth: { dropped: 0, enabled: 0, disabled: {} },
     actionStates: {},
   },
+  ArdiaBoosts: {},
   ArdiaSearch: {
     engines: { list: { engines: [] } },
     suggest: { status: 200, body: "[]" },

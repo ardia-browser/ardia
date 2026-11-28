@@ -104,6 +104,8 @@ extension WebKitTab: PageTab {
 
   func showDevTools(panel: String?) { showWebKitDevTools(panel: panel) }
 
+  func zap(_ action: String, level: Int) {}
+
   func downloadImage(_ url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void) {
     downloadFavicon(url, completion: completion)
   }

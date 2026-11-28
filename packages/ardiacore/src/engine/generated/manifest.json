@@ -87,6 +87,29 @@
         }
       }
     },
+    "boosts": {
+      "kind": "engine",
+      "types": "packages/ardiacore/src/engine/generated/boosts.ts",
+      "swift": "packages/ardiacore/ios/BoostsCalls.swift",
+      "calls": {
+        "setProfileBoosts": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "previewBoost": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "clearBoostPreview": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      },
+      "events": {}
+    },
     "contentBlocker": {
       "kind": "engine",
       "types": "packages/ardiacore/src/engine/generated/contentBlocker.ts",

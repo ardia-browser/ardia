@@ -271,6 +271,15 @@
    ]
   },
   {
+   "id": "chromium-page-message:zapPicked",
+   "source": "page",
+   "guard": "Main frame only; a selector of at most 4096 characters and finite counts, delivered only to a listener the Boost editor registered for that tab. A saved selector passes safeSelector before it becomes a hide rule, so it can only hide elements",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm",
+    "apps/browser/src/state/boosts/valid.ts#safeSelector"
+   ]
+  },
+  {
    "id": "chromium-page-message:verificationCode",
    "source": "page",
    "guard": "Main frame only; the offer is bound to frame, navigation, profile and generation; filling needs a click on the chip",
@@ -282,7 +291,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 35,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -426,7 +435,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 68,
+   "count": 69,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -888,6 +897,15 @@
    "guard": "Web Store ids, version and permission fingerprint checked natively (C3: privileges follow the record)",
    "checks": [
     "apps/browser/src/state/sync/extensions.ts#extensionsAdapterFor"
+   ]
+  },
+  {
+   "id": "sync-adapter:boostsAdapter.ts#boostsAdapter",
+   "source": "sync",
+   "guard": "validBoost decoder: field types and sizes, a hostname-only domain, a closed set of sizes and cases. Selectors pass safeSelector before they become rules. A synced Boost's JavaScript runs on its matching sites on the receiving device, as it does where it was written",
+   "checks": [
+    "apps/browser/src/state/sync/boostsAdapter.ts#boostsAdapter",
+    "apps/browser/src/state/boosts/valid.ts#validBoost"
    ]
   },
   {

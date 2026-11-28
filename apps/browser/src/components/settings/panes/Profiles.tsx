@@ -32,6 +32,7 @@ import { OtherEnginesPage, SearchSection } from "./ProfileSearch";
 import { PasswordsPage, PasswordsSection } from "./ProfilePasswords";
 import { AddressesPage, CardsPage } from "./ProfileAutofill";
 import { ExtensionPage, ExtensionsSection } from "./ProfileExtensions";
+import { BoostsSection } from "./ProfileBoosts";
 import { SitePage, SitesPage } from "./SiteSettings";
 import { homeRelative } from "../../../lib/homePath";
 
@@ -60,6 +61,7 @@ function ProfileOverview({ profileId }: { profileId: string }) {
         <SearchSection profileId={profileId} />
         <PasswordsSection profileId={profileId} />
         <ExtensionsSection profileId={profileId} />
+        <BoostsSection profileId={profileId} />
         <DataSection profileId={profileId} />
       </View>
       <AllProfilesSection />

@@ -5,7 +5,7 @@ import { useBrowser } from "../browser/store";
 import { engineProfile } from "../browser/model";
 import { historyExpired } from "./historyAdapter";
 import { settleRetiredDefaultsWithoutSync, settleSettingsFromSavedSync } from "./settingsAdapter";
-import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced, watchSyncedExtensions } from "./scopeAdapters";
+import { appAdapters, extensionsOf, forgetScopeAdapters, profileAdapters, typeSynced, watchBoosts, watchSyncedExtensions } from "./scopeAdapters";
 import { APP_SCOPE, emptyDoc, emptyUi, typeSyncedFor, type DataType, type SendTarget, type SyncDoc, type SyncUi } from "./syncDoc";
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
@@ -43,8 +43,7 @@ export const currentSyncFolder = () => useSync.getState().folder;
 
 let doc: SyncDoc = emptyDoc();
 let cycle: Promise<void> | null = null;
-let again = false;
-let forcePasswordsNext = false;
+let again = false, forcePasswordsNext = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let stateLoading: Promise<unknown> = Promise.resolve();
 const { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, checkpoint } = syncFiles(() => doc, sessionMarkHooks(() => doc));
@@ -388,6 +387,7 @@ export function startSync() {
     if (closed && !cycle) save();
     if (closed || (!cycle && (s.bookmarks !== prev.bookmarks || s.settings !== prev.settings || s.profiles !== prev.profiles || s.profileOrder !== prev.profileOrder || s.groups !== prev.groups))) scheduleSync();
   });
+  watchBoosts(() => doc.types.boosts && scheduleSync());
   if (__DEV__)
     exposeDevSync({ useSync, syncNow, turnOnSync, enterRecoveryPhrase: (folder: string, text: string) => enterRecoveryPhrase(folder, asSecret("syncPhrase", text)), stopSync, setTypeSynced, setProfileSynced, setOpenTabsSynced, addRemoteProfile, removeRemoteProfile, removeSyncedDevice, setSyncFolder, moveSyncFolder, recreateSyncFolder, folderInfo, doc: () => doc, native: SyncNative });
 }

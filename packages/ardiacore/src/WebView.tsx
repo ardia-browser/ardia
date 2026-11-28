@@ -90,6 +90,7 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
     sleepIfUnused: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => (typeof n.sleepIfUnused === "function" ? n.sleepIfUnused(seconds) : n.sleepIfHidden(seconds))),
     wakeIfSleeping: () => call(false, (n) => (typeof n.wakeIfSleeping === "function" ? n.wakeIfSleeping() : Promise.resolve(false))),
     setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
+    zap: (action, level) => call(undefined, (n) => n.zap(action, level ?? 0)),
   };
 }
 

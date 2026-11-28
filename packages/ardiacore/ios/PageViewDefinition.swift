@@ -126,6 +126,7 @@ enum PageViewDefinition {
         .runOnQueue(.main)
       AsyncFunction("wakeIfSleeping") { (view: V) -> Bool in view.page.wakeIfSleeping() }.runOnQueue(.main)
       AsyncFunction("setFrozen") { (view: V, frozen: Bool) in view.page.frozen = frozen }.runOnQueue(.main)
+      AsyncFunction("zap") { (view: V, action: String, level: Int) in view.page.zap(action, level: level) }.runOnQueue(.main)
 
       OnViewDidUpdateProps { (view: V) in view.propsDidUpdate() }
     }

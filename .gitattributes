@@ -3,6 +3,7 @@ engine/ardiacore-desktop/src/ardia/desktop/generated/** text eol=lf
 engine/ardiacore-linux/src/ardia/linux/bootstrap.js text eol=lf
 packages/ardiacore/ios/AutofillCalls.swift text eol=lf
 packages/ardiacore/ios/BookmarksCalls.swift text eol=lf
+packages/ardiacore/ios/BoostsCalls.swift text eol=lf
 packages/ardiacore/ios/ContentBlockerCalls.swift text eol=lf
 packages/ardiacore/ios/DownloadsCalls.swift text eol=lf
 packages/ardiacore/ios/EngineCalls.swift text eol=lf

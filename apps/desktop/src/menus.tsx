@@ -109,6 +109,14 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
   const [position, setPosition] = useState({ left: 0, top: 0 });
   const [sub, setSub] = useState<{ item: MenuItem; row: HTMLElement } | null>(null);
   const [modifiers, setModifiers] = useState(held);
+  const anchorRow = "row" in anchor ? anchor.row : null;
+  const [shownRow, setShownRow] = useState(anchorRow);
+  if (shownRow !== anchorRow) {
+    setShownRow(anchorRow);
+    setSub(null);
+  }
+  const openSub = sub ? items.find((item) => sameItem(sub.item, item)) : undefined;
+  const subChildren = openSub && "children" in openSub ? openSub.children : undefined;
   const dark = useBrowser((s) => s.ui.appDark);
   useLayoutEffect(() => {
     const place = () => {
@@ -139,6 +147,9 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
       window.removeEventListener("scroll", place, true);
     };
   }, [anchor, modifiers, items]);
+  useLayoutEffect(() => {
+    if (menuRef.current) menuRef.current.scrollTop = 0;
+  }, [anchorRow]);
   useInputRegion(menuRef);
   useEffect(() => {
     const track = (e: KeyboardEvent | PointerEvent) => {
@@ -163,7 +174,7 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
         return (
           <div
             key={item.id + i}
-            className={`ardia-menu-item${enabled ? "" : " disabled"}${sameItem(sub?.item, item) ? " expanded" : ""}`}
+            className={`ardia-menu-item${enabled ? "" : " disabled"}${sameItem(openSub, item) ? " expanded" : ""}`}
             onPointerEnter={(e) => setSub(enabled && item.children ? { item, row: e.currentTarget } : null)}
             onClick={() => enabled && !item.children && pickMenuItem(item.id, item.keepOpen)}
           >
@@ -175,10 +186,10 @@ function MenuList({ items, anchor }: { items: MenuItem[]; anchor: MenuAnchor }) 
             ) : symbols ? <span className="ardia-menu-symbol-gap" style={{ width: 16, marginRight: 6, flex: "none" }} /> : null}
             <span className="ardia-menu-title">{item.title}</span>
             <span className="ardia-menu-key">{item.children ? "›" : item.key ? formatShortcut({ key: item.key, modifiers: item.modifiers ?? [] }) : ""}</span>
-            {sub && sameItem(sub.item, item) && item.children ? <MenuList items={item.children} anchor={{ row: sub.row }} /> : null}
           </div>
         );
       })}
+      {sub && subChildren ? <MenuList items={subChildren} anchor={{ row: sub.row }} /> : null}
     </div>,
     document.body,
   );

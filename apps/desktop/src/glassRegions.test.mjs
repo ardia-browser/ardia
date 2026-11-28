@@ -508,3 +508,49 @@ test("a slice too narrow for its rounded corner cuts no hole, so no hole can spi
   const square = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
   assert.deepEqual(offPagePieces(rect, square, [{ x: 203, y: 0, width: 800, height: 800 }]).map((piece) => piece.rect.width), [3]);
 });
+
+test("scrolling inside a glass panel keeps it translucent and does not hold it, while scrolling an ancestor still turns it opaque and holds it", async () => {
+  const h = harness();
+  h.glass.setPages([PAGE]);
+  const scroller = node(null);
+  const panel = node(menu(), scroller);
+  h.glass.add(panel);
+  h.tick(STABLE_FRAMES + 1);
+  await h.accept();
+  h.glass.presented(h.sent.at(-1).generation);
+  assert.equal(panel.attributes.glass, "on");
+  const sentBefore = h.sent.length;
+  h.glass.motion(panel, true);
+  assert.equal(panel.attributes.glass, "on", "scrolling the panel's own content flashed it opaque");
+  h.tick(STABLE_FRAMES + 1);
+  assert.equal(h.sent.length, sentBefore, "scrolling the panel's own content resubmitted its region");
+  assert.equal(h.glass.status().panels[0].translucent, true);
+  h.glass.motion(scroller, true);
+  assert.equal(panel.attributes.glass, "off", "scrolling an ancestor left the moving panel translucent");
+  h.tick(1);
+  assert.equal(h.sent.at(-1).regions.length, 0, "a panel held by an ancestor's scroll was still submitted");
+});
+
+test("a glass panel's afterimage sits under the shell, first in the body at z-index 0, so it never covers live UI", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./shellGlass.ts", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("function afterimage("), source.indexOf("function watch("));
+  assert.match(body, /zIndex: "0"/);
+  assert.match(body, /document\.body\.prepend\(ghost\)/);
+  assert.doesNotMatch(body, /appendChild|2147483000/);
+});
+
+test("a glass surface registers once and only restyles its fill when the theme tint changes", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./shellGlass.ts", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("export function useGlassSurface("), source.indexOf("export function useGlassLook("));
+  const effects = body.split("useLayoutEffect(").slice(1);
+  assert.equal(effects.length, 2);
+  assert.match(effects[0], /glass\.add\(element\)/);
+  assert.match(effects[0], /\}, \[active\]\);/);
+  assert.doesNotMatch(effects[0], /\bfill\b(?!\()/);
+  assert.match(body, /const active = enabled && available && !!fill;/);
+  assert.doesNotMatch(effects[1], /glass\.add|remove\(\)/);
+  assert.match(effects[1], /setProperty\(GLASS_FILL_PROPERTY, glassFill\(fill\)\)/);
+  assert.match(effects[1], /\}, \[active, fill\]\);/);
+});

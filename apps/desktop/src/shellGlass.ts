@@ -109,11 +109,11 @@ function afterimage(element: Element, geometry: GlassGeometry) {
     backdropFilter: style.backdropFilter,
     opacity: String(geometry.opacity),
     pointerEvents: "none",
-    zIndex: "2147483000",
+    zIndex: "0",
   });
   ghost.setAttribute("aria-hidden", "true");
   ghost.dataset.ardiaGlassAfterimage = "";
-  document.body.appendChild(ghost);
+  document.body.prepend(ghost);
   return () => ghost.remove();
 }
 
@@ -205,13 +205,17 @@ export function useGlassPanel(ref: RefObject<Element | null>, enabled = true) {
 
 export function useGlassSurface(ref: RefObject<Element | null>, fill: string | undefined, enabled: boolean) {
   const available = useGlassAvailable();
+  const latest = useRef(fill);
+  latest.current = fill;
+  const active = enabled && available && !!fill;
   useLayoutEffect(() => {
     const element = ref.current;
     const glass = registry;
-    if (!enabled || !available || !element || !glass || !fill) return;
+    const initial = latest.current;
+    if (!active || !element || !glass || !initial) return;
     const html = element as HTMLElement;
     element.setAttribute(GLASS_ID_ATTRIBUTE, "");
-    html.style.setProperty(GLASS_FILL_PROPERTY, glassFill(fill));
+    html.style.setProperty(GLASS_FILL_PROPERTY, glassFill(initial));
     const remove = glass.add(element);
     return () => {
       remove();
@@ -219,7 +223,11 @@ export function useGlassSurface(ref: RefObject<Element | null>, fill: string | u
       element.removeAttribute(GLASS_ID_ATTRIBUTE);
       element.removeAttribute(GLASS_ATTRIBUTE);
     };
-  }, [enabled, available, fill]);
+  }, [active]);
+  useLayoutEffect(() => {
+    const element = ref.current as HTMLElement | null;
+    if (active && element && fill) element.style.setProperty(GLASS_FILL_PROPERTY, glassFill(fill));
+  }, [active, fill]);
 }
 
 export function useGlassLook(ref: RefObject<Element | null>, look: GlassLook, enabled: boolean) {

@@ -157,3 +157,24 @@ test("in a forced-colours (high contrast) theme every swatch keeps a solid Canva
   assert.match(rule(".ardia-menu-swatch.empty"), /opacity:\s*1/, "None's ring is drawn at full strength");
   assert.match(rule(".ardia-menu-swatch.empty"), /box-shadow:\s*none/, "None drops its inset shadow so forced-colors draws a single ring");
 });
+
+test("a menu keeps one submenu per depth, so hovering from one parent row to another reuses it instead of remounting it opaque", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./menus.tsx", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("function MenuList("), source.indexOf("export function claimMenuEscape("));
+  const rows = body.slice(body.indexOf("{items.map("), body.indexOf("</div>,\n    document.body"));
+  assert.equal(body.match(/<MenuList /g).length, 1);
+  const loopEnd = rows.lastIndexOf("})}");
+  assert.doesNotMatch(rows.slice(0, loopEnd), /<MenuList /, "a submenu is still rendered inside a row");
+  assert.match(rows.slice(loopEnd), /\{sub && subChildren \? <MenuList items=\{subChildren\} anchor=\{\{ row: sub\.row \}\} \/> : null\}/);
+});
+
+test("a reused submenu resets deeper state and scroll only when switching parent rows, preserving keep-open refreshes", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("./menus.tsx", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("function MenuList("), source.indexOf("export function claimMenuEscape("));
+  assert.match(body, /const anchorRow = "row" in anchor \? anchor\.row : null;/);
+  assert.match(body, /if \(shownRow !== anchorRow\) \{\n\s*setShownRow\(anchorRow\);\n\s*setSub\(null\);\n\s*\}/);
+  assert.match(body, /const openSub = sub \? items\.find\(\(item\) => sameItem\(sub\.item, item\)\) : undefined;/);
+  assert.match(body, /useLayoutEffect\(\(\) => \{\n\s*if \(menuRef\.current\) menuRef\.current\.scrollTop = 0;\n\s*\}, \[anchorRow\]\);/);
+});

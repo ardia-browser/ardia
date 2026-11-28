@@ -313,7 +313,7 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
     motion(target: Element, scrolling = false) {
       let moved = false;
       for (const [element, entry] of entries) {
-        if (!target.contains(element)) continue;
+        if (!target.contains(element) || (scrolling && target === element)) continue;
         entry.stable = 0;
         if (scrolling) entry.held = true;
         setTranslucent(element, entry, false);

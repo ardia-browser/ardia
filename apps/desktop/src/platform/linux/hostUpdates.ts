@@ -275,7 +275,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       if (asked) return startRun(release, "asked", consent);
       if (saved.failed === release.version || updateBusy(status)) return;
       const latest = await preferences();
-      const askFirst = latest.askFirst && installsThroughPkexec(status.kind);
+      const askFirst = latest.automaticDownloads && latest.askFirst && installsThroughPkexec(status.kind);
       if (latest.automaticDownloads && !askFirst) return startRun(release, "automatic", consent);
       if (!(await offeredOnce(release))) return;
       if (askFirst) noteAskFirstUpdateOffer(consent);

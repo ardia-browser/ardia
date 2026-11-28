@@ -519,6 +519,11 @@ test("an automatic run whose password prompt went unanswered offers Update, not 
   await deb.updater.check(false);
   assert.deepEqual([deb.seen.offeredInstalls.map((o) => o.version), deb.seen.offered, debEngine.updates], [["0.2.46"], [], []], "a pkexec install that had to ask before asks first, without starting pkexec");
   assert.equal(takeUpdateCounts().update_offers_ask_first, 1);
+  const manualDisk = new Map([[UPDATE_PREFERENCES, JSON.stringify({ askFirst: true, automaticDownloads: false })]]);
+  const manual = harness({ engine: fakeEngine({ kind: "deb" }), disk: manualDisk });
+  await manual.updater.check(false);
+  assert.equal(manual.seen.offeredInstalls.length, 1);
+  assert.equal(takeUpdateCounts().update_offers_ask_first, 0, "with automatic updates off the offer is the user's setting, not askFirst");
   await deb.updater.methods.setAutomaticUpdateDownloads(true);
   assert.equal(JSON.parse(deb.docs.get(UPDATE_PREFERENCES)).askFirst, false, "turning automatic updates back on clears askFirst");
   const appimage = harness({ engine: fakeEngine({ kind: "appimage" }), disk: askFirst() });

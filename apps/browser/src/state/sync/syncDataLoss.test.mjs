@@ -856,3 +856,68 @@ test("#1577: a profile added back while one of its files downloads, then a crash
   });
   assert.equal(tombstones(), before, "no pin is deleted after the restart");
 });
+
+test("#4759: when sync.json can't save a new mark, the session keeps the mark sync.json still holds until it does", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?markOrderA1");
+  await a.with(() => pin(["https://one.example/"]));
+  await turnOn(a, engineA1);
+  const onDisk = JSON.parse(a.docs.get("sync.json")).sessionMark;
+  assert.equal(a.browser.syncMark, onDisk);
+  shell.refusedSaves.of.add("sync.json");
+  try {
+    await a.with(async () => {
+      pin(["https://two.example/"]);
+      await engineA1.syncNow();
+      assert.equal(engineA1.useSync.getState().status, "stalled");
+      assert.equal(S().syncMark, onDisk, "the session keeps the mark sync.json holds");
+    });
+  } finally {
+    shell.refusedSaves.of.delete("sync.json");
+  }
+  assert.equal(JSON.parse(a.docs.get("sync.json")).sessionMark, onDisk, "sync.json never saved the new mark");
+  await a.with(async () => {
+    await engineA1.syncNow();
+    const saved = syncDoc().sessionMark;
+    assert.notEqual(saved, onDisk, "the pin moved the mark once sync.json saved");
+    assert.equal(S().syncMark, saved, "and the session took that exact mark");
+  });
+});
+
+test("#4759: Stop Syncing keeps the journal and the saved state when sync.json can't save, so the old setup reopens whole", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?startOverA1");
+  await a.with(() => pin(["https://one.example/", "https://two.example/"]));
+  await turnOn(a, engineA1);
+  await a.with(async () => {
+    pin(["https://three.example/"]);
+    await engineA1.syncNow();
+  });
+  const recorded = (docs) => [...docs].filter(([name, contents]) => /^sync-(journal-\d+|state)\.nns$/.test(name) && contents).map(([name]) => name).sort();
+  const before = recorded(a.docs);
+  assert.ok(before.length > 0, "sync recorded its data");
+  shell.refusedSaves.of.add("sync.json");
+  try {
+    await a.with(async () => {
+      await engineA1.stopSync();
+      engineA1.setTypeSynced("history", true);
+      await settle();
+    });
+  } finally {
+    shell.refusedSaves.of.delete("sync.json");
+  }
+  assert.equal(JSON.parse(a.docs.get("sync.json")).enabled, true, "sync.json still holds the setup");
+  assert.deepEqual(before.filter((name) => !recorded(a.docs).includes(name)), [], "nothing it recorded was cleared");
+  const tombstonesBefore = tombstones();
+  const engineA2 = await relaunch(a, "startOverA2");
+  await a.with(async () => {
+    await engineA2.syncNow();
+    assert.equal(engineA2.useSync.getState().enabled, true);
+    assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://three.example/", "https://two.example/"]);
+  });
+  assert.equal(tombstones(), tombstonesBefore, "no pin is deleted");
+});

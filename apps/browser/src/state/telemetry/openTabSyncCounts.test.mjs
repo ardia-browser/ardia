@@ -56,7 +56,7 @@ test("sharing sends the open-tab sync counters once with the mass-close alarm an
   assert.deepEqual(await sentCounts(), expected);
 });
 
-const SAFETY_FIELDS = new Set(["sync_session_rebases", "sync_profiles_missing_here", "sync_join_waits", "sync_password_replaces", "sync_password_replace_failures", "sync_password_adds", "sync_password_add_failures"]);
+const SAFETY_FIELDS = new Set(["sync_session_rebases", "sync_profiles_missing_here", "sync_join_waits", "sync_password_replaces", "sync_password_replace_failures", "sync_password_adds", "sync_password_add_failures", "sync_mark_saves_refused", "sync_start_overs_refused"]);
 
 test("sync's data-safety counts go out in the same hourly event, then start again from zero", async () => {
   client.setSharing(true, "settings");
@@ -75,10 +75,14 @@ test("sync's data-safety counts go out in the same hourly event, then start agai
   safety.notePasswordReplace(null, false);
   safety.notePasswordAdd(token, false);
   safety.notePasswordAdd(null, true);
+  safety.noteMarkSaveRefused(token);
+  safety.noteMarkSaveRefused(token);
+  safety.noteMarkSaveRefused(null);
+  safety.noteStartOverRefused(token);
   counts.noteOpenTabsPublished(1);
   usage.sessionEnding();
   const sent = await sentCounts((key) => SAFETY_FIELDS.has(key));
-  assert.deepEqual(sent.at(-1), { sync_session_rebases: 1, sync_profiles_missing_here: 2, sync_join_waits: 2, sync_password_replaces: 2, sync_password_replace_failures: 1, sync_password_adds: 1, sync_password_add_failures: 1 });
+  assert.deepEqual(sent.at(-1), { sync_session_rebases: 1, sync_profiles_missing_here: 2, sync_join_waits: 2, sync_password_replaces: 2, sync_password_replace_failures: 1, sync_password_adds: 1, sync_password_add_failures: 1, sync_mark_saves_refused: 2, sync_start_overs_refused: 1 });
   assert.deepEqual(safety.takeSyncDataCounts(), {
     ...counts.takeOpenTabSyncCounts(),
     sync_session_rebases: 0,
@@ -88,6 +92,8 @@ test("sync's data-safety counts go out in the same hourly event, then start agai
     sync_password_replace_failures: 0,
     sync_password_adds: 0,
     sync_password_add_failures: 0,
+    sync_mark_saves_refused: 0,
+    sync_start_overs_refused: 0,
   });
 });
 

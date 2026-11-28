@@ -10,8 +10,17 @@ import type { SessionMarkHooks } from "./syncFiles";
 import { oweRebase, takeUnsavedObligations } from "./rebaseObligations";
 import type { ConsentToken } from "../telemetry/consentPeriod";
 
+const markAwaitingSave = new WeakMap<SyncDoc, string>();
+
 function markSessionWith(doc: SyncDoc, mark: string) {
   doc.sessionMark = mark;
+  if (useBrowser.getState().syncMark === mark) markAwaitingSave.delete(doc);
+  else markAwaitingSave.set(doc, mark);
+}
+
+function markSaved(doc: SyncDoc, mark: string | undefined) {
+  if (mark === undefined || markAwaitingSave.get(doc) !== mark) return;
+  markAwaitingSave.delete(doc);
   if (!isQuitting()) foreignWriteHooks.around(() => useBrowser.setState({ syncMark: mark }));
 }
 
@@ -58,7 +67,8 @@ function rebaseRecorded(doc: SyncDoc, saved: Record<string, string | undefined>)
 export const sessionMarkHooks = (current: () => SyncDoc): SessionMarkHooks => ({
   moved: (scopes) => {
     const owed = takeUnsavedObligations(current());
-    return sessionMovedBeforeDurable(current(), scopes) || owed;
+    return sessionMovedBeforeDurable(current(), scopes) || owed || markAwaitingSave.has(current());
   },
   saved: (rebaseIds) => rebaseRecorded(current(), rebaseIds),
+  docSaved: markSaved,
 });

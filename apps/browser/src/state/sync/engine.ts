@@ -256,9 +256,10 @@ export const recreateSyncFolder = (): Promise<FolderRecreateResult> => {
 };
 
 function begin(folder: string, deviceId: string, joining: boolean) {
+  const consent = consentToken();
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
   markNewSync(doc);
-  startOver();
+  void startOver().catch((error: unknown) => warnFor(consent, "[sync] couldn't save sync.json to start syncing", error));
   publishUi({ status: "starting", error: null });
   scheduleSync(0);
 }
@@ -318,7 +319,7 @@ async function retire(native: NonNullable<typeof SyncNative>, deleteIn: (string 
   if (doc.deviceId) await native.forget(doc.deviceId);
   doc = { ...emptyDoc(), folder, types: doc.types };
   forgetScopeAdapters();
-  startOver();
+  void startOver().catch((error: unknown) => warnFor(consent, "[sync] couldn't save sync.json to stop syncing, so its data is kept", error));
   publishUi({ status: "off", error: null });
 }
 

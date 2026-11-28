@@ -266,6 +266,7 @@ const documents: Modules["ArdiaDocuments"] = {
   writeDocument: (name, contents) => {
     if (refusedWrites.on) throw new Error("write refused");
     if (refusedWrites.returnsFalse) return false as unknown as void;
+    if (refusedSaves.of.has(name)) return;
     docs.set(name, contents);
     stagedDocs.delete(name);
     unreadableDocs.delete(name);
@@ -287,7 +288,7 @@ const documents: Modules["ArdiaDocuments"] = {
       if (heldSaves.on) heldSaves.queue.push(land);
       else land();
     }),
-  documentSaved: () => (refusedWrites.on || refusedWrites.landingFails ? Promise.reject(new Error("save refused")) : Promise.resolve()),
+  documentSaved: (name) => (refusedWrites.on || refusedWrites.landingFails || refusedSaves.of.has(name) ? Promise.reject(new Error("save refused")) : Promise.resolve()),
   removeDocument: (name) => void (docs.delete(name), stagedDocs.delete(name), unreadableDocs.delete(name)),
   listDocuments: (prefix) => [...new Set([...docs.keys(), ...unreadableDocs])].filter((name) => name.startsWith(prefix)),
   syncDocument: (name) => {

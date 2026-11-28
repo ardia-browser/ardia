@@ -6,6 +6,8 @@ import { APP_SCOPE, DOC, DOC_MIGRATIONS, DOC_VERSION, JOURNAL, STATE, defaultTyp
 import { isFields, numberOr, stringOr } from "../../lib/decode";
 import { consentToken } from "../telemetry/client";
 import { warnFor } from "../telemetry/logs";
+import { noteMarkSaveRefused, noteStartOverRefused } from "../telemetry/syncSafetyCounts";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 import { chunksOf, holdsApplying, replayApplying, restOf, savedScope, scopeFromRest, type Assembly, type ScopeRest } from "./applyJournal";
 
 type Journal = Record<string, LogFile[]>;
@@ -91,12 +93,16 @@ function replayChanges(scopes: SyncDoc["scopes"], changes: Record<string, ScopeC
   }
 }
 
-export type SessionMarkHooks = { moved: (scopes: ScopeState[]) => boolean; saved: (rebaseIds: Record<string, string | undefined>) => void };
+export type SessionMarkHooks = {
+  moved: (scopes: ScopeState[]) => boolean;
+  saved: (rebaseIds: Record<string, string | undefined>) => void;
+  docSaved: (doc: SyncDoc, mark: string | undefined) => void;
+};
 
-const NO_MARKS: SessionMarkHooks = { moved: () => false, saved: () => {} };
+const NO_MARKS: SessionMarkHooks = { moved: () => false, saved: () => {}, docSaved: () => {} };
 
 export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_MARKS) {
-  const docFile = { json: "", lasting: "", savedAt: 0 };
+  const docFile = { json: "", lasting: "", savedAt: 0, durable: "" };
   const journal = { batches: {} as Journal, parts: null as number | null, bytes: 0, legacy: false, lastId: 0 };
   const state = { json: "", onDisk: false, loaded: false, savedAt: 0, wanted: false, clock: null as Clock | null, heldSince: undefined as number | undefined };
   const writtenRest = new Map<string, string>();
@@ -275,10 +281,23 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
   async function markBeforeDurable(scopes: (ScopeState | undefined)[]) {
     if (marks.moved(scopes.filter((scoped): scoped is ScopeState => !!scoped))) markOwed = true;
     if (!markOwed) return;
-    const { json, lasting } = docJson();
-    await saveDocument(DOC, json);
+    await saveDocDurably(noteMarkSaveRefused);
     markOwed = false;
-    Object.assign(docFile, { json, lasting, savedAt: Date.now() });
+  }
+
+  async function saveDocDurably(noteRefused: (consent: ConsentToken | null) => void) {
+    const consent = consentToken();
+    const doc = current();
+    const mark = doc.sessionMark;
+    const { json, lasting } = docJson();
+    try {
+      await saveDocument(DOC, json);
+    } catch (error) {
+      noteRefused(consent);
+      throw error;
+    }
+    Object.assign(docFile, { json, lasting, savedAt: Date.now(), durable: json });
+    marks.docSaved(doc, mark);
   }
 
   function docJson() {
@@ -308,7 +327,15 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     const consent = consentToken();
     const doc = current();
     if (!doc.enabled) {
-      if (state.onDisk || state.wanted) writeDocument(STATE, "");
+      if (state.onDisk || state.wanted) {
+        try {
+          if (docJson().json !== docFile.durable) await saveDocDurably(noteStartOverRefused);
+        } catch (error) {
+          warnFor(consent, "[sync] couldn't save sync.json before clearing the sync state", error);
+          return;
+        }
+        writeDocument(STATE, "");
+      }
       Object.assign(state, { json: "", onDisk: false, wanted: false });
       return;
     }
@@ -348,14 +375,13 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     await documentSaved(DOC);
   }
 
-  function startOver() {
-    saveDoc();
-    void serial(async () => {
+  const startOver = () =>
+    serial(async () => {
+      await saveDocDurably(noteStartOverRefused);
       clearJournal();
       state.wanted = true;
       await saveState();
     });
-  }
 
   function checkpoint() {
     saveDoc();

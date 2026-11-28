@@ -13,6 +13,7 @@ import { chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, fon
 import { NativeGlyph } from "../ui/Symbol";
 import { GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST } from "../ui/LookViews";
 import { useBrowse } from "../../state/browse/store";
+import { labTrace } from "../../platform/lab";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 
 export const MINI_PLAYER = { height: 56, radius: 28, art: 40, artRadius: 10, button: MINI_PLAYER_TARGET, gap: 10, maxWidth: 480, inMs: 180, outMs: 150, travel: 8, textScale: 1.35 } as const;
@@ -41,14 +42,19 @@ export function MiniPlayer() {
   }, [otherSide]);
   const hasMedia = media !== null;
   useEffect(() => {
+    labTrace(`MEDIALAB mini ${shows ? "in" : "out"} from ${shown.value.toFixed(2)} present=${present} media=${hasMedia}`);
     if (shows) {
-      shown.value = withTiming(1, { duration: MINI_PLAYER.inMs, easing: entering });
+      shown.value = withTiming(1, { duration: MINI_PLAYER.inMs, easing: entering }, (finished) => {
+        runOnJS(labTrace)(`MEDIALAB mini in finished=${finished}`);
+      });
       return;
     }
     shown.value = withTiming(0, { duration: MINI_PLAYER.outMs, easing: leaving }, (finished) => {
+      runOnJS(labTrace)(`MEDIALAB mini out finished=${finished}`);
       if (finished && !hasMedia) runOnJS(setPresent)(false);
     });
   }, [shows, hasMedia]);
+  useEffect(() => labTrace(`MEDIALAB mini present=${present}`), [present]);
   useEffect(() => {
     setMiniPlayerRoom(shows ? MINI_PLAYER.height + MINI_PLAYER.gap : 0);
     if (shows && media) noteMiniPlayerShown(media);

@@ -6,6 +6,7 @@ import { webviews } from "../../platform/webviews";
 import { withDeadline } from "../../lib/deadline";
 import { adoptKind } from "../tabs/adoptIds";
 import { adoptOf } from "../tabs/pageSession";
+import { awaitsFirstPage } from "../tabs/pendingAddress";
 
 export type OpenerState = "live" | "none" | "unknown";
 
@@ -52,10 +53,11 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const openerAnswer = (answer: unknown): OpenerState => (answer === true ? "live" : answer === false ? "none" : "unknown");
 
-export async function openerState(tabId: string, stillWanted: () => boolean): Promise<OpenerState> {
-  const until = Date.now() + OPENER_GIVE_UP_MS;
+export const openerDeadline = () => Date.now() + OPENER_GIVE_UP_MS;
+
+export async function openerState(tabId: string, stillWanted: () => boolean, until = openerDeadline()): Promise<OpenerState> {
   while (stillWanted()) {
-    const web = webviews.get(tabId);
+    const web = awaitsFirstPage(tabId) ? undefined : webviews.get(tabId);
     const state = openerAnswer(web ? await withDeadline(web.evaluate<unknown>(HAS_OPENER).catch(() => null), OPENER_CHECK_MS, null) : null);
     if (state !== "unknown") return state;
     if (Date.now() + OPENER_RETRY_MS > until) return "unknown";

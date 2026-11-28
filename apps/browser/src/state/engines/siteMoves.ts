@@ -4,7 +4,7 @@ import { patchPage } from "../tabs/pageState";
 import { canSwitchEngine, chosenEngine, chromiumOnly, modeEngineFor, needsChromium, singleEngine, siteOf, tabEngine, webStorePage } from "./engines";
 import { navigationOf } from "../tabs/pageSession";
 import { declineSite, modeStillHolds, openPageIn, pageDocumentOf, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
-import { openedByPage, openerState } from "./openedPages";
+import { openedByPage, openerDeadline, openerState } from "./openedPages";
 import { noteSiteMove } from "../telemetry/engineSwitchCounts";
 import { heldByCli } from "../tabs/cliHolds";
 import { consentToken, type ConsentToken } from "../telemetry/client";
@@ -12,7 +12,7 @@ import { consentToken, type ConsentToken } from "../telemetry/client";
 const store = () => useBrowser.getState();
 const SITE_MOVE_SPACING_MS = 10_000;
 
-type Move = { from: PageEngine; to: PageEngine; url: string; navigation: number | null; previousUrl: string; consent: ConsentToken | null; forVideo?: { site: string }; delayed?: boolean };
+type Move = { from: PageEngine; to: PageEngine; url: string; navigation: number | null; previousUrl: string; consent: ConsentToken | null; forVideo?: { site: string }; delayed?: boolean; askedDocument?: number };
 type TabMoves = { lastMovedAt: number; moving: boolean; pending: Move | null; cooling: ReturnType<typeof setTimeout> | null; visit: number };
 
 const tabMoves = new Map<string, TabMoves>();
@@ -163,22 +163,23 @@ function settlePending(tabId: string, move: Move) {
   const url = pageUrl(t);
   const from = tabEngine(store(), tabId);
   if (from === move.to || !stillFor(tabId, move) || declinedVideo(move) || !routedTo(tabId, move.to)(url)) return;
+  if (move.askedDocument !== undefined && pageDocumentOf(tabId) !== move.askedDocument) return void moveOpenedTab(tabId, url, { ...move, from, askedDocument: undefined });
   startMove(tabId, { ...move, from });
 }
 
-async function moveOpenedTab(tabId: string, url: string, move: Move) {
+async function moveOpenedTab(tabId: string, url: string, move: Move, until = openerDeadline()): Promise<void> {
   const holds = modeStillHolds();
   const visit = movesOf(tabId).visit;
   const document = pageDocumentOf(tabId);
   const sameVisit = () => tabMoves.get(tabId)?.visit === visit && navigationNow(tabId) === move.navigation;
   const onSite = () => !!store().tabs[tabId] && holds() && sameVisit() && siteOf(pageUrl(store().tabs[tabId])) === siteOf(url) && tabEngine(store(), tabId) === move.from;
   const stillOnSite = () => onSite() && pageDocumentOf(tabId) === document;
-  const opener = await openerState(tabId, stillOnSite);
-  if (onSite() && pageDocumentOf(tabId) !== document) return moveOpenedTab(tabId, url, move);
-  if (!stillOnSite() || !routedTo(tabId, move.to)(pageUrl(store().tabs[tabId]))) return;
+  const opener = await openerState(tabId, stillOnSite, until);
+  if (!onSite() || !routedTo(tabId, move.to)(pageUrl(store().tabs[tabId]))) return;
+  if (pageDocumentOf(tabId) !== document) return Date.now() < until ? moveOpenedTab(tabId, url, move, until) : noteSiteMove("dropped", true, move.consent);
   if (opener === "live") return noteSiteMove("keptForOpener", true, move.consent);
   if (opener === "unknown") return noteSiteMove("dropped", true, move.consent);
-  startMove(tabId, { ...move, delayed: true });
+  startMove(tabId, { ...move, delayed: true, askedDocument: document });
 }
 
 export function followSiteChoice(tabId: string, engine: PageEngine, url: string, previousUrl: string) {

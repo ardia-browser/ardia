@@ -1085,3 +1085,108 @@ test("Close Group counts a fallback when its pick closes during confirmation and
     client.setSharing(false, "settings");
   }
 });
+
+test("Tab below on the bottom tab of an open folder shows the tab above it in the folder, not the tab below the folder", () => {
+  const { w, ids: [x, a, b, c] } = windowWith("tabBelow", "x", "a", "b", "c");
+  S().groupTabs([a, b], { pinned: false, name: "G" });
+  S().activate(c);
+  S().activate(x);
+  S().activate(b);
+  assert.deepEqual(rowsOf(w), ["regular:x", "regular:a", "regular:b", "regular:c"]);
+  close(b);
+  assert.equal(shown(w), "a");
+  close(a);
+  assert.equal(shown(w), "c", "with no tab left in the folder, the tab below it");
+});
+
+test("Tab above on the top tab of an open folder shows the tab below it in the folder, not the tab above the folder", () => {
+  const { w, ids: [x, a, b, c] } = windowWith("tabAbove", "x", "a", "b", "c");
+  S().groupTabs([a, b], { pinned: false, name: "G" });
+  S().activate(x);
+  S().activate(c);
+  S().activate(a);
+  close(a);
+  assert.equal(shown(w), "b");
+  close(b);
+  assert.equal(shown(w), "x", "with no tab left in the folder, the tab above it");
+});
+
+test("a tab in a nested folder stays in its own folder first, then its parent folder, then the list", () => {
+  const { w, ids: [a, b, c, d, e] } = windowWith("tabBelow", "a", "b", "c", "d", "e");
+  S().groupTabs([a, b, c, d], { pinned: false, name: "Outer" });
+  S().groupTabs([b, c], { name: "Inner" });
+  S().activate(e);
+  S().activate(c);
+  close(c);
+  assert.equal(shown(w), "b", "the inner folder's other tab");
+  close(b);
+  assert.equal(shown(w), "d", "then the tab below in the outer folder");
+  close(d);
+  assert.equal(shown(w), "a");
+  close(a);
+  assert.equal(shown(w), "e");
+});
+
+test("a folder's tabs hidden by collapsing it never count: a kept tab leaves the folder when it is the only one on screen", () => {
+  const { w, ids: [, a, b, c] } = windowWith("tabBelow", "x", "a", "b", "c");
+  const g = S().groupTabs([a, b], { pinned: false, name: "G" });
+  S().activate(c);
+  S().activate(b);
+  S().updateGroup(g, { collapsed: true });
+  close(b);
+  assert.equal(shown(w), "c");
+});
+
+test("across the top, Tab to the right on a group's last tab shows the tab to its left in the group", () => {
+  const { w, ids: [, a, b] } = windowWith("tabBelow", "x", "a", "b", "c");
+  S().updateSettings({ tabLayout: "top" });
+  S().groupTabs([a, b], { pinned: false, name: "G" });
+  S().activate(b);
+  close(b);
+  assert.equal(shown(w), "a");
+  S().updateSettings({ tabLayout: "sidebar" });
+});
+
+test("a pinned folder's open tab stays in its folder before a pinned row outside it", () => {
+  for (const mode of ["tabAbove", "tabBelow"]) {
+    const { w, ids: [p, f1, f2] } = windowWith(mode, "p", "f1", "f2", "r");
+    S().groupTabs([f1, f2], { name: "F" });
+    S().pinTabs([p], true, true);
+    S().activate(p);
+    S().activate(f1);
+    S().activate(f2);
+    const pinned = rowsOf(w).filter((r) => r.startsWith("pinned"));
+    assert.deepEqual([...pinned].sort(), ["pinned:f1", "pinned:f2", "pinned:p"]);
+    const folderEdgeNextToP = (pinned.indexOf("pinned:p") < pinned.indexOf("pinned:f1")) === (mode === "tabAbove") ? f1 : f2;
+    S().activate(folderEdgeNextToP);
+    close(folderEdgeNextToP);
+    assert.equal(shown(w), folderEdgeNextToP === f1 ? "f2" : "f1", mode);
+  }
+});
+
+test("Previously active tab still goes to the tab used before, even outside the folder", () => {
+  const { w, ids: [, a, b, c] } = windowWith("previouslyActive", "x", "a", "b", "c");
+  S().groupTabs([a, b], { pinned: false, name: "G" });
+  S().activate(a);
+  S().activate(c);
+  S().activate(b);
+  close(b);
+  assert.equal(shown(w), "c");
+});
+
+test("a Live Folder's open tabs stay in the folder before the pinned row above it", () => {
+  const { w, ids: [p] } = windowWith("tabAbove", "p");
+  S().pinTabs([p], true, true);
+  const profile = S().windows[w].profileId;
+  liveFolder(profile, ["x", "y"]);
+  liveTab(w, "lf", "x");
+  liveTab(w, "lf", "y");
+  const x = Object.values(S().tabs).find((t) => t.liveItem?.itemId === "x").id;
+  S().newTab(w, { url: "https://r.com/", background: true });
+  S().activate(p);
+  S().activate(x);
+  assert.deepEqual(rowsOf(w).filter((r) => r.startsWith("pinned")), ["pinned:p", "pinned:x", "pinned:y"]);
+  close(x);
+  assert.equal(shown(w), "y");
+  noLive();
+});

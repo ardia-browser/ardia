@@ -1,7 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import { activeTabId, inPinnedContainer, isPinnedRow, tabLayoutOf } from "../browser/model";
 import { useBrowser } from "../browser/store";
-import { parseEntry } from "../sidebar/entryKey";
+import { entryKey, parseEntry } from "../sidebar/entryKey";
 import { groupEntries, keptEntries, sidebarEntries } from "../sidebar/entries";
 import { pinnedSequence } from "../sidebar/pinnedOrder";
 import { pinnedCollapsed, pinnedKept } from "../sidebar/pinnedFold";
@@ -17,22 +17,23 @@ import { withSharedFamily } from "../pins/pinShare";
 import { keptWithTopApp, successorKey, type CloseOptions, type Successor } from "./tabs";
 
 type VisibleSection = "topApps" | "pinned" | "regular";
-type VisibleRow = { ids: string[]; section: VisibleSection };
+type VisibleRow = { ids: string[]; section: VisibleSection; containers: string[] };
+type EntryRow = Omit<VisibleRow, "section">;
 type Side = Successor["side"];
 
 const sideOf = (s: Pick<BrowserState, "settings">): Side | null => ({ tabAbove: "above", tabBelow: "below", previouslyActive: null } as const)[s.settings.afterClosingTab];
 
-function entryRows(s: BrowserState, windowId: string, profileId: string, entry: string): string[][] {
+function entryRows(s: BrowserState, windowId: string, profileId: string, entry: string, containers: string[] = []): EntryRow[] {
   const { kind, id } = parseEntry(entry);
-  if (kind === "tab") return s.tabs[id] ? [[id]] : [];
-  if (kind === "live") return liveFolderTabRows(s, live(), windowId, profileId, id);
+  if (kind === "tab") return s.tabs[id] ? [{ ids: [id], containers }] : [];
+  if (kind === "live") return liveFolderTabRows(s, live(), windowId, profileId, id).map((ids) => ({ ids, containers: [...containers, entry] }));
   if (kind === "split") {
     const panes = splitRowPanes(s, s.splits[id]);
-    return [panes.length ? panes : (splitTabIdsOf(s.splits[id]) ?? [])];
+    return [{ ids: panes.length ? panes : (splitTabIdsOf(s.splits[id]) ?? []), containers }];
   }
   if (kind !== "group" || !s.groups[id]) return [];
   const shown = s.groups[id]!.collapsed ? keptEntries(s, windowId, profileId, id) : groupEntries(s, id);
-  return shown.flatMap((e) => entryRows(s, windowId, profileId, e));
+  return shown.flatMap((e) => entryRows(s, windowId, profileId, e, [...containers, entry]));
 }
 
 function sidebarRows(s: BrowserState, windowId: string, profileId: string): VisibleRow[] {
@@ -44,8 +45,8 @@ function sidebarRows(s: BrowserState, windowId: string, profileId: string): Visi
   };
   const sequence = pinnedSequence(s, live().folders, live().folderOrder, windowId, profileId);
   const shownPinned = pinnedCollapsed(s, profileId) ? [pinnedKept(s, windowId, profileId, sequence) ?? []].flat() : sequence;
-  const rows = (entries: string[], section: VisibleSection) => entries.flatMap((e) => entryRows(s, windowId, profileId, e)).map((ids) => ({ ids, section }));
-  return [...cells.map(tile).filter((ids) => ids.length).map((ids) => ({ ids, section: "topApps" as const })), ...rows(shownPinned, "pinned"), ...rows(list, "regular")];
+  const rows = (entries: string[], section: VisibleSection) => entries.flatMap((e) => entryRows(s, windowId, profileId, e)).map((row) => ({ ...row, section }));
+  return [...cells.map(tile).filter((ids) => ids.length).map((ids) => ({ ids, section: "topApps" as const, containers: [] })), ...rows(shownPinned, "pinned"), ...rows(list, "regular")];
 }
 
 const memberHolds = (m: StripMember, tabId: string) => (m.kind === "tab" ? m.id === tabId : m.tabIds.includes(tabId));
@@ -61,12 +62,13 @@ function stripRows(s: BrowserState, windowId: string, profileId: string): Visibl
   const rows: VisibleRow[] = [];
   for (const e of stripEntries(s, windowId, profileId)) {
     if (e.kind === "dock") {
-      for (const id of e.ids) if (s.tabs[id]) rows.push({ ids: [id], section: isPinnedRow(s.tabs[id]) ? "pinned" : "topApps" });
+      for (const id of e.ids) if (s.tabs[id]) rows.push({ ids: [id], section: isPinnedRow(s.tabs[id]) ? "pinned" : "topApps", containers: [] });
       continue;
     }
     const section: VisibleSection = e.kind === "group" && s.groups[e.id]?.pinned ? "pinned" : "regular";
     const members = e.kind === "group" ? e.members.filter((m) => !e.collapsed || memberHolds(m, activeId)) : [e];
-    for (const m of members) for (const ids of memberRows(m, activeId)) rows.push({ ids, section });
+    const containers = e.kind === "group" ? [entryKey("group", e.id)] : [];
+    for (const m of members) for (const ids of memberRows(m, activeId)) rows.push({ ids, section, containers });
   }
   return rows;
 }
@@ -78,10 +80,20 @@ export function visibleRows(s: BrowserState, windowId: string, profileId: string
 const latest = (s: BrowserState, ids: string[]) => ids.reduce<string | undefined>((best, id) => (!best || s.tabs[id]!.lastActiveAt > s.tabs[best]!.lastActiveAt ? id : best), undefined);
 
 export function tabBeside(s: BrowserState, rows: VisibleRow[], closedId: string, closing: ReadonlySet<string>, eligible: (id: string) => boolean, side: Side): string | undefined {
-  const section = rows.find((row) => row.ids.includes(closedId))?.section;
-  if (!section) return undefined;
-  const same = rows.filter((row) => row.section === section).map((row) => row.ids);
-  const ordered = side === "above" ? same : [...same].reverse();
+  const closed = rows.find((row) => row.ids.includes(closedId));
+  if (!closed) return undefined;
+  const same = rows.filter((row) => row.section === closed.section);
+  for (let depth = closed.containers.length; depth >= 0; depth--) {
+    const container = closed.containers.slice(0, depth);
+    const inside = same.filter((row) => container.every((key, i) => row.containers[i] === key)).map((row) => row.ids);
+    const id = nearestSurvivor(s, inside, closing, eligible, side);
+    if (id) return id;
+  }
+  return undefined;
+}
+
+function nearestSurvivor(s: BrowserState, rows: string[][], closing: ReadonlySet<string>, eligible: (id: string) => boolean, side: Side): string | undefined {
+  const ordered = side === "above" ? rows : [...rows].reverse();
   const edge = ordered.findIndex((ids) => ids.some((id) => closing.has(id)));
   const survivor = (ids: string[]) => latest(s, ids.filter((id) => !closing.has(id) && eligible(id)));
   for (let i = edge - 1; i >= 0; i--) {

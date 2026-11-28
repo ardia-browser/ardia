@@ -148,17 +148,18 @@ export function DialogTitle({ icon, subtitle, children }: { icon?: ReactNode; su
   );
 }
 
-const DIALOG_ACTIONS = { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: space.m, marginTop: space.xl } as const;
-const DIALOG_ACTIONS_LEADING = { marginRight: "auto" } as const;
-const DIALOG_ACTIONS_NOTE = { flex: 1 } as const;
+const ACTIONS = { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: space.m, marginTop: space.xl } as const;
+const ACTIONS_LEADING = { flexDirection: "row", alignItems: "center", gap: space.m } as const;
+const ACTIONS_LEADING_START = { ...ACTIONS_LEADING, marginRight: "auto" } as const;
+const ACTIONS_NOTE = { flex: 1 } as const;
 
 export function DialogActions({ leading, note, children }: { leading?: ReactNode; note?: ReactNode; children: ReactNode }) {
   const hasNote = !(note == null || note === false);
   return (
-    <View style={DIALOG_ACTIONS}>
-      {leading ? <View style={hasNote ? undefined : DIALOG_ACTIONS_LEADING}>{leading}</View> : null}
+    <View style={ACTIONS}>
+      {leading ? <View style={hasNote ? ACTIONS_LEADING : ACTIONS_LEADING_START}>{leading}</View> : null}
       {hasNote ? (
-        <View style={DIALOG_ACTIONS_NOTE}>
+        <View style={ACTIONS_NOTE}>
           {typeof note === "string" ? (
             <Text size="caption" tone="textSecondary">
               {note}

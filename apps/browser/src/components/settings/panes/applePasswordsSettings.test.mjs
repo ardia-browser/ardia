@@ -57,11 +57,12 @@ function pairingSheet() {
   const element = useSettingsSheet.getState().sheet;
   if (!element) return null;
   const sheet = mount(() => element.type(element.props));
-  const texts = (node) => (typeof node === "string" ? [node] : Array.isArray(node) ? node.flatMap(texts) : node?.props ? texts(node.props.children) : []);
+  const texts = (node) => (typeof node === "string" ? [node] : Array.isArray(node) ? node.flatMap(texts) : node?.props ? [...texts(node.props.subtitle), ...texts(node.props.children)] : []);
   return {
     get text() {
       return texts(sheet.value).join(" ");
     },
+    title: () => find(sheet.value, (n) => n.type === ui.DialogTitle)[0]?.props ?? null,
     type: (code) => find(sheet.value, (n) => n.type === TextField)[0].props.onChangeText(code),
     press: (title) => find(sheet.value, (n) => n.type === Button && n.props.title === title)[0].props.onPress(),
   };
@@ -290,4 +291,13 @@ test("the Apple Passwords status row under the Password manager row has the divi
   await loadApplePasswords();
   await flush();
   assert.deepEqual(slotsOf(profileId), [{ divider: false, row: "profiles.passwordManager" }]);
+});
+
+test("the Pairing sheet's line under its title is the title's subtitle, spaced like every other sheet's", async () => {
+  const profileId = await settingsOn("notConnected");
+  managerMenu(profileId).onChange("apple");
+  await flush();
+  const title = pairingSheet().title();
+  assert.equal(title.children, "Connect Apple Passwords");
+  assert.equal(title.subtitle, "Enter the six-digit code the Passwords app shows.");
 });

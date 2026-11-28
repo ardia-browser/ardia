@@ -63,8 +63,7 @@ function ApplePasswordsPairingSheet() {
   const prompt = pairingPrompt(pairing.step);
   return (
     <Sheet size="s" onClose={cancel}>
-      <DialogTitle>Connect Apple Passwords</DialogTitle>
-      {prompt ? <Text>{prompt}</Text> : null}
+      <DialogTitle subtitle={prompt}>Connect Apple Passwords</DialogTitle>
       {pairing.step === "code" || pairing.step === "checking" ? (
         <Box row gap="m" style={FIELDS}>
           <TextField value={code} onChangeText={(text) => setCode(pairingCodeInput(text))} onSubmit={() => void connect()} onEscape={cancel} autoFocus mono width={120} disabled={pairing.step === "checking"} />

@@ -154,7 +154,7 @@ export const noteOnboardingStyle = (style: "glass" | "classic", tinted: boolean)
 
 export const noteSplit = (count: "splitPaneCloses" | "splitViewCloses" | "splitDividerResets" | "barSplitOpens" | "barSplitFullTabs" | "splitSuggestionKeyPicks" | "splitPaneSuggestionPicks" | "splitEmptyPaneEscapeCloses" | "splitBelowOpens" | "splitStackedDrops" | "splitPaneKeyMoves" | "splitPaneMenuMoves" | "splitPaneDragSwaps" | "splitPaneDragRedocks", consent?: ConsentToken | null) => bump(consent, { [count]: 1 });
 export const noteBackCloseToOpener = () => void counts.backClosesToOpener++;
-export const noteFullScreenMenuBarFrameKept = () => void counts.fullScreenMenuBarFramesKept++;
+export const noteFullScreenMenuBarFrameKept = (consent?: ConsentToken | null) => bump(consent, { fullScreenMenuBarFramesKept: 1 });
 
 export const noteWindowCloseTabsKept = (n: number) => void (counts.windowCloseTabsKept += n);
 

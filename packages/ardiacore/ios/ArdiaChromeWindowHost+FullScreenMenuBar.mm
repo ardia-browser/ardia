@@ -28,7 +28,9 @@
 
 - (BOOL)menuBarStaysShown {
   NSScreen *screen = self.watchedWindow.screen;
-  return screen && NSMaxY(screen.visibleFrame) < NSMaxY(screen.frame) - 0.5;
+  if (!screen) return NO;
+  const CGFloat coveredTop = NSMaxY(screen.frame) - NSMaxY(screen.visibleFrame);
+  return coveredTop > screen.safeAreaInsets.top + 0.5;
 }
 
 - (void)reportMenuBar {
@@ -47,14 +49,15 @@ static const void *kMenuBarWatchKey = &kMenuBarWatchKey;
 
 + (void)watchMenuBarOfWindow:(NSWindow *)window changed:(void (^)(BOOL shown))changed {
   ArdiaMenuBarWatch *watch = objc_getAssociatedObject(window, kMenuBarWatchKey);
-  if (!watch) {
+  const BOOL fresh = watch == nil;
+  if (fresh) {
     watch = [[ArdiaMenuBarWatch alloc] init];
     watch.layoutAttribute = NSLayoutAttributeBottom;
     watch.watchedWindow = window;
     objc_setAssociatedObject(window, kMenuBarWatchKey, watch, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    if (window.styleMask & NSWindowStyleMaskTitled) [window addTitlebarAccessoryViewController:watch];
   }
   watch.menuBarChanged = changed;
+  if (fresh && (window.styleMask & NSWindowStyleMaskTitled)) [window addTitlebarAccessoryViewController:watch];
   [watch reportMenuBar];
 }
 

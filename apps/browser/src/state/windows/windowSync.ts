@@ -9,6 +9,7 @@ import { isSmallWindow } from "./small";
 import { signalFullScreenExit } from "./fullScreenExits";
 import { setMenuBarShown } from "./fullScreenMenuBar";
 import { noteFullScreenMenuBarFrameKept } from "../telemetry/usage";
+import { nativeConsent } from "../telemetry/nativeConsent";
 import type { Frame } from "../browser/types";
 
 const fitsBelowSaved = (frame: Frame, was: Frame | null | undefined, [width, height]: readonly [number, number]) =>
@@ -62,8 +63,9 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       if (e.type === "fullScreen" && !e.on) setMenuBarShown(e.id, false);
       if (e.type === "menuBar") {
         const shown = e.shown && !!s.windows[e.id]?.fullScreen;
-        const frameRuleOn = s.settings.pageFrameZeroInFullScreen || s.settings.pageFrameZeroWhenTabsHidden;
-        if (setMenuBarShown(e.id, shown) && shown && frameRuleOn) noteFullScreenMenuBarFrameKept();
+        const { pageFrame, pageFrameZeroInFullScreen, borderlessMode, minimalismMode } = s.settings;
+        const frameKept = pageFrameZeroInFullScreen && pageFrame > 0 && !borderlessMode && !minimalismMode;
+        if (setMenuBarShown(e.id, shown) && shown && frameKept) noteFullScreenMenuBarFrameKept(nativeConsent(e));
       }
       if (e.type === "close") {
         if (isQuitting()) return;
@@ -98,6 +100,7 @@ export function createWindowSync({ port, getState, isQuitting, lightsCenter, isU
       if (s.windows[id]) continue;
       open.delete(id);
       titles.delete(id);
+      setMenuBarShown(id, false);
       port.close(id);
       releasePrivateProfile(id);
     }

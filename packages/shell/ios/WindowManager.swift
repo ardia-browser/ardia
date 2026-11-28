@@ -446,6 +446,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let window = notification.object as? NSWindow, let id = id(of: window), let entry = managed[id] else { return }
     SavedKeyResponders.shared.windowClosed(window, id: id)
     let closedByJS = entry.closingFromJS
+    ArdiaChromeWindowHost.stopWatchingMenuBar(of: window)
     flushFrameReport(window)
     managed[id] = nil
     NotificationCenter.default.removeObserver(self, name: nil, object: window)
@@ -496,7 +497,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   private func watchMenuBar(_ window: NSWindow, id: String) {
     guard isMainWindow(window), !ArdiaChromeWindowHost.windowFullScreenIs(forPage: window) else { return }
     ArdiaChromeWindowHost.watchMenuBar(of: window) { shown in
-      ShellEvents.send(.window, ["type": "menuBar", "id": id, "shown": shown])
+      ShellEvents.send(.window, ArdiaConsentStamp.begin().onto(["type": "menuBar", "id": id, "shown": shown]))
     }
   }
 

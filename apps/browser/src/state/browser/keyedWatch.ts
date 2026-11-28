@@ -68,7 +68,7 @@ const watchWindowSettingsInStore = keyedWatch(browser, (s: BrowserState, prev: B
   if (s.windows !== prev.windows) for (const id of changedIds(s.windows, prev.windows)) wake(id);
 });
 export const watchWindowSettings: KeyedWatch = (key, listener) => {
-  const stops = [watchWindowSettingsInStore(key, listener), onWindowChromeChange(listener), onMenuBarChange(listener)];
+  const stops = [watchWindowSettingsInStore(key, listener), onWindowChromeChange(listener), onMenuBarChange(key, listener)];
   return () => stops.forEach((stop) => stop());
 };
 export const useWindowSettings = <T,>(windowId: string, read: (s: BrowserState) => T): T => useKeyed(watchWindowSettings, windowId, () => read(useBrowser.getState()));

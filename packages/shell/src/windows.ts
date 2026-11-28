@@ -21,7 +21,7 @@ export type WindowEvent =
   | { type: "frame"; id: string; frame: [number, number, number, number]; restored?: [number, number, number, number]; fitted?: boolean }
   | { type: "fullScreen"; id: string; on: boolean; display?: string }
   | { type: "maximized"; id: string; on: boolean }
-  | { type: "menuBar"; id: string; shown: boolean }
+  | { type: "menuBar"; id: string; shown: boolean; epoch?: string }
   | { type: "sidebarEdge"; id: string; over: boolean; point: [number, number]; screenEdge?: "crossed" | "returned"; overlay?: boolean; heldByMenu?: "app" | "system" }
   | { type: "closeRequest"; id: string };
 

@@ -74,7 +74,7 @@ test("a gesture names its tab only for a page that is still in that regular wind
   const [little] = S().windows[small].tabIds;
   const gesture = (windowId, gestureTabId, mouseGesture = "back") => gestureTab(S(), { windowId, gestureTabId, mouseGesture });
   assert.equal(gesture(w, a), a);
-  assert.equal(gesture(w, a, undefined), null, "only gestures carry a page tab");
+  assert.equal(gesture(w, a, null), null, "only gestures carry a page tab");
   assert.equal(gesture(small, little), null, "Little Ardia keeps its own command routing");
   assert.equal(gesture(small, a), null, "a tab from another window is never targeted");
   assert.equal(gesture(w, "tab-gone"), null);

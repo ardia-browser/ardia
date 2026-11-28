@@ -37,7 +37,7 @@ import { homeRelative } from "../../../lib/homePath";
 
 export function ProfilesPane({ profileId: chosen, detail }: SettingsPlace) {
   const profileId = useSelectedProfile(chosen);
-  if (detail === SETTINGS_DETAIL.otherEngines) return <OtherEnginesPage profileId={profileId} />;
+  if (detail === SETTINGS_DETAIL.otherEngines) return <OtherEnginesPage />;
   if (detail === SETTINGS_DETAIL.passwords) return <PasswordsPage profileId={profileId} />;
   if (detail === SETTINGS_DETAIL.addresses) return <AddressesPage profileId={profileId} />;
   if (detail === SETTINGS_DETAIL.cards) return <CardsPage profileId={profileId} />;

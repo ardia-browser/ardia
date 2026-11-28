@@ -29,5 +29,6 @@ export function watchExtensionInstalls(startedAt: number) {
     void getPasskeyAccess()
       .then((access) => access?.entitled === true, () => false)
       .then((helperAllowed) => capture("extension_installed", { icloud_passwords: true, apple_helper_allowed: helperAllowed }, consent));
+    return undefined;
   });
 }

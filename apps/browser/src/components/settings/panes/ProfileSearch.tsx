@@ -65,7 +65,7 @@ export function SearchSection({ profileId }: { profileId: string }) {
   );
 }
 
-export function OtherEnginesPage({ profileId }: { profileId: string }) {
+export function OtherEnginesPage() {
   const engines = useSettings(searchEngines);
   const selectedId = useSettings((s) => defaultSearchEngine(s).id);
   const locked = useSettings((s) => !!controllingSearchExtension(s));

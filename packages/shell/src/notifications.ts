@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { NotificationsNative } from "./generated/native";
 
 export type NotificationPermission = "granted" | "denied" | "notDetermined" | "provisional";

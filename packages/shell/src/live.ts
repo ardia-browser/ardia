@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { CalendarNative, KeychainNative } from "./generated/native";
 
 export type CalendarAuthorization = "fullAccess" | "writeOnly" | "denied" | "restricted" | "notDetermined";

@@ -144,6 +144,7 @@ function useLittleArdiaSwipeClose(windowId: string) {
       closeLittleArdia(windowId);
       if (!isWindowClosing(windowId)) x.setValue(0);
     });
+    return undefined;
   };
   const onSwipe = (e: SwipeEvent) => {
     if (isWindowClosing(windowId)) return;

@@ -1,6 +1,3 @@
-import type { CleanedUrl } from "@ardia/core";
-import type { EventSubscription } from "expo-modules-core";
-import type { BangListReply } from "./documents";
 import type { ShellNative } from "./generated/native";
 
 export type AppEvent =
@@ -49,9 +46,5 @@ export type AppearanceMode = "auto" | "light" | "dark";
 
 export type OpenURLSource = { bundleId: string | null; appName: string | null };
 
-type ShellEvents = {
-  onAppEvent: (e: AppEvent) => void;
-  onOpenURLs: (e: { urls: string[]; pointer?: [number, number]; source?: OpenURLSource; returnTo?: string }) => void;
-};
 
 export type { ShellNative };

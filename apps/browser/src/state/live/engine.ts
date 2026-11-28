@@ -313,7 +313,7 @@ function markCompletedTabs(folderId: string, gone: Record<string, CompletionStat
 }
 
 
-const inUse = (s: BrowserState, id: string) => {
+const inUse = (id: string) => {
   const media = useMedia.getState();
   return liveOf(id).playingAudio || !!media.pipOpen[id] || isPlaying(media.sessions[id]) || capturing(usePages.getState().pages[id]?.mediaAccess) || !!media.tabShares[id] || Object.values(media.tabShares).some((share) => share.capturedTabId === id);
 };
@@ -323,7 +323,7 @@ function closeCompletedTabs() {
   const { folders, items } = live();
   const shown = shownTabIds(s);
   const tabs = Object.values(s.tabs)
-    .filter(({ id, liveItem: ref }) => ref?.completed && folders[ref.folderId]?.showCompleted === false && !shown.has(id) && !inPinnedContainer(s, id) && !inUse(s, id) && !items[ref.folderId]?.some((it) => it.id === ref.itemId))
+    .filter(({ id, liveItem: ref }) => ref?.completed && folders[ref.folderId]?.showCompleted === false && !shown.has(id) && !inPinnedContainer(s, id) && !inUse(id) && !items[ref.folderId]?.some((it) => it.id === ref.itemId))
     .map((t) => t.id);
   if (!tabs.length) return;
   s.closeTabs(tabs);

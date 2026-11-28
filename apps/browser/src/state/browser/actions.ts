@@ -86,6 +86,7 @@ export async function closeTab(tabId: string, { mayWrite, user }: CloseRequest =
   commit(() => store().closeTab(tabId, close));
   const next = activeTabId(store(), w.id);
   if (front === tabId && next && next !== front && isSleeping(next)) noteCloseWokeSleepingTab(consent);
+  return undefined;
 }
 
 export async function closeGroup(groupId: string, { mayWrite, user }: CloseRequest = {}) {

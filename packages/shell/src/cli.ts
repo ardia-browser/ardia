@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { CliNative } from "./generated/native";
 
 export type CliInstallResult = {

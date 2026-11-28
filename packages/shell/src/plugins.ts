@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { ViewProps } from "react-native";
 import type { PluginsNative } from "./generated/native";
 

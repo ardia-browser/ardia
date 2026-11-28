@@ -1,7 +1,4 @@
-import type { EventSubscription } from "expo-modules-core";
-import type { CommandEvent } from "./commands";
 import { nativeModule } from "./nativeModules";
-import type { MenuShortcut, ShortcutModifier } from "./system";
 import type { MenusNative } from "./generated/native";
 
 export type MenuItem =

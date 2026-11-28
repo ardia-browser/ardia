@@ -1,5 +1,5 @@
 import { addHistoryVisits } from "../../platform/history";
-import type { PageEngine, ProtectedMediaRequest } from "../../platform/tabs";
+import type { PageEngine } from "../../platform/tabs";
 import { confirm } from "../../platform/dialogs";
 import { create } from "zustand";
 import { storeTransaction, useBrowser } from "../browser/store";
@@ -8,7 +8,6 @@ import { pageOf, patchPage } from "../tabs/pageState";
 import {
   builtInEngine,
   canSwitchEngine,
-  chosenEngine,
   drivenByChrome,
   ENGINE_NAMES,
   engineMode,

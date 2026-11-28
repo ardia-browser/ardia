@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode
 import { useShallow } from "zustand/react/shallow";
 import { Animated, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
 import { useTheme } from "../ui/theme";
-import { TOOLBAR_ROWS, toolbarTrailing, urlFieldOf, type ToolbarRow } from "../../lib/toolbarRow";
+import { toolbarTrailing, urlFieldOf, type ToolbarRow } from "../../lib/toolbarRow";
 import { ToolbarRowContext, useToolbarRowContext } from "../ui/toolbarRowContext";
 import { activate } from "../../state/tabs/actions";
 import { toggleSidebar } from "../../state/windows/actions";

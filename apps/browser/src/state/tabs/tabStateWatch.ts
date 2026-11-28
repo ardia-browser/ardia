@@ -57,6 +57,7 @@ export function tabStateChanges(s: BrowserState, prev: BrowserState, wake: (id: 
       wakeIds(s.selection[id], wake);
       wakeIds(prev.selection[id], wake);
     }
+  return undefined;
 }
 
 const watchStoreTabState = keyedWatch<BrowserState>(() => useBrowser, tabStateChanges);

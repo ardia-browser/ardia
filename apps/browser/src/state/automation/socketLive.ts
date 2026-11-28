@@ -121,7 +121,7 @@ function nameOf(value: unknown): string {
 
 const PATCHABLE = ["collapsed", "groupStacks", "showCompleted", "icon"] as const;
 
-function update(params: Record<string, unknown>, call: SocketCall) {
+function update(params: Record<string, unknown>, _call: SocketCall) {
   const folder = folderOf(params.folder);
   const patch: Partial<LiveFolder> = {};
   for (const key of PATCHABLE) if (params[key] !== undefined) Object.assign(patch, { [key]: params[key] });

@@ -1,5 +1,5 @@
 import { CRUMB_X, FIELD, type Geo, type Rect, STRIP_H } from "../geometry";
-import type { Look } from "../look";
+
 import { tracker } from "../timeline";
 import { Caret, Label } from "../Kit";
 import { InputRow, Panel } from "../Floating";

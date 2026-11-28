@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { AutomationNative } from "./generated/native";
 
 export type ControlSocketStatus = { state: "on" | "off"; generation: number; path: string; reason?: string };

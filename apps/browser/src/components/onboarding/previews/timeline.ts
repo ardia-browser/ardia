@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Animated } from "react-native";
-import { curve, nativeLoop } from "../../ui/motion";
+import { nativeLoop } from "../../ui/motion";
 
 export type Stop = readonly [number, number];
 

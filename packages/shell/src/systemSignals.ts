@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { SystemSignalsNative } from "./generated/native";
 
 export type SystemSignal = { type: "sleep" } | { type: "wake" } | { type: "idle"; threshold: number; idle: boolean };

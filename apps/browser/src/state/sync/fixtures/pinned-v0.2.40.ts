@@ -406,6 +406,7 @@ export function pinnedAdapter(profileId: string): Adapter {
       const { find, splits, selection, windowOrder, windowUi } = s;
       const pinSync = noted.size ? { ...s.pinSync, [profileId]: { ...s.pinSync[profileId], ...Object.fromEntries(noted) } } : s.pinSync;
       useBrowser.setState({ tabs, windows, groups, find, splits, selection, windowOrder, windowUi, parkedPins, pinSync });
+      return undefined;
     },
   };
 }

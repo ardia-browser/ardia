@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { ConfigNative } from "./generated/native";
 
 export type ConfigFileRead =

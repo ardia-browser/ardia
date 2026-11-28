@@ -220,4 +220,5 @@ export function dismissAsk() {
   const relay = telemetryRelay();
   if (relay) return relay.change({ kind: "askDismissed" });
   save({ askDoneAt: Date.now() });
+  return undefined;
 }

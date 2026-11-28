@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { AppWindowsNative } from "./generated/native";
 
 export type Rect4 = [number, number, number, number];

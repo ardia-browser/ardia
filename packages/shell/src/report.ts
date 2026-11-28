@@ -1,4 +1,4 @@
-import { requireNativeViewManager, type EventSubscription } from "expo-modules-core";
+import { requireNativeViewManager } from "expo-modules-core";
 import type { ViewProps } from "react-native";
 import type { ReportNative } from "./generated/native";
 

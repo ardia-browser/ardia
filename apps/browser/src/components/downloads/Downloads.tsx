@@ -139,7 +139,7 @@ function DownloadsPanel({ windowId, closing, onClosed }: { windowId: string; clo
               ) : (
                 <ScrollView style={{ maxHeight: listMax }} showsVerticalScrollIndicator={ids.length * L.row > listMax} contentContainerStyle={{ paddingHorizontal: PANEL.rowInset }}>
                   {ids.map((id) => (
-                    <DownloadRowItem key={id} id={id} windowId={windowId} />
+                    <DownloadRowItem key={id} id={id} />
                   ))}
                 </ScrollView>
               )}
@@ -189,14 +189,14 @@ function RowButton({ icon, onPress, tooltip }: { icon: string; onPress: () => vo
   return <Button variant="icon" icon={icon} size="s" glyph={PANEL.iconSize} onPress={onPress} tooltip={tooltip} />;
 }
 
-const DownloadRowItem = memo(function DownloadRowItem({ id, windowId }: { id: string; windowId: string }) {
+const DownloadRowItem = memo(function DownloadRowItem({ id }: { id: string }) {
   const live = useDownload(id);
   const last = useRef(live);
   if (live) last.current = live;
-  return last.current ? <DownloadRow d={last.current} windowId={windowId} /> : null;
+  return last.current ? <DownloadRow d={last.current} /> : null;
 });
 
-function DownloadRow({ d, windowId }: { d: Download; windowId: string }) {
+function DownloadRow({ d }: { d: Download }) {
   const theme = useTheme();
   const { hovered, hoverProps } = useHover();
   const { exists, done, progress, blocked } = useDownloadView(d);

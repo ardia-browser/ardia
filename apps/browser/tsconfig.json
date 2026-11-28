@@ -2,6 +2,13 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "types": [],
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
     "paths": {
       "react-native": ["../../node_modules/react-native-macos"]
     }

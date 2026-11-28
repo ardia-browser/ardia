@@ -185,6 +185,7 @@ export function historyAdapter(profileId: string): Adapter {
         return withHistoryList(s, engine, list);
       });
       if (titlesKept) noteSyncHistoryTitlesKept(titlesKept, consent);
+      return undefined;
     },
   });
 }

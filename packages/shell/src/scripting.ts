@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { ScriptingNative } from "./generated/native";
 
 export type ScriptState = {

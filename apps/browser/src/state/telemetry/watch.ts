@@ -43,6 +43,7 @@ export function startWatch(reportId: string, days = WATCH_DAYS, now = Date.now()
   lastMonotonic = monotonicNow();
   capture("watch_started", { days: Math.round(span / DAY_MS), turned_sharing_on: !wasSharing }, consentNow());
   schedule(now);
+  return undefined;
 }
 
 function endWatch(reason: "expired" | "clock" | "stopped") {
@@ -56,12 +57,14 @@ function endWatch(reason: "expired" | "clock" | "stopped") {
   } else save({ ...NO_WATCH });
   clearTimeout(timer);
   timer = undefined;
+  return undefined;
 }
 
 export function stopWatch() {
   const relay = telemetryRelay();
   if (relay) return relay.change({ kind: "watchStopped" });
   endWatch("stopped");
+  return undefined;
 }
 
 export function checkWatch(now = Date.now(), sameSession = lastMonotonic !== null) {
@@ -99,4 +102,5 @@ export function watchNoticeShown() {
   const relay = telemetryRelay();
   if (relay) return relay.change({ kind: "watchNoticeShown" });
   save({ watchEndedNotice: null });
+  return undefined;
 }

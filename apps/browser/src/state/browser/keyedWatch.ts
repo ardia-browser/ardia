@@ -65,6 +65,7 @@ export const watchAppDark = fieldWatch(browser, (s: BrowserState) => s.ui.appDar
 const watchWindowSettingsInStore = keyedWatch(browser, (s: BrowserState, prev: BrowserState, wake) => {
   if (s.settings !== prev.settings) return true;
   if (s.windows !== prev.windows) for (const id of changedIds(s.windows, prev.windows)) wake(id);
+  return undefined;
 });
 export const watchWindowSettings: KeyedWatch = (key, listener) => {
   const stops = [watchWindowSettingsInStore(key, listener), onWindowChromeChange(listener)];

@@ -4,7 +4,7 @@ import { searchEngines } from "../../state/settings/settings";
 import { useSettings } from "../../state/browser/hooks";
 import { isSharing, setSharing } from "../../state/telemetry/client";
 import { SHARING_COPY } from "../../state/telemetry/copy";
-import { Text } from "../ui";
+
 import { space } from "../ui/tokens";
 import { SiteLogo } from "./SiteLogo";
 import { Page } from "./LayoutSteps";

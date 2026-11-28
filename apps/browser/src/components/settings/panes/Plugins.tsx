@@ -91,7 +91,7 @@ function programsText(p: ProgramsState | undefined): string | null {
   return p.linked.length ? `${p.linked.join(", ")} is on PATH (${p.binDir})` : null;
 }
 
-function originText(listing: PluginListing | undefined, active: boolean): string | null {
+function originText(listing: PluginListing | undefined): string | null {
   if (listing?.ignoresUserFolder) return `Official (the folder of the same name in ${pluginsFolderPath()} is ignored)`;
   return listing?.official ? "Official" : null;
 }
@@ -125,7 +125,7 @@ function PluginRow({ name }: { name: string }) {
   return (
     <Row
       title={m ? `${m.title}${m.version ? ` ${m.version}` : ""}` : name}
-      description={[originText(listing, active), m && fullControlLine(m) ? FULL_CONTROL_SUMMARY : null, statusOf(m, listing?.problems ?? [], active, review, process, unsaved)].filter(Boolean).join(" · ")}
+      description={[originText(listing), m && fullControlLine(m) ? FULL_CONTROL_SUMMARY : null, statusOf(m, listing?.problems ?? [], active, review, process, unsaved)].filter(Boolean).join(" · ")}
       icon={<Symbol name={m?.icon ?? m?.page?.icon ?? "puzzlepiece"} size={14} color={theme.icon} style={ICON} />}
       onPress={() => goToSettingsPane("plugins", null, name)}
     >
@@ -241,7 +241,7 @@ function PluginPage({ name }: { name: string }) {
       <Group>
         <Row
           title={active ? "On" : review ? "Changed since you turned it on" : "Off"}
-          description={[originText(listing, active), statusOf(m, listing.problems, active, review, process, unsaved, false)].filter(Boolean).join(" · ") || undefined}
+          description={[originText(listing), statusOf(m, listing.problems, active, review, process, unsaved, false)].filter(Boolean).join(" · ") || undefined}
         >
           <Toggle value={active} disabled={!m} asksFirst={!active} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on)} />
         </Row>
@@ -268,7 +268,7 @@ function PluginPage({ name }: { name: string }) {
           </Group>
         </>
       ) : null}
-      {m?.passwordManager && active ? <PasswordManagerDetails name={name} spec={m.passwordManager} /> : null}
+      {m?.passwordManager && active ? <PasswordManagerDetails name={name} /> : null}
       {m ? (
         <>
           <SectionHeader title="What it gets" />

@@ -46,7 +46,7 @@ const capturing = (id: string) => {
 
 const audibleNow = (id: string) => liveOf(id).playingAudio || isPlaying(useMedia.getState().sessions[id]);
 
-export function inUse(s: BrowserState, id: string): boolean {
+export function inUse(_s: BrowserState, id: string): boolean {
   return audibleNow(id) || !!useMedia.getState().pipOpen[id] || capturing(id);
 }
 

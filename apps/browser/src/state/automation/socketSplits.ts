@@ -1,4 +1,3 @@
-import type { BrowserState } from "../browser/store";
 import type { SplitView } from "../browser/types";
 import { MAX_SPLIT_PANES, splitOf, splitTabIds } from "../splits/splits";
 import { eligibleKind, isEligibleTab, shownPage } from "./automationWindows";
@@ -11,7 +10,7 @@ import { ownValue } from "../../lib/decode";
 
 const ORIENTATIONS = ["horizontal", "vertical"] as const;
 
-function splitRow(s: BrowserState, v: SplitView) {
+function splitRow(v: SplitView) {
   return {
     id: v.id,
     window: v.windowId,
@@ -31,7 +30,7 @@ function splitArg(value: unknown): SplitView {
 function listSplits(params: Record<string, unknown>) {
   const s = now();
   const windowId = params.window !== undefined ? windowOf(params.window).id : null;
-  return Object.values(s.splits).filter((v) => eligibleKind(s, v.windowId) && (!windowId || v.windowId === windowId)).map((v) => splitRow(s, v));
+  return Object.values(s.splits).filter((v) => eligibleKind(s, v.windowId) && (!windowId || v.windowId === windowId)).map((v) => splitRow(v));
 }
 
 function createSplit(params: Record<string, unknown>) {
@@ -42,7 +41,7 @@ function createSplit(params: Record<string, unknown>) {
   if (already) throw new OpError("bad_request", `Tab ${already.id} is already in split ${splitOf(now(), already.id)!.id}.`);
   const made = now().createSplit(tabs.map((t) => t.id), params.orientation as SplitView["orientation"] | undefined);
   expect(!!made && !!now().splits[made], "the split wasn't made.");
-  return splitRow(now(), now().splits[made]!);
+  return splitRow(now().splits[made]!);
 }
 
 function resize(params: Record<string, unknown>) {
@@ -53,13 +52,13 @@ function resize(params: Record<string, unknown>) {
   const shares = sizes.map((n) => n / total);
   if (!shares.every((n) => Number.isFinite(n) && n > 0)) throw new OpError("bad_request", "sizes must be positive numbers whose shares are all above zero.");
   now().updateSplit(v.id, { sizes: shares });
-  return splitRow(now(), now().splits[v.id]!);
+  return splitRow(now().splits[v.id]!);
 }
 
 function setOrientation(params: Record<string, unknown>) {
   const v = splitArg(params.split);
   if (v.orientation !== params.orientation) now().toggleSplitOrientation(v.id);
-  return splitRow(now(), now().splits[v.id]!);
+  return splitRow(now().splits[v.id]!);
 }
 
 function peekList() {
@@ -120,7 +119,7 @@ export const SPLIT_METHODS: MethodSpec[] = [
     run: (p) => {
       const v = splitArg(p.split);
       now().flipSplit(v.id);
-      return splitRow(now(), now().splits[v.id]!);
+      return splitRow(now().splits[v.id]!);
     },
   },
   { name: "splits.setOrientation", mutates: true, description: "Side by side or stacked", params: obj({ split: id("A split id"), orientation: oneOf(ORIENTATIONS, "horizontal or vertical") }, ["split", "orientation"]), result: "split", run: setOrientation },

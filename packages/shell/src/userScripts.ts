@@ -1,4 +1,3 @@
-import type { EventSubscription } from "expo-modules-core";
 import type { UserScriptsNative } from "./generated/native";
 
 export type UserScriptsFolder = { token?: string } & (

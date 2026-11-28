@@ -1,10 +1,9 @@
-import type { PasswordManagerSpec } from "../../../lib/pluginPasswordManager";
 import { useProfilesUsing } from "../../../state/site/passwordManager";
 import { goToSettingsPane } from "../../../state/settings/settingsWindows";
 import { Button } from "../../ui";
 import { Group, Row, SectionHeader } from "../Form";
 
-export function PasswordManagerDetails({ name, spec }: { name: string; spec: PasswordManagerSpec }) {
+export function PasswordManagerDetails({ name }: { name: string }) {
   const using = useProfilesUsing(name);
   return (
     <>

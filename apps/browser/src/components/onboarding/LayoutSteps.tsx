@@ -7,7 +7,7 @@ import { ChoiceList, type ChoiceOption, type MockFocus } from "./ChoiceList";
 import { useScreen } from "./Screen";
 import { useSection, useSharedMockFocus } from "./sectionContext";
 import { confirmAnswer, previewLive, PRESET_NAMES, PRESETS, setOnboardingDraft, skipStep, touchedOrPresetPatch, useOnboarding, type Preset, type QuestionId } from "../../state/onboarding/onboarding";
-import { keysOf, questionKeys, useQuestions } from "../../state/onboarding/questions";
+import { keysOf, questionKeys } from "../../state/onboarding/questions";
 import { placementCard, placementFromCard } from "../../state/omnibox/barPlacement";
 import { StepActions, StepLayout } from "./StepLayout";
 import { OptionCard } from "./OptionCard";

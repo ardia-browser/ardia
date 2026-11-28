@@ -1,4 +1,3 @@
-import type { IntroMusicCues } from "./app";
 import type { DevNative } from "./generated/native";
 
 export type SidebarEdgeStats = { wakes?: { global: number; local: number }; global?: boolean; local?: boolean; watched?: number };

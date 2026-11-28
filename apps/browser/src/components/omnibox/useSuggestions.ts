@@ -132,7 +132,8 @@ export function useSuggestions({
   }, [fetcher]);
   const query = text.trim();
   const fromEngine = suggestEngine(scope, engines, engine);
-  const bangs = useBangs(active && !scope && query.includes("!"));
+  const bangsOn = useSettings((st) => st.bangs);
+  const bangs = useBangs(active && bangsOn && !scope && query.includes("!"));
   const bang = useMemo(() => (bangs ? findBang(query, bangs) : null), [bangs, query]);
   const asked = query.replace(/^\?/, "").trim();
   const remoteQuery = active && suggestionsOn && remoteAllowed && asked && !bang && !hasKnownScheme(asked) && scope?.kind !== "history" && scope?.kind !== "provider" && suggestRequestUrl(fromEngine, asked) ? asked : null;

@@ -61,6 +61,7 @@ export const SETTING_SPECS = {
     { type: "array", items: { type: "object", properties: { ...Object.fromEntries(["profile", "extensionId", "extensionName", "name", "keyword", "url", "suggestUrl"].map((k) => [k, { type: "string" }])), isDefault: { type: "boolean" } }, required: ["profile", "extensionId", "extensionName", "name", "keyword", "url", "isDefault"] } },
   ),
   searchSuggestions: flag(true, SYNCED),
+  bangs: flag(true, SYNCED),
   commandBarHistory: flag(true, SYNCED),
   showSelectionSearch: flag(true, SYNCED),
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),

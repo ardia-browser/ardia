@@ -72,6 +72,11 @@ export const profileRows = {
           description: "Searches and pages from your history.",
           keywords: ["autocomplete", "show search suggestions", "history", "visited pages", "browsing history", "hide history", "autofill", "inline completion", "recent pages", "command bar", "omnibox", "suggest pages from history", "search suggestions", "history suggestions"],
         },
+        bangs: {
+          title: "Bangs",
+          description: "Typing !w or !yt searches that site. Turn off to send them to your search engine.",
+          keywords: ["bang", "!bang", "duckduckgo bangs", "kagi bangs", "shortcuts", "exclamation mark", "let the search engine handle bangs"],
+        },
         showSelectionSearch: {
           title: "Search button on selected text",
           description: "Shows a Search button over text you select.",

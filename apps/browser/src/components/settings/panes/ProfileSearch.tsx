@@ -59,6 +59,7 @@ export function SearchSection({ profileId }: { profileId: string }) {
             <Checkbox label="Pages from history" value={history} onChange={(v) => updateSettings({ commandBarHistory: v })} />
           </Box>
         </Row>
+        <SettingToggle anchor="profiles.bangs" />
         <SettingToggle anchor="profiles.showSelectionSearch" />
       </Group>
     </>

@@ -323,6 +323,7 @@ export function ChromeSurface({
   dark,
   shown,
   shownMs,
+  fadesWithReduceMotion = false,
   underlay = false,
   sampleHold = null,
   testID,
@@ -339,6 +340,7 @@ export function ChromeSurface({
   dark?: boolean;
   shown?: boolean;
   shownMs?: number;
+  fadesWithReduceMotion?: boolean;
   underlay?: boolean;
   sampleHold?: string | null;
   testID?: string;
@@ -357,7 +359,7 @@ export function ChromeSurface({
   const laidOut = ({ nativeEvent: { layout } }: LayoutChangeEvent) => setBox((was) => (was && was.x === layout.x && was.y === layout.y && was.width === layout.width && was.height === layout.height ? was : layout));
   if (glassIsNative()) {
     const shade = dark ?? (incognito || theme.dark);
-    const glassProps = { source, name: testID, shape, cornerRadius, tint: incognito ? undefined : lookGlassTint(look), interactive, tinted, surface, barShadow, shown, shownMs, sampleHold, privately: privately || incognito || privateContext || browsingPrivately, classicChrome: nativeClassicChrome, ...lookColors(look, incognito, shade), dark: shade };
+    const glassProps = { source, name: testID, shape, cornerRadius, tint: incognito ? undefined : lookGlassTint(look), interactive, tinted, surface, barShadow, shown, shownMs, fadesWithReduceMotion, sampleHold, privately: privately || incognito || privateContext || browsingPrivately, classicChrome: nativeClassicChrome, ...lookColors(look, incognito, shade), dark: shade };
     const split = splitsGlassFromFace(Platform.OS, true, branch);
     const glass = split ? (
       <View testID={testID ? `${testID}Face` : undefined} collapsable={false} style={[style, { borderRadius: cornerRadius }]} onLayout={underlay ? laidOut : undefined}>

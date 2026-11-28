@@ -122,6 +122,7 @@ public final class LookModule: Module {
       Prop("classicChrome") { (view: GlassView, value: ClassicChrome?) in view.classicChrome = value ?? ClassicChrome() }
       Prop("shown") { (view: GlassView, value: Bool?) in view.shown = value ?? true }
       Prop("shownMs") { (view: GlassView, value: Double?) in view.shownDuration = max(0, value ?? 200) / 1000 }
+      Prop("fadesWithReduceMotion") { (view: GlassView, value: Bool?) in view.fadesWithReduceMotion = value == true }
       Prop("privately") { (view: GlassView, value: Bool?) in view.privately = value == true }
       Prop("overlay") { (view: GlassView, value: Bool?) in view.overlay = value == true }
       Prop("color") { (view: GlassView, value: String?) in view.colors.color = value }
@@ -300,6 +301,7 @@ final class GlassView: ExpoView {
   var classicChrome = ClassicChrome()
   var shown = true
   var shownDuration: TimeInterval = 0.2
+  var fadesWithReduceMotion = false
   var privately = false
   var overlay = false
   var colors = LookColors()
@@ -377,7 +379,7 @@ final class GlassView: ExpoView {
     }
     if turning, PhoneTestBuild.isOn { traceShown("turning") }
     let shadowWas = layer.presentation()?.shadowOpacity ?? layer.shadowOpacity
-    let fades = turning && window != nil && shownDuration > 0 && !UIAccessibility.isReduceMotionEnabled
+    let fades = turning && window != nil && shownDuration > 0 && (fadesWithReduceMotion || !UIAccessibility.isReduceMotionEnabled)
     if fades {
       UIView.animate(withDuration: shownDuration, delay: 0, options: [shown ? .curveEaseOut : .curveEaseIn, .beginFromCurrentState], animations: surface) { [weak self] finished in
         guard PhoneTestBuild.isOn else { return }

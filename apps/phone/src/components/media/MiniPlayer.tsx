@@ -104,7 +104,7 @@ function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale, shows }: { 
   ];
   const playing = media.state === "playing";
   return (
-    <ChromeSurface testID="miniPlayerPlate" shape="capsule" cornerRadius={MINI_PLAYER.radius} incognito={media.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={shows} shownMs={shows ? MINI_PLAYER.inMs : MINI_PLAYER.outMs} style={styles.plate}>
+    <ChromeSurface testID="miniPlayerPlate" shape="capsule" cornerRadius={MINI_PLAYER.radius} incognito={media.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={shows} shownMs={shows ? MINI_PLAYER.inMs : MINI_PLAYER.outMs} fadesWithReduceMotion style={styles.plate}>
       <PressInPlace grow label={MINI_PLAYER_WORDS.open(lines.title)} hint={MINI_PLAYER_WORDS.openHint} actions={spokenExtras.length ? spokenExtras : undefined} onPress={() => openMiniPlayerTab(media)} onPressIn={haptics.barPress} style={styles.lead}>
         <Artwork media={media} faviconUrl={tab?.faviconUrl ?? null} pageUrl={tab?.url ?? null} fill={ink.edge} />
         <View style={styles.lines}>

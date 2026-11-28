@@ -712,7 +712,10 @@ ungoogled's `disable-webstore-urls` and `fix-building-with-prunned-binaries`, He
 undoes what they do instead (below).
 
 After the patches, `fixups` turns saving passwords, addresses and cards back on by default (inox's
-`modify-default-prefs` turns them off); autosign-in stays off.
+`modify-default-prefs` turns them off); autosign-in stays off. It also puts the third-party cookie default back to
+Chrome's: blocked only in private windows (`CookieControlsMode::kIncognitoOnly`), where inox blocks them in every
+window. Microsoft's sign-in iframes and token renewal (Teams) and Office add-ins (Zoom in Outlook) need them. A
+profile that chose a mode in Settings keeps it.
 
 **Substitutions**, in this order:
 
@@ -775,7 +778,8 @@ Helium also adds fingerprinting noise (canvas, audio, hardware concurrency), red
 Privacy Control pref (off by default) and flags for ECH and QUIC v2, and turns `InfiniteTabsFreezing` on by default.
 HTTPS-First in its balanced mode turns itself on by default (`HttpsFirstBalancedModeAutoEnable`): Helium's
 `prefer-https-by-default` did that until Chromium 157 made it the default. Inox's prefs, Safe Browsing compiled out (`safe_browsing_mode=0`), MV2 and no
-field trials are as before.
+field trials are as before, except that third-party cookies are blocked only in private windows, as in Chrome (the
+`fixups` stage undoes inox's block in every window).
 
 **Ungoogled patches Helium leaves out that we carry**, as `chromium-ungoogled-*` patches (BSD-3-Clause, as we
 applied them before Helium): `0005-disable-default-extensions` (without its `webstore_installer.cc` part),

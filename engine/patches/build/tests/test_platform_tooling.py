@@ -361,6 +361,44 @@ class HeliumTests(unittest.TestCase):
                     with self.assertRaisesRegex(helium.StageError, 'submodule does not match'):
                         helium.stage_pins(ctx)
 
+    COOKIE_SETTINGS = 'components/content_settings/core/browser/cookie_settings.cc'
+    COOKIE_BLOCK = (
+        'void CookieSettings::RegisterProfilePrefs(\n'
+        '    user_prefs::PrefRegistrySyncable* registry) {\n'
+        '  registry->RegisterIntegerPref(\n'
+        '      prefs::kCookieControlsMode,\n'
+        '      static_cast<int>(CookieControlsMode::kBlockThirdParty),\n'
+        '      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);\n'
+        '}\n')
+
+    def helium_patched_tree(self, root):
+        files = {}
+        for rel, old, _ in helium.FIXUPS:
+            if rel != self.COOKIE_SETTINGS:
+                files.setdefault(rel, []).append(old + '\n')
+        files[self.COOKIE_SETTINGS] = [self.COOKIE_BLOCK]
+        for rel, lines in files.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(''.join(lines))
+
+    def test_fixups_keep_third_party_cookies_blocked_only_in_private_windows(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            self.helium_patched_tree(root)
+            helium.stage_fixups(argparse.Namespace(tree=root))
+            cookies = (root / self.COOKIE_SETTINGS).read_text()
+            self.assertIn('static_cast<int>(CookieControlsMode::kIncognitoOnly),', cookies)
+            self.assertNotIn('kBlockThirdParty', cookies)
+            self.assertIn('prefs::kCookieControlsMode,\n      static_cast<int>(CookieControlsMode::kIncognitoOnly)', cookies)
+
+    def test_fixups_refuse_a_tree_where_the_cookie_default_moved(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = pathlib.Path(scratch)
+            self.helium_patched_tree(root)
+            (root / self.COOKIE_SETTINGS).write_text('void CookieSettings::RegisterProfilePrefs() {}\n')
+            with self.assertRaisesRegex(helium.StageError, r'kBlockThirdParty.*cookie_settings\.cc exactly once'):
+                helium.stage_fixups(argparse.Namespace(tree=root))
+
 
 class PackagingTests(unittest.TestCase):
     def test_packaged_ui_sits_beside_binary_and_runtime_files_survive(self):

@@ -11,7 +11,8 @@ entirely: no stage fetches them, and the hunks of Helium's patches that edit the
                  skip protects (Safe Storage, passwords, Sparkle, the product dir, mDNS) beyond the reviewed allowlist
   patches        helium-chromium's series, then helium-macos's, minus SKIP and minus the omitted downloads' files;
                  patch -p1 -l -N with no fuzz (Helium allows 2; a patch that needs it fails here instead)
-  fixups         saving passwords, addresses and cards on by default
+  fixups         saving passwords, addresses and cards on by default; third-party cookies blocked only in
+                 private windows, as in Chrome (inox's modify-default-prefs flips all four)
   domsub         Helium's domain substitution, minus domsub-keep-store.txt (the Web Store and extension updates)
   namesub        Helium's name_substitution.py --sub and i18n_apply.py
   brand-namesub  ardia_namesub.py: Helium -> Ardia in the string files
@@ -111,6 +112,9 @@ FIXUPS = [
      '      kAutofillProfileEnabled, false,', '      kAutofillProfileEnabled, true,'),
     ('components/autofill/core/common/autofill_prefs.cc',
      '      kAutofillCreditCardEnabled, false,', '      kAutofillCreditCardEnabled, true,'),
+    ('components/content_settings/core/browser/cookie_settings.cc',
+     '      prefs::kCookieControlsMode,\n      static_cast<int>(CookieControlsMode::kBlockThirdParty),',
+     '      prefs::kCookieControlsMode,\n      static_cast<int>(CookieControlsMode::kIncognitoOnly),'),
 ]
 
 OMITTED = ('third_party/ublock/', 'components/helium_onboarding/', 'third_party/search_engines_data/resources_internal/')

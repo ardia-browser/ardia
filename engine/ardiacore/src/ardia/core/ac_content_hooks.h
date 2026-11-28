@@ -12,6 +12,10 @@
 
 class GURL;
 
+namespace url {
+class Origin;
+}
+
 namespace content {
 class BrowserContext;
 class DevToolsAgentHost;
@@ -19,11 +23,16 @@ class DevToolsAgentHostClient;
 class DevToolsSocketFactory;
 class RenderFrameHost;
 class RenderWidgetHost;
+class WeakDocumentPtr;
 class WebContents;
 
 extern bool g_ardia_opacity_from_default_color;
 
 bool ArdiaHasAccessedInitialMainDocument(WebContents* contents);
+
+WeakDocumentPtr ArdiaBrowserRedirectDocument(WebContents* contents,
+                                            const GURL& app_url,
+                                            const url::Origin& redirector);
 
 bool ArdiaMainFrameHandlesEnterPictureInPicture(WebContents* contents);
 

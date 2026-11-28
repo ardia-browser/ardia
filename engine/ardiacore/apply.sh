@@ -523,6 +523,7 @@ bool (*g_ardia_external_protocol_dialog)(
     content::WebContents* web_contents,
     const std::optional<url::Origin>& initiating_origin,
     content::WeakDocumentPtr initiator_document,
+    content::WeakDocumentPtr browser_redirect_document,
     const std::u16string& program_name) = nullptr;
 """
 old = """  CHECK(web_contents, base::NotFatalUntil::M161);
@@ -532,7 +533,8 @@ new = """  CHECK(web_contents, base::NotFatalUntil::M161);
   // Ardia: ArdiaCore
   if (!delegate && g_ardia_external_protocol_dialog &&
       g_ardia_external_protocol_dialog(url, web_contents, initiating_origin,
-                                           initiator_document, program_name)) {
+                                       initiator_document, browser_redirect_document,
+                                       program_name)) {
     return;
   }
   if (delegate) {
@@ -542,7 +544,7 @@ def edit(s):
     at = s.index(old_ns)
     return (s[:at] + decl + s[at:]).replace(old, new)
 hook(["bool (*g_ardia_external_protocol_dialog)(\n",
-      "      g_ardia_external_protocol_dialog(url, web_contents, initiating_origin,\n"], edit, HOOKS)
+      "                                       initiator_document, browser_redirect_document,\n"], edit, HOOKS)
 PY
 
 hook "$src/chrome/browser/history/history_tab_helper.cc" "HistoryTabHelper" <<'PY'

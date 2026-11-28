@@ -62,7 +62,7 @@ const usesPageA = [
   "extension-prompts", "traffic-lights-after-profile-switch", "extension-configure",
   "private-windows-create", "extension-private-window", "extension-installed-bubble", "popup-window", "popup-window-full-screen", "autofill-save-prompts",
   "settings-services", "download-navigation", "page-events", "page-background", "external-app-answer",
-  "external-app-from-extension",
+  "external-app-from-extension", "external-app-from-redirect",
   "notifications", "now-playing", "media-state", "auto-picture-in-picture", "auto-picture-in-picture-app-switch", "auto-picture-in-picture-closed-stays-closed", "auto-picture-in-picture-other-window", "auto-picture-in-picture-paused", "auto-picture-in-picture-covered-quick", "media-plays-on-move", "picture-in-picture-opt-out", "pip-window", "pip-framing", "report-recording-pip", "report-recording-guard", "report-recording-webkit-media", "page-focus",
   "fullscreen-tab-switch", "fullscreen-native", "fullscreen-system-title-bar", "fullscreen-transition-picture", "fullscreen-hidden-page", "fullscreen-split-sibling",
   "fullscreen-pip", "autofill-suggestions", "images", "extension-surfaces", "frozen", "discard",
@@ -219,6 +219,7 @@ const fixtureClip = () => {
   }
   return (clipBytes ??= readFileSync(path));
 };
+const redirectedAppUrl = "shortcuts://ardiacore-acceptance-redirect?case=initial";
 const server = createServer((req, res) => {
   if (!req.headers.host?.startsWith("127.0.0.1")) adServed.push(`${req.headers.host}${req.url}`);
   served.set(req.url, (served.get(req.url) ?? 0) + 1);
@@ -226,6 +227,10 @@ const server = createServer((req, res) => {
   const url = new URL(req.url, "http://x");
   const page = (title, body, extra = "") =>
     `<!doctype html><html><head><title>${title}</title><link rel="icon" href="/icon.png">${extra}</head><body>${body}</body></html>`;
+  if (url.pathname === "/external-app-redirect") {
+    res.writeHead(302, { location: redirectedAppUrl, "cache-control": "no-store" });
+    return res.end();
+  }
   if (url.pathname === "/icon.png") {
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==", "base64");
     res.writeHead(200, { "content-type": "image/png" });
@@ -3524,6 +3529,32 @@ try {
     return { app: firstAsk.app, origin: firstAsk.origin, remember: firstAsk.remember, icon: !!firstAsk.icon,
       declined: [firstAsk.id, again.id], allowancesAfterDecline: allowances.length, opened: launch, allowance: remembered,
       removed: true, launched: false };
+  });
+
+  await check("external-app-from-redirect", async () => {
+    const launchCount = async () =>
+      (await engine("permissions.devExternalLaunches")).filter((entry) => entry.url === redirectedAppUrl).length;
+    for (const answer of ["cancel", "navigate", "open"]) {
+      const before = await launchCount();
+      const tab = await evalApp(`return ac.store.getState().newTab(${JSON.stringify(mainWindow)})`);
+      try {
+        await evalApp(`ac.store.getState().navigate("${tab}", "${base}/external-app-redirect", { userInitiated: true }); return true`);
+        const request = await until(`the redirected app's prompt for ${answer}`, () =>
+          evalApp(`return ac.pageState.getState().pages["${tab}"]?.externalApp ?? null`), 10000);
+        if (request.origin !== base || request.scheme !== "shortcuts")
+          throw new Error(`unexpected app request: ${request.origin} ${request.scheme}`);
+        if (answer === "navigate") {
+          await evalApp(`ac.store.getState().navigate("${tab}", "${base}/b", { userInitiated: true }); return true`);
+          await until("the replacement page", async () => (await state()).tabs.some((t) => t.id === tab && t.title === "Page B" && !t.loading));
+        }
+        await engine("permissions.resolveExternalApp", { id: request.id, open: answer !== "cancel", remember: false });
+        const launched = await launchCount() - before;
+        if (launched !== (answer === "open" ? 1 : 0))
+          throw new Error(`${answer} after the initial redirect recorded ${launched} launches`);
+      } finally {
+        await closeTab(tab);
+      }
+    }
   });
 
   await check("external-app-from-extension", async () => {

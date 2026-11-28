@@ -15,6 +15,7 @@
 #include "components/permissions/permission_prompt.h"
 #include "content/public/browser/media_stream_request.h"
 #include "extensions/browser/extension_install_prompt_client.h"
+#include "ui/base/page_transition_types.h"
 #include "ui/base/resource/resource_bundle.h"
 
 class Browser;
@@ -105,11 +106,22 @@ extern bool (*g_ardia_file_system_restore_prompt)(
     base::OnceCallback<void(permissions::PermissionAction)>& callback,
     content::WebContents* web_contents);
 
+void ArdiaLaunchExternalProtocol(
+    const GURL& url,
+    base::RepeatingCallback<content::WebContents*()> web_contents_getter,
+    ui::PageTransition page_transition,
+    bool has_user_gesture,
+    bool is_in_fenced_frame_tree,
+    const std::optional<url::Origin>& initiating_origin,
+    content::WeakDocumentPtr initiator_document,
+    content::WeakDocumentPtr browser_redirect_document);
+
 extern bool (*g_ardia_external_protocol_dialog)(
     const GURL& url,
     content::WebContents* web_contents,
     const std::optional<url::Origin>& initiating_origin,
     content::WeakDocumentPtr initiator_document,
+    content::WeakDocumentPtr browser_redirect_document,
     const std::u16string& program_name);
 
 extern bool (*g_ardia_history_eligible)(content::WebContents*);

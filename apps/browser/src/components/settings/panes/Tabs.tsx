@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
-import { useSettings, useTabLayout } from "../../../state/browser/hooks";
+import { useAutoHidesTabsInFocused, useSettings, useTabLayout } from "../../../state/browser/hooks";
 import { chooseScrollToolbar, chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
 import { customNewTabUrl, type Settings } from "../../../state/settings/settings";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Segmented, Sheet, space, Text, TextField, Toggle, type Option, type SegmentOption } from "../../ui";
@@ -96,8 +96,6 @@ export function TabsPane(_place: SettingsPlace) {
 function LayoutSection() {
   const top = useTabLayout() === "top";
   const sidebarSide = useSettings((s) => s.sidebarSide);
-  const autoHideKeys = useShortcutHint("toggleSidebar");
-  const autoHideConflicts = useCommandConflicts("toggleSidebar");
   return (
     <>
       <SectionHeader title="Layout" />
@@ -109,9 +107,7 @@ function LayoutSection() {
           </Box>
         </Anchor>
         <Group>
-          <SettingToggle anchor="tabs.autoHideTabs" description={autoHideConflicts.length ? <ShortcutConflict titles={autoHideConflicts} /> : autoHideDescription(top, autoHideKeys)}>
-            <CommandKeyField command="toggleSidebar" onChange={(change) => change !== "mouse" && noteSettingsPick("autoHideTabsKeys", change)} />
-          </SettingToggle>
+          <AutoHideTabsRow top={top} />
           <Row anchor="tabs.sidebarSide">
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
           </Row>
@@ -144,6 +140,18 @@ function ScrollToolbarChoices() {
         </Box>
       </FormField>
     </Anchor>
+  );
+}
+
+function AutoHideTabsRow({ top }: { top: boolean }) {
+  const on = useAutoHidesTabsInFocused();
+  const keys = useShortcutHint("toggleSidebar");
+  const conflicts = useCommandConflicts("toggleSidebar");
+  return (
+    <Row anchor="tabs.autoHideTabs" description={conflicts.length ? <ShortcutConflict titles={conflicts} /> : autoHideDescription(top, keys)}>
+      <CommandKeyField command="toggleSidebar" onChange={(change) => change !== "mouse" && noteSettingsPick("autoHideTabsKeys", change)} />
+      <Toggle value={on} accessibilityLabel={setting("tabs.autoHideTabs").title} onChange={(next) => updateSettings({ autoHideTabs: next })} />
+    </Row>
   );
 }
 

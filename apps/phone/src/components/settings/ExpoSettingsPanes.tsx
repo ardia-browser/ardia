@@ -212,15 +212,19 @@ export function ExpoPictureInPicturePane() {
           <ExpoRowText title={PICTURE_IN_PICTURE_COPY.keepsPlaying} />
         </Toggle>
       </Section>
-      <Section title={PICTURE_IN_PICTURE_COPY.miniPlayerSection} footer={<Text>{spaces && miniPlayer ? `${PICTURE_IN_PICTURE_COPY.miniPlayerFooter} ${PICTURE_IN_PICTURE_COPY.everySpaceFooter}` : PICTURE_IN_PICTURE_COPY.miniPlayerFooter}</Text>}>
+      <Section title={PICTURE_IN_PICTURE_COPY.miniPlayerSection} footer={<Text>{PICTURE_IN_PICTURE_COPY.miniPlayerFooter}</Text>}>
         <Toggle isOn={miniPlayer} onIsOnChange={setMiniPlayer} modifiers={modifierList(settingsSwitchStyle())}>
           <ExpoRowText title={PICTURE_IN_PICTURE_COPY.miniPlayer} />
         </Toggle>
-        {spaces && miniPlayer ? (
+      </Section>
+      {spaces && miniPlayer ? (
+        <Section footer={<Text>{PICTURE_IN_PICTURE_COPY.everySpaceFooter}</Text>}>
           <Toggle isOn={everySpace} onIsOnChange={setMiniPlayerEverySpace} modifiers={modifierList(settingsSwitchStyle())}>
             <ExpoRowText title={PICTURE_IN_PICTURE_COPY.everySpace} />
           </Toggle>
-        ) : null}
+        </Section>
+      ) : null}
+      <Section footer={<Text>{PICTURE_IN_PICTURE_COPY.skipLengthFooter}</Text>}>
         <Picker
           label={<ExpoRowText title={PICTURE_IN_PICTURE_COPY.skipLength} />}
           selection={String(skip)}

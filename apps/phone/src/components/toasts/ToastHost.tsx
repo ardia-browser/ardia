@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AccessibilityInfo, Keyboard, Platform, StyleSheet, Text, useWindowDimensions, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from "react-native-reanimated";
+import Animated, { runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { keyboardIsUp } from "../../lib/trayMotion";
 import { backdropIsDark, compositeOver } from "../../lib/readableInk";
 import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, usePageBarShown, useToast } from "../../state/toasts/hooks";
-import { floatingBarClearance, floatingPillClearance, materialPillClearance, pageBarClearance, shownBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace, toastSideInset, type ToastPlacement } from "../../state/toasts/placement";
+import { floatingBarClearance, floatingPillClearance, materialPillClearance, pageBarClearance, shownBarClearance, TOAST_MOTION, toastPlace, toastSideInset, type ToastPlacement } from "../../state/toasts/placement";
+import { IDLE_TOAST_TOUCH, toastTouchDown, toastTouchDrag, toastTouchMove, toastTouchUp, type ToastTouch } from "../../state/toasts/touch";
 import { FLOATING_BAR_PLACE, floatingBarCenter } from "../../lib/deckGeometry";
-import { dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics } from "../../state/toasts/semantics";
+import { activatesToast, dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics } from "../../state/toasts/semantics";
 import { dismissToast, holdToast, tapToast, type Toast, type ToastAction, type ToastIcon, type ToastTile } from "../../state/toasts/store";
-import { browseLayout, chromeLayout, font, PlateSymbol, PlateText, space, stroke, SurfaceInkProvider, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useSurfaceInk, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { browseLayout, chromeLayout, font, PlateSymbol, PlateText, press, space, stroke, SurfaceInkProvider, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, useSurfaceInk, useTheme, type SymbolName, useReduceMotion } from "../ui";
 import { fileKindOf, fileTileLabel, toastGesture, toastTileInk } from "./toastTokens";
 import { materialBarPill, materialBottomBar } from "../ui/materialTokens";
 import { IncognitoLook } from "../ui/theme";
@@ -73,6 +74,8 @@ function ToastLayer({ covered }: { covered: boolean }) {
   return (
     <View
       ref={frame}
+      testID="toastLayer"
+      collapsable={false}
       style={StyleSheet.absoluteFill}
       pointerEvents="box-none"
       onLayout={() => frame.current?.measureInWindow((_x, y, _width, height) => setHostBottom(y + height))}
@@ -104,7 +107,7 @@ function KeyboardRidingPlace({ spot, toastId, children }: PlaceProps) {
   const resting = "bottom" in place ? place.bottom : 0;
   const ride = useKeyboardRide(spot, resting, arrivedOverKeyboard, keyboard.height);
   return (
-    <Animated.View testID="toastPlace" style={[styles.host, { left: spot.side, right: spot.side }, place, ride]} pointerEvents="box-none">
+    <Animated.View testID="toastPlace" collapsable={false} style={[styles.host, { left: spot.side, right: spot.side }, place, ride]} pointerEvents="box-none">
       {children}
     </Animated.View>
   );
@@ -113,7 +116,7 @@ function KeyboardRidingPlace({ spot, toastId, children }: PlaceProps) {
 function ResizedPlace({ spot, children }: PlaceProps) {
   const { lift, keyboard } = useBottomLift();
   return (
-    <View testID="toastPlace" style={[styles.host, { left: spot.side, right: spot.side }, toastPlace({ ...spot, keyboardLift: keyboard ? lift : null })]} pointerEvents="box-none">
+    <View testID="toastPlace" collapsable={false} style={[styles.host, { left: spot.side, right: spot.side }, toastPlace({ ...spot, keyboardLift: keyboard ? lift : null })]} pointerEvents="box-none">
       {children}
     </View>
   );
@@ -121,81 +124,184 @@ function ResizedPlace({ spot, children }: PlaceProps) {
 
 const ToastPlace = Platform.OS === "ios" ? KeyboardRidingPlace : ResizedPlace;
 
-function ToastView({ spot }: { spot: ToastSpot }) {
+function useShownToast(reduceMotion: boolean) {
   const toast = useToast();
+  const [leaving, setLeaving] = useState<Toast | null>(null);
+  const last = useRef<Toast | null>(null);
+  const appear = useSharedValue(0);
+  const departing = useSharedValue(0);
+  const shownId = toast?.id ?? null;
+  useLayoutEffect(() => {
+    if (toast) {
+      last.current = toast;
+      setLeaving(null);
+      departing.value = 0;
+      appear.value = 0;
+      appear.value = reduceMotion ? withTiming(1, { duration: tabsMotion.surfaceFade }) : withSpring(1, toastMotion.snappy);
+      return;
+    }
+    const gone = last.current;
+    last.current = null;
+    if (!gone) return;
+    setLeaving(gone);
+    departing.value = 1;
+    const settle = (finished?: boolean) => {
+      "worklet";
+      if (finished) runOnJS(setLeaving)(null);
+    };
+    appear.value = reduceMotion ? withTiming(0, { duration: tabsMotion.surfaceFade }, settle) : withSpring(0, toastMotion.snappy, settle);
+  }, [shownId]);
+  return { toast, card: toast ?? leaving, appear, departing };
+}
+
+function ToastView({ spot }: { spot: ToastSpot }) {
   const reduceMotion = useReduceMotion();
+  const { toast, card, appear, departing } = useShownToast(reduceMotion);
   const drag = useSharedValue(0);
+  const pressed = useSharedValue(0);
+  const actionable = useSharedValue(false);
+  const touch = useSharedValue<ToastTouch>(IDLE_TOAST_TOUCH);
   const actionLabel = toast?.action?.label ?? null;
   const semantics = toastSemantics(actionLabel, Platform.OS);
+  useLayoutEffect(() => {
+    actionable.value = semantics.pressable;
+  }, [semantics.pressable]);
   useEffect(() => {
     drag.value = 0;
+    pressed.value = 0;
+    touch.value = IDLE_TOAST_TOUCH;
   }, [toast?.id]);
   useEffect(() => {
     if (toast && semantics.announcement === "announceForAccessibility") AccessibilityInfo.announceForAccessibility(toastAnnouncement(toast.spoken, actionLabel));
   }, [toast?.id, toast?.stage]);
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY([-TOAST_SLOP, TOAST_SLOP])
-        .onStart(() => {
-          runOnJS(holdToast)(true);
-        })
-        .onUpdate((event) => {
-          drag.value = event.translationY;
-        })
-        .onEnd((event) => {
-          if (toastDragDismisses(event.translationY, event.velocityY)) {
-            runOnJS(dismissToast)();
-            return;
-          }
-          runOnJS(holdToast)(false);
-          drag.value = toastDragReturn(reduceMotion) === "snap" ? 0 : withSpring(0, toastMotion.snappy);
-        }),
-    [reduceMotion],
-  );
-  const dragged = useAnimatedStyle(() => ({ transform: [{ translateY: Math.max(drag.value, drag.value / 4) }] }));
-  const pressStyle = usePressStyle("filled", { style: styles.press });
-  if (!toast) return null;
+  const gesture = useMemo(() => toastTouchGesture({ touch, drag, pressed, actionable, departing, reduceMotion }), [reduceMotion]);
+  const shown = useAnimatedStyle(() => {
+    const progress = appear.value;
+    const travel = departing.value ? (1 - progress) * TOAST_MOTION.exitTravel : (1 - progress) * TOAST_MOTION.enterTravel;
+    const scale = departing.value ? 1 : TOAST_MOTION.enterScale + (1 - TOAST_MOTION.enterScale) * progress;
+    const held = Math.max(drag.value, drag.value / 4);
+    return { opacity: progress * (pressed.value ? press.filledOpacity : 1), transform: [{ translateY: travel + held }, { scale }] };
+  });
+  if (!card) return null;
+  const live = toast !== null;
   const onAccessibilityAction = (event: AccessibilityActionEvent) => {
-    if (dismissesToast(event.nativeEvent.actionName)) dismissToast();
+    const name = event.nativeEvent.actionName;
+    if (dismissesToast(name)) dismissToast();
+    else if (activatesToast(name) && semantics.pressable) tapToast();
   };
   const escape = semantics.escapes ? dismissToast : undefined;
-  const cardPress = semantics.pressable ? tapToast : undefined;
-  const content = (
-    <ToastPlate>
-      <ToastTileView tile={toast.tile} />
-      <TextBlock toast={toast} reduceMotion={reduceMotion} />
-      {toast.action ? <ToastButton action={toast.action} /> : null}
-    </ToastPlate>
-  );
-  const spokenLabel = toastAnnouncement(toast.spoken, actionLabel);
+  const spokenLabel = toastAnnouncement(card.spoken, card.action?.label ?? null);
   return (
-    <ToastPlace spot={spot} toastId={toast.id}>
+    <ToastPlace spot={spot} toastId={card.id}>
       <GestureDetector gesture={gesture}>
-        <Animated.View key={toast.id} entering={reduceMotion ? REDUCED_IN : toastIn} exiting={reduceMotion ? REDUCED_OUT : toastOut} style={[styles.origin, dragged]}>
-          <Pressable
-            testID="toast"
-            accessible
-            accessibilityRole={semantics.role}
-            accessibilityLabel={spokenLabel}
-            accessibilityLiveRegion={semantics.liveRegion}
-            accessibilityActions={semantics.actions}
-            onAccessibilityAction={onAccessibilityAction}
-            onAccessibilityEscape={escape}
-            onPress={cardPress}
-            style={cardPress ? pressStyle : styles.press}
-          >
-            {content}
-          </Pressable>
+        <Animated.View
+          testID="toast"
+          collapsable={false}
+          accessible={live}
+          importantForAccessibility={live ? "yes" : "no-hide-descendants"}
+          accessibilityElementsHidden={!live}
+          accessibilityRole={semantics.role}
+          accessibilityLabel={spokenLabel}
+          accessibilityLiveRegion={semantics.liveRegion}
+          accessibilityActions={semantics.actions}
+          onAccessibilityAction={onAccessibilityAction}
+          onAccessibilityEscape={escape}
+          pointerEvents={live ? "auto" : "none"}
+          style={[styles.origin, styles.press, shown]}
+        >
+          <ToastPlate>
+            <ToastTileView tile={card.tile} />
+            <TextBlock toast={card} reduceMotion={reduceMotion} />
+            {card.action ? <ToastButton action={card.action} /> : null}
+          </ToastPlate>
         </Animated.View>
       </GestureDetector>
     </ToastPlace>
   );
 }
 
+type TouchValues = { touch: SharedValue<ToastTouch>; drag: SharedValue<number>; pressed: SharedValue<number>; actionable: SharedValue<boolean>; departing: SharedValue<number>; reduceMotion: boolean };
+
+export function toastTouchGesture({ touch, drag, pressed, actionable, departing, reduceMotion }: TouchValues) {
+  const now = () => {
+    "worklet";
+    return Date.now();
+  };
+  return Gesture.Manual()
+    .withTestId("toastTouch")
+    .onTouchesDown((event, manager) => {
+      const point = event.changedTouches[0];
+      if (!point || departing.value || event.numberOfTouches > 1) {
+        manager.fail();
+        return;
+      }
+      touch.value = toastTouchDown(point.absoluteX, point.absoluteY, now());
+      pressed.value = actionable.value ? 1 : 0;
+    })
+    .onTouchesMove((event, manager) => {
+      const point = event.allTouches[0];
+      if (!point) return;
+      const before = touch.value.phase;
+      const next = toastTouchMove(touch.value, point.absoluteX, point.absoluteY, now());
+      touch.value = next;
+      if (next.phase === "gone") {
+        pressed.value = 0;
+        manager.fail();
+        return;
+      }
+      if (next.phase !== "dragging") return;
+      if (before !== "dragging") {
+        pressed.value = 0;
+        manager.activate();
+        runOnJS(holdToast)(true);
+      }
+      drag.value = toastTouchDrag(next);
+    })
+    .onTouchesUp((_event, manager) => {
+      const end = toastTouchUp(touch.value, now());
+      touch.value = IDLE_TOAST_TOUCH;
+      pressed.value = 0;
+      if (end === "tap") {
+        if (actionable.value) runOnJS(tapToast)();
+        manager.end();
+        return;
+      }
+      if (end === "dismiss") {
+        runOnJS(dismissToast)();
+        manager.end();
+        return;
+      }
+      if (end === "settle") {
+        runOnJS(holdToast)(false);
+        drag.value = toastDragReturn(reduceMotion) === "snap" ? 0 : withSpring(0, toastMotion.snappy);
+      }
+      manager.end();
+    })
+    .onTouchesCancelled((_event, manager) => {
+      if (touch.value.phase === "dragging") {
+        runOnJS(holdToast)(false);
+        drag.value = toastDragReturn(reduceMotion) === "snap" ? 0 : withSpring(0, toastMotion.snappy);
+      }
+      touch.value = IDLE_TOAST_TOUCH;
+      pressed.value = 0;
+      manager.fail();
+    });
+}
+
 function TextBlock({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolean }) {
+  const fade = useSharedValue(1);
+  const stage = `${toast.key}|${toast.stage}`;
+  const seen = useRef(stage);
+  useEffect(() => {
+    if (seen.current === stage) return;
+    seen.current = stage;
+    if (reduceMotion) return;
+    fade.value = 0;
+    fade.value = withTiming(1, { duration: tabsMotion.surfaceFade });
+  }, [stage]);
+  const faded = useAnimatedStyle(() => ({ opacity: fade.value }));
   return (
-    <Animated.View key={`${toast.key}|${toast.stage}`} testID="toastText" entering={reduceMotion ? undefined : TEXT_IN} style={styles.lines}>
+    <Animated.View testID="toastText" style={[styles.lines, faded]}>
       <PlateText testID="toastTitle" inkRole="toastLabel" style={[font.subheadline, styles.title]} numberOfLines={toast.titleLines} ellipsizeMode={toast.middleTruncates ? "middle" : "tail"}>
         {toast.title}
       </PlateText>
@@ -281,30 +387,6 @@ function ToastPlate({ children }: { children: ReactNode }) {
     </View>
   );
 }
-
-const TOAST_SLOP = toastGesture.slop;
-const REDUCED_IN = FadeIn.duration(tabsMotion.surfaceFade);
-const REDUCED_OUT = FadeOut.duration(tabsMotion.surfaceFade);
-const TEXT_IN = FadeIn.duration(tabsMotion.surfaceFade);
-
-const toastIn = () => {
-  "worklet";
-  return {
-    initialValues: { opacity: 0, transform: [{ translateY: TOAST_MOTION.enterTravel }, { scale: TOAST_MOTION.enterScale }] },
-    animations: {
-      opacity: withSpring(1, toastMotion.snappy),
-      transform: [{ translateY: withSpring(0, toastMotion.snappy) }, { scale: withSpring(1, toastMotion.snappy) }],
-    },
-  };
-};
-
-const toastOut = () => {
-  "worklet";
-  return {
-    initialValues: { opacity: 1, transform: [{ translateY: 0 }] },
-    animations: { opacity: withSpring(0, toastMotion.snappy), transform: [{ translateY: withSpring(TOAST_MOTION.exitTravel, toastMotion.snappy) }] },
-  };
-};
 
 const styles = StyleSheet.create({
   host: { position: "absolute", alignItems: "stretch" },

@@ -141,6 +141,6 @@ test("a card's tile and button follow the layout: a 26 point tile, one filled ca
   expect(root.root.findAll((node) => node.props.testID === "toastAction" && typeof node.type === "string")).toHaveLength(1);
   expect(root.root.findAll((node) => node.props.testID === "toastProgress")).toHaveLength(0);
   const card = root.root.findAll((node) => node.props.testID === "toast" && typeof node.type === "string")[0]!;
-  expect(card.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }]);
+  expect(card.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }, { name: "activate", label: "Open" }]);
   unmount(root);
 });

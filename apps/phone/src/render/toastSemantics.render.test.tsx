@@ -1,5 +1,5 @@
 import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
-import { ChromeSurface, press, stroke, surfaceInkFor, toastLayout } from "../components/ui";
+import { ChromeSurface, stroke, surfaceInkFor, toastLayout } from "../components/ui";
 import { act } from "react-test-renderer";
 import { ToastHost } from "../components/toasts/ToastHost";
 import { showToast, useToasts } from "../state/toasts/store";
@@ -28,6 +28,8 @@ test("a toast without an action is an alert with no press, and swiping it away h
   expect(toast.props.accessibilityRole).toBe("alert");
   expect(toast.props.onPress).toBeUndefined();
   expect(toast.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }]);
+  act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "activate" } }));
+  expect(useToasts.getState().toast).not.toBeNull();
   expect(typeof toast.props.onAccessibilityEscape).toBe("function");
   expect(root.root.findAll((node) => node.props.testID === "toastAction")).toHaveLength(0);
   act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "dismiss" } }));
@@ -35,20 +37,18 @@ test("a toast without an action is an alert with no press, and swiping it away h
   unmount(root);
 });
 
-test("a toast with an action is a button that dims on press with the shared look, names its action in words and to screen readers, and runs it on tap", () => {
+test("a toast with an action is a button that names its action in words and to screen readers, and runs it when activated", () => {
   const tapped = jest.fn();
   const root = renderSurface(<ToastHost />);
   act(() => showToast("Downloaded otter.pdf", "download", 3000, { label: "Open", run: tapped }));
-  const toast = root.root.findAll((node) => node.props.testID === "toast" && typeof node.props.style === "function")[0]!;
+  const toast = toastNode(root);
   expect(toast.props.accessibilityRole).toBe("button");
   expect(toast.props.accessibilityLabel).toBe("Downloaded otter.pdf, Open");
-  expect(toast.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }]);
+  expect(toast.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }, { name: "activate", label: "Open" }]);
   expect(typeof toast.props.onAccessibilityEscape).toBe("function");
   expect(root.root.findAll((node) => node.props.testID === "toastAction" && typeof node.type === "string")[0]!.props.children).toBe("Open");
   expect(symbols(root)).not.toContain("chevronRight");
-  expect(StyleSheet.flatten(toast.props.style({ pressed: false })).opacity).toBeUndefined();
-  expect(StyleSheet.flatten(toast.props.style({ pressed: true })).opacity).toBe(press.filledOpacity);
-  act(() => toast.props.onPress());
+  act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "activate" } }));
   expect(tapped).toHaveBeenCalledTimes(1);
   expect(useToasts.getState().toast).toBeNull();
   unmount(root);

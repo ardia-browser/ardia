@@ -2149,6 +2149,13 @@ every look (#4721, from the owner's approved mockup):
   becomes a title on an icon tile. A later card with the same `key` updates the one on screen: no exit or entrance, no
   width jump, only the text crossfades (once per stage). The spoken label is the title and detail.
 - **Time.** 2.4 s, about 5 s once a card has a button. A finger holds it, a drag or flick down dismisses it.
+- **Touch.** The card is one native touch target: a single gesture-handler `Manual` gesture (`toastTouch`) decides tap,
+  drag and fling from screen coordinates (`state/toasts/touch.ts`), so a card that enters, settles or updates in place
+  under a still finger can't turn a tap into a drag, and no React Native `Pressable` inside the gesture competes for the
+  touch. It dims while an actionable card is pressed; screen readers activate it with the named `activate` action. The
+  card's views stay mounted across in-place updates (enter and exit run on shared values, not layout animations), the
+  layer and its place never flatten into the app root, and a leaving card takes no touches and hides from screen
+  readers (F4, 2026-11-28: about 4 in 11 taps on Show or Retry did nothing).
 - **Place.** With the keyboard up, at the top. Otherwise one gap above whatever bar shows: the deck bar's measured top,
   the full floating or Material You bar, the collapsed host pill (`notePageBar` from `BrowsingScreen`, placed from the
   pill's geometry because measuring it mid-fold gives a moving box), and one gap above the safe area when a full sheet

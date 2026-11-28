@@ -3948,7 +3948,8 @@ titles and phrases that post links instead.
   plain `<video>` that never pauses itself (its events logged to a local server):
   - **WebKit pauses it.** About 0.6 s after Home, WebKit pauses a video that has sound, before the page even gets
     `visibilitychange`. A `play()` from the page after that pause is accepted and the video plays on in the background,
-    `currentTime` advancing in real time.
+    `currentTime` advancing in real time. With the fix, YouTube played on through Home (t=42.7 → 61.6 in 20 s) and the
+  app switcher (112.7 → 127.5 in 15 s), from the app's `MEDIALAB` log in lab builds.
   - **The site pauses it.** YouTube and others pause on `visibilitychange` to hidden, which WebKit also fires when a tab's
     web view leaves the window (another tab, the deck), where WebKit itself keeps playing.
   The page media script (`PageMediaScript` in ArdiaKit's `PageMedia.swift`, page world, every frame, from document
@@ -3984,9 +3985,15 @@ titles and phrases that post links instead.
   defines them; none for a live stream), Picture in Picture for a video on an iPhone that has it, and close. A tap goes
   to the tab; close hides it until something starts playing again and never pauses. The most recently started media wins,
   as on the Mac. It stays away while search, a menu, Reader, a press menu or a sheet covers the screen, shows only on the
-  Incognito side for Incognito media and only in the playing tab's space unless Show in every space is on, and lifts
-  toasts above itself. It fades and rises 8 pt in 180 ms and leaves in 150 ms, opacity only with Reduce Motion, all on
-  the UI thread; play/pause flips at once and the page's report confirms it. The two most recently started media pages
+  Incognito side for Incognito media (each side picks its own newest media) and only in the playing tab's space unless
+  Show in every space is on, and lifts toasts above itself. Its glass samples the page's source over a page and the
+  start page's on the start page, as the bar's does; the default surfaces source can't see a web view and drew clear
+  glass with the page's text through it. It floats over the page without changing the page's inset: changing it moved
+  the page about two lines each time it came or went. It fades and rises 8 pt in 180 ms and leaves in 150 ms, opacity
+  only with Reduce Motion, all on the UI thread; play/pause flips at once and the page's report confirms it. Measured on
+  the simulator over a static page at 60 fps: out 9 frames (150 ms), in 7 frames to 94% (117 ms) and at rest by about
+  180 ms, both monotonic with no overshoot, resting 10 pt above the bar. A close lasts until the media starts again: its
+  start time is fixed per start, and the play that undoes WebKit's pause on leaving keeps the old one. The two most recently started media pages
   are kept live so the page limit never discards them. Android shows neither the mini player nor the settings page:
   `pages.reportsMedia()` is false there.
 - **Settings › Picture in Picture:** Automatic Picture in Picture (on), Keep playing in the background (on), Mini

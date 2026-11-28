@@ -2667,10 +2667,11 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
     the capsule's width and off to its left. Each open Duo collapse counts in `bottom_bar_collapses`. The deck's grid and the search tray keep
   the side insets (grid 84 + 16, both sides). The deck has no header on a Duo
   (the owner, 2026-11-28, to test): the space switcher moves to the bottom bar, next to Search Tabs, and `···` is in
-  the strip, so the header row would be empty. Its geometry gets no header height there (`deckGeometry`'s chrome
-  height 0 from TabDeck), so the card band's floor starts 41 below the safe top instead of 89; on the closed and open
-  poses Arc's centre (0.514 of the height) already sits below that floor, so the cards are where they were until the
-  arc's centring uses the band. On either Duo the bar row is [space switcher][Search Tabs] (`deckSpacesSlot`, the
+  the strip, so the header row would be empty. The cards grow into that room (the owner, 2026-11-28, after an empty
+  band of about 140 above them on the simulator): on a Duo the arc stack is sized from its own band (`DECK_DUO_ARC`),
+  110 below the safe top (room for the card's 28-point title row and the space above it) to 40 above the bottom
+  row, and centred in it instead of at 0.514 of the height; the card is at most 0.785 of the room beside the strip
+  and keeps the screen's aspect, so page pictures are neither cropped nor letterboxed. On either Duo the bar row is [space switcher][Search Tabs] (`deckSpacesSlot`, the
   owner, 2026-11-28): the switcher is a 48-high glass capsule sized to its text from the row's start, the field
   flexes in the rest, 8 between them. The switcher and its gap take at most 40% of the row, so Search Tabs keeps at
   least 60%: the switcher at most 130.4 of 346 closed and 176 of 460 open, a longer name ending in an ellipsis
@@ -2706,9 +2707,16 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   card. The strip's `+`, Incognito and `···` menus are drawn by the
   app beside the strip (`MenuTrigger`'s `drawn`), never the system menu, which grows out of the button over the
   strip's other buttons; the start page's strip `+` does the same. Closed
-  (466×678, strip from 382): cards 250×364, the focused one 78 to 328, where it used to run 165 to 470. Open
-  (951×669, strip from 867): cards 568×400, the focused one 177 to 745, where it used to run 248 to 871. The strip's
-  side gets no pile margin of its own; a plain iPhone, upright or on its side, keeps the whole screen. Nothing new is
+  (466×678, strip from 382, bottom row 609 to 657): cards 299.9×436.3, y 121.4 to 557.6 (51 above the row), the
+  focused one centred beside the strip at 41 to 341, its title row at y 93 to 113; it was 250×364 at 78 to 328, y
+  166.5 to 530.5. Open (951×669, strip from 867, bottom row 600 to 648): cards 639.7×450, y 110 to 560 (40 above the
+  row), the focused one at 113.7 to 753.3; it was 568×400 at 177 to 745. The focused card is centred in the room
+  beside the strip, leaving about 41 either side closed and 114 open; the next card starts one spacing (0.844 of a
+  card) on, at 294 closed and 654 open, and runs on under the strip. The pile behind keeps to the room left of the
+  focused card: its peek is that room less 12 and its tail half the peek (`pileEdge`, `pileTail`), so the cards
+  behind step in from 15, 11 and 7 closed. A closed Duo turned on its side (678×466) is band-limited: 378×260, y 110
+  to 370. Hit tests, the pull, the card's growth to and from the page and the curtain all read this geometry. The
+  strip's side gets no pile margin of its own; a plain iPhone, upright or on its side, keeps the whole screen. Nothing new is
   counted for it: it only moves the cards.
 - Pager: the full screen width. A sideways swipe on the bar commits past half the drag span the bar offers
   (`barSwipeSpan`): the screen's width on an iPhone and the closed Duo (201 on a 402 iPhone, 233 on the closed Duo, as

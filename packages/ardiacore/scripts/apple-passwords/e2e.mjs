@@ -322,13 +322,18 @@ async function settingsRow(title) {
   await app.eval(`ac.openSettings("profiles", ac.store.getState().settings.defaultProfileId); return true;`);
   const anyWindow = (await app.eval(`return ac.engine.call("windows.list")`))[0].window;
   const dev = (window, action) => app.eval(`return ac.engine.call("windows.dev", { window: ${window}, action: ${JSON.stringify(action)} })`);
-  const texts = await waitFor("the Settings window", async () => {
-    const settings = JSON.parse((await dev(anyWindow, "subroles")) || "[]").find((w) => w.title === "Settings");
-    if (!settings) return null;
-    const found = String((await dev(settings.number, "ax")) ?? "").split("\n").map((l) => l.trim().match(/^AX(?:TextArea|StaticText): (.*)$/)?.[1]).filter((t) => t !== undefined);
-    return found.includes(title) ? found : null;
-  }, 15_000);
-  return texts.slice(texts.lastIndexOf(title) + 1)[0] ?? null;
+  try {
+    const texts = await waitFor("the Settings window", async () => {
+      const settings = JSON.parse((await dev(anyWindow, "subroles")) || "[]").find((w) => w.title === "Settings");
+      if (!settings) return null;
+      const found = String((await dev(settings.number, "ax")) ?? "").split("\n").map((l) => l.trim().match(/^AX(?:TextArea|StaticText): (.*)$/)?.[1]).filter((t) => t !== undefined);
+      return found.includes(title) ? found : null;
+    }, 15_000);
+    return texts.slice(texts.lastIndexOf(title) + 1)[0] ?? null;
+  } finally {
+    await app.eval(`globalThis.expo.modules.ArdiaAppWindows.closeWindow("settings"); return true;`);
+    await waitFor("the Settings window closed", async () => !JSON.parse((await dev(anyWindow, "subroles")) || "[]").some((w) => w.title === "Settings"), 10_000);
+  }
 }
 
 const UNAVAILABLE_SAVES = {

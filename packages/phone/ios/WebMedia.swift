@@ -74,11 +74,6 @@ final class WebMedia {
     self.host = host
     settings = Self.storedSettings(defaults)
     host.installScripts(scripts)
-    if PhoneTestBuild.flag("ArdiaMediaPlaybackSession") {
-      try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-      try? AVAudioSession.sharedInstance().setActive(true)
-      Self.trace("audio session set to playback for the experiment")
-    }
     let center = NotificationCenter.default
     observers.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
       MainActor.assumeIsolated { self?.willLeave() }

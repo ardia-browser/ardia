@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 here=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
-chrome="$here/chrome"
+browser="$here/ardia"
 helper="$here/chrome-sandbox"
 why=""
 allow=""
@@ -26,7 +26,7 @@ number() {
 
 apparmor_grants_userns() {
   local binary profile
-  binary=$(readlink -f -- "$chrome")
+  binary=$(readlink -f -- "$browser")
   for profile in /etc/apparmor.d/*; do
     [[ -f "$profile" ]] || continue
     grep -qF -- "profile ardia $binary " "$profile" 2>/dev/null && grep -qE '^[[:space:]]*userns,' "$profile" 2>/dev/null && return 0
@@ -46,7 +46,7 @@ userns_ready() {
     return 1
   fi
   if [[ "$(number /proc/sys/kernel/apparmor_restrict_unprivileged_userns 0)" == 1 ]] && ! apparmor_grants_userns; then
-    why="AppArmor restricts unprivileged user namespaces and no AppArmor profile grants them to $chrome"
+    why="AppArmor restricts unprivileged user namespaces and no AppArmor profile grants them to $browser"
     allow="sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0"
     return 1
   fi
@@ -71,7 +71,7 @@ fi
 
 for argument in "$@"; do
   if [[ "$argument" == --no-sandbox ]]; then
-    exec "$chrome" "--ardia-sandbox-decision=Ardia was started with --no-sandbox" "$@"
+    exec "$browser" "--ardia-sandbox-decision=Ardia was started with --no-sandbox" "$@"
   fi
 done
 
@@ -80,7 +80,7 @@ if [[ -f /.flatpak-info && "${FLATPAK_ID:-}" == dev.ardia.Ardia ]]; then
 fi
 
 if userns_ready || setuid_ready; then
-  exec "$chrome" "$@"
+  exec "$browser" "$@"
 fi
 
 installer=$(readlink -f -- "$here/../../install.sh" 2>/dev/null || true)

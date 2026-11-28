@@ -322,6 +322,7 @@ class RuntimeSelectionTests(unittest.TestCase):
             with tarfile.open(archive) as packed:
                 names = packed.getnames()
             self.assertIn('ardia/lib/ardia/manifest.json', names)
+            self.assertIn('ardia/lib/ardia/ardia', names)
             self.assertIn('ardia/lib/ardia/chrome', names)
             self.assertIn('ardia/lib/ardia/locales/en-US.pak', names)
             self.assertNotIn('ardia/lib/ardia/.complete', names)

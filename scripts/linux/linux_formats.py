@@ -74,7 +74,7 @@ FLATHUB = 'https://dl.flathub.org/repo/flathub.flatpakrepo'
 ZYPAK = {'type': 'git', 'url': 'https://github.com/refi64/zypak', 'tag': 'v2025.09', 'commit': '693a71c5ffa80ec9c9ce2ae03b1ccc493c698e53'}
 COBALT_INI = '''[Application]
 Name=ardia
-EntryPoint=/app/lib/ardia/chrome
+EntryPoint=/app/lib/ardia/ardia
 WrapperScript=/app/bin/ardia
 ConfigDir=ardia
 ExposePids=optional
@@ -189,7 +189,7 @@ def deb_depends(runtime):
         if path.name in OPTIONAL_LIBRARIES or not is_elf(path):
             continue
         needed = needed_libraries(path)
-        if path.name == 'chrome' and not needed:
+        if path.name == 'ardia' and not needed:
             raise ValueError(f'readelf found no libraries that {path} needs')
         sonames.update(needed)
         glibc |= glibc_versions(path)
@@ -416,7 +416,7 @@ def rpmbuild(tree, destination, version, payload=RPM_PAYLOAD):
     if shutil.which('rpmbuild') is None:
         raise ValueError('rpmbuild is required to build the .rpm (apt install rpm, dnf install rpm-build)')
     usr = tree / 'usr'
-    for required in ('lib/ardia/chrome', *(f'share/applications/{name}' for name in desktop_entries()), 'share/icons/hicolor/256x256/apps/ardia.png',
+    for required in ('lib/ardia/ardia', *(f'share/applications/{name}' for name in desktop_entries()), 'share/icons/hicolor/256x256/apps/ardia.png',
                      'share/polkit-1/actions/dev.ardia.linux.policy', 'share/licenses/ardia/copyright'):
         if not (usr / required).exists():
             raise ValueError(f'the .rpm tree has no usr/{required}')

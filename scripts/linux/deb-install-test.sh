@@ -3,7 +3,7 @@ set -euo pipefail
 usage='usage: scripts/linux/deb-install-test.sh <Ardia-<version>-linux-x64.deb> [<image>...]
 
 Installs the .deb with apt in fresh containers (docker or podman) and checks
-that its dependencies resolve, every library chrome needs is found, chrome
+that its dependencies resolve, every library the browser needs is found, ardia
 --version runs, chrome-sandbox is setuid root, ardia is an x-www-browser
 alternative that survives a rolled-back deconfigure or remove, curl is there for the bundled CLI installer, the AppArmor profile
 is written only where AppArmor reads the 4.0 ABI, and apt purge leaves the file
@@ -42,7 +42,7 @@ apt-get satisfy -y -qq "$(dpkg-deb -f /pkg/ardia.deb Depends), $(dpkg-deb -f /pk
 echo "ok   dependencies resolve"
 snapshot >/tmp/before
 apt-get install -y -qq /pkg/ardia.deb >/tmp/install.log 2>&1 || { cat /tmp/install.log; exit 1; }
-missing=$(ldd /usr/lib/ardia/chrome /usr/lib/ardia/chrome_crashpad_handler | grep "not found" || true)
+missing=$(ldd /usr/lib/ardia/ardia /usr/lib/ardia/chrome_crashpad_handler | grep "not found" || true)
 [ -z "$missing" ] || fail "unresolved libraries: $missing"
 echo "ok   libraries resolve"
 [ "$(stat -c "%a %U" /usr/lib/ardia/chrome-sandbox)" = "4755 root" ] || fail "chrome-sandbox is not setuid root"
@@ -72,7 +72,7 @@ update-alternatives --query x-www-browser | grep -qx "Value: /usr/bin/ardia" || 
 update-alternatives --query gnome-www-browser | grep -qx "Alternative: /usr/bin/ardia" || fail "a rolled-back remove left ardia without its alternatives"
 echo "ok   alternatives survive a rolled-back deconfigure and remove"
 if [ -e /etc/apparmor.d/abi/4.0 ]; then
-  grep -q "profile ardia /usr/lib/ardia/chrome " /etc/apparmor.d/ardia || fail "no AppArmor profile for /usr/lib/ardia/chrome"
+  grep -q "profile ardia /usr/lib/ardia/ardia " /etc/apparmor.d/ardia || fail "no AppArmor profile for /usr/lib/ardia/ardia"
   echo "ok   AppArmor profile installed"
 else
   test ! -e /etc/apparmor.d/ardia || fail "an AppArmor profile without the 4.0 ABI"

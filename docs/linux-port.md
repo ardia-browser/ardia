@@ -671,8 +671,8 @@ python3 scripts/linux/package.py \
   the same tree. The Flatpak is built from the finished tarball (`linux_formats.py from-tarball --flatpak <path>`).
   `release.sh` builds all five and smoke-tests the tarball, the `.deb`, the `.rpm` and the AppImage.
 - **Launcher.** Every format starts through `lib/ardia/ardia-launch`, which decides the sandbox before it runs
-  `chrome`: user namespaces when the kernel allows them and AppArmor doesn't restrict them (or a profile grants
-  `userns` to this `chrome`), else the setuid-root `chrome-sandbox` beside it on a mount without `nosuid`. Otherwise it
+  `ardia`: user namespaces when the kernel allows them and AppArmor doesn't restrict them (or a profile grants
+  `userns` to this `ardia`), else the setuid-root `chrome-sandbox` beside it on a mount without `nosuid`. Otherwise it
   says why on stderr and exits 1, whatever the format: Ardia never runs without the sandbox on its own. A tarball run
   in place points at `sudo install.sh` or the `.deb`; an AppImage points at the `.deb` (the sandbox helper and the
   AppArmor profile) or at the `sysctl` that allows user namespaces for the reason it found. Only a user who passes
@@ -700,7 +700,7 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   `packages/ardiacore/scripts/ubo.sh` with `flock` and `sha256sum` standing in for `lockf` and `shasum`. Without
   `--content-blocker` the package has no blocker, and Settings says so.
 - **Seeded blocker.** With a blocker, package.py runs `scripts/linux/ubo-seed.mjs` on its staged copy (skip it with
-  `--no-ubo-seed`). The script starts the staged `chrome` once on a scratch profile in English, waits for uBlock
+  `--no-ubo-seed`). The script starts the staged `ardia` once on a scratch profile in English, waits for uBlock
   Origin to fetch and compile its default lists and save its engine, and writes that storage to
   `extensions/ublock/ardia-seed/storage.json`, without the raw and compiled list copies uBlock Origin can rebuild. It
   also patches the staged `js/start.js` to load the seed first thing into a profile whose uBlock Origin storage is
@@ -712,7 +712,10 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
 - **Compression.** package.py streams the tar through `xz -T0 -6`, every core at once.
 - **Archive contents.**
   - `bin/ardia`;
-  - `lib/ardia/chrome` and the Chromium runtime files from the allowlist in `scripts/linux/runtime_files.py`;
+  - `lib/ardia/ardia`, the engine's `chrome` renamed so process lists (`ps`, `top`, `htop`, `btop`) name the
+    browser and its child processes `ardia` (Crashpad's handler keeps Chromium's name), and the Chromium runtime files from the allowlist in `scripts/linux/runtime_files.py`.
+    `lib/ardia/chrome` stays as a link to `ardia`: an engine from before the rename relaunches that path after it
+    updates itself, and `chromium-linux-process-singleton-name.patch` lets the profile lock accept either name;
   - `lib/ardia/ardia-ui`;
   - `lib/ardia/extensions/ublock`;
   - `lib/ardia/VERSION` (with `--version`), one line with the Ardia version (`0.2.44`, `0.2.44-nightly.3`);
@@ -816,7 +819,7 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     `linux_formats.py flathub --version <version> --sha256 <tarball sha256> --out <folder>` writes the same manifest
     with the published tarball's URL, its metainfo and `cobalt.ini`: the files a Flathub submission needs.
   - **Sandbox.** In a Flatpak (`/.flatpak-info` and `FLATPAK_ID`), `ardia-launch` execs `cobalt`, the BaseApp's
-    launcher, which starts `/app/lib/ardia/chrome` through `zypak-wrapper.sh`: zypak stands in for the setuid
+    launcher, which starts `/app/lib/ardia/ardia` through `zypak-wrapper.sh`: zypak stands in for the setuid
     `chrome-sandbox` (kept, not setuid) with Flatpak's own sandbox. cobalt reads extra switches from
     `~/.var/app/dev.ardia.Ardia/config/ardia-flags.conf`, one per line. `ExposePids` is optional, so a host without
     Flatpak's expose-pids still starts without a dialog.
@@ -864,14 +867,14 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   `makepkg -si`. `pkaction --action-id dev.ardia.linux.reauthenticate` then lists the polkit action.
 - **Ubuntu.** On a host whose AppArmor reads the 4.0 ABI (`/etc/apparmor.d/abi/4.0`, Ubuntu 24.04 and later), an
   install without `--destdir` also writes `/etc/apparmor.d/ardia` and loads it with `apparmor_parser -r`. The profile
-  leaves `<prefix>/lib/ardia/chrome` unconfined and allows it user namespaces, which Ubuntu denies to unprivileged
+  leaves `<prefix>/lib/ardia/ardia` unconfined and allows it user namespaces, which Ubuntu denies to unprivileged
   programs and Chromium's sandbox needs. A staged install writes no profile, and an older AppArmor never gets the
   file, which it couldn't parse.
 
 - **Self-update helper.** `lib/ardia/ardia-update` (`scripts/linux/ardia-update`, bash) installs a release the
   browser downloaded. `ardia-update kind` prints one line: `appimage` (`$APPIMAGE` names a file whose folder the user
   can write, and when `$APPDIR` is set the helper runs from it), `managed` (inside a Flatpak, or pacman or rpm owns
-  `lib/ardia/chrome`, or a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or
+  `lib/ardia/ardia`, or a dpkg package other than `ardia`), `deb` (dpkg's `ardia` owns it), `tarball`, or
   `unsupported <reason>`: `noVerifier` (no `lib/ardia/ardia-update-verify` that runs here), `noVersion`, `noKey`, and
   for deb and tarball `noPkexec` (no setuid pkexec) and
   `noPolicy` (the installed policy's update action doesn't name this helper, as for a tarball run in place).
@@ -2081,12 +2084,12 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
   one (`minidump.ts`) and keeps the newest five of the browser and five of the other processes, as the Mac does. A
   report carries the process kind (from Chromium's `ptype` annotation), the signal and its code (`SIGSEGV`,
   `SEGV_MAPERR`), the engine version (Ardia's own version for a browser crash, from the `ardia-ver` annotation the
-  engine sets at startup from `VERSION`), the process's uptime, the build IDs of the files beside `chrome`, and the
+  engine sets at startup from `VERSION`), the process's uptime, the build IDs of the files beside `ardia`, and the
   crashing thread's frames as file plus offset: a frame-pointer walk from the signal's registers (Linux builds keep
   frame pointers), and when libc reused the frame pointer, from the first frame record on the stack. A dump written
   without a crash (`DumpWithoutCrashing`) is skipped. Nothing else from the dump leaves the shell: it holds stack
   memory, which can hold page content. The shared client sends it under the same consent as the Mac (sharing on only);
-  `chrome` is stripped, so its frames are offsets, named later against the engine's symbols by build ID.
+  `ardia` (the engine's `chrome`) is stripped, so its frames are offsets, named later against the engine's symbols by build ID.
 - **One owner for the choice.** A window that isn't the telemetry owner (Settings, a second browser window) doesn't
   write `telemetry.json`. Turning sharing on or off, dismissing the new-tab question, starting or stopping a report's
   14-day watch and making the first anonymous ID are `choice` requests the owner runs (`telemetryChoice.ts`,
@@ -2127,9 +2130,9 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
 `xdg-settings` process and the replies. The file and process work runs on one thread-pool sequence, never on the UI
 thread. The reply shapes are the Mac's (`packages/shell/ios/SystemModule.swift`, `AppModule.swift`).
 
-- **This copy of Ardia.** The launcher is `<prefix>/bin/ardia`, found from the running `chrome`
-  (`<prefix>/lib/ardia/chrome`). A desktop entry counts only when its `Exec` program resolves to that launcher or to
-  `chrome` itself (symlinks followed; a bare name is looked up in `PATH`).
+- **This copy of Ardia.** The launcher is `<prefix>/bin/ardia`, found from the running browser
+  (`<prefix>/lib/ardia/ardia`). A desktop entry counts only when its `Exec` program resolves to that launcher or to
+  the browser itself (symlinks followed; a bare name is looked up in `PATH`).
 - **The installed entry.** The first `ardia.desktop` in the `applications` folders, in XDG order, the one
   `scripts/linux/package.py` writes and `install.sh` installs with an absolute `Exec`. It must be `Type=Application`,
   not `Hidden`, start this copy and list `x-scheme-handler/http` and `x-scheme-handler/https` in `MimeType`. At most

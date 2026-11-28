@@ -15,7 +15,7 @@ function kind(t, { flatpak, app = "dev.ardia.Ardia" }) {
   mkdirSync(runtime, { recursive: true });
   writeFileSync(join(runtime, "ardia-update"), readFileSync(HELPER, "utf8").replaceAll("/.flatpak-info", `${root}/.flatpak-info`));
   chmodSync(join(runtime, "ardia-update"), 0o755);
-  writeFileSync(join(runtime, "chrome"), "");
+  writeFileSync(join(runtime, "ardia"), "");
   if (flatpak) writeFileSync(join(root, ".flatpak-info"), "[Application]\nname=dev.ardia.Ardia\n");
   const result = spawnSync(join(runtime, "ardia-update"), ["kind"], { env: { PATH: process.env.PATH, ...(flatpak ? { FLATPAK_ID: app } : {}) }, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);

@@ -67,7 +67,7 @@ Hosted CI never runs `gclient sync`, GN or a Chromium build.
   `ArdiaCore-<key12>-linux-x64-symbols.tar.xz`, with its own `.sha256`, uploaded to the same prerelease. It holds
   `ardiacore-linux-x64-symbols/.build-id/<2>/<rest>.debug` per file, the layout gdb and debuginfod read, and a
   `symbols.json` naming each file's build ID. A `symbol_level=0` build has no debug info, so this is the symbol
-  table: function names, no lines. Crash reports name `chrome` by its build ID (`crash_images`) and give each frame as
+  table: function names, no lines. Crash reports name the browser binary (`ardia` in packages since the rename, `chrome` before) by its build ID (`crash_images`) and give each frame as
   an offset; [`scripts/linux/symbolize.py`](../scripts/linux/symbolize.py) names them:
   `scripts/linux/symbolize.py --symbols ArdiaCore-<key12>-linux-x64-symbols.tar.xz --build-id <id> <offset>...`
   (crashing frame first; the others are return addresses). The fetcher never downloads the symbols.
@@ -130,7 +130,7 @@ package job red after almost every merge.
      warning, and the smoke skips the `cli-*` assertions;
   5. prepares uBlock Origin with `scripts/linux/fetch-ubo.sh` (cached);
   6. runs `scripts/linux/package.py --out <engine> --version <version> --cli <CLI tarball> --deb <path> --rpm <path>
-     --appimage <path>`, which seeds the packaged uBlock Origin by running the staged `chrome` once
+     --appimage <path>`, which seeds the packaged uBlock Origin by running the staged `ardia` once
      (`scripts/linux/ubo-seed.mjs`);
   7. runs the smoke gate on the tarball, the `.deb`, the `.rpm` and the AppImage, with `--allow-old-engine` when the
      engine is a nearest one;
@@ -168,7 +168,7 @@ It refuses any sandbox-disabling switch. Every check must run and pass:
 5. Every renderer runs under seccomp in its own user and pid namespace.
 6. The shipped uBlock Origin and its Linux bridge are present and the content blocker reports ready.
 7. A clean quit and relaunch restores the tab.
-8. `install.sh --destdir` stages the launcher, desktop entry, chrome, UI and polkit policy with the right modes, plus
+8. `install.sh --destdir` stages the launcher, desktop entry, `ardia` (with its `chrome` link), UI and polkit policy with the right modes, plus
    `lib/ardia/VERSION` and `lib/ardia/cli/` when the package has them. For a `.deb` it checks the control file, the
    maintainer scripts, root ownership, the setuid `chrome-sandbox`, the policy and the AppArmor profile; for an
    `.rpm` its name, architecture and version, root ownership, the setuid `chrome-sandbox`, the launcher link, the
@@ -285,7 +285,7 @@ hand. The one-time setup is in [releasing.md](releasing.md#linux-package).
 - **In CI.** The workflow lifts the restriction on its throwaway runner before the smoke step and never passes
   `--no-sandbox`.
 - **For users.** Users on Ubuntu 24.04 hit the same restriction. `sudo ./ardia/install.sh` installs and loads an
-  AppArmor profile for the installed `chrome`, as Chrome's `.deb` does ([linux-port.md](linux-port.md) › Packaging
+  AppArmor profile for the installed `ardia`, as Chrome's `.deb` does ([linux-port.md](linux-port.md) › Packaging
   and installing). An extracted tarball run in place says how to fix it and exits; an AppImage runs without the
   sandbox there and says so.
 

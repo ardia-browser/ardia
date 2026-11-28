@@ -167,7 +167,7 @@ def normalize_modes(root):
 
 
 def seed_content_blocker(runtime, blocker):
-    subprocess.run(['node', str(UBO_SEED), '--chrome', str(runtime / 'chrome'), '--ui', str(runtime / 'ardia-ui'), '--blocker', str(blocker)],
+    subprocess.run(['node', str(UBO_SEED), '--chrome', str(runtime / 'ardia'), '--ui', str(runtime / 'ardia-ui'), '--blocker', str(blocker)],
                    check=True, stdout=subprocess.DEVNULL)
 
 
@@ -207,6 +207,8 @@ def package(output, ui, destination, content_blocker=None, version=None, cli=Non
         runtime_files.copy(output, runtime)
         if (runtime / 'chrome_sandbox').is_file():
             (runtime / 'chrome_sandbox').rename(runtime / 'chrome-sandbox')
+        (runtime / 'chrome').rename(runtime / 'ardia')
+        (runtime / 'chrome').symlink_to('ardia')
         shutil.copyfile(pathlib.Path(__file__).resolve().parent / 'ardia-launch', runtime / 'ardia-launch')
         (runtime / 'ardia-launch').chmod(0o755)
         shutil.copyfile(UPDATE_HELPER, runtime / 'ardia-update')
@@ -299,7 +301,7 @@ def main():
     parser.add_argument('--appimage', type=pathlib.Path, help='also build an AppImage at this path (a pinned type 2 runtime and mksquashfs)')
     parser.add_argument('--update-verify', type=pathlib.Path, help=f'the {UPDATE_VERIFY_TARGET} ardia-update-verify to bundle in lib/ardia, as scripts/linux/update-verify.sh builds it (without it the package never updates itself)')
     parser.add_argument('--rpm', type=pathlib.Path, help='also build an .rpm at this path (rpmbuild; needs --version)')
-    parser.add_argument('--no-ubo-seed', action='store_true', help="don't seed the content blocker (by default package.py runs the staged chrome once to save uBlock Origin's compiled engine, so a new profile filters from its first page)")
+    parser.add_argument('--no-ubo-seed', action='store_true', help="don't seed the content blocker (by default package.py runs the staged ardia once to save uBlock Origin's compiled engine, so a new profile filters from its first page)")
     args = parser.parse_args()
     if args.cli is not None and args.version is None:
         parser.error('--cli needs --version')

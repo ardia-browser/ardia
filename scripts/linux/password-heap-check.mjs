@@ -116,7 +116,7 @@ async function browserPid(rootPid) {
     parents.set(Number(entry), Number(/^PPid:\s+(\d+)/m.exec(status)?.[1] ?? 0));
     const exe = await readlink(`/proc/${entry}/exe`).catch(() => "");
     const cmdline = await readFile(`/proc/${entry}/cmdline`, "utf8").catch(() => "");
-    if (exe.endsWith("/chrome") && !cmdline.includes("--type=")) browsers.push(Number(entry));
+    if (/\/(ardia|chrome)$/.test(exe) && !cmdline.includes("--type=")) browsers.push(Number(entry));
   }
   return browsers.find((pid) => {
     for (let at = pid; at > 1; at = parents.get(at) ?? 0) if (at === rootPid) return true;

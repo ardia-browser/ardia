@@ -29,7 +29,7 @@ function launch(t, args, { command = "data", env = {}, folder = null, installed 
   if (flatpak) writeFileSync(join(root, ".flatpak-info"), "[Application]\nname=dev.ardia.Ardia\n");
   executable(join(root, "bin/cobalt"), 'printf "cobalt %s\\n" "$@"');
   chmodSync(join(runtime, "ardia-launch"), 0o755);
-  executable(join(runtime, "chrome"), 'printf "browser %s\\n" "$@"');
+  executable(join(runtime, "ardia"), 'printf "browser %s\\n" "$@"');
   const homes = { data: join(root, "data/ardia/cli"), own: join(root, "own"), home: join(root, "home/.local/share/ardia/cli") };
   if (command) {
     const installedCommand = join(homes[command], "9.9.9/bin/ardia");

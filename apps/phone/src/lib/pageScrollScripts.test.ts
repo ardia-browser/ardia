@@ -164,3 +164,40 @@ test("the search's zoom probe reads the visual viewport and changes nothing", ()
   assert.equal(Object.getOwnPropertySymbols(dom.window).length, symbols);
   assert.equal(dom.window.document.getElementById("bar")!.getAttribute("style"), "color: red");
 });
+
+test("fixed and sticky elements inside open shadow roots, nested ones too, are faded and put back like any other", () => {
+  const { run, dom } = page('<div id="host"></div><p id="plain">text</p>');
+  const doc = dom.window.document;
+  const outer = doc.getElementById("host")!.attachShadow({ mode: "open" });
+  outer.innerHTML = '<header id="bar" style="position: fixed; top: 0px">bar</header><div id="inner-host"></div><h2 id="head" style="position: sticky; top: 0px">head</h2>';
+  const inner = outer.getElementById("inner-host")!.attachShadow({ mode: "open" });
+  inner.innerHTML = '<nav id="deep" style="position: fixed; bottom: 0px">deep</nav>';
+  run(mark(KEY_A));
+  assert.equal(run(hide(KEY_A)), 3);
+  for (const element of [outer.getElementById("bar")!, outer.getElementById("head")!, inner.getElementById("deep")!]) assert.equal(element.style.getPropertyValue("opacity"), "0");
+  assert.equal(run(show(KEY_A)), 3);
+  assert.equal(outer.getElementById("bar")!.getAttribute("style"), "position: fixed; top: 0px");
+  assert.equal(inner.getElementById("deep")!.getAttribute("style"), "position: fixed; bottom: 0px");
+  assert.equal(doc.getElementById("plain")!.hasAttribute("style"), false);
+});
+
+test("a closed shadow root stays closed: the scripts never reach into it", () => {
+  const { run, dom } = page('<div id="host"></div>');
+  const closed = dom.window.document.getElementById("host")!.attachShadow({ mode: "closed" });
+  closed.innerHTML = '<header id="bar" style="position: fixed">bar</header>';
+  run(mark(KEY_A));
+  assert.equal(run(hide(KEY_A)), 0);
+  assert.equal(closed.getElementById("bar")!.style.getPropertyValue("opacity"), "");
+});
+
+test("the publish check reads the token and changes nothing, and a reloaded document answers no", () => {
+  const { run, dom } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  const owns = scriptFor("OWNS");
+  assert.equal(run(owns(KEY_A)), 0);
+  run(mark(KEY_A));
+  assert.equal(run(owns(KEY_A)), 1);
+  assert.equal(run(owns(KEY_B)), 0);
+  assert.equal(dom.window.document.getElementById("bar")!.getAttribute("style"), "color: red");
+  const reloaded = page('<div id="bar" class="bar">bar</div>');
+  assert.equal(reloaded.run(owns(KEY_A)), 0);
+});

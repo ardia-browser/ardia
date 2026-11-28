@@ -100,4 +100,15 @@ class ScrollCapturePlanTest {
         assertEquals("2000.000", ScrollCapturePlan.cssPixels(2_000, Double.NaN))
         assertEquals("0.000", ScrollCapturePlan.cssPixels(-5, 1.0))
     }
+
+    @Test
+    fun onlyAFrameTheRendererPresentedCounts() {
+        assertTrue(ScrollCapturePlan.presented(android.graphics.HardwareRenderer.SYNC_OK))
+        assertTrue(ScrollCapturePlan.presented(android.graphics.HardwareRenderer.SYNC_REDRAW_REQUESTED))
+        assertFalse(ScrollCapturePlan.presented(null))
+        for (flag in listOf(android.graphics.HardwareRenderer.SYNC_LOST_SURFACE_REWARD_IF_FOUND, android.graphics.HardwareRenderer.SYNC_CONTEXT_IS_STOPPED, android.graphics.HardwareRenderer.SYNC_FRAME_DROPPED)) {
+            assertFalse("$flag", ScrollCapturePlan.presented(flag))
+            assertFalse("$flag", ScrollCapturePlan.presented(flag or android.graphics.HardwareRenderer.SYNC_REDRAW_REQUESTED))
+        }
+    }
 }

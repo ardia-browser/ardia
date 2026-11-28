@@ -39,7 +39,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class PageView(context: Context, appContext: AppContext) : ExpoView(context, appContext), PageScrollCapture.Host {
+class PageView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
     private val onPageEvent by EventDispatcher()
     private val host = FrameLayout(context)
     private var scope: CoroutineScope? = null
@@ -224,17 +224,23 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         super.dispatchDraw(canvas)
     }
 
+    private val scrollCaptureHost = object : PageScrollCapture.Host {
+        override fun capturablePage(): CapturePage? = capturableWebView()?.let(::WebViewCapturePage)
+
+        override fun scrollBounds(): Rect = captureBounds()
+    }
+
     init {
         setWillNotDraw(false)
         addView(host, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         gestures.install()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             scrollCaptureHint = View.SCROLL_CAPTURE_HINT_INCLUDE or View.SCROLL_CAPTURE_HINT_EXCLUDE_DESCENDANTS
-            setScrollCaptureCallback(PageScrollCallback(PageScrollCapture(this)))
+            setScrollCaptureCallback(PageScrollCallback(PageScrollCapture(scrollCaptureHost)))
         }
     }
 
-    override fun capturableWebView(): WebView? {
+    private fun capturableWebView(): WebView? {
         val opened = page ?: return null
         if (opened.isPrivate || isPrivate || summaryPresenter.shown) return null
         if (!PagePrinting.printable(opened.state.value.url)) return null
@@ -243,7 +249,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         return web.takeIf { PageFront.isFrontmost(this, host) }
     }
 
-    override fun scrollBounds(): Rect {
+    private fun captureBounds(): Rect {
         val visible = Rect()
         if (!getLocalVisibleRect(visible)) return Rect()
         val bounds = Rect(host.left, host.top, host.right, host.bottom)

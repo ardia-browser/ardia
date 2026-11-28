@@ -2118,10 +2118,12 @@ the iPhone's Full Page tab below.
 
 - **Where.** `packages/phone/android/.../PageScrollCapture.kt` is the `ScrollCaptureCallback`; `PageView` installs it
   on API 31+ and marks itself `SCROLL_CAPTURE_HINT_INCLUDE | SCROLL_CAPTURE_HINT_EXCLUDE_DESCENDANTS`, so the system
-  picks the page view over any React Native scroll view and never asks the WebView's own scroll capture (Android 12L+),
-  which is shut out. The pure math is `ScrollCapturePlan.kt`, the page scripts `PageScrollScripts.kt`. The session's
-  suspend steps (start, draw one tile into a surface, end) are the unit a later module function or plugin would call
-  for an in-app capture; nothing else calls them today.
+  picks the page view over any React Native scroll view and never asks the WebView's own scroll capture (Android
+  12L+), which is shut out. The pure math is `ScrollCapturePlan.kt`, the page scripts `PageScrollScripts.kt`; the
+  session reaches the page only through `CapturePage` (`WebViewCapturePage.kt` for the WebView) and the surface only
+  through `TileSurface`, so `PageScrollCaptureTest` drives the real session against a scripted page and surface. The
+  session's suspend steps (start, draw one tile into a surface, end) are the unit a later module function or plugin
+  would call for an in-app capture; nothing else calls them today.
 - **When there is no Capture more.** The search answers an empty rect, which drops the page from the system's
   choice, unless `PageView.capturableWebView` finds a bound, non-private page on an http(s) address, no page summary
   over it, fully opaque, unscaled (not mid deck pull), filling at least half the window and frontmost at its centre by
@@ -2138,16 +2140,22 @@ the iPhone's Full Page tab below.
   the scroll moved or fixed elements changed, a visual state callback and a frame pass first. Then only the rows the
   tile needs, those both in the page and on screen at the scroll the view reports (`ScrollCapturePlan.tile`), are
   drawn from the WebView, recorded into a `RenderNode` and rendered into the session's surface by a `HardwareRenderer`
-  that waits until the frame is presented (`setWaitForPresent`, as the framework's own scroll capture does); only then
-  is the tile reported. SystemUI asks for most tiles twice in a row; a repeat of the area just drawn presents the same
-  rows again without touching the page. Android 15's SystemUI gives the whole capture about 6 s: past that its
-  screenshot UI dismisses, cancels the pending tile and shows no editor. Two earlier drafts missed it on the Pixel 9
-  emulator: `lockHardwareCanvas` and then a frame-commit callback both reported tiles before their buffer reached
-  SystemUI, which asked for each tile again, and a full-screen draw with 80 ms of settling per tile took 6.9 s; a tile
-  above the page's top or below its end comes back empty, which tells the system it reached that edge. The page's
-  height comes only from the WebView (`contentHeight` times its scale). Fixed and sticky elements show once, as in
-  Chrome: the tiles of the screen you took are drawn as it was; before any other tile `HIDE_FIXED` sets every
-  `position: fixed` and `sticky` element to opacity 0 (sticky ones keep their place, so nothing moves), and a later
+  that waits until the frame is presented (`setWaitForPresent`, as the framework's own scroll capture does).
+  `syncAndDraw`'s result is checked as the framework checks it: a lost surface, a stopped context or a dropped frame
+  is presented once more, and a second failure answers an empty rect and ends the session
+  (`ScrollCapturePlan.presented`). Right before every present, a fresh tile or a repeat, the session checks again that
+  the host still offers the same page (not private, no summary, visible, frontmost) and that the document still holds
+  the session's token (`OWNS`); if either fails, after any wait, the tile answers empty and the session ends at once,
+  restoring the page. Only then is the tile reported. SystemUI asks for most tiles twice in a row; a repeat of the
+  area just drawn presents the same rows again without touching the page. Android 15's SystemUI gives the whole
+  capture about 6 s: past that its screenshot UI dismisses, cancels the pending tile and shows no editor. Two earlier
+  drafts missed it on the Pixel 9 emulator: `lockHardwareCanvas` and then a frame-commit callback both reported tiles
+  before their buffer reached SystemUI, which asked for each tile again, and a full-screen draw with 80 ms of settling
+  per tile took 6.9 s; a tile above the page's top or below its end comes back empty, which tells the system it
+  reached that edge. The page's height comes only from the WebView (`contentHeight` times its scale). Fixed and sticky
+  elements show once, as in Chrome: the tiles of the screen you took are drawn as it was; before any other tile
+  `HIDE_FIXED` sets every `position: fixed` and `sticky` element to opacity 0, in the document and in every open
+  shadow root inside it (closed ones stay out of reach) (sticky ones keep their place, so nothing moves), and a later
   request inside the screen you took shows them again. End restores the styles, the scroll position and the scroll bar
   in one script (`SHOW_FIXED` with the start position) and removes the token (`DROP`). All scripts check the token in
   the same script as their action and keep the changed elements and their original `style` attributes in a list under
@@ -2162,14 +2170,26 @@ the iPhone's Full Page tab below.
   nullable: Android's `ScrollCaptureConnection` reads its signal and session fields when the posted request runs, and
   on the Pixel 9 emulator a tile request arrived with a null one, which crashed the app through Kotlin's non-null
   parameter check until the overrides took nulls (`PageScrollCaptureTest`). A request without its session or area
-  answers an empty rect; one without its signal just can't be cancelled.
+  answers an empty rect; one without its signal just can't be cancelled. The same race can also throw inside the
+  framework's own request handling (`ScrollCaptureConnection` cancels the previous request's signal while the UI
+  thread clears it): on the Pixel 9 emulator SystemUI got that NullPointerException back from a tile request, gave up
+  and never called end, which left the page scrolled with its fixed elements faded. So the session never depends on
+  end alone: 3 s after the last start or tile with no new request (`IDLE_LIMIT_MILLIS`; SystemUI asks for tiles back
+  to back and ends right after the last one), it ends itself, counted as cancelled, and restores the page
+  (`PageScrollCaptureTest`).
 - **Measured on the Pixel 9 emulator (Android 15, WebView 124), before this change** (PR build `fullpage-11974bb`,
   `/tmp/ardia-shot-plan/evidence/android-v2/`): Capture more was already offered on an Ardia page, through WebView's
   own callback. The floating bar was never in it (the WebView draws only itself), and the scroll came back. But
-  WebView's capture left out every `position: sticky` and `fixed` element, even from the screen you took (a test page's
-  sticky header and fixed badge were missing everywhere), drew the WebView's scroll bar thumb into every tile, so it
-  repeated down the picture, and captured private tabs. Chrome 124 on the same page showed the header and the badge
-  once, in the start tile, and no scroll bar; this callback does the same.
+  WebView's capture left out every `position: sticky` and `fixed` element, even from the screen you took (a test
+  page's sticky header and fixed badge were missing everywhere), drew the WebView's scroll bar thumb into every tile,
+  so it repeated down the picture, and captured private tabs. Chrome 124 on the same page showed the header and the
+  badge once, in the start tile, and no scroll bar; this callback does the same. After this change, on the same
+  emulator: saving a selection over 8,192 px tall gives a fully transparent PNG. SystemUI's own export fails there
+  (HWUI logs "Unable to generate GPU buffer in a format compatible with the provided bitmap" in SystemUI's process
+  while the editor shows every tile); Chrome's capture of the same page stops at 6,894 px and saves fine, so it never
+  reaches the size, and 6,052 px from Ardia saves fine too. Wikipedia's Related Articles box stays blank in Ardia's
+  capture, in Chrome's capture and on Chrome's live page on this emulator: the box never loads there, so the band
+  matches Chrome.
 - **MIUI.** Xiaomi's screenshot tool doesn't use the scroll capture API, so this callback never runs there. Its
   Scroll runs `LongScreenshotUtils` inside the app's own process (`findMainScrollView: scrollView:WebView` in the log),
   scrolls the WebView itself and stitches the screens. On 2026-11-28 on the POCO F4 (MIUI, Android 14) it captured the

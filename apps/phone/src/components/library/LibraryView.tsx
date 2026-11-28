@@ -30,6 +30,9 @@ import {
   type LibrarySection,
 } from "../../state/library/store";
 import { useSelectedProfile, useSyncEnabled } from "../../state/sync/hooks";
+import { useRunningDownloads } from "../../state/downloads/running";
+import { cancelDownloadLabel, DOWNLOADED_FILES, DOWNLOADS_IN_PROGRESS, rowFraction, runningDetail, type RunningDownload } from "../../state/downloads/runningRules";
+import { cancelDownload, refreshRunningDownloads } from "../../state/page/downloadCards";
 import { useSync } from "../../state/sync/store";
 import { useTabs } from "../../state/tabs/store";
 import { ClearDataPage } from "../settings/DataPages";
@@ -91,6 +94,7 @@ export function LibraryView() {
   const { width } = useWindowDimensions();
   const frame = useSheetFrame();
   const section = useLibrary((s) => s.section);
+  const alone = useLibrary((s) => s.alone);
   const path = useLibrary((s) => s.path);
   const hasFiles = useLibrary((s) => s.files.length > 0);
   const bookmarks = useBookmarks();
@@ -171,7 +175,7 @@ export function LibraryView() {
             )}
           </MenuTrigger>
         </View>
-        {folderKey ? null : <Switcher section={section} />}
+        {folderKey || alone ? null : <Switcher section={section} />}
         {prompt ? <SearchField prompt={prompt} query={query} onChange={setQuery} /> : null}
         {content}
       </View>
@@ -399,17 +403,29 @@ function DownloadList({ bottom, onMenu }: { bottom: number; onMenu: MenuOpener }
   const open = useLibrary((s) => s.open);
   const files = useLibrary((s) => s.files);
   const loaded = useLibrary((s) => s.filesLoaded);
+  const running = useRunningDownloads((s) => s.running);
   const [refreshing, setRefreshing] = useState(false);
   useEffect(() => {
-    if (open) void loadDownloads();
+    if (!open) return;
+    void loadDownloads();
+    void refreshRunningDownloads();
   }, [open]);
   const refresh = async () => {
     setRefreshing(true);
-    await loadDownloads();
+    await Promise.all([loadDownloads(), refreshRunningDownloads()]);
     setRefreshing(false);
   };
-  if (!loaded) return <LoadingState testID="libraryLoading" />;
-  if (!files.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
+  if (!loaded && !running.length) return <LoadingState testID="libraryLoading" />;
+  if (!files.length && !running.length) return <EmptyState title="No Downloads" message="Files you download show up here." icon="arrowDownCircle" />;
+  const header = running.length ? (
+    <View testID="libraryRunning">
+      <SectionHeader title={DOWNLOADS_IN_PROGRESS} />
+      {running.map((row) => (
+        <RunningRow key={row.id} row={row} />
+      ))}
+      {files.length ? <SectionHeader title={DOWNLOADED_FILES} /> : null}
+    </View>
+  ) : undefined;
   return (
     <FlatList
       testID="libraryDownloads"
@@ -418,10 +434,41 @@ function DownloadList({ bottom, onMenu }: { bottom: number; onMenu: MenuOpener }
       {...frame?.list(true)}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       contentContainerStyle={{ paddingBottom: bottom }}
+      ListHeaderComponent={header}
       renderItem={({ item }) => <DownloadRow file={item} onMenu={onMenu} />}
     />
   );
 }
+
+function RunningRow({ row }: { row: RunningDownload }) {
+  const theme = useTheme();
+  const iconSize = useRowIcon();
+  const detail = runningDetail(row);
+  const fraction = rowFraction(row);
+  return (
+    <View testID="libraryRunningRow" style={styles.row}>
+      <View style={styles.icon}>
+        <Symbol name="arrowDownCircle" size={iconSize} color={theme.secondaryLabel} />
+      </View>
+      <View accessible accessibilityLabel={`${row.fileName}, ${detail}`} accessibilityLiveRegion="polite" style={styles.label}>
+        <Text style={[font.body, { color: theme.label }]} numberOfLines={1} ellipsizeMode="middle">
+          {row.fileName}
+        </Text>
+        <Text style={[font.footnote, { color: theme.secondaryLabel }]} numberOfLines={1}>
+          {detail}
+        </Text>
+        <View style={[styles.track, { backgroundColor: theme.fieldFill }]}>
+          <View testID="libraryRunningBar" style={[styles.fill, { backgroundColor: theme.spaceAccentInk, width: fraction === null ? RUNNING_UNKNOWN_SHARE : `${Math.round(fraction * 100)}%` }, fraction === null ? styles.fillUnknown : null]} />
+        </View>
+      </View>
+      <Tappable kind="icon" testID="libraryRunningCancel" label={cancelDownloadLabel(row.fileName)} onPress={() => cancelDownload(row.id)} style={styles.cancel}>
+        <Symbol name="xmarkCircleFill" size={libraryLayout.runningCancelGlyph} color={theme.secondaryLabel} />
+      </Tappable>
+    </View>
+  );
+}
+
+const RUNNING_UNKNOWN_SHARE = "30%";
 
 function DownloadRow({ file, onMenu }: { file: DownloadedFile; onMenu: MenuOpener }) {
   const theme = useTheme();
@@ -483,4 +530,8 @@ const styles = StyleSheet.create({
   label: { flex: 1, gap: space.hair },
   subtitle: { flexDirection: "row", alignItems: "center", gap: space.xs },
   shrink: { flexShrink: 1 },
+  track: { height: libraryLayout.runningBar, borderRadius: libraryLayout.runningBar / 2, overflow: "hidden", marginTop: space.xs },
+  fill: { height: libraryLayout.runningBar, borderRadius: libraryLayout.runningBar / 2 },
+  fillUnknown: { opacity: 0.5 },
+  cancel: { minWidth: controlSize.hitTarget, minHeight: controlSize.hitTarget, alignItems: "center", justifyContent: "center", alignSelf: "center" },
 });

@@ -1,8 +1,8 @@
 import { PINNED_TOAST, receivedToast, sentToast } from "../sync/syncRules.ts";
 import type { ToastCard } from "../toasts/store.ts";
-import { actionWords, dismissWords } from "../../lib/sharedWords.ts";
+import { actionWords } from "../../lib/sharedWords.ts";
 import { CLEARED_TOAST } from "../settings/settingsRules.ts";
-import { DOWNLOAD_FAILURE_WHY, downloadedDetail, downloadFailedToast, downloadingDetail, downloadsCompleteDetail, downloadsCompleteTitle } from "../page/pagePrompts.ts";
+import { DOWNLOAD_FAILURE_WHY, downloadedDetail, downloadFailedToast, downloadsCompleteDetail, downloadsCompleteTitle } from "../page/pagePrompts.ts";
 
 export type SampleToast = ToastCard;
 
@@ -25,8 +25,6 @@ export function sampleToast(name: string): SampleToast | null {
       return { title: sentToast(SAMPLE_DEVICE), detail: "example.com", icon: "sent" };
     case "pinned":
       return { title: PINNED_TOAST, icon: "star" };
-    case "downloading":
-      return { key: "sample:download", title: SAMPLE_FILE, detail: downloadingDetail(0.45), tile: { kind: "file", ext: "pdf" }, icon: "download", progress: 0.45, action: { label: dismissWords.cancel, quiet: true, run: noop }, stage: "downloading" };
     case "downloaded":
       return { key: "sample:download", title: SAMPLE_FILE, detail: downloadedDetail(1_234_567, "127.0.0.1"), tile: { kind: "file", ext: "pdf" }, icon: "download", action: { label: actionWords.open, run: noop }, stage: "done" };
     case "downloadFailed":

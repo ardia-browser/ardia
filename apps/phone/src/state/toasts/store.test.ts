@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
-import { currentToastKey, dismissToast, holdToast, showToast, TOAST_ACTION_DURATION_MS, TOAST_DURATION_MS, TOAST_RELEASE_MS, toastDuration, updateToast, useToasts } from "./store.ts";
+import { currentToastKey, dismissToast, holdToast, showToast, TOAST_ACTION_DURATION_MS, TOAST_DURATION_MS, TOAST_RELEASE_MS, toastDuration, useToasts } from "./store.ts";
 
 test("the same message shown again keeps the toast and only extends its time, as Compose's ToastCenter does", () => {
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -67,40 +67,34 @@ test("a card stays 2.4 s plain and about 5 s once it has an action, even when a 
 test("a later card with the same key updates the visible one in place: same id, so no exit or entrance, new text, a fresh clock", () => {
   mock.timers.enable({ apis: ["setTimeout"] });
   try {
-    showToast({ key: "download:7", title: "otter.pdf", detail: "Downloading · 10%", tile: { kind: "file", ext: "pdf" }, progress: 0.1, action: { label: "Cancel", quiet: true, run: () => undefined } });
+    showToast({ key: "download:7", title: "Couldn’t download otter.pdf", detail: "Check your connection and try again.", tile: { kind: "icon", icon: "warning" }, titleLines: 2, action: { label: "Retry", run: () => undefined } });
     const first = useToasts.getState().toast!;
-    assert.equal(first.middleTruncates, true);
-    assert.equal(first.titleLines, 1);
-    assert.equal(first.showsProgress, true);
-    assert.equal(updateToast("download:7", { detail: "Downloading · 45%", progress: 0.45 }), true);
-    assert.equal(useToasts.getState().toast!.id, first.id);
-    assert.equal(useToasts.getState().toast!.progress, 0.45);
-    assert.equal(updateToast("download:8", { detail: "nope" }), false);
+    assert.equal(first.titleLines, 2);
+    assert.equal(first.middleTruncates, false);
     mock.timers.tick(4000);
     showToast({ key: "download:7", title: "otter.pdf", detail: "Downloaded · 1.2 MB", tile: { kind: "file", ext: "pdf" }, action: { label: "Open", run: () => undefined } });
     const done = useToasts.getState().toast!;
     assert.equal(done.id, first.id);
     assert.equal(done.detail, "Downloaded · 1.2 MB");
-    assert.equal(done.showsProgress, false);
+    assert.equal(done.middleTruncates, true);
     assert.equal(currentToastKey(), "download:7");
     mock.timers.tick(TOAST_ACTION_DURATION_MS - 1);
     assert.ok(useToasts.getState().toast);
     mock.timers.tick(1);
     assert.equal(useToasts.getState().toast, null);
-    assert.equal(updateToast("download:7", { detail: "late" }), false, "a dismissed card never comes back from an update");
+    assert.equal(currentToastKey(), null);
   } finally {
     dismissToast();
     mock.timers.reset();
   }
 });
 
-test("a card is spoken as its title and detail unless it names its own spoken words, so progress steps don't re-announce", () => {
+test("a card is spoken as its title and detail unless it names its own spoken words", () => {
   try {
     showToast({ title: "Cleared Browsing Data", detail: "History · Last Hour" });
     assert.equal(useToasts.getState().toast!.spoken, "Cleared Browsing Data, History · Last Hour");
-    showToast({ key: "d", title: "otter.pdf", detail: "Downloading · 3%", spoken: "otter.pdf, Downloading", progress: 0.03 });
-    updateToast("d", { detail: "Downloading · 4%", progress: 0.04 });
-    assert.equal(useToasts.getState().toast!.spoken, "otter.pdf, Downloading");
+    showToast({ title: "2 downloads complete", detail: "a.pdf, b.zip", spoken: "2 downloads complete" });
+    assert.equal(useToasts.getState().toast!.spoken, "2 downloads complete");
   } finally {
     dismissToast();
   }

@@ -28,6 +28,8 @@ export const libraryLayout = {
   drawnSwitcherHeight: 32,
   drawnSwitcherSegment: 48,
   drawnSectionGlyph: 17,
+  runningBar: 3,
+  runningCancelGlyph: 20,
 } as const;
 
 export const listRowIconSide = (fontScale: number) => listRowLayout.icon * Math.min(fontScale, listRowLayout.iconScaleCap);

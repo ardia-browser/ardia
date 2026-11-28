@@ -202,17 +202,6 @@ export const downloadRetries = (failure: DownloadFailure | null | undefined, url
 
 export const stoppedPrivateDownloadsToast = (count: number) => (count === 1 ? "Stopped 1 Private Download" : `Stopped ${count} Private Downloads`);
 
-export const DOWNLOAD_CARD_DELAY_MS = 800;
-
-export const downloadPercent = (fraction: number | null) => (fraction === null ? null : Math.floor(Math.min(1, Math.max(0, fraction)) * 100));
-
-export const downloadingDetail = (fraction: number | null) => {
-  const percent = downloadPercent(fraction);
-  return percent === null ? "Downloading…" : `Downloading · ${percent}%`;
-};
-
-export const DOWNLOADING_SPOKEN = "Downloading";
-
 export const downloadHost = webHost;
 
 export function downloadedDetail(size: number | null, host: string | null): string {

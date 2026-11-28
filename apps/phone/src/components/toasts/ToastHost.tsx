@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { cancelAnimation, Easing, FadeIn, FadeOut, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { keyboardIsUp } from "../../lib/trayMotion";
 import { backdropIsDark, compositeOver } from "../../lib/readableInk";
@@ -157,19 +157,15 @@ function ToastView({ spot }: { spot: ToastSpot }) {
   const pressStyle = usePressStyle("filled", { style: styles.press });
   if (!toast) return null;
   const onAccessibilityAction = (event: AccessibilityActionEvent) => {
-    const name = event.nativeEvent.actionName;
-    if (dismissesToast(name)) dismissToast();
-    else if (name === "activate" && toast.action) tapToast();
+    if (dismissesToast(event.nativeEvent.actionName)) dismissToast();
   };
   const escape = semantics.escapes ? dismissToast : undefined;
-  const quiet = toast.action?.quiet === true;
-  const cardPress = semantics.pressable && !quiet ? tapToast : undefined;
+  const cardPress = semantics.pressable ? tapToast : undefined;
   const content = (
     <ToastPlate>
       <ToastTileView tile={toast.tile} />
       <TextBlock toast={toast} reduceMotion={reduceMotion} />
-      {toast.action ? <ToastButton action={toast.action} pressable={quiet} /> : null}
-      {toast.showsProgress ? <ToastProgress progress={toast.progress} reduceMotion={reduceMotion} /> : null}
+      {toast.action ? <ToastButton action={toast.action} /> : null}
     </ToastPlate>
   );
   const spokenLabel = toastAnnouncement(toast.spoken, actionLabel);
@@ -183,7 +179,7 @@ function ToastView({ spot }: { spot: ToastSpot }) {
             accessibilityRole={semantics.role}
             accessibilityLabel={spokenLabel}
             accessibilityLiveRegion={semantics.liveRegion}
-            accessibilityActions={quiet ? [...semantics.actions, ACTIVATE] : semantics.actions}
+            accessibilityActions={semantics.actions}
             onAccessibilityAction={onAccessibilityAction}
             onAccessibilityEscape={escape}
             onPress={cardPress}
@@ -196,8 +192,6 @@ function ToastView({ spot }: { spot: ToastSpot }) {
     </ToastPlace>
   );
 }
-
-const ACTIVATE = { name: "activate" } as const;
 
 function TextBlock({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolean }) {
   return (
@@ -254,58 +248,19 @@ function ToastTileView({ tile }: { tile: ToastTile }) {
   );
 }
 
-function ToastButton({ action, pressable }: { action: ToastAction; pressable: boolean }) {
+function ToastButton({ action }: { action: ToastAction }) {
   const ink = useSurfaceInk();
   const theme = useTheme();
   const dark = usePlateDark();
   const fill = compositeOver(theme.toastFill, dark ? "#000000" : "#FFFFFF");
-  const label = ink.roles.toastLabel;
-  const look = action.quiet ? { borderWidth: stroke.field, borderColor: ink.roles.toastDetail } : { backgroundColor: label };
-  const text = (
-    <Text testID="toastAction" numberOfLines={1} style={[font.footnote, styles.buttonText, { color: action.quiet ? label : fill }]}>
-      {action.label}
-    </Text>
-  );
-  if (!pressable) return <View style={[styles.button, look]}>{text}</View>;
   return (
-    <Pressable testID="toastButton" accessible={false} importantForAccessibility="no" hitSlop={TOAST_BUTTON_SLOP} onPress={tapToast} style={({ pressed }) => [styles.button, look, pressed ? styles.buttonPressed : null]}>
-      {text}
-    </Pressable>
-  );
-}
-
-const TOAST_BUTTON_SLOP = { top: 10, bottom: 10, left: 8, right: 8 } as const;
-
-function ToastProgress({ progress, reduceMotion }: { progress: number | null; reduceMotion: boolean }) {
-  const ink = useSurfaceInk();
-  const fraction = useSharedValue(progress ?? 0);
-  const sweep = useSharedValue(0);
-  const indeterminate = progress === null;
-  useEffect(() => {
-    if (progress === null) return;
-    fraction.value = reduceMotion ? progress : withTiming(progress, { duration: TOAST_PROGRESS_MS, easing: Easing.out(Easing.quad) });
-  }, [progress, reduceMotion]);
-  useEffect(() => {
-    if (!indeterminate || reduceMotion) {
-      cancelAnimation(sweep);
-      sweep.value = 0;
-      return;
-    }
-    sweep.value = 0;
-    sweep.value = withRepeat(withTiming(1, { duration: TOAST_SWEEP_MS, easing: Easing.inOut(Easing.quad) }), -1, false);
-    return () => cancelAnimation(sweep);
-  }, [indeterminate, reduceMotion]);
-  const line = useAnimatedStyle(() => (indeterminate ? { left: `${sweep.value * (100 - TOAST_SWEEP_SHARE)}%`, width: `${TOAST_SWEEP_SHARE}%`, transform: [{ scaleX: 1 }] } : { left: 0, width: "100%", transform: [{ scaleX: Math.min(1, Math.max(0, fraction.value)) }] }), [indeterminate]);
-  return (
-    <View testID="toastProgress" pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.track}>
-      <Animated.View style={[styles.line, { backgroundColor: ink.roles.toastLabel }, line]} />
+    <View style={[styles.button, { backgroundColor: ink.roles.toastLabel }]}>
+      <Text testID="toastAction" numberOfLines={1} style={[font.footnote, styles.buttonText, { color: fill }]}>
+        {action.label}
+      </Text>
     </View>
   );
 }
-
-const TOAST_PROGRESS_MS = 200;
-const TOAST_SWEEP_MS = 1100;
-const TOAST_SWEEP_SHARE = 30;
 
 function ToastPlate({ children }: { children: ReactNode }) {
   const theme = useTheme();
@@ -384,8 +339,5 @@ const styles = StyleSheet.create({
   title: { fontWeight: "600" },
   detail: { fontWeight: "400" },
   button: { height: toastLayout.buttonHeight, paddingHorizontal: toastLayout.buttonPadding, borderRadius: toastLayout.buttonHeight / 2, alignItems: "center", justifyContent: "center" },
-  buttonPressed: { opacity: 0.7 },
   buttonText: { fontWeight: "600" },
-  track: { position: "absolute", left: 0, right: 0, bottom: 0, height: toastLayout.progressHeight },
-  line: { position: "absolute", top: 0, bottom: 0, transformOrigin: "left" },
 });

@@ -91,12 +91,11 @@ test("the card spans the bar: its edges sit at the bar's side inset in the float
 
 test("an update with the same key keeps the same card on screen: no remount, no new entrance, only the text changes", () => {
   const root = renderSurface(<ToastHost />);
-  act(() => showToast({ key: "download:1", title: "otter.pdf", detail: "Downloading · 10%", tile: { kind: "file", ext: "pdf" }, progress: 0.1, stage: "downloading" }));
+  act(() => showToast({ key: "download:1", title: "Couldn’t download otter.pdf", detail: "Check your connection and try again.", tile: { kind: "icon", icon: "warning" }, titleLines: 2, stage: "failed", action: { label: "Retry", run: () => undefined } }));
   const plate = plateOf(root);
   act(() => showToast({ key: "download:1", title: "otter.pdf", detail: "Downloaded · 1.2 MB", tile: { kind: "file", ext: "pdf" }, stage: "done", action: { label: "Open", run: () => undefined } }));
   expect(plateOf(root)).toBe(plate);
   expect(root.root.findAll((node) => node.props.testID === "toastDetail" && typeof node.type === "string")[0]!.props.children).toBe("Downloaded · 1.2 MB");
-  expect(root.root.findAll((node) => node.props.testID === "toastProgress")).toHaveLength(0);
   unmount(root);
 });
 
@@ -134,14 +133,14 @@ test("with a full sheet in front the card sits one gap above the safe area, not 
   unmount(root);
 });
 
-test("a card's tile and button follow the layout: a 26 point tile, one capsule, and a progress line only while it runs", () => {
+test("a card's tile and button follow the layout: a 26 point tile, one filled capsule, and no progress line on any card", () => {
   const root = renderSurface(<ToastHost />);
-  act(() => showToast({ key: "d", title: "otter.pdf", detail: "Downloading…", tile: { kind: "file", ext: "pdf" }, progress: null, action: { label: "Cancel", quiet: true, run: () => undefined } }));
+  act(() => showToast({ key: "d", title: "otter.pdf", detail: "Downloaded · 1.2 MB", tile: { kind: "file", ext: "pdf" }, action: { label: "Open", run: () => undefined } }));
   const tile = StyleSheet.flatten(root.root.findAll((node) => node.props.testID === "toastTile" && typeof node.type === "string")[0]!.props.style);
   expect([tile.width, tile.height, tile.backgroundColor]).toEqual([toastLayout.tile, toastLayout.tile, toastTileInk.file.pdf]);
   expect(root.root.findAll((node) => node.props.testID === "toastAction" && typeof node.type === "string")).toHaveLength(1);
-  expect(root.root.findAll((node) => node.props.testID === "toastProgress" && typeof node.type === "string")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.testID === "toastProgress")).toHaveLength(0);
   const card = root.root.findAll((node) => node.props.testID === "toast" && typeof node.type === "string")[0]!;
-  expect(card.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }, { name: "activate" }]);
+  expect(card.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }]);
   unmount(root);
 });

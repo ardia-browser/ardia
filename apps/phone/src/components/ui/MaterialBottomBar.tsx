@@ -10,6 +10,7 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { barAddress, spokenAddress } from "../browsing/FloatingBar";
 import { NotSecureLock } from "../browsing/NotSecureLock";
+import { DownloadIndicator } from "../browsing/DownloadIndicator";
 import { openPageMenuFrom } from "../browsing/pageMenuOpener";
 import { TabsMenuTrigger } from "../browsing/tabsMenu";
 import { plusMenuItems } from "../tabs/ChromeButtons";
@@ -129,6 +130,7 @@ function PageControls({ scheme, tab, order, showsPlus, addressDocked, onTabs, on
           style={[styles.fieldContainer, styles.fieldPressable, { backgroundColor: scheme.surfaceContainerHigh }, addressDocked ? styles.docked : null]}
         >
           <MaterialAddressContent address={address} scheme={scheme} testID="materialBarHost" />
+          <DownloadIndicator testID="materialBarDownloads" ink={scheme.onSurfaceVariant} gesture />
           <MaterialIconButton
             testID="materialBarSiteSettings"
             icon="ellipsis"

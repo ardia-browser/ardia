@@ -9,7 +9,7 @@ test("ArdiaToast's sample names give Compose's sample toasts, and an unknown nam
   assert.deepEqual(sampleToast("sent"), { title: "Sent to MacBook Pro", detail: "example.com", icon: "sent" });
   assert.equal(sampleToast("pinned")?.icon, "star");
   assert.equal(sampleToast("cleared")?.title, "Cleared Browsing Data");
-  assert.equal(sampleToast("downloading")?.progress, 0.45);
+  assert.equal(sampleToast("downloading"), null);
   assert.equal(sampleToast("downloadsGrouped")?.title, "2 downloads complete");
   assert.equal(sampleToast("downloadFailed")?.title, "Couldn’t download quarterly-report.pdf");
   assert.equal(sampleToast("party"), null);

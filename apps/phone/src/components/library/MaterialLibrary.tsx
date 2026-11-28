@@ -10,6 +10,9 @@ import { copyLink, menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { bookmarkMatches, bookmarkSections } from "../../state/library/bookmarkSearch";
 import { filterHistory, historyDays, historyDayTitle, historyHost, type HistoryEntry } from "../../state/library/historyTimeline";
 import { clockTime, downloadSubtitle, type FileKind } from "../../state/library/libraryText";
+import { useRunningDownloads } from "../../state/downloads/running";
+import { cancelDownloadLabel, DOWNLOADED_FILES, DOWNLOADS_IN_PROGRESS, rowFraction, runningDetail, type RunningDownload } from "../../state/downloads/runningRules";
+import { cancelDownload, refreshRunningDownloads } from "../../state/page/downloadCards";
 import {
   closeLibrary,
   deleteAllDownloads,
@@ -47,6 +50,7 @@ const FOLDER = "folder:";
 const HIDE_FALLBACK_MS = 900;
 const ENTER_RISE = 48;
 const INDICATOR = 3;
+const MATERIAL_RUNNING_BAR = 4;
 const EMPTY_ICON = 48;
 const HEADER_HEIGHT = 48;
 
@@ -98,6 +102,7 @@ function MaterialLibraryView({ open, onGone }: { open: boolean; onGone: () => vo
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const section = useLibrary((s) => s.section);
+  const alone = useLibrary((s) => s.alone);
   const path = useLibrary((s) => s.path);
   const shown = useSharedValue(0);
   const back = useSharedValue(0);
@@ -205,9 +210,9 @@ function MaterialLibraryView({ open, onGone }: { open: boolean; onGone: () => vo
       {searching ? (
         <LibrarySearchBar prompt={LIBRARY_SEARCH_PROMPTS[section] ?? ""} query={query} onQuery={setQuery} onEnd={endSearch} />
       ) : (
-        <LibraryTopBar section={section} folderKey={folderKey} onBack={() => step.current()} onSearch={searchable ? () => setSearching(true) : null} onDeleteAll={section === "downloads" ? askDeleteAll : null} showMenu={showMenu} />
+        <LibraryTopBar section={section} alone={alone} folderKey={folderKey} onBack={() => step.current()} onSearch={searchable ? () => setSearching(true) : null} onDeleteAll={section === "downloads" ? askDeleteAll : null} showMenu={showMenu} />
       )}
-      {searching || folderKey !== null ? <View style={[styles.divider, { backgroundColor: scheme.outlineVariant }]} /> : <LibraryTabs section={section} />}
+      {searching || folderKey !== null || alone ? <View style={[styles.divider, { backgroundColor: scheme.outlineVariant }]} /> : <LibraryTabs section={section} />}
       <View style={[styles.content, { paddingBottom: insets.bottom }]}>
         {section === "history" ? <HistoryList open={open} query={query} showMenu={showMenu} /> : section === "bookmarks" ? <BookmarkList query={query} folderKey={folderKey} showMenu={showMenu} /> : <DownloadList open={open} showMenu={showMenu} />}
       </View>
@@ -221,7 +226,7 @@ function IconButton({ testID, label, icon, color, onPress, flipped = false }: { 
   return <MaterialIconButton testID={testID} label={label} icon={icon} ink={color} flipped={flipped} onPress={onPress} />;
 }
 
-function LibraryTopBar({ section, folderKey, onBack, onSearch, onDeleteAll, showMenu }: { section: LibrarySection; folderKey: string | null; onBack: () => void; onSearch: (() => void) | null; onDeleteAll: (() => void) | null; showMenu: ShowMenu }) {
+function LibraryTopBar({ section, alone, folderKey, onBack, onSearch, onDeleteAll, showMenu }: { section: LibrarySection; alone: boolean; folderKey: string | null; onBack: () => void; onSearch: (() => void) | null; onDeleteAll: (() => void) | null; showMenu: ShowMenu }) {
   const { scheme } = useMaterialTheme();
   const bookmarks = useBookmarks();
   const hasFiles = useLibrary((s) => s.files.length > 0);
@@ -229,7 +234,7 @@ function LibraryTopBar({ section, folderKey, onBack, onSearch, onDeleteAll, show
   const title = folderKey === null ? LIBRARY_NAMES[section] : folder?.title || "Untitled Folder";
   return (
     <View testID="materialLibraryBar" style={[styles.bar, { backgroundColor: scheme.surface }]}>
-      <IconButton testID="materialLibraryBack" label={folderKey === null ? "Close Library" : "Back"} icon="arrowRight" color={scheme.onSurface} onPress={onBack} flipped />
+      <IconButton testID="materialLibraryBack" label={folderKey !== null ? "Back" : alone ? `Close ${LIBRARY_NAMES[section]}` : "Close Library"} icon="arrowRight" color={scheme.onSurface} onPress={onBack} flipped />
       <Text testID="materialLibraryTitle" accessibilityRole="header" numberOfLines={1} style={[materialType.titleLarge, styles.title, { color: scheme.onSurface }]}>
         {title}
       </Text>
@@ -499,13 +504,52 @@ function BookmarkRow({ item, showMenu }: { item: BookmarkItem; showMenu: ShowMen
 function DownloadList({ open, showMenu }: { open: boolean; showMenu: ShowMenu }) {
   const files = useLibrary((s) => s.files);
   const loaded = useLibrary((s) => s.filesLoaded);
+  const running = useRunningDownloads((s) => s.running);
   useEffect(() => {
-    if (open) void loadDownloads();
+    if (!open) return;
+    void loadDownloads();
+    void refreshRunningDownloads();
   }, [open]);
   const renderItem = useCallback(({ item }: { item: DownloadedFile }) => <DownloadRow file={item} showMenu={showMenu} />, [showMenu]);
-  if (loaded && !files.length) return <EmptyState icon="arrowDownCircle" title="No Downloads" message="Files you download show up here." />;
-  return <FlatList bounces={false} overScrollMode="never" testID="materialLibraryDownloads" data={files} keyExtractor={(file) => file.uri} renderItem={renderItem} initialNumToRender={14} windowSize={9} />;
+  if (loaded && !files.length && !running.length) return <EmptyState icon="arrowDownCircle" title="No Downloads" message="Files you download show up here." />;
+  const header = running.length ? (
+    <View testID="materialLibraryRunning">
+      <SectionHeader title={DOWNLOADS_IN_PROGRESS} />
+      {running.map((row) => (
+        <RunningRow key={row.id} row={row} />
+      ))}
+      {files.length ? <SectionHeader title={DOWNLOADED_FILES} /> : null}
+    </View>
+  ) : undefined;
+  return <FlatList bounces={false} overScrollMode="never" testID="materialLibraryDownloads" data={files} keyExtractor={(file) => file.uri} renderItem={renderItem} ListHeaderComponent={header} initialNumToRender={14} windowSize={9} />;
 }
+
+function RunningRow({ row }: { row: RunningDownload }) {
+  const { scheme } = useMaterialTheme();
+  const detail = runningDetail(row);
+  const fraction = rowFraction(row);
+  return (
+    <View testID="materialLibraryRunningRow" style={[styles.item, { minHeight: materialSize.listItemTwoLine }]}>
+      <View style={styles.leading}>
+        <Symbol name="arrowDownCircle" size={materialSize.icon} color={scheme.onSurfaceVariant} />
+      </View>
+      <View accessible accessibilityLabel={`${row.fileName}, ${detail}`} accessibilityLiveRegion="polite" style={styles.itemText}>
+        <Text numberOfLines={1} ellipsizeMode="middle" style={[materialType.bodyLarge, { color: scheme.onSurface }]}>
+          {row.fileName}
+        </Text>
+        <Text numberOfLines={1} style={[materialType.bodyMedium, { color: scheme.onSurfaceVariant }]}>
+          {detail}
+        </Text>
+        <View style={[styles.track, { backgroundColor: scheme.surfaceContainerHighest }]}>
+          <View testID="materialLibraryRunningBar" style={[styles.fill, { backgroundColor: scheme.primary, width: fraction === null ? RUNNING_UNKNOWN_SHARE : `${Math.round(fraction * 100)}%` }, fraction === null ? styles.fillUnknown : null]} />
+        </View>
+      </View>
+      <MaterialIconButton testID="materialLibraryRunningCancel" label={cancelDownloadLabel(row.fileName)} icon="xmark" ink={scheme.onSurfaceVariant} onPress={() => cancelDownload(row.id)} />
+    </View>
+  );
+}
+
+const RUNNING_UNKNOWN_SHARE = "30%";
 
 function DownloadRow({ file, showMenu }: { file: DownloadedFile; showMenu: ShowMenu }) {
   const { scheme } = useMaterialTheme();
@@ -547,4 +591,7 @@ const styles = StyleSheet.create({
   itemText: { flex: 1 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, paddingHorizontal: 32 },
   emptyText: { textAlign: "center" },
+  track: { height: MATERIAL_RUNNING_BAR, borderRadius: MATERIAL_RUNNING_BAR / 2, overflow: "hidden", marginTop: 6 },
+  fill: { height: MATERIAL_RUNNING_BAR, borderRadius: MATERIAL_RUNNING_BAR / 2 },
+  fillUnknown: { opacity: 0.5 },
 });

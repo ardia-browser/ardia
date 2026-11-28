@@ -1,14 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DOWNLOAD_FAILURE_WHY, downloadedDetail, downloadFailedToast, downloadFailureWhy, downloadHost, downloadingDetail, downloadRetries, downloadsCompleteDetail, downloadsCompleteTitle } from "./pagePrompts.ts";
+import { DOWNLOAD_FAILURE_WHY, downloadedDetail, downloadFailedToast, downloadFailureWhy, downloadHost, downloadRetries, downloadsCompleteDetail, downloadsCompleteTitle } from "./pagePrompts.ts";
 import { clearChoice, clearedDetail } from "../settings/settingsRules.ts";
 import { COULD_NOT_SEND_DETAIL, sentDetail } from "../sync/syncRules.ts";
-
-test("a running download says how far it is, or that it is downloading when the size is unknown", () => {
-  assert.equal(downloadingDetail(0.456), "Downloading · 45%");
-  assert.equal(downloadingDetail(1.2), "Downloading · 100%");
-  assert.equal(downloadingDetail(null), "Downloading…");
-});
 
 test("a finished download says its size and site, and leaves out what it doesn't know or must not show", () => {
   assert.equal(downloadedDetail(1_234_567, "127.0.0.1"), "Downloaded · 1.2 MB · 127.0.0.1");

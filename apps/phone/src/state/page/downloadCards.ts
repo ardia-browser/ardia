@@ -1,29 +1,18 @@
 import { Platform } from "react-native";
 import { downloads, type DownloadEvent, type DownloadProgress } from "../../platform/downloads";
 import { pages, type PageEngineEvent } from "../../platform/pages";
-import { actionWords, dismissWords } from "../../lib/sharedWords";
+import { actionWords } from "../../lib/sharedWords";
 import { fileExtension } from "../../lib/fileKinds";
 import { installDownloadedPackage } from "../appUpdate/store";
-import { openLibrary } from "../library/store";
+import { loadDownloads, openLibrary, useLibrary } from "../library/store";
 import { settled } from "../pages/store";
-import { currentTabs } from "../tabs/store";
+import { noteDownloadEnded, noteDownloadsReported, noteDownloadStarted, useRunningDownloads } from "../downloads/running";
+import { anyPrivate } from "../downloads/runningRules";
+import { currentTabs, useTabs } from "../tabs/store";
 import { findTab } from "../tabs/tabsState";
 import { countUsage } from "../telemetry/telemetry";
-import { currentToastKey, showToast, updateToast, type ToastAction, type ToastCard } from "../toasts/store";
-import {
-  DOWNLOAD_CARD_DELAY_MS,
-  DOWNLOADING_SPOKEN,
-  downloadedDetail,
-  downloadFailedToast,
-  downloadFailureWhy,
-  downloadHost,
-  downloadingDetail,
-  downloadPercent,
-  downloadRetries,
-  downloadsCompleteDetail,
-  downloadsCompleteTitle,
-  opensInInstaller,
-} from "./pagePrompts";
+import { currentToastKey, showToast, type ToastAction } from "../toasts/store";
+import { downloadedDetail, downloadFailedToast, downloadFailureWhy, downloadHost, downloadRetries, downloadsCompleteDetail, downloadsCompleteTitle, opensInInstaller } from "./pagePrompts";
 
 type PageDownload = Extract<PageEngineEvent, { name: "page.download" }>;
 type Finished = Extract<DownloadEvent, { name: "downloads.finished" }>;
@@ -36,9 +25,6 @@ type Tracked = {
   fileName: string;
   isPrivate: boolean;
   total: number | null;
-  fraction: number | null;
-  timer: ReturnType<typeof setTimeout> | null;
-  cancelled: boolean;
 };
 
 type Completed = { key: string; names: string[] };
@@ -58,36 +44,32 @@ const fileTile = (fileName: string) => ({ kind: "file" as const, ext: fileExtens
 
 const counted = (download: Tracked | null) => download !== null && !download.isPrivate;
 
-function progressCard(download: Tracked): ToastCard {
-  const cancel: ToastAction = {
-    label: dismissWords.cancel,
-    quiet: true,
-    run: () => cancelDownload(download.id),
-  };
-  return {
-    key: download.key,
-    title: download.fileName || "Download",
-    detail: downloadingDetail(download.fraction),
-    tile: fileTile(download.fileName),
-    icon: "download",
-    action: cancel,
-    progress: download.fraction,
-    stage: "downloading",
-    spoken: `${download.fileName}, ${DOWNLOADING_SPOKEN}`,
-  };
+const browsingPrivately = () => useTabs.getState().incognito;
+
+export function openDownloadsAlone() {
+  openLibrary("downloads", { alone: true });
 }
 
-function cancelDownload(id: string) {
+export function openDownloadsFromIndicator() {
+  const running = useRunningDownloads.getState().running;
+  if (!browsingPrivately() && running.length > 0 && !anyPrivate(running)) countUsage("download_indicator_opened");
+  openDownloadsAlone();
+}
+
+export function cancelDownload(id: string) {
   const download = tracked.get(id);
+  const row = useRunningDownloads.getState().running.find((item) => item.id === id);
   cancelled.add(id);
   tracked.delete(id);
-  if (download) {
-    download.cancelled = true;
-    if (download.timer) clearTimeout(download.timer);
-    download.timer = null;
-    if (counted(download)) countUsage("downloads_cancelled_from_card");
-  }
+  noteDownloadEnded(id);
+  const isPrivate = download ? download.isPrivate : row?.isPrivate !== false;
+  if (!isPrivate && !browsingPrivately()) countUsage("downloads_cancelled");
   quietly(() => downloads.cancel(id));
+}
+
+export async function refreshRunningDownloads() {
+  const reported = await settled(() => downloads.active(), []);
+  noteDownloadsReported(reported);
 }
 
 export function downloadStarted(event: PageDownload) {
@@ -106,37 +88,25 @@ export function downloadStarted(event: PageDownload) {
     fileName: again?.fileName || event.fileName,
     isPrivate: event.isPrivate,
     total: event.contentLength !== null && event.contentLength > 0 ? event.contentLength : null,
-    fraction: null,
-    timer: null,
-    cancelled: false,
   };
   tracked.set(id, download);
-  download.timer = setTimeout(() => {
-    download.timer = null;
-    if (tracked.get(id) !== download || download.cancelled) return;
-    showToast(progressCard(download));
-  }, DOWNLOAD_CARD_DELAY_MS);
+  noteDownloadStarted(id, download.fileName, download.isPrivate, download.total);
 }
 
 export function downloadsProgressed(list: readonly DownloadProgress[]) {
   for (const progress of list) {
     const download = tracked.get(progress.id);
-    if (!download || download.cancelled) continue;
-    if (progress.total !== null && progress.total > 0) download.total = progress.total;
-    const fraction = progress.fraction ?? (download.total ? progress.bytes / download.total : null);
-    const before = downloadPercent(download.fraction);
-    download.fraction = fraction;
-    if (download.timer || downloadPercent(fraction) === before) continue;
-    updateToast(download.key, { detail: downloadingDetail(fraction), progress: fraction });
+    if (download && progress.total !== null && progress.total > 0) download.total = progress.total;
   }
+  noteDownloadsReported(list.filter((progress) => !cancelled.has(progress.id)));
 }
 
 function claim(event: Finished): Tracked | null {
   const found = event.id ? (tracked.get(event.id) ?? null) : ([...tracked.values()].find((download) => download.fileName === event.fileName) ?? null);
+  if (event.id) noteDownloadEnded(event.id);
   if (!found) return null;
   tracked.delete(found.id);
-  if (found.timer) clearTimeout(found.timer);
-  found.timer = null;
+  noteDownloadEnded(found.id);
   return found;
 }
 
@@ -191,7 +161,7 @@ function showCompleted(event: Finished, download: Tracked | null) {
       detail: downloadsCompleteDetail(group.names),
       tile: { kind: "count", count: group.names.length },
       icon: "download",
-      action: { label: actionWords.show, run: () => openLibrary("downloads") },
+      action: { label: actionWords.show, run: openDownloadsAlone },
       stage: `group:${group.names.length}`,
     });
     return;
@@ -216,11 +186,15 @@ export function downloadFinished(event: Finished) {
   if (event.id && cancelled.has(event.id)) {
     cancelled.delete(event.id);
     tracked.delete(event.id);
+    noteDownloadEnded(event.id);
     return;
   }
   const download = claim(event);
   if (event.failure) showFailure(event, download);
-  else showCompleted(event, download);
+  else {
+    showCompleted(event, download);
+    if (useLibrary.getState().open) void loadDownloads();
+  }
 }
 
 export function downloadDropped(event: Finished) {
@@ -229,7 +203,6 @@ export function downloadDropped(event: Finished) {
 }
 
 export function forgetDownloadCards() {
-  for (const download of tracked.values()) if (download.timer) clearTimeout(download.timer);
   tracked.clear();
   cancelled.clear();
   retrying.clear();

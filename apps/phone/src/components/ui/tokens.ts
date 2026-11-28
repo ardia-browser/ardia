@@ -150,7 +150,7 @@ export const pageMenuInk = {
   dark: { sheet: "#000000", group: "#171717", rowPressed: "rgba(120,120,128,0.36)" },
 } as const;
 
-export const toastLayout = { radius: shape.card, minHeight: 52, verticalPadding: 9, leadingPadding: 12, trailingPadding: 10, gap: 10, tile: 26, tileRadius: 7, tileText: 10, iconSize: 15, textGap: 1, buttonHeight: 30, buttonPadding: 12, progressHeight: 2, barClearance: 64, shadowRadius: 18, shadowY: 4 } as const;
+export const toastLayout = { radius: shape.card, minHeight: 52, verticalPadding: 9, leadingPadding: 12, trailingPadding: 10, gap: 10, tile: 26, tileRadius: 7, tileText: 10, iconSize: 15, textGap: 1, buttonHeight: 30, buttonPadding: 12, barClearance: 64, shadowRadius: 18, shadowY: 4 } as const;
 
 export const pageInk = { findError: "#C93333" } as const;
 

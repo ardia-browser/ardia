@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PlatformColor, StyleSheet } from "react-native";
-import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, HStack, Host, Image, List, Menu, NavigationDestination, NavigationLink, NavigationStack, Picker, Spacer, SwipeActions, Text, Toolbar, ToolbarItem, useNativeState } from "@expo/ui/swift-ui";
+import { BottomSheet, Button, ConfirmationDialog, ContentUnavailableView, ContextMenu, HStack, Host, Image, List, Menu, NavigationDestination, NavigationLink, NavigationStack, Picker, ProgressView, Spacer, SwipeActions, Text, Toolbar, ToolbarItem, useNativeState, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityLabel,
   alignmentGuide,
+  buttonStyle,
   disabled,
   font,
   foregroundStyle,
   frame,
+  labelStyle,
+  lineLimit,
   listRowBackground,
   listRowInsets,
   listRowSeparator,
@@ -25,6 +28,7 @@ import {
   searchable,
   tag,
   tint,
+  truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { BookmarkItem } from "../../platform/sync";
 import { haptics } from "../../state/app/haptics";
@@ -58,6 +62,9 @@ import {
   type LibrarySection,
 } from "../../state/library/store";
 import { useSync } from "../../state/sync/store";
+import { useRunningDownloads } from "../../state/downloads/running";
+import { cancelDownloadLabel, DOWNLOADED_FILES, DOWNLOADS_IN_PROGRESS, rowFraction, runningDetail, type RunningDownload } from "../../state/downloads/runningRules";
+import { cancelDownload, refreshRunningDownloads } from "../../state/page/downloadCards";
 import { useSelectedProfile, useSyncEnabled } from "../../state/sync/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { ExpoClearDataPage } from "../settings/ExpoClearDataPage";
@@ -89,6 +96,7 @@ export function ExpoLibrarySheet() {
 
 export function LibraryNavigation() {
   const section = useLibrary((s) => s.section);
+  const alone = useLibrary((s) => s.alone);
   const path = useLibrary((s) => s.path);
   const hasFiles = useLibrary((s) => s.files.length > 0);
   const searchText = useNativeState("");
@@ -128,9 +136,11 @@ export function LibraryNavigation() {
           </ConfirmationDialog.Message>
         </ConfirmationDialog>
         <Toolbar.Content>
-          <ToolbarItem placement="principal">
-            <LibrarySwitcher section={section} />
-          </ToolbarItem>
+          {alone ? null : (
+            <ToolbarItem placement="principal">
+              <LibrarySwitcher section={section} />
+            </ToolbarItem>
+          )}
           <ToolbarItem placement="primaryAction">
             <Menu label={actionWords.more} systemImage={sfName(iconRoles.more)} modifiers={[accessibilityLabel(actionWords.more)]}>
               {section === "downloads" ? <Button label={listSheetWords.deleteAllEntry} systemImage="trash" role="destructive" onPress={() => setConfirmingDelete(true)} modifiers={[disabled(!hasFiles)]} /> : null}
@@ -348,17 +358,40 @@ function DownloadsContent({ page }: { page: PageModifiers }) {
   const open = useLibrary((s) => s.open);
   const files = useLibrary((s) => s.files);
   const loaded = useLibrary((s) => s.filesLoaded);
+  const running = useRunningDownloads((s) => s.running);
   useEffect(() => {
-    if (open) void loadDownloads();
+    if (!open) return;
+    void loadDownloads();
+    void refreshRunningDownloads();
   }, [open]);
-  if (!loaded) return <ListLoading modifiers={page} />;
-  if (!files.length) return <ContentUnavailableView title="No Downloads" systemImage="arrow.down.circle" description="Files you download show up here." modifiers={page} />;
+  if (!loaded && !running.length) return <ListLoading modifiers={page} />;
+  if (!files.length && !running.length) return <ContentUnavailableView title="No Downloads" systemImage="arrow.down.circle" description="Files you download show up here." modifiers={page} />;
   return (
-    <List modifiers={listModifiers(page, [refreshable(loadDownloads)])}>
+    <List modifiers={listModifiers(page, [refreshable(async () => void (await Promise.all([loadDownloads(), refreshRunningDownloads()])))])}>
+      {running.length ? <LibrarySectionHeader title={DOWNLOADS_IN_PROGRESS} /> : null}
+      {running.map((row) => (
+        <RunningRow key={row.id} row={row} />
+      ))}
+      {running.length && files.length ? <LibrarySectionHeader title={DOWNLOADED_FILES} /> : null}
       {files.map((file) => (
         <DownloadRow key={file.uri} file={file} />
       ))}
     </List>
+  );
+}
+
+function RunningRow({ row }: { row: RunningDownload }) {
+  const detail = runningDetail(row);
+  const fraction = rowFraction(row);
+  return (
+    <HStack alignment="center" spacing={listRowLayout.gap} modifiers={[...ROW_CHROME, padding({ vertical: L.rowPadding })]}>
+      <VStack alignment="leading" spacing={listRowLayout.lineGap} modifiers={[frame({ maxWidth: FILL, alignment: "leading" }), accessibilityElement("combine"), accessibilityLabel(`${row.fileName}, ${detail}`)]}>
+        <Text modifiers={[font({ textStyle: "body" }), lineLimit(1), truncationMode("middle")]}>{row.fileName}</Text>
+        <ListRowSubtitle text={detail} />
+        <ProgressView value={fraction} />
+      </VStack>
+      <Button label={cancelDownloadLabel(row.fileName)} systemImage="xmark.circle.fill" onPress={() => cancelDownload(row.id)} modifiers={[buttonStyle("plain"), labelStyle("iconOnly"), foregroundStyle(SECONDARY)]} />
+    </HStack>
   );
 }
 

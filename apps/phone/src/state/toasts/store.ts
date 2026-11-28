@@ -5,7 +5,7 @@ export type { PageBarShown };
 
 export type ToastIcon = "checkmark" | "warning" | "download" | "blocking" | "link" | "laptop" | "star" | "sent" | "calculation" | "iphone" | "swipe";
 
-export type ToastAction = { label: string; run: () => void; quiet?: boolean };
+export type ToastAction = { label: string; run: () => void };
 
 export type ToastTile = { kind: "file"; ext: string } | { kind: "icon"; icon: ToastIcon } | { kind: "count"; count: number };
 
@@ -16,7 +16,6 @@ export type ToastCard = {
   tile?: ToastTile;
   icon?: ToastIcon;
   action?: ToastAction | null;
-  progress?: number | null;
   durationMs?: number;
   titleLines?: number;
   stage?: string;
@@ -32,8 +31,6 @@ export type Toast = {
   icon: ToastIcon;
   tile: ToastTile;
   action: ToastAction | null;
-  showsProgress: boolean;
-  progress: number | null;
   durationMs: number;
   titleLines: number;
   middleTruncates: boolean;
@@ -102,8 +99,6 @@ export function toastFromCard(card: ToastCard, id: number): Toast {
     icon,
     tile,
     action,
-    showsProgress: card.progress !== undefined,
-    progress: card.progress ?? null,
     durationMs: toastDuration(card.durationMs, action),
     titleLines,
     middleTruncates: fileTitle && titleLines === 1,
@@ -130,25 +125,6 @@ export function showToast(messageOrCard: string | ToastCard, icon: ToastIcon = "
   const made = toastFromCard(card, id);
   useToasts.setState({ toast: made });
   scheduleDismissal(id, made.durationMs);
-}
-
-export function updateToast(key: string, patch: Partial<ToastCard>): boolean {
-  const showing = useToasts.getState().toast;
-  if (!showing || showing.key !== key) return false;
-  const detail = patch.detail !== undefined ? patch.detail : showing.detail;
-  const title = patch.title ?? showing.title;
-  const updated: Toast = {
-    ...showing,
-    title,
-    message: title,
-    detail,
-    progress: patch.progress !== undefined ? patch.progress : showing.progress,
-    showsProgress: patch.progress !== undefined ? true : showing.showsProgress,
-    spoken: patch.spoken ?? (showing.spoken === spokenText(showing.title, showing.detail) ? spokenText(title, detail) : showing.spoken),
-  };
-  useToasts.setState({ toast: updated });
-  scheduleDismissal(showing.id, showing.durationMs);
-  return true;
 }
 
 export const currentToastKey = () => useToasts.getState().toast?.key ?? null;

@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, parseSettings } from "./settings.ts";
 import { useBrowser } from "../browser/store.ts";
 import { flushPersistence, loadSession, startPersistence } from "../session/persist.ts";
 import { settingsAdapter, SYNCED_SETTINGS } from "../sync/settingsAdapter.ts";
-import { openingLightsCenter } from "../windows/layout.ts";
+import { openingLightsCenter, roundedPageCornersIn } from "../windows/layout.ts";
 import { docs } from "../../test-native/index.ts";
 import { confirmAnswer, QUESTIONS, resolveDraft, setOnboardingDraft, useOnboarding } from "../onboarding/onboarding.ts";
 
@@ -76,4 +76,20 @@ test("onboarding keeps the mode until a frame choice replaces it, then confirms 
   confirmAnswer("frame", chosen, ["Page frame 4 pt"]);
   assert.equal(useBrowser.getState().settings.borderlessMode, false);
   assert.equal(useBrowser.getState().settings.pageFrame, 4);
+});
+
+test("rounded page corners apply only at a zero frame outside full screen", () => {
+  useBrowser.getState().hydrate({ settings: { pageFrame: 9, borderlessMode: true, pageCornersRounded: false } });
+  const w = useBrowser.getState().createWindow();
+  assert.equal(roundedPageCornersIn(useBrowser.getState(), w), false);
+  useBrowser.getState().updateSettings({ pageCornersRounded: true });
+  assert.equal(roundedPageCornersIn(useBrowser.getState(), w), true);
+  useBrowser.getState().setWindowFullScreen(w, true);
+  assert.equal(roundedPageCornersIn(useBrowser.getState(), w), false);
+  useBrowser.getState().setWindowFullScreen(w, false);
+  assert.equal(roundedPageCornersIn(useBrowser.getState(), w), true);
+  useBrowser.getState().updateSettings({ borderlessMode: false, pageFrame: 9, minimalismMode: true });
+  assert.equal(roundedPageCornersIn(useBrowser.getState(), w), false);
+  useBrowser.getState().updateSettings({ pageFrame: 0, minimalismMode: false });
+  assert.equal(roundedPageCornersIn(useBrowser.getState(), w), true);
 });

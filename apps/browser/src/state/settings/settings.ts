@@ -149,7 +149,7 @@ export const SETTING_SPECS = {
   compactToolbar: flag(false, SYNCED),
   addressBarButtons: oneOf(["hover", "always"], "hover", SYNCED),
   pageFrame: shaped<number>(PAGE_FRAME.default, validPageFrame, { type: "integer", minimum: PAGE_FRAME.min, maximum: PAGE_FRAME.max }, SYNCED),
-  borderlessMode: flag(false, SYNCED),
+  borderlessMode: flag(false, SYNCED), pageCornersRounded: flag(true, SYNCED),
   tabCornerRadius: shaped<number | null>(null, validTabCorners, { type: ["integer", "null"], minimum: TAB_CORNERS.min, maximum: TAB_CORNERS.max }, SYNCED),
   minimalismMode: flag(false, SYNCED),
   minimalismPinnedIcons: oneOf(["letters", "logos"], "letters", SYNCED),

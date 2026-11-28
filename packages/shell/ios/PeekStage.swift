@@ -371,13 +371,13 @@ final class PeekStage: ExpoView {
     let path = CGMutablePath()
     path.move(to: CGPoint(x: rect.minX + t, y: upper))
     path.addLine(to: CGPoint(x: rect.maxX - t, y: upper))
-    path.addQuadCurve(to: CGPoint(x: rect.maxX, y: upper + towardLower * t), control: CGPoint(x: rect.maxX, y: upper))
+    path.addArc(tangent1End: CGPoint(x: rect.maxX, y: upper), tangent2End: CGPoint(x: rect.maxX, y: upper + towardLower * t), radius: t)
     path.addLine(to: CGPoint(x: rect.maxX, y: lower - towardLower * b))
-    path.addQuadCurve(to: CGPoint(x: rect.maxX - b, y: lower), control: CGPoint(x: rect.maxX, y: lower))
+    path.addArc(tangent1End: CGPoint(x: rect.maxX, y: lower), tangent2End: CGPoint(x: rect.maxX - b, y: lower), radius: b)
     path.addLine(to: CGPoint(x: rect.minX + b, y: lower))
-    path.addQuadCurve(to: CGPoint(x: rect.minX, y: lower - towardLower * b), control: CGPoint(x: rect.minX, y: lower))
+    path.addArc(tangent1End: CGPoint(x: rect.minX, y: lower), tangent2End: CGPoint(x: rect.minX, y: lower - towardLower * b), radius: b)
     path.addLine(to: CGPoint(x: rect.minX, y: upper + towardLower * t))
-    path.addQuadCurve(to: CGPoint(x: rect.minX + t, y: upper), control: CGPoint(x: rect.minX, y: upper))
+    path.addArc(tangent1End: CGPoint(x: rect.minX, y: upper), tangent2End: CGPoint(x: rect.minX + t, y: upper), radius: t)
     path.closeSubpath()
     return path
   }

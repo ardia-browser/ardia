@@ -8,6 +8,7 @@ struct PeekGeometry: Equatable {
   var card: CGRect
   var source: CGRect
   var restRadius: Double
+  var restBottomRadius: Double
   var tabTopRadius: Double
   var tabBottomRadius: Double
   var fullscreen: Bool
@@ -28,7 +29,7 @@ struct PeekGeometry: Equatable {
     return moved == self
   }
 
-  init(stage: CGSize, page: CGRect, tab: CGRect, rest: CGRect, card: CGRect, source: CGRect, restRadius: Double, tabTopRadius: Double, tabBottomRadius: Double, fullscreen: Bool) {
+  init(stage: CGSize, page: CGRect, tab: CGRect, rest: CGRect, card: CGRect, source: CGRect, restRadius: Double, restBottomRadius: Double? = nil, tabTopRadius: Double, tabBottomRadius: Double, fullscreen: Bool) {
     self.stage = stage
     self.page = page
     self.tab = tab
@@ -36,6 +37,7 @@ struct PeekGeometry: Equatable {
     self.card = card
     self.source = source
     self.restRadius = restRadius
+    self.restBottomRadius = restBottomRadius ?? restRadius
     self.tabTopRadius = tabTopRadius
     self.tabBottomRadius = tabBottomRadius
     self.fullscreen = fullscreen
@@ -55,7 +57,7 @@ struct PeekGeometry: Equatable {
     else { return nil }
     self.init(
       stage: CGSize(width: width, height: height), page: page, tab: rect("tab") ?? page, rest: rest, card: card, source: source,
-      restRadius: number("restRadius") ?? 0, tabTopRadius: number("tabTopRadius") ?? 0, tabBottomRadius: number("tabBottomRadius") ?? 0,
+      restRadius: number("restRadius") ?? 0, restBottomRadius: number("restBottomRadius"), tabTopRadius: number("tabTopRadius") ?? 0, tabBottomRadius: number("tabBottomRadius") ?? 0,
       fullscreen: dict["fullscreen"] as? Bool ?? false)
     if !valid { return nil }
   }

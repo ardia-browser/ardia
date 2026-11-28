@@ -47,3 +47,15 @@ test("a zero frame is square; a positive frame follows the window radius minus t
   assert.equal(pageFrameOf(0, 19).peek.radius, 18, "the sidebar peek floats 1 pt in, so it keeps rounded corners nested in the window's");
   assert.equal(pageFrameOf(0, 19, 16).peek.radius, 15);
 });
+
+test("rounded page corners round a zero frame to the drawn window radius and leave positive frames unchanged", () => {
+  assert.equal(pageFrameOf(0, 19, 19, false).radius, 0);
+  assert.equal(pageFrameOf(0, 19, 19, true).radius, 19);
+  assert.equal(pageFrameOf(0, 19, 16, true).radius, 16);
+  assert.equal(pageFrameOf(0, 19, 0, true).radius, 0);
+  assert.equal(pageFrameOf(0, 19, 16, true).splitGap, 2);
+  assert.equal(pageFrameOf(0, 19, 16, true).peek.radius, 15);
+  for (const inset of [1, 4, 9, 12]) {
+    assert.equal(pageFrameOf(inset, 19, 16, true).radius, pageFrameOf(inset, 19, 16, false).radius, `inset ${inset}`);
+  }
+});

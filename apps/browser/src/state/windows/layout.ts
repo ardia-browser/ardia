@@ -4,7 +4,7 @@ import { switchOn } from "../../platform/killSwitches";
 import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import { frameCornerRadius, windowFrame, type LightsPlace } from "../../platform/windows";
 import { rootSizeOfFrame } from "../settings/interfaceScale";
-import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
+import { DEFAULT_SIDEBAR_WIDTH, pageFrameInset, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
@@ -92,6 +92,14 @@ export const pageFrameIn = (s: BrowserState, windowId: string): number =>
     zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
+
+export const roundedPageCornersIn = (s: BrowserState, windowId: string): boolean =>
+  s.settings.pageCornersRounded && !s.windows[windowId]?.fullScreen && pageFrameInset(s.settings) === 0;
+
+export function useRoundedPageCorners(): boolean {
+  const windowId = useWindowId();
+  return useWindowSettings(windowId, (s) => roundedPageCornersIn(s, windowId));
+}
 
 const toolbarless = (s: BrowserState, windowId: string): boolean => addressBarInSidebar(s, windowId) || minimalismIn(s, windowId);
 

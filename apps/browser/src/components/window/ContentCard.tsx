@@ -6,19 +6,18 @@ import { usePeekOpenedFrom } from "../../state/peek/hooks";
 import { useActiveTabId, useSettings, useTab, useTabsShown, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { useThemeLook } from "../../state/config/hooks";
 import { sidebarFieldOf } from "../../state/sidebar/chrome";
-import { useCurrentInterfaceScale } from "../../state/settings/interfaceScale";
 import { newTabOpensOf } from "../../state/settings/settings";
-import { cardFrameOf } from "./cardFrame";
+import { useCardFrame } from "./cardFrame";
 import { useBookmarksBarHeight } from "../bookmarks/barSize";
 import { useBookmarksBarMode } from "../../state/bookmarks/hooks";
 import { POPOVER_MARGIN } from "../ui";
-import { NO_TOOLBAR, toolbarGeometry, type Rect, type ToolbarGeometry } from "./geometry";
+import { NO_TOOLBAR, outerCorners, toolbarGeometry, type Rect, type ToolbarGeometry } from "./geometry";
 import { startPermissionPrompts } from "../../state/site/permissions";
 import { useFullscreenTab } from "../../state/tabs/pageState";
 import { DropTargets, SplitDividers, SplitFocusRing, SplitToast, type WindowShape } from "../split/SplitChrome";
 import { dockMoving, usePeekSpan, whenDockStill } from "../../state/windows/dockMotion";
 import { FrozenPage } from "./FrozenPage";
-import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, usePageFrameInset, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
+import { setCardAnchor, setUrlAnchor, useAddressBarInSidebar, useCardCaptionRoom, useMinimalism, useTabLayout, watchToolbarExtensionsWidth, onFullScreenLeft, onInterfaceScaleChange, windowRootShape } from "../../state/windows/layout";
 import { startSelectionTools } from "../../state/site/selection";
 import { startPasswordManager } from "../../state/site/passwordManager";
 import { startMedia } from "../../state/media/pip";
@@ -55,9 +54,8 @@ export function ContentCard() {
   const barMode = useBookmarksBarMode(windowId);
   const toolbarRow = useToolbarRow();
   const barHeight = useBookmarksBarHeight();
-  const frameInset = usePageFrameInset();
-  const captionRoom = useCardCaptionRoom(frameInset);
-  const frame = cardFrameOf(frameInset, useCurrentInterfaceScale());
+  const frame = useCardFrame();
+  const captionRoom = useCardCaptionRoom(frame.inset);
   const sidebarField = sidebarFieldOf(useThemeLook(), addressInSidebar);
   const sidebarFieldOpen = useTabsShown(windowId) && !!sidebarField;
   const newTabCard = useSettings((st) => newTabOpensOf(st) === "commandBar");
@@ -199,6 +197,7 @@ export function ContentCard() {
               pageBar={chrome.kind === "none" ? (pageBars[tabId] ?? null) : null}
               sidebarFieldOpen={sidebarFieldOpen}
               cardRadius={frame.radius}
+              squareInnerCorners={frame.inset <= 0}
               toolbarHeight={toolbarRow.height}
               newTabCard={newTabCard}
             />
@@ -208,10 +207,10 @@ export function ContentCard() {
         <WindowToolbar windowId={windowId} tabId={activeId} geometry={geometryFor(panes[activeId])} autoHide={chrome.autoHide} />
       )}
       {size.width > 0 && !split && !fullscreenTab && (
-        <FrozenPage windowId={windowId} tabId={activeId} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
+        <FrozenPage windowId={windowId} tabId={activeId} radius={frame.radius} top={(chrome.kind !== "none" && !chrome.autoHide ? toolbarRow.height : activeDeveloperBar) + (barMode === "always" && !small && !hideWhileScrolling ? barHeight : 0)} />
       )}
       {split && !fullscreenTab && <SplitDividers split={split} dividers={dividers} width={size.width} height={size.height} />}
-      {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} />}
+      {split && !fullscreenTab && activeRect && <SplitFocusRing rect={activeRect} origin={origin} windowShape={windowFullScreen ? null : windowShape} paneCorners={frame.inset <= 0 && frame.radius > 0 ? outerCorners(activeRect, size.width, size.height, frame.radius) : null} />}
       {size.width > 0 && popoversOverCard && origin && activeRect && peek !== undefined && (
         <BesidePeekPopovers
           tabId={popoversOverCard}

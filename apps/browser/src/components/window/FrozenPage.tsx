@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { useTheme } from "../ui/theme";
+import { clippedContinuousCorners } from "../ui/tokens";
 import { windowColors } from "./tokens";
 import { useTab } from "../../state/browser/hooks";
 import { activate } from "../../state/tabs/actions";
@@ -8,7 +9,7 @@ import { notePainted, startPinHandoff, useFrozenPages } from "../../state/pins/p
 import { holderOfPage } from "../../state/tabs/pageSession";
 import { presentTab } from "../../state/tabs/busyTabWatch";
 
-export function FrozenPage({ windowId, tabId, top }: { windowId: string; tabId: string | undefined; top: number }) {
+export function FrozenPage({ windowId, tabId, top, radius }: { windowId: string; tabId: string | undefined; top: number; radius: number }) {
   const theme = useTheme();
   useEffect(startPinHandoff, []);
   const holderId = useTab(tabId, (t) => holderOfPage(t));
@@ -19,15 +20,17 @@ export function FrozenPage({ windowId, tabId, top }: { windowId: string; tabId: 
   const uri = useFrozenPages((f) => (copyId ? f.frames[copyId] : undefined)) ?? pass?.uri;
   if (!frozen && !pass) return null;
   return (
-    <Pressable
-      accessibilityLabel="Bring this tab to this window"
-      onPress={() => {
-        if (frozen && tabId) activate(tabId);
-      }}
-      style={[StyleSheet.absoluteFill, { top }]}
-    >
-      {uri && <Image testID="ardia.pagePicture" source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={() => notePainted(windowId)} />}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: windowColors(theme.dark).frozenWash }]} />
-    </Pressable>
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, clippedContinuousCorners(radius)]}>
+      <Pressable
+        accessibilityLabel="Bring this tab to this window"
+        onPress={() => {
+          if (frozen && tabId) activate(tabId);
+        }}
+        style={[StyleSheet.absoluteFill, { top }]}
+      >
+        {uri && <Image testID="ardia.pagePicture" source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" onLoad={() => notePainted(windowId)} />}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: windowColors(theme.dark).frozenWash }]} />
+      </Pressable>
+    </View>
   );
 }

@@ -53,13 +53,13 @@ export type PageFrame = {
   peek: { left: number; top: number; bottom: number; radius: number };
 };
 
-export function pageFrameOf(inset: number, windowRadius: number, drawnWindowRadius = windowRadius): PageFrame {
+export function pageFrameOf(inset: number, windowRadius: number, drawnWindowRadius = windowRadius, roundedAtZero = false): PageFrame {
   const settled = Math.min(1, inset / CARD_INSET);
   const concentric = Math.max(drawnWindowRadius + (windowRadius - drawnWindowRadius) * settled - inset, 2);
   const peekGap = Math.max(MIN_PEEK_GAP, inset);
   return {
     inset,
-    radius: inset <= 0 ? 0 : concentric,
+    radius: inset <= 0 ? (roundedAtZero ? Math.max(0, drawnWindowRadius) : 0) : concentric,
     splitGap: Math.max(inset, SPLIT_MIN_GAP),
     peek: { left: peekGap, top: peekGap, bottom: peekGap, radius: Math.max(0, concentric + inset - peekGap) },
   };

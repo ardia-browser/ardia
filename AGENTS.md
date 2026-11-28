@@ -294,7 +294,9 @@ cross-builds. Don't spin up Boat VMs.
   `scripts/agent/locked <pod|chromium> -- <command>` (usage in the script); its lock dies with its holder.
 - **Never wait open-ended.** Every wait has a deadline under the Bash tool's 10-minute limit and fails
   fast when the thing it waits on dies: `scripts/agent/await --pid <pid> -- <test>` instead of
-  `until …; do sleep; done`. Run builds with `run_in_background` and act on the notification. Wrap
+  `until …; do sleep; done`. Bound a command that starts helpers (`swift test`, `xcodebuild test`) with
+  `scripts/agent/deadline --timeout <s> -- <command>`, not `timeout`, which stops only the command and leaves its
+  helpers running. Run builds with `run_in_background` and act on the notification. Wrap
   screen captures in `timeout 20` (they hang while the screen is locked). Never wait for another agent's
   edit to appear; report the dependency instead. A delegated agent isn't woken when its background job finishes
   after its turn ends, so it waits on the job in the same turn (or runs it in the foreground). It never ends with

@@ -5398,7 +5398,8 @@ the iPhone reads its files.
   one is out of date. So a merge rule changed on the Mac is the phones' rule after the next bundle.
 
 **Tests.**
-- `swift test --package-path packages/phone/ios/ArdiaKit --scratch-path <scratch>`: sync end to end over a real vault
+- `scripts/agent/deadline -- swift test --package-path packages/phone/ios/ArdiaKit --scratch-path <scratch>` (the
+  wrapper stops swiftpm-testing-helper too, which a plain `timeout` leaves running): sync end to end over a real vault
   with a fake Mac, the browser layer (tabs, archive, blocking, omnibox, reader extraction in a real WKWebView), the
   JavaScriptCore bridge and the design pieces. `SyncThroughICloudTests` carries files the way iCloud Drive does: late,
   out of order, as `.icloud` placeholders, with conflict copies; its soak runs hours of random edits on a test clock.

@@ -45,7 +45,7 @@ const eventsFor = (connection, from) => stub.controlSocket.broadcasts.slice(from
 test("methods lists the new areas with their schemas", async () => {
   await setup();
   const names = new Map((await ok("methods")).map((m) => [m.name, m]));
-  for (const name of ["sync.now", "sync.setType", "sync.setProfile", "sync.setOpenTabs", "sync.devices", "sync.sendTab", "extensions.install", "extensions.configure", "windows.geometry", "windows.setFrame", "windows.setMaximized", "windows.setFullScreen"]) {
+  for (const name of ["sync.now", "sync.setType", "sync.setProfile", "sync.setOpenTabs", "sync.addRemoteProfile", "sync.removeRemoteProfile", "sync.devices", "sync.sendTab", "extensions.install", "extensions.configure", "windows.geometry", "windows.setFrame", "windows.setMaximized", "windows.setFullScreen"]) {
     assert.ok(names.has(name), name);
     assert.equal(names.get(name).params.additionalProperties, false, `${name} takes nothing it doesn't list`);
   }

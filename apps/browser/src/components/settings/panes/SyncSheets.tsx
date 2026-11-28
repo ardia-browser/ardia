@@ -14,7 +14,8 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Image, View } from "react-native";
 import { useTheme } from "../../ui/theme";
-import { addRemoteProfile, enterRecoveryPhrase, removeRemoteProfile, removeSyncedDevice, stopSync, useSync } from "../../../state/sync/engine";
+import { addRemoteProfile, enterRecoveryPhrase, removeSyncedDevice, stopSync, useSync } from "../../../state/sync/engine";
+import { confirmRemoveRemoteProfile } from "../../../state/sync/remoteProfileRemoval";
 import type { RemoteProfile, SyncedDevice } from "../../../state/sync/syncDoc";
 import { ProfileBadge } from "../../profiles/ProfileIcons";
 import { Group, Row } from "../Form";
@@ -209,16 +210,6 @@ export function addAllRemoteProfiles(profiles: RemoteProfile[]) {
   for (const p of profiles) if (!p.waiting) addRemoteProfile(p.syncId);
 }
 
-async function confirmRemoveFromSync(profile: RemoteProfile) {
-  const { confirmed } = await confirm({
-    title: `Remove “${profile.name}” from Sync?`,
-    message: "It leaves this list on all your devices. A device that still has this profile keeps it, and it comes back here.",
-    confirmTitle: "Remove",
-    destructive: true,
-  });
-  if (confirmed) removeRemoteProfile(profile.syncId);
-}
-
 export async function confirmRemoveDevice(device: SyncedDevice) {
   const { confirmed } = await confirm({
     title: `Remove “${device.name}” from Sync?`,
@@ -237,7 +228,7 @@ export function RemoteProfileRow({ profile }: { profile: RemoteProfile }) {
       description={remoteProfileDescription(profile)}
     >
       <Box row gap="s">
-        <Button title="Remove…" disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveFromSync(profile)} />
+        <Button title="Remove…" disabled={!!profile.sharedByOthers} onPress={() => void confirmRemoveRemoteProfile(profile)} />
         <Button title={`Add to This ${PLATFORM_TERMS.computerTitle}`} disabled={!!profile.waiting} onPress={() => addRemoteProfile(profile.syncId)} />
       </Box>
     </Row>

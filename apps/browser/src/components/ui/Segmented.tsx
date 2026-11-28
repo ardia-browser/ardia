@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Animated, Pressable, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { Symbol } from "./native";
 import { Text } from "./Text";
@@ -6,7 +7,7 @@ import { concentric, radius, space } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "./motion";
 import { SlidingThumb, useSlidingThumb } from "./SlidingThumb";
 
-export type SegmentOption<T extends string> = { value: T; title: string; image?: string };
+export type SegmentOption<T extends string> = { value: T; title: string; image?: string; lead?: ReactNode; label?: string };
 
 const INSET = StyleSheet.hairlineWidth * 2;
 const SEGMENT = { height: 20, imageWidth: 30, glyph: 11, glyphBox: 14 } as const;
@@ -36,7 +37,7 @@ function Segment<T extends string>({ option, selected, fill, onPress, onLayout }
     <Pressable
       tooltip={option.image ? option.title : undefined}
       accessibilityRole="button"
-      accessibilityLabel={option.title}
+      accessibilityLabel={option.label ?? option.title}
       accessibilityState={{ selected }}
       onPress={onPress}
       onPressIn={pressMotion.onPressIn}
@@ -50,6 +51,8 @@ function Segment<T extends string>({ option, selected, fill, onPress, onLayout }
             width: option.image ? SEGMENT.imageWidth : undefined,
             height: SEGMENT.height,
             paddingHorizontal: option.image ? undefined : space.m,
+            flexDirection: "row",
+            gap: option.lead ? space.xs : undefined,
             alignItems: "center",
             justifyContent: "center",
           },
@@ -59,9 +62,12 @@ function Segment<T extends string>({ option, selected, fill, onPress, onLayout }
         {option.image ? (
           <Symbol name={option.image} size={SEGMENT.glyph} color={ink} style={{ width: SEGMENT.glyphBox, height: SEGMENT.glyphBox }} />
         ) : (
-          <Text size="small" color={selected ? theme.onAccent : theme.textPrimary} ardiaCentersCapitals>
-            {option.title}
-          </Text>
+          <>
+            {option.lead}
+            <Text size="small" color={selected ? theme.onAccent : theme.textPrimary} ardiaCentersCapitals>
+              {option.title}
+            </Text>
+          </>
         )}
       </Animated.View>
     </Pressable>

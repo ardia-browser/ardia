@@ -494,6 +494,26 @@ test("the Linux applyResult adds natively written passwords to the shared counts
   assert.deepEqual(failed, ["passwords"]);
 });
 
+test("the Linux applyResult reports each turn's kept and invalid passwords, and writes nothing once its turn is over", async () => {
+  const result = { browserId: "chrome", profileId: "Default", history: [], historyCount: 0, tabs: [], tabGroups: [], credentials: [],
+    cookieCount: 0, addressCount: 0, cardCount: 0, spaces: [], favorites: [], favicons: [], failed: [], warnings: [], passwords: { token: TOKEN, count: 4 } };
+  const written = sink({ added: 2, existing: 0, conflicts: 1, invalid: 1 });
+  setImportPasswordSink(written);
+  try {
+    const reports = [];
+    const counts = await applyResult("default", result, "Google Chrome", ["passwords"], undefined, null, { onPasswordsWritten: (w) => reports.push(w) });
+    assert.equal(counts.passwords, 2);
+    assert.deepEqual(reports, [{ keptExisting: 1, failed: 1 }]);
+    assert.deepEqual(written.log, [["write", TOKEN, ""]]);
+    const ended = new AbortController();
+    ended.abort();
+    assert.equal((await applyResult("default", result, "Google Chrome", ["passwords"], undefined, null, { signal: ended.signal })).passwords, 0);
+    assert.deepEqual(written.log.at(-1), ["discard", TOKEN], "a turn that ended discards its token instead of writing it");
+  } finally {
+    setImportPasswordSink(null);
+  }
+});
+
 test("the Passwords pane's savePassword claims import handles instead of saving them as passwords", async () => {
   const writes = [];
   const [row] = issueImportHandles(TOKEN, [{ url: "https://a.example/", username: "a" }], async (token, profile) => {

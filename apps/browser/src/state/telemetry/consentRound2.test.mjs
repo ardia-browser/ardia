@@ -108,7 +108,7 @@ test("4 a default-browser check started while sharing was off isn't counted", as
 
 test("4 a password import begun while sharing was off isn't sent when it finishes after sharing is on", async () => {
   client.setSharing(false, "settings");
-  const tally = passwords.passwordImportTally("csv");
+  const tally = passwords.passwordImportTally("csv", client.consentToken());
   await tally.attempt(Promise.resolve(true));
   client.setSharing(true, "settings");
   tally.done();

@@ -17,6 +17,19 @@ export function ago(at: number, now = Date.now()): string {
   return units(Math.floor(d / 365), "year");
 }
 
+export function shortAgo(at: number, now = Date.now()): string {
+  const m = Math.floor(Math.max(0, now - at) / 60_000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  if (d < 365) return `${Math.floor(d / 30)}mo ago`;
+  return `${Math.floor(d / 365)}y ago`;
+}
+
 export type DurationUnit = "minutes" | "hours" | "days";
 
 const MINUTES_PER: Record<DurationUnit, number> = { minutes: 1, hours: 60, days: 1440 };

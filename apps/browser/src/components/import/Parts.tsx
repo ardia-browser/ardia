@@ -6,9 +6,14 @@ import { SelectableCard } from "../settings/SelectableCard";
 import { APP } from "./model";
 import { importLayout, importType } from "./tokens";
 
-export function Title({ title, subtitle, spinner }: { title: string; subtitle?: string; spinner?: boolean }) {
+export function Title({ title, subtitle, spinner, turn }: { title: string; subtitle?: string; spinner?: boolean; turn?: string }) {
   return (
     <View style={{ marginBottom: space.xxl }}>
+      {turn ? (
+        <Text size="small" weight="medium" tone="textSecondary" style={{ marginBottom: space.xs }}>
+          {turn}
+        </Text>
+      ) : null}
       <Text weight="bold" style={importType.heading}>
         {title}
       </Text>
@@ -99,7 +104,7 @@ export function FullDiskAccessSteps({ onOpen, onRecheck }: { onOpen: () => void;
   );
 }
 
-export function FileDrop({ onFile, onChoose }: { onFile: (path: string) => void; onChoose: () => Promise<string | null> }) {
+export function FileDrop({ onFile, onChoose }: { onFile: (path: string) => void; onChoose: () => void }) {
   const theme = useTheme();
   const [over, setOver] = useState(false);
   return (
@@ -116,14 +121,7 @@ export function FileDrop({ onFile, onChoose }: { onFile: (path: string) => void;
       <SelectableCard selected={over} dashed style={DROP}>
         <Symbol name="doc.zipper" size={24} color={theme.textSecondary} style={{ width: 32, height: 32 }} />
         <Text tone="textSecondary">Choose .zip file or drag it here</Text>
-        <Button
-          title="Choose .zip file"
-          onPress={() =>
-            void onChoose().then((path) => {
-              if (path) onFile(path);
-            })
-          }
-        />
+        <Button title="Choose .zip file" onPress={onChoose} />
       </SelectableCard>
     </View>
   );

@@ -80,7 +80,6 @@
     "apps/browser/src/state/telemetry/defaultBrowserCounts.ts": 1,
     "apps/browser/src/state/telemetry/errors.ts": 1,
     "apps/browser/src/state/telemetry/identity.ts": 1,
-    "apps/browser/src/state/telemetry/passwordSaves.ts": 1,
     "apps/browser/src/state/telemetry/transport.ts": 1,
     "apps/browser/src/state/telemetry/usage.ts": 4,
     "apps/browser/src/state/windows/windowClose.ts": 1,

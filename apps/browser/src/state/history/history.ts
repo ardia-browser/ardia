@@ -15,7 +15,7 @@ export type HistorySlice = {
 
   removeHistory(profileId: string, urls: string[]): Promise<void>;
   clearHistory(profileId: string, since?: number, until?: number): void;
-  importHistory(profileId: string, entries: Omit<HistoryEntry, "favicon">[]): Promise<HistoryImportOutcome>;
+  importHistory(profileId: string, entries: Omit<HistoryEntry, "favicon">[], signal?: AbortSignal): Promise<HistoryImportOutcome>;
   importCleanedTabs(entries: ClosedTab[]): { added: number; already: number };
 };
 
@@ -107,8 +107,8 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
     return { added, already };
   },
 
-  async importHistory(profileId, entries) {
-    if (isIncognitoProfile(profileId)) return { added: 0, batches: 0, failedBatches: 0 };
+  async importHistory(profileId, entries, signal) {
+    if (isIncognitoProfile(profileId) || signal?.aborted) return { added: 0, batches: 0, failedBatches: 0 };
     const rows = entries.filter((e) => isWebPageUrl(e.url) && e.lastVisit > 0);
     const placed = new Map<string, HistoryEntry>();
     let evicted: HistoryEntry[] = [];
@@ -126,7 +126,7 @@ export const createHistorySlice: StateCreator<BrowserState, [], [], HistorySlice
     });
     const run: RunningImport = { engine: engineProfile(get(), profileId), removed: new Set(), cleared: [] };
     const stillWanted = (row: { url: string; lastVisit: number }) =>
-      !run.removed.has(row.url) && !run.cleared.some((c) => row.lastVisit >= c.since && row.lastVisit <= c.until);
+      !signal?.aborted && !run.removed.has(row.url) && !run.cleared.some((c) => row.lastVisit >= c.since && row.lastVisit <= c.until);
     runningImports.add(run);
     const { written, batches, failures } = await importHistoryRows(run.engine, rows, stillWanted).finally(() => runningImports.delete(run));
     failures.forEach(failed("import"));

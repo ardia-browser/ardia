@@ -27,7 +27,7 @@ test("a bookmarks file whose profile's bookmarks never load from Chrome shows bo
   stub.bookmarkDbs.clear();
   stub.bookmarkModel.treeHangs = true;
   useProfileLoading.setState({ deferred: true, opened: {}, unloaded: {} });
-  patchImport({ target: "default" });
+  patchImport({ target: "default", step: { name: "choose", error: null } });
   const stop = startBookmarks();
   try {
     t.mock.timers.enable({ apis: ["setTimeout"] });

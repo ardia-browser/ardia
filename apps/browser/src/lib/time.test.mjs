@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { durationMinutes, durationParts, durationTitle, MAX_DURATION_MINUTES, utcDay } = await import("./time.ts");
+const { durationMinutes, durationParts, durationTitle, MAX_DURATION_MINUTES, shortAgo, utcDay } = await import("./time.ts");
 
 test("a duration in minutes reads in the largest unit that holds it exactly", () => {
   for (const [minutes, amount, unit] of [[30, 30, "minutes"], [90, 90, "minutes"], [60, 1, "hours"], [36 * 60, 36, "hours"], [1440, 1, "days"], [7 * 1440, 7, "days"]]) {
@@ -30,4 +30,13 @@ test("a day is the UTC calendar date of a moment", () => {
   assert.equal(utcDay(Date.parse("2026-10-26T00:00:00Z")), "2026-10-26");
   assert.equal(utcDay(Date.parse("2026-10-25T23:59:59.999Z")), "2026-10-25");
   assert.equal(utcDay(0), "1970-01-01");
+});
+
+test("a short age reads in the largest whole unit that fits", () => {
+  const now = Date.parse("2026-11-26T12:00:00Z");
+  const before = (minutes) => now - minutes * 60_000;
+  for (const [minutes, text] of [[0, "now"], [5, "5m ago"], [90, "1h ago"], [3 * 1440, "3d ago"], [15 * 1440, "2w ago"], [240 * 1440, "8mo ago"], [800 * 1440, "2y ago"]]) {
+    assert.equal(shortAgo(before(minutes), now), text);
+  }
+  assert.equal(shortAgo(now + 60_000, now), "now");
 });

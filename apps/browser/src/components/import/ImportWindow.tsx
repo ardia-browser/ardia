@@ -3,12 +3,14 @@ import { ActivityIndicator, ScrollView, StyleSheet, View } from "react-native";
 import { space, useTheme, VisualEffect, WindowDragRegion } from "../ui";
 import { PageToolbar } from "../pages/PageLayout";
 import { ChooseBody, ChooseFooter } from "./steps/ChooseStep";
+import { ConflictsBody, ConflictsFooter } from "./steps/ConflictsStep";
 import { DoneBody, DoneFooter } from "./steps/DoneStep";
 import { ProfilesBody, ProfilesFooter } from "./steps/ProfilesStep";
 import { ProgressBody, ProgressFooter } from "./steps/ProgressStep";
 import { AccessBody, AccessFooter, SafariBody, SafariFooter } from "./steps/SafariStep";
 import { UnlockBody, UnlockFooter } from "./steps/UnlockStep";
-import { startImport, useImportFlow, type ImportFlow, type ImportStepName } from "../../state/import/flow";
+import { useImportFlow, type ImportFlow, type ImportStepName } from "../../state/import/flow";
+import { openImportSession } from "../../state/import/runImport";
 import { useImportDevHandle } from "./importDevHandle";
 import { importColors, importLayout, importMotion } from "./tokens";
 import { WINDOW_CONTROLS, windowControlsWidth } from "../../lib/windowChrome";
@@ -34,6 +36,7 @@ const STEPS: Record<ImportStepName, { Body: StepView; Footer: StepView | null }>
   safari: { Body: SafariBody, Footer: SafariFooter },
   access: { Body: AccessBody, Footer: AccessFooter },
   progress: { Body: ProgressBody, Footer: ProgressFooter },
+  conflicts: { Body: ConflictsBody, Footer: ConflictsFooter },
   done: { Body: DoneBody, Footer: DoneFooter },
 };
 
@@ -41,7 +44,7 @@ export function ImportWindow() {
   const theme = useTheme();
   useWindowChrome();
   const flow = useImportFlow();
-  useEffect(() => startImport(importMotion.doneDelay), []);
+  useEffect(() => openImportSession(importMotion.doneDelay), []);
   useImportDevHandle(flow);
   useEffect(() => markCaptionRegions(IMPORT_WINDOW_ID, [[0, 0, CONTROLS_ROOM, importLayout.dragRegion]]), []);
   const { Body, Footer } = STEPS[flow.step.name];

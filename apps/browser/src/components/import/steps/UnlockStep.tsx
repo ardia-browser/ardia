@@ -1,7 +1,7 @@
 import { Button } from "../../ui";
 import { APP } from "../model";
 import { ErrorText, Handoff, Spacer, Title } from "../Parts";
-import { backTo, importsBySpaces, type ImportFlow } from "../../../state/import/flow";
+import { backTo, canGoBackToChoose, importsBySpaces, runStepLabel, type ImportFlow } from "../../../state/import/flow";
 import { skipEncryptedData, unlockAndImport } from "../../../state/import/runImport";
 
 export function UnlockBody({ flow }: { flow: ImportFlow }) {
@@ -13,6 +13,7 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
     <>
       <Title
         title="Unlock your data for import"
+        turn={runStepLabel(flow)}
         subtitle={`${APP} can securely import logins, cookies and cards from your previous browser, so you stay signed in and don't have to enter your passwords again.`}
       />
       <Handoff
@@ -34,12 +35,13 @@ export function UnlockFooter({ flow }: { flow: ImportFlow }) {
   const { source, step } = flow;
   if (!source || step.name !== "unlock") return null;
   const { unlocking } = step;
+  const back = source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose";
   return (
     <>
-      <Button title="Back" onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />
+      {(back === "profiles" || canGoBackToChoose(flow)) && <Button title="Back" onPress={() => backTo(back, flow.turn)} />}
       <Spacer />
-      <Button title="Skip Encrypted Data" onPress={skipEncryptedData} />
-      <Button title={unlocking ? "Waiting for password..." : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport()} />
+      <Button title="Skip Encrypted Data" onPress={() => skipEncryptedData(flow.turn)} />
+      <Button title={unlocking ? "Waiting for password..." : "Continue"} kind="primary" disabled={unlocking} onPress={() => void unlockAndImport(flow.turn)} />
     </>
   );
 }

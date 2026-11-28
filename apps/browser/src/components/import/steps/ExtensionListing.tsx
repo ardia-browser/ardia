@@ -32,7 +32,7 @@ function TargetList({ target, sourceName }: { target: ExtensionTarget; sourceNam
   );
 }
 
-export function ExtensionListingView({ listing, sourceName }: { listing: ExtensionListing; sourceName: string }) {
+export function ExtensionListingView({ listing, sourceName, several }: { listing: ExtensionListing; sourceName: string; several?: boolean }) {
   const onboarding = useOnboarding((s) => s.windowId !== null);
   const total = listedCount(listing);
   const already = listing.leftOut.filter((e) => e.reason === "installed");
@@ -42,7 +42,7 @@ export function ExtensionListingView({ listing, sourceName }: { listing: Extensi
       {total > 0 && (
         <>
           <Text size="small" tone="textSecondary" style={centered}>
-            {`${sourceName} has ${plural(total, "extension")} from the Chrome Web Store, named as ${sourceName} lists ${total === 1 ? "it" : "them"}. Add the ones you want from ${total === 1 ? "its" : "their"} store ${total === 1 ? "page" : "pages"}:`}
+            {`${sourceName} ${several ? "have" : "has"} ${plural(total, "extension")} from the Chrome Web Store, named as ${sourceName} ${several ? "list" : "lists"} ${total === 1 ? "it" : "them"}. Add the ones you want from ${total === 1 ? "its" : "their"} store ${total === 1 ? "page" : "pages"}:`}
           </Text>
           {listing.targets.map((t) => (
             <TargetList key={t.profileId} target={t} sourceName={sourceName} />

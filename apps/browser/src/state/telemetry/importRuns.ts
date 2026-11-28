@@ -83,6 +83,57 @@ export function noteHistoryImport(batches: number, failed: number, consent?: Con
   });
 }
 
+const multiCounts = {
+  import_multi_runs: 0,
+  import_multi_browsers: 0,
+  import_multi_skipped: 0,
+  import_passwords_merged: 0,
+  import_password_conflicts: 0,
+  import_passwords_kept_existing: 0,
+  import_passwords_not_saved: 0,
+  import_conflicts_newest: 0,
+  import_conflicts_browser: 0,
+  import_conflicts_custom: 0,
+  import_conflict_rows_changed: 0,
+};
+
+export function noteMultiImport(run: { browsers: number; skipped: number; merged: number; conflicts: number }, consent: ConsentToken | null) {
+  countFor(consent, () => {
+    multiCounts.import_multi_runs += 1;
+    multiCounts.import_multi_browsers += run.browsers;
+    multiCounts.import_multi_skipped += run.skipped;
+    multiCounts.import_passwords_merged += run.merged;
+    multiCounts.import_password_conflicts += run.conflicts;
+  });
+}
+
+export function noteConflictsResolved(choice: { resolution: "newest" | "browser" | "custom"; changedByHand: number }, consent: ConsentToken | null) {
+  countFor(consent, () => {
+    multiCounts[`import_conflicts_${choice.resolution}`] += 1;
+    multiCounts.import_conflict_rows_changed += choice.changedByHand;
+  });
+}
+
+export function notePasswordsNotSaved(count: number, consent: ConsentToken | null) {
+  if (!count) return;
+  countFor(consent, () => {
+    multiCounts.import_passwords_not_saved += count;
+  });
+}
+
+export function notePasswordsKeptExisting(count: number, consent: ConsentToken | null) {
+  if (!count) return;
+  countFor(consent, () => {
+    multiCounts.import_passwords_kept_existing += count;
+  });
+}
+
+function takeMultiImportCounts() {
+  const taken = { ...multiCounts };
+  for (const key of Object.keys(multiCounts) as (keyof typeof multiCounts)[]) multiCounts[key] = 0;
+  return taken;
+}
+
 type ImportCoreRead = { format: string; backend: string; outcome: string };
 
 const coreCounts = {
@@ -154,7 +205,7 @@ export function takeImportRuns() {
   searchEngineOffersTaken = 0;
   historyImportCalls = 0;
   historyImportCallsFailed = 0;
-  return { ...taken, ...takeImportExtensionCounts(), ...takeImportCoreCounts() };
+  return { ...taken, ...takeImportExtensionCounts(), ...takeImportCoreCounts(), ...takeMultiImportCounts() };
 }
 
 const extensionCounts = {

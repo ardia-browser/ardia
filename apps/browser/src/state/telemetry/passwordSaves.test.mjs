@@ -67,7 +67,7 @@ test("an import from another browser sends the same counts with source browser",
   const credentials = mixed().map(({ url, username, password }) => ({ url, username, password, realm: undefined }));
   const result = { tabs: [], spaces: [], favorites: [], history: [], credentials, favicons: [], bookmarks: null, vaultToken: null };
   const before = sent().length;
-  const counts = await applyResult("default", result, "Chrome", []);
+  const counts = await applyResult("default", result, "Chrome", [], undefined, client.consentToken());
   assert.equal(counts.passwords, 1);
   const events = sent().slice(before);
   assert.equal(events.length, 1);

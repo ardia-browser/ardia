@@ -32,7 +32,7 @@ const MODULES = [
   { name: "sync", list: SYNC_WORDING, reword: rewordSync, plugin: syncWording, pick: whole, macos: /\bMacs?\b|iCloud Drive|iCloud Settings|in Finder|iPhone|Universal Clipboard|Keychain|x-apple\.|\bUsers\b|\{PLATFORM_TERMS\.\w+\}/, surfaces: ["components/settings/panes/SyncSection.tsx", "components/settings/panes/SyncSheets.tsx"], probe: "components/settings/panes/SyncSection.tsx" },
   {
     name: "linux", list: LINUX_WORDING, reword: rewordForLinux, plugin: linuxWording, pick: strings, macos: /\bMacs?\b|macOS|iCloud|Keychain|keychain|Tahoe|\{PLATFORM_TERMS\.\w+\}/, probe: "components/onboarding/LookStep.tsx",
-    surfaces: ["state/extensions/actions.ts", "components/onboarding/SourceStep.tsx", "components/onboarding/LookStep.tsx", "components/settings/panes/General.tsx", "state/telemetry/copy.ts", "components/import/steps/ChooseStep.tsx", "components/import/steps/SafariStep.tsx", "state/import/runImport.ts", "components/onboarding/previews/scenes/LookScenes.tsx", "state/commands/appCommands.ts", "state/report/details.ts", "components/report/ReportPreview.tsx"],
+    surfaces: ["state/extensions/actions.ts", "components/onboarding/SourceStep.tsx", "components/onboarding/LookStep.tsx", "components/settings/panes/General.tsx", "state/telemetry/copy.ts", "components/import/steps/ChooseStep.tsx", "components/import/steps/SafariStep.tsx", "state/import/runImport.ts", "state/import/importSource.ts", "components/onboarding/previews/scenes/LookScenes.tsx", "state/commands/appCommands.ts", "state/report/details.ts", "components/report/ReportPreview.tsx"],
   },
 ];
 
@@ -49,6 +49,7 @@ const EXPECTED = [
   ["state/sync/engine.ts", ["keep syncing on this device", "Couldn’t save the sync key in your keyring."], []],
   ["components/onboarding/SourceStep.tsx", ["Found on this computer"], []],
   ["state/import/runImport.ts", ["system keyring"], []],
+  ["state/import/importSource.ts", ["Ardia wasn't allowed to ask Dia for them.", "which needs the keyring access you skipped."], []],
   ["state/extensions/actions.ts", ["`The extension's folder stays on your computer.`"], ["stays on your ${PLATFORM_TERMS.computer}"]],
   ["state/live/engine.ts", ["case \"keyringLocked\":\n      return `Unlock your keyring to refresh ${name}`;", "case \"keyringUnavailable\":\n      return `Start your keyring to refresh ${name}`;", "case \"signedOut\":\n      return `Sign back in to ${name}`;"], []],
   ["components/settings/panes/General.tsx", ["label: \"Quitting with Ctrl+Shift+Q\""], ["Quitting with ${keyText(\"⌘Q\")}"]],

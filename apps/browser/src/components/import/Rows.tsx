@@ -20,17 +20,22 @@ function browserDetail(browser: BrowserSource) {
           : "";
 }
 
+export function BrowserIcon({ iconPath, size }: { iconPath?: string; size: number }) {
+  const theme = useTheme();
+  return iconPath ? (
+    <Image source={{ uri: `file://${iconPath}` }} style={{ width: size, height: size }} />
+  ) : (
+    <Symbol name="globe" size={Math.round(size * 0.7)} color={theme.icon} style={{ width: size, height: size }} />
+  );
+}
+
 export function BrowserRow({ browser, selected, onPress }: { browser: BrowserSource; selected: boolean; onPress: () => void }) {
   const theme = useTheme();
   const detail = browserDetail(browser);
   return (
     <SelectableCard selected={selected} onPress={onPress} style={BROWSER_ROW}>
-      <Radio on={selected} look="form" />
-      {browser.iconPath ? (
-        <Image source={{ uri: `file://${browser.iconPath}` }} style={{ width: 32, height: 32 }} />
-      ) : (
-        <Symbol name="globe" size={22} color={theme.icon} style={{ width: 32, height: 32 }} />
-      )}
+      <Checkbox value={selected} onChange={onPress} />
+      <BrowserIcon iconPath={browser.iconPath} size={importLayout.browserIcon} />
       <Text size="title" weight="medium" style={{ flex: 1 }}>
         {browser.name}
       </Text>
@@ -45,6 +50,23 @@ export function BrowserRow({ browser, selected, onPress }: { browser: BrowserSou
 }
 
 const BROWSER_ROW = { height: importLayout.browserRow, flexDirection: "row", alignItems: "center", paddingHorizontal: space.l, gap: space.l } as const;
+
+export function ChoiceRow({ selected, onPress, icon, title, detail }: { selected: boolean; onPress: () => void; icon: ReactNode; title: string; detail?: string }) {
+  return (
+    <SelectableCard selected={selected} onPress={onPress} style={BROWSER_ROW}>
+      <Radio on={selected} look="form" />
+      {icon}
+      <Text size="title" weight="medium" style={{ flex: 1 }}>
+        {title}
+      </Text>
+      {detail ? (
+        <Text size="small" tone="textSecondary">
+          {detail}
+        </Text>
+      ) : null}
+    </SelectableCard>
+  );
+}
 
 export function SelectRow({ selected, onToggle, icon, title, subtitle }: { selected: boolean; onToggle: (v: boolean) => void; icon: ReactNode; title: string; subtitle?: string }) {
   return (

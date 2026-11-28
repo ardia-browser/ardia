@@ -12,7 +12,7 @@ import {
   type SafariExport,
   type SpaceSuggestion,
 } from "../../platform/importModule";
-import { passwordImportTally } from "../telemetry/passwordSaves";
+import { passwordImportTally, type PasswordSaveResult } from "../telemetry/passwordSaves";
 import { withPresetChosen } from "../../lib/presetLook";
 import { noteHistoryImport, noteRepeatBookmarks } from "../telemetry/importRuns";
 import { reloadEngineHistory } from "../history/engineSync";
@@ -25,7 +25,7 @@ import { openPages, pageKey } from "../tabs/pageKeys";
 import type { ProfileColor } from "../browser/types";
 import { DEFAULT_PROFILE } from "../profiles/profiles";
 import { focusedWindowOf } from "../windows/ui";
-import { originOfLogin } from "../site/savedPasswords";
+import { loginOrigin, type LoginToSave } from "./passwordConflicts";
 import { importFavicons, importTabs, linksOf, windowFor } from "./tabImport";
 import { bookmarkedPages, mergeImportedBookmarks } from "./bookmarkMerge";
 import { readImportedFolders, saveImportedFolders } from "./importedFolders";
@@ -33,7 +33,7 @@ import { readImportedFolders, saveImportedFolders } from "./importedFolders";
 export { importTabs };
 export { importArcSpace } from "./sidebarTree";
 
-export type { BrowserProfile, BrowserSource, DiaTabsResult, ImportedExtension, ImportedSearchEngine, ImportKind, ImportResult, SpaceSummary } from "../../platform/importModule";
+export type { BrowserProfile, BrowserSource, Credential, DiaTabsResult, ImportedExtension, ImportedSearchEngine, ImportKind, ImportResult, SafariExport, SpaceSummary } from "../../platform/importModule";
 
 export type ImportCounts = { bookmarks: number; history: number; tabs: number; passwords: number; cookies: number; addresses: number; cards: number; rules: number; archived: number; settings: number };
 
@@ -50,9 +50,12 @@ export async function importBookmarks(
   browserName: string,
   consent?: ConsentToken | null,
   onFailed?: (kind: ImportKind) => void,
+  signal?: AbortSignal,
 ): Promise<number> {
-  if (!root?.children?.length) return 0;
-  if (!(await bookmarksCurrent(engineProfile(useBrowser.getState(), profileId)))) {
+  if (!root?.children?.length || signal?.aborted) return 0;
+  const current = await bookmarksCurrent(engineProfile(useBrowser.getState(), profileId));
+  if (signal?.aborted) return 0;
+  if (!current) {
     onFailed?.("bookmarks");
     return 0;
   }
@@ -79,37 +82,54 @@ export async function importHistory(
   entries: { url: string; title: string; visits: number; lastVisit: number }[],
   onFailed?: (kind: ImportKind) => void,
   consent?: ConsentToken | null,
+  signal?: AbortSignal,
 ): Promise<number> {
   const engine = engineProfile(useBrowser.getState(), profileId);
-  const { added, batches, failedBatches } = await useBrowser.getState().importHistory(profileId, entries);
+  const { added, batches, failedBatches } = await useBrowser.getState().importHistory(profileId, entries, signal);
   if (batches) void reloadEngineHistory(engine);
   noteHistoryImport(batches, failedBatches, consent);
   if (failedBatches) onFailed?.("history");
   return added;
 }
 
-async function importPasswords(profileId: string, credentials: Credential[]): Promise<number> {
-  const tally = passwordImportTally("browser");
-  let saved = 0;
-  for (const c of credentials) {
-    const origin = originOfLogin(c.realm?.startsWith("http") ? c.realm : c.url);
-    if (!origin || !c.password) continue;
-    if (await tally.attempt(savePassword(engineProfile(useBrowser.getState(), profileId), origin, c.username, asSecret("password", c.password)))) saved++;
+export async function saveLogins(logins: readonly Omit<LoginToSave, "browserId">[], signal?: AbortSignal): Promise<PasswordSaveResult[]> {
+  const tallies = new Map<ConsentToken | null, ReturnType<typeof passwordImportTally>>();
+  const tallyFor = (consent: ConsentToken | null) => tallies.get(consent) ?? tallies.set(consent, passwordImportTally("browser", consent)).get(consent)!;
+  const results: PasswordSaveResult[] = [];
+  for (const l of logins) {
+    if (signal?.aborted) break;
+    results.push(await tallyFor(l.consent).settle(savePassword(engineProfile(useBrowser.getState(), l.profileId), l.origin, l.username, asSecret("password", l.password))));
   }
-  tally.done();
-  return saved;
+  for (const tally of tallies.values()) tally.done();
+  return results;
 }
+
+async function importPasswords(profileId: string, credentials: Credential[], consent: ConsentToken | null, signal?: AbortSignal): Promise<number> {
+  const logins = credentials.flatMap((c) => {
+    const origin = loginOrigin(c);
+    return origin && c.password ? [{ profileId, origin, username: c.username, password: c.password, consent }] : [];
+  });
+  return (await saveLogins(logins, signal)).filter((r) => r === "saved").length;
+}
+
+export function discardImportedResult(result: Pick<ImportResult, "vaultToken">) {
+  if (result.vaultToken) importModule().discardImported(result.vaultToken);
+}
+
+export type PasswordsWritten = { keptExisting: number; failed: number };
+export type ApplyOptions = { signal?: AbortSignal; onPasswordsWritten?: (written: PasswordsWritten) => void };
 
 async function importNative(
   profileId: string,
   token: string | undefined,
   kinds: ("cookies" | "autofill")[],
   onFailed?: (kind: ImportKind) => void,
+  signal?: AbortSignal,
 ): Promise<Pick<ImportCounts, "cookies" | "addresses" | "cards">> {
   const none = { cookies: 0, addresses: 0, cards: 0 };
   if (!token) return none;
   const api = importModule();
-  if (!kinds.length || isIncognitoProfile(profileId) || useBrowser.getState().profiles[profileId] === undefined) {
+  if (signal?.aborted || !kinds.length || isIncognitoProfile(profileId) || useBrowser.getState().profiles[profileId] === undefined) {
     api.discardImported(token);
     return none;
   }
@@ -152,28 +172,42 @@ export async function applyResult(
   requested: ImportKind[],
   onFailed?: (kind: ImportKind) => void,
   consent?: ConsentToken | null,
+  { signal }: ApplyOptions = {},
 ): Promise<ImportCounts> {
+  const counts = emptyCounts();
+  const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
+  if (signal?.aborted) {
+    if (result.vaultToken) importModule().discardImported(result.vaultToken);
+    return counts;
+  }
   const toolbar = (result.bookmarks?.children ?? []).filter((c) => c.role === "toolbar");
   importFavicons(profileId, result.favicons, [...result.favorites.map((t) => t.url), ...(result.spaces.length ? [] : result.tabs.map((t) => t.url)), ...linksOf(toolbar)]);
-  const counts = emptyCounts();
-  counts.bookmarks += await importBookmarks(profileId, result.bookmarks, browserName, consent, onFailed);
-  if (result.history.length) counts.history += await importHistory(profileId, result.history, onFailed, consent);
-  const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
-  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed));
+  counts.bookmarks += await importBookmarks(profileId, result.bookmarks, browserName, consent, onFailed, signal);
+  if (result.history.length && !signal?.aborted) counts.history += await importHistory(profileId, result.history, onFailed, consent, signal);
+  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed, signal));
+  if (signal?.aborted) return counts;
   if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
   if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null, "tiles");
-  if (result.credentials.length) counts.passwords += await importPasswords(profileId, result.credentials);
+  if (result.credentials.length) counts.passwords += await importPasswords(profileId, result.credentials, consent ?? null, signal);
   return counts;
 }
 
-export async function applySafari(profileId: string, data: SafariExport, cookies = true, onFailed?: (kind: ImportKind) => void, consent?: ConsentToken | null): Promise<ImportCounts> {
+export async function applySafari(
+  profileId: string,
+  data: SafariExport,
+  cookies = true,
+  onFailed?: (kind: ImportKind) => void,
+  consent?: ConsentToken | null,
+  signal?: AbortSignal,
+): Promise<ImportCounts> {
   const counts = emptyCounts();
-  counts.bookmarks = await importBookmarks(profileId, data.bookmarks, "Safari", consent, onFailed);
+  if (!signal?.aborted) counts.bookmarks = await importBookmarks(profileId, data.bookmarks, "Safari", consent, onFailed, signal);
   const history = data.profiles.find((p) => !p.name)?.history ?? data.profiles[0]?.history ?? [];
-  counts.history = await importHistory(profileId, history, onFailed, consent);
-  Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed));
+  if (!signal?.aborted) counts.history = await importHistory(profileId, history, onFailed, consent, signal);
+  Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed, signal));
+  if (signal?.aborted) return counts;
   if (data.tabs.length) counts.tabs += importTabs(profileId, data.tabs, "Imported");
-  counts.passwords = await importPasswords(profileId, data.credentials);
+  counts.passwords = await importPasswords(profileId, data.credentials, consent ?? null, signal);
   return counts;
 }
 

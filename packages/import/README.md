@@ -59,6 +59,11 @@ Shared code: `Model.swift` (`ImportKind`, `ImportResult` and the other result ty
    profile gets go to `adoptFavicons` (`apps/browser/src/state/favicons/favicons.ts`): into the sidebar's icon cache at once, and
    into the profile's Chrome favicon database with `ac_favicons_set`, so they survive a relaunch without a page load.
    `apps/browser/src/platform/importModule.ts` loads the package lazily.
+   Several browsers can be ticked on the choose step: `flow.ts` keeps the queue in `ImportFlow.run`, and each browser
+   takes its own turn through these steps (`importTurn.ts` owns the turn: each step's actions carry its token, and anything started in it, write or read, is dropped once the next one starts; `runImport.ts` `settleSource` moves on once per turn, also after a skip or a failure).
+   In such a run, passwords aren't saved as they arrive: `importOutcome.ts` holds them, `passwordConflicts.ts` groups
+   them by destination profile, origin and username, and differing ones wait on the conflicts step before anything
+   is saved. One browser alone still saves them as they arrive.
 6. Extensions: `listExtensions(browserId, profileId)` returns every extension of a source profile with whether the user
    turned it off there (`DISABLE_USER_ACTION`, 1 << 0, in the `disable_reasons` list or the legacy bitmask), its toolbar
    pin and, when it can't come from the Chrome Web Store, why (`skip`). Only an explicit internal location (a JSON

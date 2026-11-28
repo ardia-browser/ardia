@@ -3,6 +3,7 @@ import { onAppEvent } from "../../platform/app";
 import { importModule } from "../../platform/importModule";
 import { orWarn } from "../../lib/fallback";
 import { passwordImportTally } from "../telemetry/passwordSaves";
+import { consentToken } from "../telemetry/client";
 import { asSecret } from "@ardia/core";
 import { getPassword, savePassword, unlockPasswords, type PasswordSecret } from "./passwords";
 
@@ -70,11 +71,12 @@ export const originOfLogin = (url: string) => {
 type PasswordImport = { saved: number; skipped: number } | "cancelled";
 
 export async function importPasswordsCsv(profile: string): Promise<PasswordImport> {
+  const consent = consentToken();
   const mod = importModule();
   const path = await mod.chooseImportFile("passwordsCSV");
   if (!path) return "cancelled";
   const credentials = await mod.importPasswordsCSV(path);
-  const tally = passwordImportTally("csv");
+  const tally = passwordImportTally("csv", consent);
   let saved = 0;
   for (const c of credentials) {
     const origin = originOfLogin(c.url ?? "");

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { ActivityIndicator, Animated, View } from "react-native";
 import { Button, curve, space, Symbol, Text, useTheme } from "../../ui";
 import { SelectableCard } from "../../settings/SelectableCard";
-import { cancelImport, type ImportFlow, type KindStatus } from "../../../state/import/flow";
+import { cancelImport, runStepLabel, type ImportFlow, type KindStatus } from "../../../state/import/flow";
 import { KINDS } from "../model";
 import { Spacer, Title } from "../Parts";
 import { importLayout, importMotion } from "../tokens";
@@ -13,13 +13,18 @@ export function ProgressBody({ flow }: { flow: ImportFlow }) {
   const { status, preparing } = step;
   return (
     <>
-      <Title title={`Importing from ${source?.name ?? "file"}`} subtitle={preparing > 1 ? `Preparing ${preparing} profiles` : "Preparing your profile"} spinner />
+      <Title
+        title={`Importing from ${source?.name ?? "file"}`}
+        subtitle={preparing > 1 ? `Preparing ${preparing} profiles` : "Preparing your profile"}
+        spinner
+        turn={runStepLabel(flow)}
+      />
       <Text size="small" tone="textSecondary" style={{ marginBottom: space.l }}>
         Hold on while we fetch your data...
       </Text>
       <View style={{ gap: space.s }}>
         {KINDS.filter((k) => status[k.kind]).map((k, i) => (
-          <CategoryRow key={k.kind} title={k.title} icon={k.icon} status={status[k.kind]!} index={i} />
+          <CategoryRow key={`${source?.id ?? ""}-${k.kind}`} title={k.title} icon={k.icon} status={status[k.kind]!} index={i} />
         ))}
       </View>
     </>

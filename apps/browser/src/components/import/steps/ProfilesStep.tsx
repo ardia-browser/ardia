@@ -5,7 +5,10 @@ import { Spacer, TargetPicker, Title } from "../Parts";
 import { Monogram, ProfileAvatar, SelectRow, SpaceIcon } from "../Rows";
 import {
   backTo,
+  canGoBackToChoose,
   importsBySpaces,
+  inRun,
+  runStepLabel,
   setImportTarget,
   spacelessProfiles,
   spacesOf,
@@ -13,7 +16,7 @@ import {
   toggleSourceProfile,
   type ImportFlow,
 } from "../../../state/import/flow";
-import { continueImport } from "../../../state/import/runImport";
+import { continueImport, skipSource } from "../../../state/import/runImport";
 import type { BrowserSource } from "../../../state/import/apply";
 
 const firstSpaceNote =
@@ -38,14 +41,14 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
   if (importsBySpaces(source))
     return (
       <>
-        <Title title="Select spaces to import" subtitle={`We'll import your ${source.name} spaces, tabs, and folders to ${APP}.`} />
+        <Title title="Select spaces to import" subtitle={`We'll import your ${source.name} spaces, tabs, and folders to ${APP}.`} turn={runStepLabel(flow)} />
         <Text size="small" tone="textSecondary" style={{ marginBottom: space.ml }}>{spacesNote(source.name, source.sidebar === "zen")}</Text>
         <Group>
           {spacesOf(source).map((s) => (
             <SelectRow
               key={s.id}
               selected={spaces.includes(s.id)}
-              onToggle={(v) => toggleImportSpace(s.id, v)}
+              onToggle={(v) => toggleImportSpace(s.id, v, flow.turn)}
               icon={<SpaceIcon space={s} />}
               title={s.name || "Space"}
               subtitle={spaceSubtitle(source, s)}
@@ -57,7 +60,7 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
                 <SelectRow
                   key={p.id}
                   selected={sourceProfiles.includes(p.id)}
-                  onToggle={(v) => toggleSourceProfile(p.id, v)}
+                  onToggle={(v) => toggleSourceProfile(p.id, v, flow.turn)}
                   icon={<Monogram name={p.name} color={p.color} />}
                   title={p.name}
                   subtitle={p.isDefault ? "Default profile" : undefined}
@@ -68,14 +71,14 @@ export function ProfilesBody({ flow }: { flow: ImportFlow }) {
     );
   return (
     <>
-      <Title title="Unlock your data for import" subtitle="Select the profiles you want to import." />
+      <Title title="Unlock your data for import" subtitle="Select the profiles you want to import." turn={runStepLabel(flow)} />
       <Text size="small" tone="textSecondary" style={{ marginBottom: space.ml }}>{`Customize which profiles to bring over to ${APP}. The first goes into your selected profile; the others become new profiles.`}</Text>
       <Group>
         {source.profiles.map((p) => (
           <SelectRow
             key={p.id}
             selected={sourceProfiles.includes(p.id)}
-            onToggle={(v) => toggleSourceProfile(p.id, v)}
+            onToggle={(v) => toggleSourceProfile(p.id, v, flow.turn)}
             icon={<ProfileAvatar path={p.avatarPath} name={p.name} color={p.color} />}
             title={p.name}
             subtitle={p.email ?? (p.isDefault ? "Default profile" : undefined)}
@@ -90,16 +93,17 @@ export function ProfilesFooter({ flow }: { flow: ImportFlow }) {
   const { source, spaces, sourceProfiles } = flow;
   if (!source) return null;
   const bySpaces = importsBySpaces(source);
+  const several = inRun(flow);
   return (
     <>
-      <Button title="Back" onPress={() => backTo("choose")} />
+      {canGoBackToChoose(flow) && <Button title="Back" onPress={() => backTo("choose", flow.turn)} />}
       <Spacer />
-      <TargetPicker target={flow.target} onChange={setImportTarget} />
+      {several ? <Button title={`Skip ${source.name}`} onPress={() => skipSource(flow.turn)} /> : <TargetPicker target={flow.target} onChange={(id) => setImportTarget(id, flow.turn)} />}
       <Button
         title="Continue"
         kind="primary"
         disabled={bySpaces ? !spaces.length && (source.sidebar !== "zen" || !spacelessProfiles(source).some((p) => sourceProfiles.includes(p.id))) : !sourceProfiles.length}
-        onPress={continueImport}
+        onPress={() => continueImport("profiles", flow.turn)}
       />
     </>
   );

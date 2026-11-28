@@ -157,6 +157,11 @@ export const LINUX_WORDING: readonly Wording[] = [
         "`macOS didn't allow access to ${source.name}'s keychain item. Try again, or skip the encrypted data.`",
         "`The system keyring didn't allow access to ${source.name}'s Safe Storage key. Try again, or skip the encrypted data.`",
       ],
+    ],
+  },
+  {
+    file: "state/import/importSource.ts",
+    replacements: [
       [
         "`${NOT_BROUGHT} macOS didn't allow Ardia to ask Dia for them. Allow it in System Settings › Privacy & Security › Automation, then import again.`",
         "`${NOT_BROUGHT} Ardia wasn't allowed to ask Dia for them.`",

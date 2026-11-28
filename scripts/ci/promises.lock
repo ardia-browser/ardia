@@ -104,7 +104,7 @@ issue	hash	file	test
 2245	73e18a6e4be80bc4	apps/browser/src/state/extensions/extensions.test.mjs	Add on an install prompt the engine no longer holds says so in the dialog, and Cancel on one rejects nothing
 2245	fe17442fdad3de61	apps/desktop/src/pageFocus.test.mjs	focusIfUnfocused gives the page the keyboard unless a shell field has it, and answers whether it did
 2260	cb2884a57b51a848	apps/browser/src/state/sync/scopeWrites.test.mjs	a sync record or base is written only through putRecord, dropRecord, putBase and dropBase, so the cycle's journal sees every change
-2389	943be910bfe4c200	apps/browser/src/state/import/bookmarksHtmlFailure.test.mjs	a bookmarks file whose profile's bookmarks never load from Chrome shows bookmarks as failed on the done step (#2389)
+2389	ae8e5538eadef191	apps/browser/src/state/import/bookmarksHtmlFailure.test.mjs	a bookmarks file whose profile's bookmarks never load from Chrome shows bookmarks as failed on the done step (#2389)
 2389	c14bf4c0d2ca5409	apps/browser/src/state/import/importUnloadedProfile.test.mjs	an import into a profile not opened since launch reads its bookmarks from Chrome first, so it neither doubles one Chrome has nor skips one only a stale cache showed
 2389	ca71dce9a296515e	apps/browser/src/state/import/repeatBookmarks.test.mjs	1,000 folders of the same name holding 150 pages, each page in 16 existing folders, stay within the matching budget
 2389	ea7586d6de0d4ab3	apps/browser/src/state/import/repeatBookmarks.test.mjs	1,001 folders of the same name linked in a ring of shared pages, past the exact pairing's limit, still all pair by their links

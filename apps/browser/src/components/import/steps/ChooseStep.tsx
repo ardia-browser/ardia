@@ -5,22 +5,38 @@ import { diaTabsNote, KINDS, type ImportKind } from "../model";
 import { ErrorText, Note, Spacer, TargetPicker, Title } from "../Parts";
 import { BrowserRow } from "../Rows";
 import { importType } from "../tokens";
-import { chooseSource, closeImport, importsBySpaces, setImportTarget, toggleImportKind, type ImportFlow } from "../../../state/import/flow";
+import { closeImport, importsBySpaces, kindsShownFor, pickedBrowsers, setImportTarget, toggleImportKind, toggleSource, type ImportFlow } from "../../../state/import/flow";
+import type { BrowserSource } from "../../../state/import/apply";
 import { importBookmarksHtml } from "../../../state/import/fileImports";
 import { continueImport } from "../../../state/import/runImport";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
+import { spokenList } from "../../../lib/lists";
 
 const HIDDEN_KINDS: ImportKind[] = ["spaces", "pinnedTabs"];
 
+const readsDiaTabs = (b: BrowserSource) => !!b.asksAppForTabs || b.profiles.some((p) => p.diaSidebar);
+const hasKind = (b: BrowserSource, kind: ImportKind) => b.profiles.some((p) => p.available.includes(kind));
+
+function kindLabel(kind: ImportKind, title: string, holders: BrowserSource[]) {
+  if (kind === "tabs" && holders.every((b) => importsBySpaces(b))) return "Spaces and tabs";
+  if (kind === "tabs" && holders.every(readsDiaTabs)) return "Open tabs";
+  if (kind === "favorites" && holders.every((b) => b.sidebar === "zen")) return "Essentials";
+  return title;
+}
+
 export function ChooseBody({ flow }: { flow: ImportFlow }) {
-  const { browsers, source, kinds, step } = flow;
-  const bySpaces = importsBySpaces(source);
+  const { browsers, picked, kinds, step } = flow;
   const error = step.name === "choose" ? step.error : null;
-  const appTabs = !!source?.asksAppForTabs;
-  const diaTabs = appTabs || !!source?.profiles.some((p) => p.diaSidebar);
-  const shown = !source
-    ? []
-    : KINDS.filter((k) => source.profiles.some((p) => p.available.includes(k.kind)) && (!HIDDEN_KINDS.includes(k.kind) || (diaTabs && k.kind === "pinnedTabs")));
+  const listed = pickedBrowsers(flow).filter(kindsShownFor);
+  const several = listed.length > 1;
+  const diaSources = listed.filter(readsDiaTabs);
+  const diaTabs = diaSources.length > 0;
+  const shown = KINDS.flatMap((k) => {
+    const holders = listed.filter((b) => hasKind(b, k.kind));
+    if (!holders.length || (HIDDEN_KINDS.includes(k.kind) && !(diaTabs && k.kind === "pinnedTabs"))) return [];
+    const only = several && holders.length < listed.length ? `${spokenList(holders.map((b) => b.name))} only` : null;
+    return [{ ...k, label: kindLabel(k.kind, k.title, holders), only }];
+  });
   return (
     <>
       <Title title="Import from Another Browser" subtitle="Import once and stay in your flow. Your tabs, passwords, bookmarks and history come with you, and you stay signed in." />
@@ -29,28 +45,30 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
       ) : (
         <View style={{ gap: space.s }}>
           {browsers.map((b) => (
-            <BrowserRow key={b.id} browser={b} selected={source?.id === b.id} onPress={() => chooseSource(b)} />
+            <BrowserRow key={b.id} browser={b} selected={picked.includes(b.id)} onPress={() => toggleSource(b)} />
           ))}
         </View>
       )}
-      {source && !source.requiresExport && !source.needsFullDiskAccess && (
+      {listed.length > 0 && (
         <View>
           <SectionHeader title="What to import" />
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.xl }}>
             {shown.map((k) => (
-              <Checkbox
-                key={k.kind}
-                label={k.kind === "tabs" && bySpaces ? "Spaces and tabs" : k.kind === "tabs" && diaTabs ? "Open tabs" : k.kind === "favorites" && source.sidebar === "zen" ? "Essentials" : k.title}
-                value={kinds.has(k.kind)}
-                onChange={(v) => toggleImportKind(k.kind, v)}
-              />
+              <View key={k.kind} style={{ flexDirection: "row", alignItems: "center", gap: space.s }}>
+                <Checkbox label={k.label} value={kinds.has(k.kind)} onChange={(v) => toggleImportKind(k.kind, v)} />
+                {k.only ? (
+                  <Text size="caption" tone="textTertiary">
+                    {k.only}
+                  </Text>
+                ) : null}
+              </View>
             ))}
           </View>
-          {source && diaTabs && (
-            <Text size="caption" tone="textSecondary" style={{ lineHeight: importType.smallLine, marginTop: space.ml }}>
-              {diaTabsNote(source.profiles)}
+          {diaSources.map((b) => (
+            <Text key={b.id} size="caption" tone="textSecondary" style={{ lineHeight: importType.smallLine, marginTop: space.ml }}>
+              {diaTabsNote(b.profiles)}
             </Text>
-          )}
+          ))}
         </View>
       )}
       {error && <ErrorText text={error} />}
@@ -59,14 +77,16 @@ export function ChooseBody({ flow }: { flow: ImportFlow }) {
 }
 
 export function ChooseFooter({ flow }: { flow: ImportFlow }) {
-  const { source, kinds } = flow;
+  const { kinds } = flow;
+  const chosen = pickedBrowsers(flow);
+  const nothing = !chosen.length || (chosen.every(kindsShownFor) && kinds.size === 0);
   return (
     <>
       <Button title="Bookmarks HTML File…" onPress={() => void importBookmarksHtml()} />
       <Spacer />
-      <TargetPicker target={flow.target} onChange={setImportTarget} />
+      <TargetPicker target={flow.target} onChange={(id) => setImportTarget(id, flow.turn)} />
       <Button title="Cancel" onPress={closeImport} />
-      <Button title="Continue" kind="primary" disabled={!source || (!source.requiresExport && !source.needsFullDiskAccess && kinds.size === 0)} onPress={continueImport} />
+      <Button title="Continue" kind="primary" disabled={nothing} onPress={() => continueImport("choose", flow.turn)} />
     </>
   );
 }

@@ -6,7 +6,7 @@ const { providerApprovalKey } = await import("@ardia/core");
 const { DEFAULT_SETTINGS } = await import("../settings/settings.ts");
 const { readConfig } = await import("../config/configSettings.ts");
 const { registerOmniboxProvider, useRegisteredProviders } = await import("./providers.ts");
-const { createProviderQueries } = await import("./providerQueries.ts");
+const { createProviderQueries, PROVIDER_DEADLINE_MS } = await import("./providerQueries.ts");
 const { configProviders, pendingConfigProviders } = await import("./configProviders.ts");
 const { approveOmniboxProvider, revokeOmniboxProvider } = await import("./providerApproval.ts");
 const { fetchRemoteRows, forgetRemoteProviderCache, REMOTE_PROVIDER } = await import("./remoteProvider.ts");
@@ -97,6 +97,21 @@ test("static keyword providers and URL templates need no approval; global and re
   revokeOmniboxProvider(providerApprovalKey(entries[3]));
 });
 
+test("a global link template adds one row for what you type, opening the link, once approved", async () => {
+  const entries = [{ title: "Dictionary", url: "https://dict.example.com/define?q={query}", global: true }];
+  const signal = new AbortController().signal;
+  assert.deepEqual(configProviders(entries, ctx), [], "a global provider waits for approval");
+  assert.deepEqual(pendingConfigProviders(entries).map((p) => [p.title, p.global, p.endpoint]), [["Dictionary", true, null]]);
+  approveOmniboxProvider(providerApprovalKey(entries[0]));
+  const [p] = configProviders(entries, ctx);
+  assert.equal(p.sendsInput, false, "nothing leaves until the row is picked");
+  assert.deepEqual(await p.query("  serendipity now ", signal), [{ title: "serendipity now", url: "https://dict.example.com/define?q=serendipity%20now" }]);
+  assert.deepEqual(await p.query("   ", signal), [], "nothing typed, no row");
+  assert.deepEqual(await p.query("example.com/page", signal), [], "an address isn't turned into a row");
+  assert.deepEqual(configProviders(entries, { ...ctx, privateContext: true }).length, 1, "a link template sends nothing, so it stays in a private window");
+  revokeOmniboxProvider(providerApprovalKey(entries[0]));
+});
+
 test("config.json: a bad provider is reported and skipped, the others apply", () => {
   const { patch, problems } = readConfig(
     JSON.stringify({ settings: { omniboxProviders: [{ keyword: "go", url: "https://linear.app/{query}" }, { keyword: "x", url: "javascript:{query}" }] } }),
@@ -105,6 +120,9 @@ test("config.json: a bad provider is reported and skipped, the others apply", ()
   assert.deepEqual(patch, { omniboxProviders: [{ keyword: "go", url: "https://linear.app/{query}" }] });
   assert.deepEqual(problems, ["config.json: omniboxProviders[1].url must be an http or https URL containing {query}"]);
   assert.deepEqual(readConfig(JSON.stringify({ settings: { omniboxProviders: 3 } }), DEFAULT_SETTINGS).problems, ["config.json: omniboxProviders must be a list of providers"]);
+  const unkeyed = readConfig(JSON.stringify({ settings: { omniboxProviders: [{ url: "https://dict.example.com/{query}" }, { url: "https://dict.example.com/{query}", global: true }] } }), DEFAULT_SETTINGS);
+  assert.deepEqual(unkeyed.problems, ["config.json: omniboxProviders[0].url without a keyword needs global: true, since it then adds a row for everything you type"]);
+  assert.deepEqual(unkeyed.patch, { omniboxProviders: [{ url: "https://dict.example.com/{query}", global: true }] });
 });
 
 function fakeFetch(handler) {
@@ -232,5 +250,50 @@ test("a request cancelled before it is sent never reaches the network", async ()
     assert.equal(f.calls.length, 0);
   } finally {
     f.restore();
+  }
+});
+
+test("a global link template with a suggest endpoint keeps its row in a private window and sends nothing", async () => {
+  const entries = [{ title: "Dictionary", url: "https://dict.example.com/define?q={query}", suggest: "https://dict.example.com/suggest?q={query}", global: true }];
+  approveOmniboxProvider(providerApprovalKey(entries[0]));
+  const f = fakeFetch(() => reply(["serendipity", ["serendipity meaning"]]));
+  try {
+    const [p] = configProviders(entries, { ...ctx, privateContext: true });
+    assert.equal(p?.sendsInput, false, "no endpoint in a private window");
+    assert.deepEqual(await p.query("serendipity", new AbortController().signal), [{ title: "serendipity", url: "https://dict.example.com/define?q=serendipity" }]);
+    assert.equal(f.calls.length, 0);
+  } finally {
+    f.restore();
+    revokeOmniboxProvider(providerApprovalKey(entries[0]));
+  }
+});
+
+test("a global link template's row shows at once and outlives a suggest endpoint that misses the deadline", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  forgetRemoteProviderCache();
+  const entries = [{ title: "Dictionary", url: "https://dict.example.com/define?q={query}", suggest: "https://dict.example.com/suggest?q={query}", global: true }];
+  approveOmniboxProvider(providerApprovalKey(entries[0]));
+  const f = fakeFetch((url) => (url.includes("slow") ? new Promise(() => {}) : reply(["fast", ["fast lane"]])));
+  try {
+    const providers = configProviders(entries, ctx);
+    const queries = createProviderQueries();
+    const seen = [];
+    queries.run("fast", providers, (s) => seen.push(s.rows.map((r) => r.url)));
+    await flush();
+    assert.deepEqual(seen, [["https://dict.example.com/define?q=fast"]], "the link doesn't wait for the endpoint");
+    t.mock.timers.tick(REMOTE_PROVIDER.debounceMs);
+    await flush();
+    assert.deepEqual(seen.at(-1), ["https://dict.example.com/define?q=fast", "https://dict.example.com/define?q=fast%20lane"], "a timely answer joins the link");
+    seen.length = 0;
+    queries.run("slow", providers, (s) => seen.push(s.rows.map((r) => r.url)));
+    t.mock.timers.tick(REMOTE_PROVIDER.debounceMs);
+    await flush();
+    assert.equal(f.calls.at(-1).url, "https://dict.example.com/suggest?q=slow", "the endpoint was asked and hasn't answered");
+    t.mock.timers.tick(PROVIDER_DEADLINE_MS);
+    await flush();
+    assert.deepEqual(seen, [["https://dict.example.com/define?q=slow"]], "the deadline drops only the endpoint's part");
+  } finally {
+    f.restore();
+    revokeOmniboxProvider(providerApprovalKey(entries[0]));
   }
 });

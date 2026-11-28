@@ -49,13 +49,14 @@ export type Counted = (typeof COUNTED)[number];
 const COUNT_RULE = { kind: "count" } as const;
 const USAGE_FIELDS = Object.fromEntries(COUNTED.map((field) => [field, COUNT_RULE])) as Record<Counted, typeof COUNT_RULE>;
 
-export type FieldRule =
+export type FieldRule = (
   | { kind: "const"; value: string | boolean }
   | { kind: "enum"; values: readonly string[] }
   | { kind: "pattern"; pattern: RegExp }
   | { kind: "count" }
   | { kind: "ms" }
-  | { kind: "flag" };
+  | { kind: "flag" }
+) & { onlyWhereOffered?: true };
 
 export const CONTEXT_FIELDS = {
   $lib: { kind: "const", value: PHONE_LIB },
@@ -87,11 +88,11 @@ export const EVENT_FIELDS = {
     page_border: { kind: "flag" },
     page_corner_radius: { kind: "count" },
     previous_session: { kind: "enum", values: PREVIOUS_SESSIONS },
-    auto_pip: { kind: "flag" },
-    background_play: { kind: "flag" },
-    mini_player: { kind: "flag" },
-    mini_player_every_space: { kind: "flag" },
-    media_skip_seconds: { kind: "enum", values: MEDIA_SKIP_SECONDS },
+    auto_pip: { kind: "flag", onlyWhereOffered: true },
+    background_play: { kind: "flag", onlyWhereOffered: true },
+    mini_player: { kind: "flag", onlyWhereOffered: true },
+    mini_player_every_space: { kind: "flag", onlyWhereOffered: true },
+    media_skip_seconds: { kind: "enum", values: MEDIA_SKIP_SECONDS, onlyWhereOffered: true },
   },
   perf_launch: { launch_ms: { kind: "ms" }, js_ms: { kind: "ms" } },
   perf_backdrop: { backdrop_ms: { kind: "ms" } },
@@ -109,7 +110,13 @@ export const EVENT_FIELDS = {
 
 export type PhoneEvent = keyof typeof EVENT_FIELDS;
 
-export type EventProps<E extends PhoneEvent> = { [K in keyof (typeof EVENT_FIELDS)[E]]: (typeof EVENT_FIELDS)[E][K] extends { kind: "enum"; values: readonly (infer V)[] } ? V : (typeof EVENT_FIELDS)[E][K] extends { kind: "flag" } ? boolean : number };
+type FieldValue<R> = R extends { kind: "enum"; values: readonly (infer V)[] } ? V : R extends { kind: "flag" } ? boolean : number;
+
+type Fields<E extends PhoneEvent> = (typeof EVENT_FIELDS)[E];
+
+export type EventProps<E extends PhoneEvent> = { [K in keyof Fields<E> as Fields<E>[K] extends { onlyWhereOffered: true } ? never : K]: FieldValue<Fields<E>[K]> } & {
+  [K in keyof Fields<E> as Fields<E>[K] extends { onlyWhereOffered: true } ? K : never]?: FieldValue<Fields<E>[K]>;
+};
 
 export type PhoneRecord = { uuid: string; event: PhoneEvent; distinct_id: string; timestamp: string; properties: Record<string, string | number | boolean> };
 
@@ -146,7 +153,7 @@ export function recordProblems(record: PhoneRecord): string[] {
       if (problem) problems.push(`${key}: ${problem}`);
     }
   }
-  for (const key of Object.keys(rules)) if (!(key in record.properties)) problems.push(`${key}: missing`);
+  for (const [key, rule] of Object.entries(rules)) if (!rule.onlyWhereOffered && !(key in record.properties)) problems.push(`${key}: missing`);
   return problems;
 }
 
@@ -340,7 +347,11 @@ export function appVersionOf(raw: string | null | undefined): string {
   return VERSION.test(text) ? text : "0";
 }
 
-export const mediaSettingsTelemetry = (settings: { autoPictureInPicture: boolean; keepsPlaying: boolean; miniPlayer: boolean; miniPlayerEverySpace: boolean; mediaSkipSeconds: 10 | 15 | 30 }) => ({
+export type MediaSettingsValues = { autoPictureInPicture: boolean; keepsPlaying: boolean; miniPlayer: boolean; miniPlayerEverySpace: boolean; mediaSkipSeconds: 10 | 15 | 30 };
+
+export const launchMediaSettings = (offered: boolean, settings: MediaSettingsValues): Partial<ReturnType<typeof mediaSettingsTelemetry>> => (offered ? mediaSettingsTelemetry(settings) : {});
+
+export const mediaSettingsTelemetry = (settings: MediaSettingsValues) => ({
   auto_pip: settings.autoPictureInPicture,
   background_play: settings.keepsPlaying,
   mini_player: settings.miniPlayer,

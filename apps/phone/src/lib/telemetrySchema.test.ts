@@ -109,3 +109,22 @@ test("Android counts why Gemini Nano wasn't used, and nothing for an unknown rea
   assert.deepEqual(geminiNanoMissingCount("toString"), []);
   for (const field of ["gemini_nano_downloading", "gemini_nano_not_offered", "gemini_nano_needs_update", "gemini_nano_errors", "gemini_nano_download_failed", "gemini_nano_write_failed", "gemini_nano_download_rewrites"]) assert.ok((COUNTED as readonly string[]).includes(field), field);
 });
+
+test("the Picture in Picture settings go out only where the phone offers them, so Android sends none of the fields its What's Sent leaves out", async () => {
+  const { launchMediaSettings } = await import("./telemetrySchema.ts");
+  const { shownWhatsSent } = await import("./shownWhatsSent.ts");
+  const values = { autoPictureInPicture: true, keepsPlaying: false, miniPlayer: true, miniPlayerEverySpace: false, mediaSkipSeconds: 30 } as const;
+  assert.deepEqual(launchMediaSettings(false, values), {});
+  const iphone = launchMediaSettings(true, values);
+  assert.deepEqual(iphone, { auto_pip: true, background_play: false, mini_player: true, mini_player_every_space: false, media_skip_seconds: "30" });
+  const listed = new Set(shownWhatsSent("ios", true).flatMap((section) => section.items.flatMap((item) => item.fields)));
+  for (const field of Object.keys(iphone)) assert.ok(listed.has(field), field);
+  const androidListed = new Set(shownWhatsSent("android", false).flatMap((section) => section.items.flatMap((item) => item.fields)));
+  for (const field of Object.keys(iphone)) assert.ok(!androidListed.has(field), field);
+  const { recordProblems } = await import("./telemetrySchema.ts");
+  const record = (properties: Record<string, string | number | boolean>) => ({ uuid: "00000000-0000-4000-8000-000000000001", event: "app_launched" as const, distinct_id: "00000000-0000-4000-8000-000000000002", timestamp: "2026-11-28T00:00:00.000Z", properties });
+  const base = { $lib: "ardia-phone-telemetry", $lib_version: "1", $app_name: "Ardia", app: "phone", platform: "android", $app_version: "1.0", $os: "Android", $os_version: "15", $environment: "test", $process_person_profile: false, $geoip_disable: true, $session_id: "00000000-0000-4000-8000-000000000003", legacy_import: "none", legacy_import_failures: 0, look_mode: "full", interface_style: "match_mac", color_scheme: "match_mac", material_colors: "wallpaper", color_choice: "match_mac", theme_fixed_scheme: false, glass_render: "lens", page_border: true, page_corner_radius: 16, previous_session: "clean" };
+  assert.deepEqual(recordProblems(record(base)), []);
+  assert.deepEqual(recordProblems(record({ ...base, ...iphone })), []);
+  assert.notDeepEqual(recordProblems(record({ ...base, media_skip_seconds: "12" })), []);
+});

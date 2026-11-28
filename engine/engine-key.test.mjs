@@ -152,6 +152,8 @@ const files = {
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_extension_views.h': 'linux ac_linux_extension_views.h\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.cc': 'linux ac_linux_extensions.cc\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_extensions.h': 'linux ac_linux_extensions.h\n',
+  'engine/ardiacore-linux/src/ardia/linux/ac_linux_favicons.cc': 'linux ac_linux_favicons.cc\n',
+  'engine/ardiacore-linux/src/ardia/linux/ac_linux_favicons.h': 'linux ac_linux_favicons.h\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_find.cc': 'linux ac_linux_find.cc\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_find.h': 'linux ac_linux_find.h\n',
   'engine/ardiacore-linux/src/ardia/linux/ac_linux_page_evaluation.cc': 'linux ac_linux_page_evaluation.cc\n',

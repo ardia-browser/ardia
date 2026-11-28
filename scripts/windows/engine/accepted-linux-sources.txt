@@ -10,6 +10,8 @@ ac_linux_extension_views.cc
 ac_linux_extension_views.h
 ac_linux_extensions.cc
 ac_linux_extensions.h
+ac_linux_favicons.cc
+ac_linux_favicons.h
 ac_linux_find.cc
 ac_linux_find.h
 ac_linux_page_evaluation.cc

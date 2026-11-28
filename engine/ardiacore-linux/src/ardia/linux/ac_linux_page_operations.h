@@ -33,11 +33,11 @@ inline constexpr std::array<LinuxPageOperation, 16> kLinuxPageOperations = {{
     {"readerToggle", 48805, "b81f8ca01558e423e9dba155ae5e1457bc8b41d537c1d896abe2faae25480c81", LinuxPageOperationArgs::kLook, ")));"},
     {"readerOpen", 48803, "27c38da60f46cb93c6dda26052d50fdbb72a34c71175c005777e6a31154a3d2f", LinuxPageOperationArgs::kLook, ")));"},
     {"readerSetLook", 16056, "73ff30353564a1d77fd7fcd03018f3fa8e2fef0556bcbe984bb0e1c29ab8f129", LinuxPageOperationArgs::kLook, "])));"},
-    {"elementPickerStart", 11671, "33829e4d5f85222208e734c9a767bba59aac7488860d00b99ee37c11cfb9be48", LinuxPageOperationArgs::kPoint, "])).then((v) => { window[Symbol.for(\"ardia.elementPicker\")].linuxPick = { value: v === undefined ? null : v }; }, () => { window[Symbol.for(\"ardia.elementPicker\")].linuxPick = { value: null }; });"},
+    {"elementPickerStart", 11786, "490ff1ba5b5599866acb2b045adb6df7d6c41a2bed4665f5b4750875cdc32c11", LinuxPageOperationArgs::kPoint, "])).then((v) => { window[Symbol.for(\"ardia.elementPicker\")].linuxPick = { value: v === undefined ? null : v }; }, () => { window[Symbol.for(\"ardia.elementPicker\")].linuxPick = { value: null }; });"},
     {"elementPickerTake", 324, "0f0eaa1b3b91b91af67550c35b0afcfe7d0310c9ef3a06855624985631327045", LinuxPageOperationArgs::kNone, ""},
-    {"elementPickerCancel", 11753, "e13d35dad4acfc37802e6ac1fdb2547453cc7f80e5607026542d3788a5d984ce", LinuxPageOperationArgs::kNone, ""},
-    {"elementPickerApply", 11671, "9796cc69325a00533bdc7dd50a588aaaa21c615ca4f6be04f6f4722703408589", LinuxPageOperationArgs::kSelectors, "])).then((v) => post(\"result\", JSON.stringify(v)), () => post(\"result\", \"null\"));"},
-    {"elementPickerUnhide", 11672, "184e2774a14737606df07e951ed6444d36e2a5fc39747f902caceb61acc1a339", LinuxPageOperationArgs::kSelectors, "])).then((v) => post(\"result\", JSON.stringify(v)), () => post(\"result\", \"null\"));"},
+    {"elementPickerCancel", 11868, "753ae055619b0735d973eb98340e7da0b14c957e5c5ad6b7ea53f80fcbc01225", LinuxPageOperationArgs::kNone, ""},
+    {"elementPickerApply", 11786, "673cd7508f84bd165adbe2aa91717e83ae5c6a771cc6a2c21a3a191e2c6ccbc7", LinuxPageOperationArgs::kSelectors, "])).then((v) => post(\"result\", JSON.stringify(v)), () => post(\"result\", \"null\"));"},
+    {"elementPickerUnhide", 11787, "04b291227d20ea59c29c854a143479dac0d672e1eddb538a8eca05f40b43ed7a", LinuxPageOperationArgs::kSelectors, "])).then((v) => post(\"result\", JSON.stringify(v)), () => post(\"result\", \"null\"));"},
 }};
 
 }

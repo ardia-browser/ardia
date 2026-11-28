@@ -29,6 +29,7 @@ public final class ContentBlocker {
   @ObservationIgnored private let userScripts: [WKUserScript]
   @ObservationIgnored private var scriptlets = ScriptletTable()
   @ObservationIgnored private var scriptletScript: WKUserScript?
+  @ObservationIgnored private let scriptletScripts = NSHashTable<WKUserScript>.weakObjects()
   @ObservationIgnored public var onScriptletPage: (@MainActor (_ isPrivate: Bool) -> Void)?
   static let world = WKContentWorld.world(name: "ArdiaBlocking")
 
@@ -188,6 +189,7 @@ public final class ContentBlocker {
     if active != scriptlets {
       scriptlets = active
       scriptletScript = active.script.map { WKUserScript(source: $0, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page) }
+      if let scriptletScript { scriptletScripts.add(scriptletScript) }
     }
     pushToControllers()
   }
@@ -207,10 +209,18 @@ public final class ContentBlocker {
     guard applied[key] != target else { return }
     applied[key] = target
     controller.removeAllContentRuleLists()
-    controller.removeAllUserScripts(from: .page)
+    installScriptlets(on: controller, exempt ? nil : scriptletScript)
     guard !exempt else { return }
     for list in activeLists() { controller.add(list) }
-    if let scriptletScript { controller.addUserScript(scriptletScript) }
+  }
+
+  private func installScriptlets(on controller: WKUserContentController, _ wanted: WKUserScript?) {
+    let installed = controller.userScripts.filter(scriptletScripts.contains)
+    guard installed.count != (wanted == nil ? 0 : 1) || installed.first !== wanted else { return }
+    let others = controller.userScripts.filter { !scriptletScripts.contains($0) }
+    controller.removeAllUserScripts()
+    for script in others { controller.addUserScript(script) }
+    if let wanted { controller.addUserScript(wanted) }
   }
 
   func activeLists() -> [WKContentRuleList] {

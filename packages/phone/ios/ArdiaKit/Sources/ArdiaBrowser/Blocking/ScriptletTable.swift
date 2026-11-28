@@ -76,7 +76,7 @@ public struct ScriptletTable: Codable, Equatable, Sendable {
     guard let args = arguments(line[marker.upperBound..<line.index(before: line.endIndex)]) else { return .skip }
     guard let first = args.first else { return isException ? .exception(hosts: hosts, body: []) : .skip }
     let requested = first.hasSuffix(".js") ? String(first.dropLast(3)) : first
-    guard let name = supported[requested], trusted || !name.hasPrefix("trusted-") else { return .skip }
+    guard let name = supported[requested], trusted || isException || !name.hasPrefix("trusted-") else { return .skip }
     let body = [name] + args.dropFirst()
     return isException ? .exception(hosts: hosts, body: body) : .run(hosts: hosts, body: body)
   }

@@ -1,5 +1,4 @@
 import Foundation
-import SwiftData
 import Testing
 import WebKit
 @testable import ArdiaBrowser
@@ -51,7 +50,7 @@ let adShieldBody = ["trusted-replace-argument", "Element.prototype.setAttribute"
 
   @Test func exceptionsFromOneListLiftAnothersScriptlets() {
     var table = FilterListConverter.parse(adShieldFilter, id: "ublock-filters").scriptlets
-    table.merge(FilterListConverter.parse("people.com#@#+js(trusted-replace-argument, Element.prototype.setAttribute, 1, , condition, '\(adShieldCondition)')", id: "easylist").scriptlets)
+    table.merge(FilterListConverter.parse("people.com#@#+js(trusted-replace-argument, Element.prototype.setAttribute, 1, , condition, '\(adShieldCondition)')", id: FilterLists.myFiltersID).scriptlets)
     #expect(table.bodies(forHost: "people.com").isEmpty)
     #expect(table.bodies(forHost: "allrecipes.com") == [adShieldBody])
   }
@@ -109,7 +108,6 @@ enum ScriptletPages {
     let fixture = FilterListsFixture(catalog: [FilterListsFixture.entry("ublock-filters"), FilterListsFixture.entry("easylist")])
     let suite = "ardia.scriptlets.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
-    let container = try BrowserStore.makeContainer(.inMemory)
     defer {
       fixture.cleanUp()
       defaults.removePersistentDomain(forName: suite)
@@ -128,22 +126,37 @@ enum ScriptletPages {
     await blocker.prepare()
     var counted: [Bool] = []
     blocker.onScriptletPage = { counted.append($0) }
-    let engine = WebEngine(tabs: TabStore(context: container.mainContext, defaults: defaults), blocker: blocker, preferences: BrowsingPreferences(defaults: defaults))
-    let tab = engine.tabs.open(.url(URL(string: "\(BrowserURL.browseScheme)://blank")!), isPrivate: false)
-    let page = try #require(engine.webTab(for: tab.id))
-    page.makeLive()
-    let webView = try #require(page.webView)
+    let configuration = WKWebViewConfiguration()
+    configuration.websiteDataStore = .nonPersistent()
+    let controller = configuration.userContentController
+    blocker.install(on: controller, counter: BlockedResourceCounter())
+    let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 320, height: 480), configuration: configuration)
+    let pageScript = WKUserScript(source: "window.__other = true", injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient)
+    func navigate(_ nonce: String) async throws -> String? {
+      blocker.prepareNavigation(of: controller, toHost: "www.allrecipes.com")
+      blocker.countScriptletPage(toHost: "www.allrecipes.com")
+      controller.removeAllUserScripts()
+      blocker.restoreUserScripts(on: controller)
+      controller.addUserScript(pageScript)
+      return try await ScriptletPages.run(host: "www.allrecipes.com", nonce: nonce, in: webView).load
+    }
 
-    #expect(try await ScriptletPages.run(host: "www.allrecipes.com", nonce: "on", in: webView).load == "")
+    #expect(try await navigate("on") == "")
     #expect(counted == [false])
+    #expect(controller.userScripts.count(where: { $0.source.contains("trusted-replace-argument") }) == 1)
 
     settings.setExempt("www.allrecipes.com", true)
-    #expect(try await ScriptletPages.run(host: "www.allrecipes.com", nonce: "trusted", in: webView).load == "fetch(url).then(adShieldError)")
+    #expect(try await navigate("trusted") == "fetch(url).then(adShieldError)")
     #expect(counted == [false])
+    #expect(controller.userScripts.contains { $0 === pageScript })
+
     settings.setExempt("www.allrecipes.com", false)
-    #expect(try await ScriptletPages.run(host: "www.allrecipes.com", nonce: "again", in: webView).load == "")
+    #expect(try await navigate("again") == "")
+    #expect(counted == [false, false])
 
     settings.blocksAds = false
-    #expect(try await ScriptletPages.run(host: "www.allrecipes.com", nonce: "off", in: webView).load == "fetch(url).then(adShieldError)")
+    #expect(try await navigate("off") == "fetch(url).then(adShieldError)")
+    #expect(counted == [false, false])
+    #expect(!controller.userScripts.contains { $0.source.contains("trusted-replace-argument") })
   }
 }

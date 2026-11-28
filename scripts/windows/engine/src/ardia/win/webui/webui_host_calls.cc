@@ -15,6 +15,8 @@
 #include "ardia/linux/ac_linux_document_service.h"
 #include "ardia/linux/ac_linux_extension_views.h"
 #include "ardia/linux/ac_linux_documents.h"
+#include "ardia/linux/ac_linux_site_controls.h"
+#include "ardia/linux/ac_linux_site_controls_service.h"
 #include "ardia/win/ac_calls.h"
 #include "ardia/win/launch_guard.h"
 #include "ardia/win/main.h"
@@ -854,6 +856,17 @@ void ShellHostView::EngineCall(const std::string& name,
                          "Document arguments require a JSON object"));
     }
     return DocumentCall(*verb, std::move(parsed->GetDict()), std::move(done));
+  }
+  if (::linux_site_controls::IsContentBlockerCall(name)) {
+    return ardia::LinuxSiteControlsCall(
+        app_profile(), page_profile(), name, profile, args,
+        base::BindOnce(
+            [](Done done, bool ok, base::Value result) {
+              std::move(done).Run(
+                  ok, ok ? base::Value(base::WriteJson(result).value_or("null"))
+                         : std::move(result));
+            },
+            std::move(done)));
   }
   const auto* route = ardia::desktop_routes::FindRoute(name);
   ac_engine_call_t call =

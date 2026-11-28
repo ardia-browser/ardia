@@ -35,8 +35,9 @@ New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 try {
   $rnw = New-Folder "rnw"
   Touch $rnw "Ardia.exe", "ArdiaApp.dll", "chrome.dll"
+  $blockerFiles = @("extensions\ublock\manifest.json", "extensions\ublock\ardia-linux-bridge.html")
   $webui = New-Folder "webui"
-  Touch $webui "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-ui\assets\app.js", "ardia-webui-migrate.exe", "locales\en-US.pak"
+  Touch $webui (@("Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-ui\assets\app.js", "ardia-webui-migrate.exe", "locales\en-US.pak") + $blockerFiles)
   $mixed = New-Folder "mixed"
   Touch $mixed "Ardia.exe", "chrome.dll", "ArdiaApp.dll", "ardia-ui\index.html"
   $bare = New-Folder "bare"
@@ -59,31 +60,37 @@ try {
   Check "the React Native document command is unchanged" '"C:\A\Ardia.exe" --single-argument %1' (Get-ShellDocumentCommand "C:\A\Ardia.exe" "rnw")
   Check "the WebUI document command puts the switch before --single-argument" '"C:\A\Ardia.exe" --ardia-shell=webui --single-argument %1' (Get-ShellDocumentCommand "C:\A\Ardia.exe" "webui")
   Check "the React Native install ships ArdiaApp.dll and the update verifier" "Ardia.exe,ArdiaApp.dll,chrome.dll,Ardia.ico,Ardia.build.json,ardia-update-verify.exe,windows-update.pem,unins000.exe,ardia-rnw-files.txt" ((Get-ShellInstalledFiles "rnw") -join ",")
-  Check "the WebUI install ships the UI, the migrator and the update verifier" "Ardia.exe,chrome.dll,Ardia.ico,Ardia.build.json,ardia-update-verify.exe,windows-update.pem,unins000.exe,ardia-ui\index.html,ardia-webui-migrate.exe,ardia-webui-files.txt" ((Get-ShellInstalledFiles "webui") -join ",")
+  Check "the WebUI install ships the UI, the migrator, the update verifier and the content blocker" "Ardia.exe,chrome.dll,Ardia.ico,Ardia.build.json,ardia-update-verify.exe,windows-update.pem,unins000.exe,ardia-ui\index.html,ardia-webui-migrate.exe,extensions\ublock\manifest.json,extensions\ublock\ardia-linux-bridge.html,ardia-webui-files.txt" ((Get-ShellInstalledFiles "webui") -join ",")
 
   Check "a complete WebUI folder has no problems" 0 (Get-ShellLayoutProblems $webui "webui").Count
   Check "a complete React Native folder has no problems" 0 (Get-ShellLayoutProblems $rnw "rnw").Count
   $noMigrator = New-Folder "no-migrator"
-  Touch $noMigrator "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html"
+  Touch $noMigrator (@("Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html") + $blockerFiles)
   Check "a WebUI folder without the migrator is a problem" "it has no ardia-webui-migrate.exe, so an upgrade from the React Native shell would start empty" ((Get-ShellLayoutProblems $noMigrator "webui") -join "|")
   $noIdentity = New-Folder "no-identity"
-  Touch $noIdentity "Ardia.exe", "chrome.dll", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Touch $noIdentity (@("Ardia.exe", "chrome.dll", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe") + $blockerFiles)
   Check "a WebUI folder without Ardia.build.json is a problem" "it has no Ardia.build.json, so updates can't tell its version and build" ((Get-ShellLayoutProblems $noIdentity "webui") -join "|")
   $noVerifier = New-Folder "no-verifier"
-  Touch $noVerifier "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Touch $noVerifier (@("Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-ui\index.html", "ardia-webui-migrate.exe") + $blockerFiles)
   Check "a WebUI folder without the update verifier and key names both" "it has no ardia-update-verify.exe, so it can't verify the updates it downloads|it has no windows-update.pem, so it can't verify the updates it downloads" ((Get-ShellLayoutProblems $noVerifier "webui") -join "|")
   $noKey = New-Folder "no-key"
-  Touch $noKey "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Touch $noKey (@("Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "ardia-ui\index.html", "ardia-webui-migrate.exe") + $blockerFiles)
   Check "a WebUI folder without the pinned key is a problem" "it has no windows-update.pem, so it can't verify the updates it downloads" ((Get-ShellLayoutProblems $noKey "webui") -join "|")
+  $noBlocker = New-Folder "no-blocker"
+  Touch $noBlocker "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Check "a WebUI folder without the content blocker names both files the engine looks for" "it has no extensions\ublock\manifest.json, so it blocks no ads|it has no extensions\ublock\ardia-linux-bridge.html, so it blocks no ads" ((Get-ShellLayoutProblems $noBlocker "webui") -join "|")
+  $noBridge = New-Folder "no-bridge"
+  Touch $noBridge "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe", "extensions\ublock\manifest.json"
+  Check "a WebUI folder with uBlock Origin but no bridge page is a problem" "it has no extensions\ublock\ardia-linux-bridge.html, so it blocks no ads" ((Get-ShellLayoutProblems $noBridge "webui") -join "|")
   $leftover = New-Folder "leftover"
-  Touch $leftover "Ardia.exe", "chrome.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "Microsoft.ReactNative.dll", "Bundle\index.windows.bundle", "de-DE\Microsoft.ui.xaml.dll.mui", "ardia-ui\index.html", "ardia-webui-migrate.exe"
+  Touch $leftover (@("Ardia.exe", "chrome.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "Microsoft.ReactNative.dll", "Bundle\index.windows.bundle", "de-DE\Microsoft.ui.xaml.dll.mui", "ardia-ui\index.html", "ardia-webui-migrate.exe") + $blockerFiles)
   Check "a WebUI folder with chrome.exe and React Native files has two problems" 2 (Get-ShellLayoutProblems $leftover "webui").Count
   Check "the React Native files left in a WebUI folder are named" "it still holds 3 of the rnw shell's files: Microsoft.ReactNative.dll, de-DE\Microsoft.ui.xaml.dll.mui, Bundle\" ((Get-ShellLayoutProblems $leftover "webui") | Where-Object { $_ -match "rnw shell" })
   $rolledBack = New-Folder "rolled-back"
   Touch $rolledBack "Ardia.exe", "chrome.dll", "ArdiaApp.dll", "ardia-ui\index.html", "ardia-webui-migrate.exe"
   Check "a React Native folder that kept the WebUI files names both" "it still holds 2 of the webui shell's files: ardia-webui-migrate.exe, ardia-ui\" ((Get-ShellLayoutProblems $rolledBack "rnw") -join "|")
   $marked = New-Folder "marked"
-  Touch $marked "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe", "sub\Ardia.test-build"
+  Touch $marked (@("Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-webui-migrate.exe", "sub\Ardia.test-build") + $blockerFiles)
   Check "a test-build marker anywhere is a problem" 1 (Get-ShellLayoutProblems $marked "webui").Count
   Check "a test-build marker is allowed when asked" 0 (Get-ShellLayoutProblems $marked "webui" -AllowTestBuild).Count
   Check "an unknown shell is a problem" "'other' is not a shell: rnw or webui" ((Get-ShellLayoutProblems $webui "other") -join "|")
@@ -93,7 +100,7 @@ try {
   Check "the React Native shell owns its library, bundle and XAML resources" $true (($rnwOwned -contains "ArdiaApp.dll") -and ($rnwOwned -contains "Bundle\index.windows.bundle") -and ($rnwOwned -contains "Microsoft.ReactNative.dll") -and ($rnwOwned -contains "*\Microsoft.ui.xaml.dll.mui"))
   Check "the WebUI shell owns its UI and migrator" "ardia-ui\index.html,ardia-webui-migrate.exe" ($webuiOwned -join ",")
   Check "every fallback entry names a file, never a whole folder" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $_.EndsWith("\") }) -join ",")
-  Check "each shell's own folders" "Bundle,Microsoft.UI.Xaml,NpuDetect|ardia-ui" (($ShellOwnedFolders.rnw -join ",") + "|" + ($ShellOwnedFolders.webui -join ","))
+  Check "each shell's own folders" "Bundle,Microsoft.UI.Xaml,NpuDetect|ardia-ui,extensions\ublock" (($ShellOwnedFolders.rnw -join ",") + "|" + ($ShellOwnedFolders.webui -join ","))
   Check "no file is owned by both shells" "" (($rnwOwned | Where-Object { $webuiOwned -contains $_ }) -join ",")
   Check "both shells keep the update verifier and its pinned key" $true (($ShellKept -contains "ardia-update-verify.exe") -and ($ShellKept -contains "windows-update.pem"))
   Check "neither shell owns the launcher, the engine, the identity, the update verifier, the locales or the uninstaller" "" ((@($rnwOwned) + @($webuiOwned) | Where-Object { $ShellKept -contains $_ }) -join ",")
@@ -165,6 +172,33 @@ try {
   Check "-UpdateVerify bundles the verifier" $true (Test-Path -LiteralPath (Join-Path $verified "ardia-update-verify.exe"))
   Check "-UpdateVerify bundles the pinned key from scripts/windows" ([System.IO.File]::ReadAllText((Join-Path $PSScriptRoot "windows-update.pem"))) ([System.IO.File]::ReadAllText((Join-Path $verified "windows-update.pem")))
 
+  $blocker = New-Folder "blocker"
+  Touch $blocker "js\vapi.js", "js\vapi-common.js", "js\vapi-client.js", "js\background.js", "_metadata\verified_contents.json"
+  [System.IO.File]::WriteAllText((Join-Path $blocker "manifest.json"), '{"manifest_version":2,"key":"MIIB","version":"1.77.2.33"}')
+  $blocked = Join-Path $scratch "out-blocked"
+  & $assemble -Engine $engine -Ui $ui -Out $blocked -ContentBlocker $blocker -NoUboSeed | Out-Null
+  Check "-ContentBlocker bundles uBlock Origin in extensions\ublock" $true ((Test-Path -LiteralPath (Join-Path $blocked "extensions\ublock\manifest.json")) -and (Test-Path -LiteralPath (Join-Path $blocked "extensions\ublock\js\background.js")))
+  $bridgeSource = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) "engine\ardiacore-linux\content-blocker"
+  Check "-ContentBlocker adds every bridge file the Linux package adds" $true (@(Get-ChildItem -LiteralPath $bridgeSource -File | Where-Object { -not (Test-Path -LiteralPath (Join-Path $blocked "extensions\ublock\$($_.Name)") -PathType Leaf) }).Count -eq 0)
+  Check "-ContentBlocker leaves out the store's signature folder, which no longer matches" $false (Test-Path -LiteralPath (Join-Path $blocked "extensions\ublock\_metadata"))
+  Check "an assembly bundles no content blocker unless asked" $false (Test-Path -LiteralPath (Join-Path $pilot "extensions"))
+  Check "-NoUboSeed leaves the blocker unseeded" $false (Test-Path -LiteralPath (Join-Path $blocked "extensions\ublock\ardia-seed"))
+  Check "-NoUboSeed leaves no test marker behind" $false (Test-Path -LiteralPath (Join-Path $blocked "Ardia.test-build"))
+  $seedFailed = Join-Path $scratch "out-seed-failed"
+  Check-Throws "a seed that fails fails the assembly" "seeding the content blocker failed" { & $assemble -Engine $engine -Ui $ui -Out $seedFailed -ContentBlocker $blocker }
+  Check "a failed seed leaves no test marker behind" $false (Test-Path -LiteralPath (Join-Path $seedFailed "Ardia.test-build"))
+  $assembleSource = Get-Content -LiteralPath $assemble -Raw
+  Check "the assembly seeds with the Windows seed, which runs the Linux one" $true ($assembleSource -match 'scripts\\windows\\ubo-seed\.mjs')
+  $unkeyed = New-Folder "blocker-unkeyed"
+  Touch $unkeyed "js\vapi.js", "js\vapi-common.js", "js\vapi-client.js"
+  [System.IO.File]::WriteAllText((Join-Path $unkeyed "manifest.json"), '{"manifest_version":2,"version":"1.77.2"}')
+  Check-Throws "a content blocker that is not the keyed build is refused" "is not the keyed uBlock Origin build" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-l") -ContentBlocker $unkeyed }
+  $noVapi = New-Folder "blocker-no-vapi"
+  [System.IO.File]::WriteAllText((Join-Path $noVapi "manifest.json"), '{"manifest_version":2,"key":"MIIB"}')
+  Check-Throws "a content blocker without the scripts the bridge page loads is refused" "lacks js/vapi.js, js/vapi-common.js, js/vapi-client.js, which its bridge page loads" { & $assemble -Engine $engine -Ui $ui -Out (Join-Path $scratch "out-m") -ContentBlocker $noVapi }
+  Check-Throws "a shippable assembly without the content blocker is refused" "needs -ContentBlocker" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-n") -Shippable -MigrateBin $migrator -UpdateVerify $verifier -Build 1 }
+  Check "a refused content blocker writes nothing" $false ((Test-Path -LiteralPath (Join-Path $scratch "out-l")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-m")) -or (Test-Path -LiteralPath (Join-Path $scratch "out-n")))
+
   Check-Throws "an assembly into a folder that is not empty is refused" "is not empty" { & $assemble -Engine $engine -Ui $ui -Out $pilot }
   Check-Throws "a shippable assembly without the migrator is refused" "needs -MigrateBin" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-a") -Shippable -Build 1 }
   Check-Throws "a shippable assembly without the update verifier is refused" "needs -UpdateVerify" { & $assemble -Engine $cleanEngine -Ui $ui -Out (Join-Path $scratch "out-j") -Shippable -MigrateBin $migrator -Build 1 }
@@ -209,8 +243,8 @@ try {
   Check "a file that can't be removed stays in the manifest" $true (($script -match "(?s)procedure KeepOwnership.*SaveStringToFile\(Path, Failed\[I\] \+ #13#10, True\)") -and ($script -match "KeepOwnership\(Folder \+ '\\' \+ Manifest, Failed\);"))
   Check "the cleanup refuses an install folder that is a link" $true ($script -match "if IsReparsePoint\(Folder\) then\s+begin\s+Log\('Owned files: ' \+ Folder \+ ' is a link, so no file is removed'\);")
   $listedInstall = New-Folder "listed-install"
-  Touch $listedInstall "Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-ui\assets\index-NEW.js", "ardia-ui\assets\index-OLD.js", "ardia-webui-migrate.exe"
-  [System.IO.File]::WriteAllText((Join-Path $listedInstall "ardia-webui-files.txt"), "ardia-ui\index.html`r`nARDIA-UI\assets\index-NEW.js`r`nardia-webui-migrate.exe`r`n")
+  Touch $listedInstall (@("Ardia.exe", "chrome.dll", "Ardia.build.json", "ardia-update-verify.exe", "windows-update.pem", "ardia-ui\index.html", "ardia-ui\assets\index-NEW.js", "ardia-ui\assets\index-OLD.js", "ardia-webui-migrate.exe") + $blockerFiles)
+  [System.IO.File]::WriteAllText((Join-Path $listedInstall "ardia-webui-files.txt"), "ardia-ui\index.html`r`nARDIA-UI\assets\index-NEW.js`r`nardia-webui-migrate.exe`r`nextensions\ublock\manifest.json`r`nextensions\ublock\ardia-linux-bridge.html`r`n")
   Check "files in a shell's folders that its manifest doesn't list are found, ignoring case" "ardia-ui\assets\index-OLD.js" ((Find-UnlistedOwnedFiles $listedInstall "webui") -join ",")
   Check "an install holding a file its manifest doesn't list fails the layout check" "it holds 1 files in its own folders that ardia-webui-files.txt doesn't list: ardia-ui\assets\index-OLD.js" ((Get-ShellLayoutProblems $listedInstall "webui") -join "|")
   Check "a folder without a manifest has nothing unlisted" 0 (Find-UnlistedOwnedFiles $webui "webui").Count

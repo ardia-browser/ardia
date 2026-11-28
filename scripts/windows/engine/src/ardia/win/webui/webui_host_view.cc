@@ -19,6 +19,8 @@
 #include "ardia/desktop/generated/ac_desktop_routes.h"
 #include "ardia/linux/ac_linux_extension_views.h"
 #include "ardia/linux/ac_linux_find.h"
+#include "ardia/linux/ac_linux_site_controls.h"
+#include "ardia/linux/ac_linux_site_controls_service.h"
 #include "ardia/win/hooks.h"
 #include "ardia/win/main.h"
 #include "ardia/win/private_sessions.h"
@@ -692,6 +694,7 @@ void ShellHostView::Initialize() {
           weak_factory_.GetWeakPtr()),
       base::BindRepeating(&NoteShellRecovery));
   ObserveMember(browser_);
+  ardia::StartLinuxContentBlocker(app_profile_.get(), page_profile());
   if (views::Widget* frame = widget()) {
     original_targeter_ = frame->GetNativeWindow()->SetEventTargeter(
         std::make_unique<ShellRootTargeter>(GetWeakPtr()));
@@ -859,6 +862,7 @@ BrowserWindowInterface* ShellHostView::EnsureMember(Profile* profile) {
   WindowRegistry::Get().RegisterCompanion(created, this);
   companions_.push_back(created->GetWeakPtr());
   ObserveMember(created);
+  ardia::StartLinuxContentBlocker(app_profile_.get(), created->GetProfile());
   RegisterShortcuts(CompanionFocusManager(created));
   Note("companion window for another profile joined window " +
        config_.window_id);
@@ -1736,6 +1740,11 @@ std::string ShellHostView::BootstrapJson() const {
   }
   for (const auto& route : ardia::desktop_routes::kRoutes) {
     capabilities.Append(route.name);
+  }
+  for (std::string_view capability : ::linux_site_controls::Capabilities()) {
+    if (::linux_site_controls::IsContentBlockerCall(capability)) {
+      capabilities.Append(capability);
+    }
   }
   base::DictValue bootstrap;
   bootstrap.Set("windowId", config_.window_id);

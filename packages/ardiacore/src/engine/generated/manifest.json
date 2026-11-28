@@ -95,63 +95,63 @@
         "state": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "setEnabled": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "setListEnabled": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "addList": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "removeList": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "isAllowed": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "setAllowed": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "removeAllowed": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent",
+          "windows": "custom",
           "deadline": 90000
         },
         "hiddenElements": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "hideElements": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "restoreElements": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "devFailNextMessage": {
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         },
         "devDelayNextLoad": {
           "mac": "custom",
@@ -164,7 +164,7 @@
           "topic": "contentBlocker.changed",
           "mac": "custom",
           "desktop": "custom",
-          "windows": "absent"
+          "windows": "custom"
         }
       }
     },

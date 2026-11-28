@@ -198,6 +198,48 @@ test("the Windows WebUI host answers tab.command find, stopFinding and evaluate 
   }
 });
 
+test("the Windows WebUI host serves the content blocker with the Linux host's site controls, started for every window's profiles", () => {
+  const win = "scripts/windows/engine/src/ardia/win/";
+  const build = read(`${win}BUILD.gn`);
+  for (const file of ["ac_linux_site_controls.cc", "ac_linux_site_controls.h", "ac_linux_site_controls_service.cc", "ac_linux_site_controls_service.h", "ac_linux_navigation_hold.cc", "ac_linux_navigation_hold.h", "ac_linux_profiles.cc", "ac_linux_profiles.h", "ac_linux_private_services.h"]) {
+    assert.ok(build.includes(`"//ardia/linux/${file}"`), `the Windows engine compiles ${file}`);
+  }
+  assert.ok(build.includes('"linux_layer_bridge.cc"'), "the Windows engine answers the Linux layer's profile lookups and engine calls");
+  const bridge = stripComments(read(`${win}linux_layer_bridge.cc`));
+  for (const lookup of ["ResolveLinuxProfile(", "LinuxProfileHosts(", "void ac_engine_call("]) {
+    assert.ok(bridge.includes(lookup), `linux_layer_bridge.cc defines ${lookup}`);
+  }
+  assert.match(bridge, /GetProfileByPath\(\s*ardia_win::ProfilePath\(/, "profile lookups find loaded profiles by their Windows directory");
+  assert.doesNotMatch(bridge, /CreateProfileAsync|WithProfile\(/, "a profile lookup never creates or loads a profile");
+  assert.ok(bridge.includes("FindEngineCall("), "engine calls go through the Windows call table");
+  const calls = stripComments(read(`${win}webui/webui_host_calls.cc`));
+  assert.ok(calls.includes("linux_site_controls::IsContentBlockerCall(name)"), "EngineCall picks out the content blocker calls");
+  assert.ok(calls.includes("ardia::LinuxSiteControlsCall("), "content blocker calls run through the shared site controls");
+  assert.ok(calls.indexOf("IsContentBlockerCall(name)") < calls.indexOf("ardia::desktop_routes::FindRoute("), "content blocker calls are routed before the route table turns them down");
+  const view = stripComments(read(`${win}webui/webui_host_view.cc`));
+  assert.ok(view.includes("ardia::StartLinuxContentBlocker(app_profile_.get(), page_profile())"), "every window starts the blocker for its app and page profiles");
+  assert.ok(view.includes("ardia::StartLinuxContentBlocker(app_profile_.get(), created->GetProfile())"), "a companion window for another profile starts that profile's blocker");
+  assert.ok(view.includes("IsContentBlockerCall(capability)"), "the window advertises the content blocker calls it serves");
+  const shell = stripComments(read(`${win}webui/webui_shell.cc`));
+  assert.ok(shell.includes("ardia::StartLinuxSiteControls("), "the shell starts the site controls before its first window");
+  assert.ok(shell.includes('"ArdiaContentBlocker", "contentBlocker"') && shell.includes('"contentBlocker.changed"'), "blocker changes reach each window of that profile as contentBlocker.changed");
+  const blocker = manifest.domains.contentBlocker;
+  for (const [verb, call] of Object.entries(blocker.calls)) {
+    assert.equal(call.windows, call.desktop === "custom" ? "custom" : "absent", `contentBlocker.${verb} is served on Windows exactly when the desktop host serves it`);
+  }
+  assert.equal(blocker.events.changed.windows, "custom", "contentBlocker.changed reaches the Windows shell");
+});
+
+test("the Windows engine sets the restricted content blocker hook in every process, as Linux does", () => {
+  const series = read("scripts/windows/engine/series-win");
+  assert.match(series, /^chromium chromium-win-content-blocker-restricted\.patch$/m);
+  const patch = read("scripts/windows/engine/patches/chromium-win-content-blocker-restricted.patch");
+  assert.ok(patch.includes("+++ b/chrome/app/chrome_main_delegate.cc"), "the hook is set in ChromeMainDelegate, which every process runs");
+  assert.match(patch, /\+#if BUILDFLAG\(IS_WIN\)[\s\S]*g_ardia_restricted_component_extension = &IsArdiaWindowsContentBlocker;/);
+  assert.ok(patch.includes('+#include "ardia/linux/ac_linux_site_controls.h"  // nogncheck') && patch.includes("return extension_id == linux_site_controls::kExtensionId;"), "only Ardia's own uBlock Origin is kept off restricted pages, named by the constant the browser-side hook uses");
+  assert.doesNotMatch(patch, /fajbdaomknpkicfjcpipdmcpoamdmilh/, "the extension id lives in one place");
+});
+
 test("the hosts advertise the routes in the order they always have: engine, tabs, downloads' settings before its commands, then the rest", () => {
   assert.deepEqual(linuxRoutes.slice(0, 8).map(({ name }) => name), ["engine.components", "engine.tasks", "engine.batterySaver", "engine.trimMemory", "engine.openTaskManager", "tabs.lastTabPolicy", "downloads.settings", "downloads.setSettings"]);
   const domainsInOrder = [...new Set(linuxRoutes.map(({ name }) => name.split(".")[0]))];

@@ -115,7 +115,7 @@ async function blockerStorage(app, expression) {
 const saved = (summary) => !!summary && summary.selfie.every((length) => length > 0);
 const sameSummary = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-export async function seed({ chrome, ui, blocker, timeoutMs = 240000, log = console.error }) {
+export async function seed({ chrome, ui, blocker, timeoutMs = 240000, log = console.error, launch = launchArdia }) {
   const startPath = join(blocker, "js/start.js");
   const assets = JSON.parse(await readFile(join(blocker, "assets/assets.json"), "utf8"));
   const keys = selfieKeys(await readFile(join(blocker, "js/storage.js"), "utf8"));
@@ -126,7 +126,7 @@ export async function seed({ chrome, ui, blocker, timeoutMs = 240000, log = cons
   const started = Date.now();
   let app;
   try {
-    app = await launchArdia({
+    app = await launch({
       executable: chrome,
       uiDir: ui,
       scratch,

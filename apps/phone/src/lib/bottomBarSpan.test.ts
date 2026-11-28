@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { barSwipeSpan, besideStrip, bottomBarLayout, DECK_STRIP_SLOTS, deckBarSpan, deckHeaderSides, deckSpacesMenu, deckSpacesSlot, deckStripOf, DUO_PLUS_ABOVE, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
+import { barSwipeSpan, besideStrip, bottomBarLayout, DECK_STRIP_SLOTS, deckBarSpan, deckHeaderSides, deckSpacesMenu, deckSpacesSlot, deckStripOf, DUO_PLUS_ABOVE, duoSqueeze, incognitoInHeader, isOpenDuo } from "./bottomBarSpan.ts";
 import { pagerCommitDistance, snapTarget } from "./pagerPhysics.ts";
 
 test("with no hinge every bottom bar pads by the larger side inset plus its own side, on both sides, and nothing goes to a strip", () => {
@@ -182,4 +182,13 @@ test("the switcher's menu rises above it, left-aligned with the capsule and kept
 test("with no strip there is no bottom-row switcher, so Search Tabs keeps the whole row", () => {
   assert.equal(deckSpacesSlot(402, { left: 24, right: 24 }, bottomBarLayout(402, { left: 0, right: 0 }, "none", 24).strip, 8), null);
   assert.equal(deckSpacesSlot(466, { left: 44, right: 44 }, bottomBarLayout(466, { left: 0, right: 20 }, "closed", 24).strip, 8), null);
+});
+
+test("with sync on a plain iPhone's deck puts Spaces in the bar's left slot and the Incognito switch in the header, while either Duo keeps the switch in its strip and has no header; with sync off nothing moves", () => {
+  const iphone = bottomBarLayout(402, { left: 0, right: 0 }, "none", 24);
+  const landscape = bottomBarLayout(852, { left: 59, right: 59 }, "none", 24);
+  const closed = bottomBarLayout(466, { left: 0, right: 84 }, "closed", 24);
+  const open = bottomBarLayout(951, { left: 0, right: 84 }, "fullyOpen", 24);
+  assert.deepEqual([iphone, landscape, closed, open].map((layout) => incognitoInHeader(true, layout)), [true, true, false, false]);
+  assert.deepEqual([iphone, landscape, closed, open].map((layout) => incognitoInHeader(false, layout)), [false, false, false, false]);
 });

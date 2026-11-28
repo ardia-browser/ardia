@@ -12,13 +12,14 @@ import { PressedGlyph } from "../ui/PressInPlace";
 const CIRCLE_SYSTEM_NAMES: Partial<Record<SymbolName, string>> = {
   ellipsis: "ellipsis",
   gearshape: "gearshape",
+  laptop: "laptopcomputer",
   magnifyingglass: "magnifyingglass",
   squareOnSquare: "square.on.square",
   squareStack: "square.stack",
   squareGrid2x2: "square.grid.2x2",
 };
 
-const CIRCLE_SYSTEM_GLYPH = 16;
+export const CIRCLE_SYSTEM_GLYPH = 16;
 
 export const CLOSE_ALL_TABS = "Close All Tabs";
 
@@ -56,10 +57,10 @@ function PressedFadingGlyphs({ fade, style, children, ...rest }: ViewProps & { f
   );
 }
 
-export function GlassCircleButton({ icon, label, testID, diameter = controlSize.bar, dark, incognito = false, glassShown, glassShownMs, glyphFade, underlay = false, onPress }: Look & ChromeFade & { icon: SymbolName; label: string; testID: string; diameter?: number; underlay?: boolean; onPress: () => void }) {
+export function GlassCircleButton({ icon, label, hint, testID, diameter = controlSize.bar, dark, incognito = false, glassShown, glassShownMs, glyphFade, underlay = false, onPress }: Look & ChromeFade & { icon: SymbolName; label: string; hint?: string; testID: string; diameter?: number; underlay?: boolean; onPress: () => void }) {
   const size = { width: diameter, height: diameter };
   return (
-    <PressInPlace label={label} onPress={onPress} onPressIn={haptics.barPress} dims="glyph" style={[styles.centered, size]}>
+    <PressInPlace label={label} hint={hint} onPress={onPress} onPressIn={haptics.barPress} dims="glyph" style={[styles.centered, size]}>
       <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(diameter)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay} style={[styles.centered, size]}>
         <PressedFadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           {CIRCLE_SYSTEM_NAMES[icon] ? (

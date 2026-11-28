@@ -257,6 +257,47 @@ test("the bottom bar is the Incognito switch, the Search Tabs pill and a 48-poin
   unmount(root);
 });
 
+test("with sync on the bottom bar's left button is Spaces, as the start page's is with no tabs, and the Incognito switch moves to the header between the switcher and the ···, on 44-point glass with 28-point eyes", () => {
+  withPrivateTabs(2);
+  withSpaces([profile("work", "Work")]);
+  const root = deck();
+  const pieces = ["deckBarSpaces", "deckSearchTabs", "deckBarPlus"];
+  const shown = host(root, "deckBottomBar")!.findAll((node) => typeof node.type === "string" && [...pieces, "deckBarIncognito"].includes(node.props.testID)).map((node) => node.props.testID);
+  expect(shown.filter((id, at) => id !== shown[at - 1])).toEqual(pieces);
+  expect(style(root, "deckBarSpaces")).toMatchObject({ width: 48, height: 48, borderRadius: 24 });
+  const order = host(root, "deckHeader")!.findAll((node) => typeof node.type === "string" && ["deckSwitcher", "deckBarIncognito", "deckHeaderMore"].includes(node.props.testID)).map((node) => node.props.testID);
+  expect(order.filter((id, at) => id !== order[at - 1])).toEqual(["deckSwitcher", "deckBarIncognito", "deckHeaderMore"]);
+  expect(style(root, "deckBarIncognito")).toMatchObject({ width: 44, height: 44, borderRadius: 22 });
+  expect(host(root, "deckBarIncognitoGlyph")!.findAll((node) => node.type === IncognitoEyes && node.props.size === 28)).toHaveLength(1);
+  const toggle = incognitoSwitch(root)!;
+  expect(toggle.props.accessibilityHint).toBe("Shows your Incognito tabs.");
+  act(() => toggle.props.onLongPress());
+  expect(menuLabels(root)).toEqual(["Close Incognito Tabs"]);
+  const menu = root.root.findAll((node) => Array.isArray(node.props.items) && node.props.items.some((item: { label?: string }) => item.label === "Close Incognito Tabs") && node.props.place)[0]!;
+  expect(menu.props.place).toMatchObject({ right: 24 });
+  expect(menu.props.place.top).toBeGreaterThan(SAFE_TOP);
+  unmount(root);
+});
+
+test("the bar's Spaces button opens the Spaces sheet, is named and hinted for screen readers, stays in Incognito, and is counted only outside it; the header switch still toggles Incognito", () => {
+  withSpaces([profile("work", "Work")]);
+  const root = deck();
+  const spaces = pressable(root, "Spaces");
+  expect(spaces.props.accessibilityHint).toBe("Shows your Mac’s spaces.");
+  act(() => spaces.props.onPress());
+  expect(browse.useBrowse.getState().sheet).toBe("spaces");
+  expect(counted.mock.calls.filter(([name]) => name === "deck_spaces_button_taps")).toHaveLength(1);
+  act(() => browse.useBrowse.setState({ sheet: null }));
+  act(() => incognitoSwitch(root)!.props.onPress());
+  act(() => jest.advanceTimersByTime(600));
+  expect(useTabs.getState().incognito).toBe(true);
+  act(() => pressable(root, "Spaces").props.onPress());
+  expect(browse.useBrowse.getState().sheet).toBe("spaces");
+  expect(counted.mock.calls.filter(([name]) => name === "deck_spaces_button_taps")).toHaveLength(1);
+  act(() => browse.useBrowse.setState({ sheet: null }));
+  unmount(root);
+});
+
 const incognitoSwitch = (root: Root) => root.root.findAll((node) => node.props.accessibilityLabel === "Incognito" && node.props.accessibilityRole === "switch" && typeof node.props.onPress === "function")[0];
 
 test("the bar's left button is an Incognito switch: Arc Search's two solid eyes, 30 points, drawn on 48-point glass, read as a switch with a hint, on both phones and only in the redesign", () => {

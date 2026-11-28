@@ -1296,6 +1296,35 @@ test("a standby whose controls haven't reported their bounds or whose privacy or
   deckTurn.prepared.value = null;
 });
 
+test("with sync on, the bar's Spaces and the header's Incognito switch pressed in the frames after the cut answer on the UI thread like the other controls: Spaces opens the Spaces sheet and the switch turns Incognito on", async () => {
+  if (Platform.OS !== "android") return;
+  const { OFF_STATUS, useSync } = require("../state/sync/store") as typeof import("../state/sync/store");
+  for (const control of ["sheet", "privacy"] as const) {
+    act(() => useSync.setState((state) => ({ ...state, status: { ...OFF_STATUS, isEnabled: true } })));
+    const root = await standbyDeck();
+    act(() => hostWith(root, "deckHit-sheet")!.props.onLayout({ nativeEvent: { layout: { x: 24, y: 0, width: 48, height: 48 } } }));
+    await act(async () => undefined);
+    act(() => jest.advanceTimersByTime(16));
+    expect([...deckTurn.prepared.value!.present].sort()).toEqual(["more", "plus", "privacy", "search", "sheet"]);
+    const header = hostWith(root, "deckHeader")!;
+    expect(header.findAll((node) => node.props.testID === "deckHit-privacy")).not.toHaveLength(0);
+    const bounds = deckTurn.prepared.value!.controls[control]!;
+    const at = { absoluteX: (bounds.left + bounds.right) / 2, absoluteY: (bounds.top + bounds.bottom) / 2, x: 1, y: 1 };
+    tapTabs();
+    act(() => fireGestureHandler(getByGestureTestId(`deckHit:${control}`), [{ state: State.BEGAN, ...at }, { state: State.ACTIVE, ...at }, { state: State.END, ...at }]));
+    expect(deckTurn.hitMark.value).toBe(`deck-hit:${control}`);
+    act(() => jest.advanceTimersByTime(0));
+    act(() => jest.advanceTimersByTime(100));
+    if (control === "sheet") expect(browse.useBrowse.getState().sheet).toBe("spaces");
+    if (control === "privacy") expect(useTabs.getState().incognito).toBe(true);
+    act(() => browse.useBrowse.setState({ sheet: null }));
+    act(() => useTabs.setState({ incognito: false }));
+    unmount(root);
+    act(() => browse.useBrowse.setState({ surface: "browsing" }));
+    act(() => useSync.setState((state) => ({ ...state, status: OFF_STATUS })));
+  }
+});
+
 test("two deck controls pressed before React takes either: the first one wins and the second is refused on the UI thread", async () => {
   if (Platform.OS !== "android") return;
   const root = await standbyDeck();

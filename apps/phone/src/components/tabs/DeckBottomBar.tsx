@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
-import { actionWords, incognitoWords } from "../../lib/sharedWords";
+import { actionWords, destinationWords, incognitoWords } from "../../lib/sharedWords";
 import { Platform, Pressable, StyleSheet, TextInput, View, type StyleProp, type TextInputInstance, type ViewInstance, type ViewStyle } from "react-native";
 import Animated, { dispatchCommand, runOnJS, useAnimatedKeyboard, useAnimatedReaction, useAnimatedRef, useAnimatedStyle, useEvent, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { floatingBarCenter } from "../../lib/deckGeometry";
 import { haptics } from "../../state/app/haptics";
-import { deckHitAccepted, switchDeckIncognito } from "../../state/browse/store";
+import { deckHitAccepted, openSpacesFromDeck, switchDeckIncognito } from "../../state/browse/store";
+import { useSyncEnabled } from "../../state/sync/hooks";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
@@ -16,8 +17,8 @@ import { PressedGlyph } from "../ui/PressInPlace";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
-import { FadingGlyphs, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
-import { besideStrip, DECK_STRIP_SLOTS, deckBarSpan, deckSpacesMenu, deckSpacesSlot, type BottomBarLayout } from "../../lib/bottomBarSpan";
+import { FadingGlyphs, GlassCircleButton, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
+import { besideStrip, DECK_STRIP_SLOTS, deckBarSpan, deckSpacesMenu, deckSpacesSlot, incognitoInHeader, type BottomBarLayout } from "../../lib/bottomBarSpan";
 import { DeckHitTarget } from "./DeckHitTarget";
 import { DeckMoreButton, DeckSpacesSwitcher, useDeckSpaces } from "./DeckHeader";
 import type { MenuOpener } from "../ui/MenuTrigger";
@@ -43,8 +44,10 @@ type Props = {
 } & ChromeFade;
 
 
-export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void } & ChromeFade) {
-  const size = { width: controlSize.bar, height: controlSize.bar };
+export const SPACES_HINT = "Shows your Mac’s spaces.";
+
+export function IncognitoSwitch({ incognito, dark, onLongPress, screenReaderLongPress, diameter = controlSize.bar, underlay = false, glassShown, glassShownMs, glyphFade }: { incognito: boolean; dark: boolean; onLongPress?: () => void; screenReaderLongPress?: () => void; diameter?: number; underlay?: boolean } & ChromeFade) {
+  const size = { width: diameter, height: diameter };
   return (
     <ToggleIconButton
       testID="deckBarIncognitoSwitch"
@@ -54,14 +57,15 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
       onChange={switchIncognitoSide}
       onLongPress={onLongPress}
       longPressLabel={onLongPress ? incognitoWords.closeIncognitoTabs : undefined}
+      screenReaderLongPress={screenReaderLongPress}
       onPressIn={haptics.barPress}
-      visual={controlSize.bar}
+      visual={diameter}
       dims="glyph"
     >
-      <ChromeSurface testID="deckBarIncognito" shape="circle" cornerRadius={capsule(controlSize.bar)} incognito={incognito} dark={dark || incognito} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
+      <ChromeSurface testID="deckBarIncognito" shape="circle" cornerRadius={capsule(diameter)} incognito={incognito} dark={dark || incognito} shown={glassShown} shownMs={glassShownMs} underlay={underlay} style={[styles.centered, size]}>
         <FadingGlyphs testID="deckBarIncognitoGlyph" pointerEvents="none" fade={glyphFade} style={[styles.centered, size]}>
           <PressedGlyph>
-            <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />
+            <IncognitoEyes incognito={incognito} size={Math.round((deckChromeLayout.incognitoEyes * diameter) / controlSize.bar)} color={rolesFor(dark).label} />
           </PressedGlyph>
         </FadingGlyphs>
       </ChromeSurface>
@@ -70,7 +74,22 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
 }
 
 
+export function IncognitoSwitchMenu({ incognito, dark, privateCount, onCloseIncognito, menusShown, onMenu, place, drawn = false, hits, originY, diameter = controlSize.bar, underlay = false, ...fade }: { incognito: boolean; dark: boolean; privateCount: number; onCloseIncognito?: () => void; menusShown: boolean; onMenu?: (open: boolean) => void; place: ViewStyle; drawn?: boolean; hits: boolean; originY: number; diameter?: number; underlay?: boolean } & ChromeFade) {
+  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: incognitoWords.closeIncognitoTabs, icon: "xmark", destructive: true, onPress: onCloseIncognito }] : [];
+  const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
+  const size = { width: diameter, height: diameter };
+  return (
+    <DeckHitTarget control="privacy" live={hits} originY={originY} style={size}>
+      <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} drawn={drawn} style={size}>
+        {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} diameter={diameter} underlay={underlay} onLongPress={switchMenuShown ? (onLongPress ?? holdOwnedByMenu) : undefined} screenReaderLongPress={switchMenuShown && !onLongPress ? onCloseIncognito : undefined} {...fade} />}
+      </MenuTrigger>
+    </DeckHitTarget>
+  );
+}
+
 const switchIncognitoSide = () => switchDeckIncognito();
+
+const holdOwnedByMenu = () => undefined;
 
 const LIVE_KEYBOARD = Platform.OS === "ios";
 
@@ -243,14 +262,14 @@ export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, b
   const besideSlot = (top: number) => (strip ? { bottom: deckHeight - centerY - controlSize.bar / 2 - top, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : null);
   const plusPlace = besideSlot(plusTop) ?? { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
   const switchPlace = (slots ? besideSlot(slots.incognito) : null) ?? { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, left: span.left, width: tabsLayout.menuWidth };
-  const closeIncognito: MenuItem[] = onCloseIncognito ? [{ label: incognitoWords.closeIncognitoTabs, icon: "xmark", destructive: true, onPress: onCloseIncognito }] : [];
-  const switchMenuShown = menusShown && privateCount > 0 && closeIncognito.length > 0;
-  const incognitoSwitch = (
-    <DeckHitTarget control="privacy" live={rowHits} originY={rowTop} style={styles.circleHit}>
-      <MenuTrigger items={closeIncognito} trigger="longPress" haptic={menuOpenedHaptic} disabled={!switchMenuShown} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={switchPlace} drawn={strip !== null} style={{ width: controlSize.bar, height: controlSize.bar }}>
-        {({ onLongPress }) => <IncognitoSwitch incognito={incognito} dark={dark} onLongPress={switchMenuShown ? onLongPress : undefined} {...fade} />}
-      </MenuTrigger>
+  const incognitoSwitch = <IncognitoSwitchMenu incognito={incognito} dark={dark} privateCount={privateCount} onCloseIncognito={onCloseIncognito} menusShown={menusShown} onMenu={onMenu} place={switchPlace} drawn={strip !== null} hits={rowHits} originY={rowTop} {...fade} />;
+  const syncs = useSyncEnabled();
+  const leading = incognitoInHeader(syncs, layout) ? (
+    <DeckHitTarget control="sheet" live={rowHits} originY={rowTop} style={styles.circleHit}>
+      <GlassCircleButton icon="laptop" label={destinationWords.spaces} hint={SPACES_HINT} testID="deckBarSpaces" dark={dark} incognito={incognito} onPress={openSpacesFromDeck} {...fade} />
     </DeckHitTarget>
+  ) : (
+    incognitoSwitch
   );
   const { spaces, current } = useDeckSpaces();
   const spacesSlot = current && spaces.length > 1 ? deckSpacesSlot(width, span, strip, deckChromeLayout.barGap) : null;
@@ -315,7 +334,7 @@ export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, b
       {shown ? <FabricCatchUp motion={riseNow} testID="deckBarFabricCatchUp" /> : null}
       {shown && LIVE_KEYBOARD ? <LiveKeyboardTop into={keyboardTop} /> : null}
       <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingLeft: span.left, paddingRight: span.right }]}>
-        {strip ? null : incognitoSwitch}
+        {strip ? null : leading}
         {spacesSlot?.anchor === "start" ? switcher : null}
         {covers ? (
           <Animated.View testID="deckSearchCover" collapsable={false} pointerEvents="box-none" style={[styles.searchHit, styles.above, fieldCovers]}>

@@ -83,7 +83,8 @@ import { PageProgressLine } from "./PageProgressLine";
 import { useBarLoadWash } from "./barLoadWash";
 import { labTrace } from "../../platform/lab";
 import { barIsDark, shownTone } from "../../lib/pageTone";
-import { barSwipeSpan, besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
+import { barSwipeSpan, besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze, incognitoInHeader } from "../../lib/bottomBarSpan";
+import { useSyncEnabled } from "../../state/sync/hooks";
 import { useScreenLayout } from "../../state/app/screenLayout";
 import { notePageBarDark } from "../../state/toasts/store";
 
@@ -218,6 +219,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   const { span: barSpan, strip } = barLayout;
   const controlsSpan = { left: barSpan.left - barSide, right: barSpan.right - barSide };
   const duoStrip = design === "redesigned" ? strip : null;
+  const deckLeadsWithSpaces = incognitoInHeader(useSyncEnabled(), barLayout);
   const squeeze = duoStrip ? duoSqueeze(width, barLayout) : null;
   const safeSide = Math.max(insets.left, insets.right);
   const systemMenu = usesSystemPageMenu(design);
@@ -487,6 +489,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
                     showsPlus={staged || !searching}
                     anchors={!folds || !collapse.collapsed}
                     duo={duoBar}
+                    deckLeadsWithSpaces={deckLeadsWithSpaces}
                     fold={folds ? collapse.fold.barLook : null}
                     wash={wash}
                     swipe={swipeAddresses}

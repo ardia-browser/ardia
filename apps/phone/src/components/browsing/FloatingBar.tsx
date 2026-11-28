@@ -34,7 +34,7 @@ import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { useDeckOwnsBar } from "../../state/browse/hooks";
 import { usePageBusy } from "../../state/page/hooks";
 import { PullGhost, PullGlyphs } from "./PagePull";
-import { IncognitoGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
+import { DeckLeadingGlyph, PlusGlyph, SearchTabsGlyph, SearchTabsGlyphs } from "../tabs/DeckBarGlyphs";
 import { DUO_PLUS_ABOVE, type DuoSqueeze } from "../../lib/bottomBarSpan";
 import { pageWords } from "../../lib/sharedWords";
 
@@ -49,6 +49,7 @@ type Props = {
   showsPlus: boolean;
   anchors?: boolean;
   duo?: DuoBar | null;
+  deckLeadsWithSpaces?: boolean;
   onTabs: () => void;
   onTabsMenu: () => void;
   onStep: (delta: -1 | 1) => void;
@@ -214,7 +215,7 @@ export function barAddress(tab: BrowserTab): BarAddress {
   };
 }
 
-export function FloatingBar({ tab, preview = null, standsIn = false, privateLook, order, roles, dark, showsPlus, anchors = true, duo = null, fold = null, wash = null, swipe = null, handover, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
+export function FloatingBar({ tab, preview = null, standsIn = false, privateLook, order, roles, dark, showsPlus, anchors = true, duo = null, deckLeadsWithSpaces = false, fold = null, wash = null, swipe = null, handover, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
   const previewId = preview?.id ?? null;
   const previewHides = useAnimatedStyle(() => {
     const lifted = destination.id.value;
@@ -295,7 +296,7 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
   const lockFade = useAnimatedStyle(() => ({ opacity: shut(progress.value) }));
   const leading = (
     <Animated.View testID="floatingBarLeading" collapsable={false} style={back.leading} pointerEvents={back.sidesShown ? "box-none" : "none"} importantForAccessibility={back.sidesShown ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!back.sidesShown}>
-      <FloatingTabsButton tab={styledTab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} fold={fold} ghost={!handed} swipe={swipe} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
+      <FloatingTabsButton tab={styledTab} order={order} roles={roles} dark={dark} testID="floatingBarTabs" glass={back.sidesGlass} glyphs={back.leadingGlyphs} fold={fold} ghost={!handed} ghostSpaces={deckLeadsWithSpaces} swipe={swipe} onTabs={onTabs} onTabsMenu={onTabsMenu} onStep={onStep} />
     </Animated.View>
   );
   const trailing = (
@@ -391,7 +392,7 @@ const TABS_LONG_PRESS_MS = 500;
 const TABS_TAP_OUTLASTS_HOLD_MS = 150;
 const TABS_PRESS_DRIFT = 24;
 
-export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, glyphs, fold = null, ghost = false, swipe = null, onTabs, onTabsMenu, onStep }: ButtonProps & { order: BrowserTab[]; roles: ColorRoles; swipe?: SwipeAddresses | null; onTabs: () => void; onTabsMenu: () => void; onStep: (delta: -1 | 1) => void }) {
+export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, glyphs, fold = null, ghost = false, ghostSpaces = false, swipe = null, onTabs, onTabsMenu, onStep }: ButtonProps & { order: BrowserTab[]; roles: ColorRoles; ghostSpaces?: boolean; swipe?: SwipeAddresses | null; onTabs: () => void; onTabsMenu: () => void; onStep: (delta: -1 | 1) => void }) {
   const count = order.length;
   const foldGlyphs = useFoldGlyphs(fold);
   const tabsNow = useRef(onTabs);
@@ -469,7 +470,7 @@ export function FloatingTabsButton({ tab, order, roles, dark, testID, glass, gly
             </PullGlyphs>
             {ghost ? (
               <PullGhost style={styles.ghost}>
-                <IncognitoGlyph incognito={tab.isPrivate} dark={dark} />
+                <DeckLeadingGlyph spaces={ghostSpaces} incognito={tab.isPrivate} dark={dark} />
               </PullGhost>
             ) : null}
           </ChromeSurface>

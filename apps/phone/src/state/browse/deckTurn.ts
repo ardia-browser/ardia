@@ -1,7 +1,7 @@
 import { makeMutable, runOnUI } from "react-native-reanimated";
 import { create } from "zustand";
 
-export type DeckControl = "more" | "spaces" | "privacy" | "search" | "plus";
+export type DeckControl = "more" | "spaces" | "sheet" | "privacy" | "search" | "plus";
 
 export type DeckBounds = { left: number; top: number; right: number; bottom: number };
 
@@ -15,7 +15,7 @@ export type DeckHitCommand = { seq: number; turn: number; phone: number; control
 
 export type DeckCardLift = { turn: number; phone: number; deck: string };
 
-export const DECK_HIT_LABELS = ["more", "spaces", "privacy", "search", "plus", "card"] as const;
+export const DECK_HIT_LABELS = ["more", "spaces", "sheet", "privacy", "search", "plus", "card"] as const;
 
 export const DECK_PRESS_SLOP = 12;
 

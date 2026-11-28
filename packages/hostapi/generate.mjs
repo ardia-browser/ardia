@@ -15,11 +15,13 @@ and the domain's entry under the manifest's modules.
 For the desktop host Linux and Windows share it writes the engine routes in
 engine/ardiacore-desktop/src/ardia/desktop/generated/ac_desktop_routes.h and the request deadline maps
 of engine/ardiacore-linux/src/ardia/linux/bootstrap.js, from each call's and function's deadline and the
-desktop host's own methods in schema/desktop.ts.`;
+desktop host's own methods in schema/desktop.ts, and the module functions and constants the desktop host
+leaves out on purpose (optional and absent there) in packages/ardiacore/src/engine/generated/desktopOmitted.ts.`;
 
 export const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 export const GENERATED_TS = "packages/ardiacore/src/engine/generated/";
 export const MANIFEST = `${GENERATED_TS}manifest.json`;
+export const DESKTOP_OMITTED = `${GENERATED_TS}desktopOmitted.ts`;
 export const SWIFT = "packages/ardiacore/ios/";
 export const HOSTS = ["mac", "desktop", "windows"];
 export const DESKTOP_ROUTES = "engine/ardiacore-desktop/src/ardia/desktop/generated/ac_desktop_routes.h";
@@ -516,6 +518,19 @@ function moduleManifest(name, domain) {
   return { kind: domain.kind, package: domain.package, types: modulePaths(name, domain.package).types, swift, sha256, modules };
 }
 
+export function desktopOmitted(moduleDomains) {
+  const names = [];
+  for (const domain of Object.values(moduleDomains)) {
+    for (const [module, entry] of Object.entries(domain.modules)) {
+      for (const [member, row] of [...Object.entries(entry.functions), ...Object.entries(constantsOf(entry))]) {
+        if (row.optional && row.desktop === "absent") names.push(`${module}.${member}`);
+      }
+    }
+  }
+  const rows = names.sort().map((name) => `  "${name}",`);
+  return `export const DESKTOP_OMITTED: readonly string[] = [\n${rows.join("\n")}${rows.length ? "\n" : ""}];\n`;
+}
+
 function manifest(domains, moduleDomains) {
   const out = { domains: {}, modules: {} };
   for (const name of Object.keys(domains)) {
@@ -630,6 +645,7 @@ export function outputs(domains, moduleDomains = {}, desktopHost = null) {
   }
   files.set(DESKTOP_ROUTES, routesHeader(domains, desktopHost?.routeOrder ?? []));
   if (desktopHost !== null) files.set(BOOTSTRAP, spliceDeadlines(readFileSync(ROOT + BOOTSTRAP, "utf8"), desktopDeadlines(domains, moduleDomains, desktopHost)));
+  files.set(DESKTOP_OMITTED, desktopOmitted(moduleDomains));
   files.set(MANIFEST, manifest(domains, moduleDomains));
   return files;
 }

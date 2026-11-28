@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { callHost } from "./host.ts";
 import { BOOKMARKS_EXPORT_CALL } from "./hostBookmarksExport.ts";
 import { reachesNativeHostUnchecked, resolveHostModule } from "./hostModules.ts";
+import { DESKTOP_OMITTED } from "../../../packages/ardiacore/src/engine/generated/desktopOmitted.ts";
 import { createNativeEvents } from "./hostEvents.ts";
 import { hostLaunchConfig } from "./hostLaunchConfig.ts";
 import { HostTab } from "./hostTab.ts";
@@ -57,7 +58,7 @@ test("every call of a schema-generated domain reaches a host that serves it unde
   }
 });
 
-const LEFT_OUT_BY_THE_UI = new Set(["ArdiaSync.takeFileCounts"]);
+const LEFT_OUT_BY_THE_UI = new Set(DESKTOP_OMITTED);
 const moduleManifest = JSON.parse(readFileSync(new URL("../../../packages/ardiacore/src/engine/generated/manifest.json", import.meta.url), "utf8")).modules;
 
 function generatedResults() {
@@ -85,7 +86,7 @@ async function checkModuleFunction(module, fn, row, { advertised = true } = {}) 
   const resolved = resolveHostModule(host, module, fn);
   if (LEFT_OUT_BY_THE_UI.has(name)) {
     assert.equal(row.desktop, "absent", `${name} is left out on the desktop`);
-    assert.equal(resolved, null, `${name} resolves to nothing, so callers skip it`);
+    assert.equal(resolved, null, `${name} is optional and absent on the desktop, so it resolves to nothing and its optional callers skip it instead of sending the host a call it refuses`);
     return;
   }
   assert.equal(typeof resolved, "function", `${name} resolves to a function`);
@@ -119,7 +120,7 @@ test("with the capabilities the Linux engine advertises, every module function i
     assert.ok(linuxAdvertised.includes(capability), `bootstrap helper capability ${capability} is parsed into the advertised fixture`);
   }
   assert.ok(functions.some(({ module, fn }) => module === "ArdiaWindowBackdrop" && fn === "holdKeyLook"), "the scan found the shaders pilot");
-  for (const name of LEFT_OUT_BY_THE_UI) assert.ok(functions.some(({ module, fn }) => `${module}.${fn}` === name), `${name} is still a schema function`);
+  for (const name of ["ArdiaSync.takeOpenFailures", "ArdiaSync.takeFileCounts"]) assert.ok(LEFT_OUT_BY_THE_UI.has(name), `${name} is still left out on the desktop`);
   for (const { module, fn, row } of functions) await checkModuleFunction(module, fn, row);
 });
 
@@ -157,7 +158,8 @@ test("a module constant the desktop answers resolves without the native host fal
         const { host } = fixture();
         host.bootstrap.capabilities = [...linuxAdvertised];
         const resolved = resolveHostModule(host, module, constant);
-        assert.equal(reachesNativeHostUnchecked(resolved), !["custom", "adapted"].includes(binding.desktop), `constant ${module}.${constant} is ${binding.desktop} on the desktop`);
+        if (LEFT_OUT_BY_THE_UI.has(`${module}.${constant}`)) assert.equal(resolved, null, `constant ${module}.${constant} is optional and absent on the desktop, so it resolves to nothing`);
+        else assert.equal(reachesNativeHostUnchecked(resolved), !["custom", "adapted"].includes(binding.desktop), `constant ${module}.${constant} is ${binding.desktop} on the desktop`);
       }
     }
   }
@@ -170,6 +172,33 @@ test("a Mac-only synchronous module function, which the desktop leaves to the ho
   await assert.rejects(checkModuleFunction("ArdiaWindowBackdrop", "holdKeyLook", { args: ["on"], async: true, mac: "custom", desktop: "absent", windows: "absent" }), /goes to the native host/);
   await assert.rejects(checkModuleFunction("ArdiaShell", "copyText", { args: ["text"], async: false, mac: "custom", desktop: "adapted", windows: "custom" }), /is answered by the desktop UI, in front of the native host's own dispatch/);
   await checkModuleFunction("ArdiaDemoOnMac", "size", { args: [], async: false, mac: "custom", desktop: "absent", windows: "absent" });
+});
+
+test("a module member the desktop leaves out resolves to nothing through the native-module shim, under its own module name even when the shim aliases it, and reaches the host once the host advertises it", async () => {
+  const run = spawnSync(process.execPath, ["--no-warnings", "--import", fileURLToPath(new URL("../scripts/host-test-loader.mjs", import.meta.url)), "--input-type=module", "-e", `
+const sent = [];
+const advertised = JSON.parse(process.env.ADVERTISED);
+globalThis.window = globalThis;
+globalThis.__ardiaHost = { bootstrap: { windowId: "main", profileId: "default", capabilities: advertised }, call: async () => "null", invoke: async (method) => { sent.push(method); throw new Error("Unsupported Linux host method: " + method); }, onEvent: () => () => {} };
+const { requireNativeModule } = await import("./src/shims/expo-modules-core.ts");
+const sync = requireNativeModule("ArdiaSync");
+const windows = requireNativeModule("ArdiaAppWindows");
+const rejected = [];
+process.on("unhandledRejection", (reason) => rejected.push(String(reason?.message ?? reason)));
+const counts = sync.takeOpenFailures?.();
+const files = sync.takeFileCounts?.();
+const shown = typeof windows.setWindowShown;
+await new Promise((resolve) => setTimeout(resolve, 20));
+process.stdout.write(JSON.stringify({ counts: counts ?? "none", files: files ?? "none", shown, sent, rejected }));
+`], { cwd: fileURLToPath(new URL("../", import.meta.url)), encoding: "utf8", env: { ...process.env, ADVERTISED: JSON.stringify([]) } });
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(run.stdout), { counts: "none", files: "none", shown: "object", sent: [], rejected: [] });
+  const { host, requests } = fixture();
+  host.bootstrap.capabilities = ["ArdiaShell.setWindowShown"];
+  const shown = resolveHostModule(host, "ArdiaShell", "setWindowShown", "ArdiaAppWindows");
+  assert.equal(typeof shown, "function");
+  await shown("main", true, false);
+  assert.deepEqual(requests, [{ method: "ArdiaShell.setWindowShown", args: { args: ["main", true, false] } }]);
 });
 
 test("engine errors and bad replies reject with stable codes, profiles never retry", async () => {

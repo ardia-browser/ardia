@@ -5,6 +5,7 @@
 #include <dwmapi.h>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <set>
@@ -33,6 +34,7 @@
 #include "base/json/json_writer.h"
 #include "base/logging.h"
 #include "base/process/kill.h"
+#include "base/process/process.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
@@ -66,6 +68,7 @@
 #include "ui/aura/window_targeter.h"
 #include "ui/base/base_window.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
+#include "ui/base/mojom/ui_base_types.mojom-shared.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/mojom/window_show_state.mojom.h"
 #include "ui/compositor/layer.h"
@@ -77,6 +80,7 @@
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/view_targeter.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/widget/widget_delegate.h"
 #include "ui/views/win/hwnd_util.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -1457,13 +1461,16 @@ void ShellHostView::RememberPlacement() {
 }
 
 void ShellHostView::RequestClose() {
-  if (!browser_ || closing_ || close_confirming_) {
+  if (!browser_ || closing_ || close_confirming_ ||
+      (close_committed_ && LeavingSession())) {
     return;
   }
+  close_committed_ = false;
+  close_started_ = false;
   RememberPlacement();
   ResetUnloadConfirmations();
   if (!CompanionsHoldTabs() || browser_shutdown::IsTryingToQuit()) {
-    browser_->GetWindow()->Close();
+    CommitClose();
     return;
   }
   close_confirming_ = true;
@@ -1478,14 +1485,89 @@ void ShellHostView::RequestClose() {
                      " was cancelled by one of its pages");
           return;
         }
-        host->browser_->GetWindow()->Close();
+        host->CommitClose();
       },
       GetWeakPtr()));
 }
 
+void ShellHostView::CommitClose() {
+  if (!browser_) {
+    return;
+  }
+  close_committed_ = true;
+  WindowRegistry& registry = WindowRegistry::Get();
+  if (is_utility() || private_window() ||
+      !webui_window::ClosingEndsSession(
+          registry.OpenBrowserWindowsBesides(this))) {
+    close_started_ = true;
+    browser_->GetWindow()->Close();
+    return;
+  }
+  Note("window " + config_.window_id + " ends the session as it closes");
+  registry.EndSessionThen(
+      this, base::BindOnce(
+                [](base::WeakPtr<ShellHostView> host) {
+                  if (host && host->browser_) {
+                    host->close_started_ = true;
+                    host->browser_->GetWindow()->Close();
+                  }
+                },
+                GetWeakPtr()));
+}
+
+bool ShellHostView::LeavingSession() const {
+  if (!browser_) {
+    return true;
+  }
+  const UnloadController* unload = UnloadController::From(browser_.get());
+  const bool started = close_committed_ && close_started_;
+  return webui_window::CloseStillInFlight(
+      closing_, close_committed_, close_started_,
+      started && unload && unload->is_attempting_to_close_browser(),
+      started && HoldsModalDialog());
+}
+
+bool ShellHostView::HoldsModalDialog() const {
+  views::Widget* frame = widget();
+  if (!frame) {
+    return false;
+  }
+  for (const auto& owned :
+       views::Widget::GetAllOwnedWidgets(frame->GetNativeView())) {
+    if (owned && owned->IsVisible() && owned->widget_delegate() &&
+        owned->widget_delegate()->GetModalType() !=
+            ui::mojom::ModalType::kNone) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool ShellHostView::ListensForSessionEnd() const {
+  return browser_ && !closing_ && handler_ &&
+         OwnsHandler(handler_, handler_->generation());
+}
+
+void ShellHostView::EmitShellEvent(std::string_view name,
+                                   base::DictValue data) {
+  Emit("ArdiaShell", "shell",
+       base::Value(base::DictValue()
+                       .Set("name", name)
+                       .Set("data", std::move(data))));
+}
+
 bool ShellHostView::InterceptSystemClose() {
-  if (!browser_ || closing_ || browser_shutdown::IsTryingToQuit() ||
-      !CompanionsHoldTabs()) {
+  if (!browser_ || closing_) {
+    return false;
+  }
+  if (webui_window::SwallowsSystemClose(close_committed_, close_started_)) {
+    return true;
+  }
+  if ((close_committed_ && LeavingSession()) ||
+      browser_shutdown::IsTryingToQuit()) {
+    return false;
+  }
+  if (!webui_window::RoutesSystemClose(is_utility(), CompanionsHoldTabs())) {
     return false;
   }
   base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
@@ -1721,9 +1803,17 @@ std::string ShellHostView::BootstrapJson() const {
   info.Set("locale", "en-US");
   info.Set("updates", false);
   info.Set("isolatedInstance", true);
+  if (const base::Time started = base::Process::Current().CreationTime();
+      !started.is_null()) {
+    info.Set("processStart",
+             std::floor(started.InMillisecondsFSinceUnixEpochIgnoringNull()));
+  }
   base::ListValue capabilities;
   for (std::string_view capability : HostCapabilities(is_utility())) {
-    capabilities.Append(capability);
+    if (!private_window() ||
+        webui_window::OfferedToPrivateWindow(capability)) {
+      capabilities.Append(capability);
+    }
   }
   for (const auto& calls :
        {std::span<const std::string_view>(kDefaultBrowserCalls),

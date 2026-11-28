@@ -3,7 +3,8 @@ export * from "@ardia-real/shell";
 import { unstable_batchedUpdates } from "react-dom";
 import { emitNativeEvent, provideNativeModule, provideNativeModuleProvider } from "./expo-modules-core";
 import { NATIVE_CHANGE } from "./react-native";
-import { ardiaHost, hostModuleMethod, reportHostError } from "../host";
+import { ardiaHost, hostModuleMethod, reportHostError, type ArdiaHost } from "../host";
+import { appVersionOf } from "@platform/appVersion";
 import { hostLaunchConfig } from "../hostLaunchConfig";
 import { createFolderPicker } from "../hostFolders";
 import { linuxHostDialogs } from "../hostDialogs";
@@ -103,7 +104,14 @@ export const setAppearance = (mode: AppearanceMode) => appearance.setAppearance(
 
 export const windowIds = ardiaHost ? createLinuxWindowIds(ardiaHost, () => useBrowser.getState()) : async () => [] as string[];
 export const windowFrame = async (id: string): Promise<[number, number, number, number] | null> => ardiaHost ? hostModuleMethod("ArdiaShell", "windowFrame")(id) as Promise<[number, number, number, number] | null> : null;
-export const systemInfo = (): SystemInfo => ardiaHost ? (ardiaHost.bootstrap.nativeModules?.ArdiaApp?.systemInfo as SystemInfo | undefined) ?? { ...SYSTEM_INFO, appVersion: "linux-dev", appBuild: "host", bundleId: "dev.ardia.linux", osVersion: "Linux", osBuild: "Linux", arch: "unknown", model: "Linux" } : SYSTEM_INFO;
+const hostSystemInfo = (host: ArdiaHost): SystemInfo => {
+  const reported = host.bootstrap.nativeModules?.ArdiaApp?.systemInfo as SystemInfo | undefined;
+  if (!reported) return { ...SYSTEM_INFO, appVersion: "linux-dev", appBuild: "host", bundleId: "dev.ardia.linux", osVersion: "Linux", osBuild: "Linux", arch: "unknown", model: "Linux" };
+  const appVersion = appVersionOf(reported.appVersion);
+  return appVersion === reported.appVersion ? reported : { ...reported, appVersion };
+};
+let hostInfo: SystemInfo | undefined;
+export const systemInfo = (): SystemInfo => ardiaHost ? (hostInfo ??= hostSystemInfo(ardiaHost)) : SYSTEM_INFO;
 export const launchConfig = () => hostLaunchConfig(ardiaHost);
 
 const claimHostFocus = async (generation: number, tag: number) => {

@@ -8,6 +8,7 @@ export * from "react-native-web";
 export { MacPressable as Pressable, MacView as View } from "./web/motion/macView";
 export { MacText as Text } from "./web/MacText";
 export { ScaledImage as Image } from "./web/ScaledImage";
+export { AccessibilityInfo } from "./web/accessibilityInfo";
 
 export const unstable_batchedUpdates = batchedUpdates;
 

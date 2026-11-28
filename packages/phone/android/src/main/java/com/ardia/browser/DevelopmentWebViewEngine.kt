@@ -401,8 +401,8 @@ class DevelopmentWebViewEngine(
         val name = privateProfileName
         privateProfileName = null
         val endedSession = privateJar?.session
-        privateJar = null
         endedSession?.let { session -> sessionEndListeners.forEach { listener -> runCatching { listener(session) } } }
+        privateJar = null
         onPrivateBrowsingEnded?.invoke()
         if (name == null || !multiProfileFeature) return
         clearPrivateProfile(name)

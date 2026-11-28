@@ -82,7 +82,7 @@ final class MouseGestures {
     guard enabled, !ShortcutRecorder.shared.isRecording,
       event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(Self.ignoredModifiers).isEmpty,
       let window = event.window, MouseShortcuts.browserWindowId(of: window) != nil, !Self.overPeek(event, in: window),
-      let page = ArdiaWebView.pageView(at: event.locationInWindow, in: window)
+      let page = ArdiaWebView.pageView(at: event.locationInWindow, in: window), !ArdiaWebView.tabId(ofPageView: page).isEmpty
     else {
       lastOutcome = "passed"
       return event
@@ -163,13 +163,13 @@ final class MouseGestures {
       lastOutcome = "unrecognized"
       return nil
     }
-    let targetsPage = !pageTab.isEmpty && WindowManager.shared.kind(of: window) == .browser
-    guard targetsPage || window !== NSApp.keyWindow || MenuTarget.shared.validateMenuItem(item) else {
+    let inBrowserWindow = WindowManager.shared.kind(of: window) == .browser
+    guard inBrowserWindow || window !== NSApp.keyWindow || MenuTarget.shared.validateMenuItem(item) else {
       lastOutcome = "unavailable:\(action.command)"
       return nil
     }
     lastOutcome = action.command
-    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: pageTab.isEmpty ? nil : pageTab)
+    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: pageTab)
     return nil
   }
 

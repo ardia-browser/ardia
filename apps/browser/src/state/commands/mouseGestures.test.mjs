@@ -79,7 +79,7 @@ test("a gesture runs on its own tab, drops when that tab is gone, and keeps Litt
   const route = (windowId, gestureTabId, command = "back", mouseGesture = "back") => gestureRoute(S(), { command, windowId, gestureTabId, mouseGesture });
   assert.deepEqual(route(w, a), { run: true, tabId: a });
   assert.deepEqual(route(w, a, "back", null), { run: true, tabId: null }, "a command that isn't a gesture is untouched");
-  assert.deepEqual(route(w, null), { run: true, tabId: null }, "a gesture whose page tab is unknown runs as the window's command");
+  assert.deepEqual(route(w, null, "closeTab", "close_tab"), { run: false, tabId: null }, "a page with no tab, like an extension side panel, never falls back to the window's command");
   assert.deepEqual(route(w, c), { run: false, tabId: null }, "a tab that moved to another window is never acted on");
   S().closeTab(b);
   assert.deepEqual(route(w, b, "closeTab", "close_tab"), { run: false, tabId: null }, "a closed tab never falls back to the active tab or the selection");

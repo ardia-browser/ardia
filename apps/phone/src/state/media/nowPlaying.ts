@@ -67,6 +67,8 @@ export function frontMedia(shelf: MediaShelf, belongs: (media: PlayingMedia) => 
   return front;
 }
 
+export const frontMediaOnSide = (shelf: MediaShelf, incognito: boolean, belongs: (media: PlayingMedia) => boolean = () => true) => frontMedia(shelf, (media) => media.isPrivate === incognito && belongs(media));
+
 export type MiniPlayerScene = {
   enabled: boolean;
   surface: "start" | "browsing" | "deck";

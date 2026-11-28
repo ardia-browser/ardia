@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PageMediaEvent } from "@ardia/phone-native";
-import { frontMedia, mediaFromEvent, miniPlayerLines, miniPlayerShows, positionAt, shelve, skipControls, withOptimisticState, type MiniPlayerScene, type PlayingMedia } from "./nowPlaying.ts";
+import { frontMedia, frontMediaOnSide, mediaFromEvent, miniPlayerLines, miniPlayerShows, positionAt, shelve, skipControls, withOptimisticState, type MiniPlayerScene, type PlayingMedia } from "./nowPlaying.ts";
 
 const event = (pageId: string, fields: Partial<PageMediaEvent> = {}): PageMediaEvent => ({
   name: "pages.media",
@@ -49,6 +49,13 @@ test("the most recently started media is in front, playing or paused, like the M
   assert.equal(frontMedia(shelf)?.pageId, "b");
   assert.equal(frontMedia(shelf, (one) => one.pageId !== "b")?.pageId, "c");
   assert.equal(frontMedia({}), null);
+});
+
+test("each side picks its own media: a newer Incognito play never hides the normal side's, and the reverse", () => {
+  const shelf = { normal: media("normal", { startedAt: 100 }), secret: media("secret", { startedAt: 900, isPrivate: true }) };
+  assert.equal(frontMediaOnSide(shelf, false)?.pageId, "normal");
+  assert.equal(frontMediaOnSide(shelf, true)?.pageId, "secret");
+  assert.equal(frontMediaOnSide({ secret: shelf.secret }, false), null);
 });
 
 test("the mini player shows when the playing tab is not the one on screen", () => {

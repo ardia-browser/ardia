@@ -13,7 +13,7 @@ import { currentTabs, useTabs } from "../tabs/store";
 import { findTab } from "../tabs/tabsState";
 import { countUsage } from "../telemetry/telemetry";
 import { useVoice } from "../voice/store";
-import { frontMedia, miniPlayerShows, shelve, withOptimisticState, type Dismissal, type MediaShelf, type PlayingMedia, type SkipControl } from "./nowPlaying";
+import { frontMediaOnSide, miniPlayerShows, shelve, withOptimisticState, type Dismissal, type MediaShelf, type PlayingMedia, type SkipControl } from "./nowPlaying";
 
 type MediaState = { shelf: MediaShelf; dismissed: Dismissal; counted: string | null };
 
@@ -141,7 +141,7 @@ export function useMiniPlayer(): MiniPlayerView {
   const onboarding = useOnboarding((s) => s.showing);
   const voice = useVoice((s) => s.presented);
   const tabOf = (pageId: string) => open.find((tab) => tab.id === pageId) ?? privates.find((tab) => tab.id === pageId) ?? null;
-  const media = enabled ? frontMedia(shelf, (one) => {
+  const media = enabled ? frontMediaOnSide(shelf, incognito, (one) => {
     const tab = tabOf(one.pageId);
     return tab !== null && (everySpace || tab.isPrivate || belongsToSpace(spaces, tab.profileSyncId));
   }) : null;

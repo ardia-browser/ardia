@@ -1,14 +1,15 @@
 import { openWindow, switchToTab } from "../browser/actions";
 import { useBrowser } from "../browser/store";
 import { activeTabId, viewTabIds } from "../browser/model";
-import type { Tab } from "../browser/types";
+import type { SplitView, Tab } from "../browser/types";
 import { openSplitPane } from "../splits/actions";
-import { splitViewAvailable } from "../splits/splits";
+import { splitOf, splitViewAvailable } from "../splits/splits";
 import { gateOpening, settleOpening } from "../tabs/openingGate";
 import { noteSplit } from "../telemetry/usage";
 import { noteBarLoad } from "../telemetry/barLoadFocus";
 import { originalProfile } from "../windows/small";
 import { navigateTyped, noteTypedOpen } from "../plugins/typedAddresses";
+import { windowRootSize, type RootSize } from "../windows/rootSize";
 
 export type Disposition = "current" | "newTab" | "newWindow" | "split";
 
@@ -43,11 +44,17 @@ export function openFromBar(url: string, tabId: string, disposition: Disposition
 
 export const barSplitsFrom = (tabId: string) => splitViewAvailable && !!useBrowser.getState().tabs[tabId]?.url;
 
+export function barSplitSide(split: SplitView | undefined, size: RootSize | undefined): "right" | "bottom" {
+  if (split) return split.orientation === "horizontal" ? "right" : "bottom";
+  return size && size.height > size.width ? "bottom" : "right";
+}
+
 function openBesideOrBehind(tabId: string, url: string) {
   const s = useBrowser.getState();
   const tab = s.tabs[tabId];
   if (!tab) return;
-  const beside = openSplitPane(tab.windowId, { anchorTabId: tabId, url, side: "right" });
+  const side = barSplitSide(splitOf(s, tabId), windowRootSize(s, tab.windowId));
+  const beside = openSplitPane(tab.windowId, { anchorTabId: tabId, url, side });
   if (!beside) s.newTab(tab.windowId, { url, profileId: tab.profileId, background: true, gated: true });
   noteSplit(beside ? "barSplitOpens" : "barSplitFullTabs");
 }

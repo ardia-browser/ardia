@@ -145,12 +145,21 @@
   background-color: rgba(127, 127, 127, 0.75);
 }
 
-.ardia-linux.utility .ardia-window > div:first-child {
+.ardia-linux.utility[data-ardia-linux-window="settings"] .ardia-window > div:first-child {
   min-width: 700px;
 }
 
-.ardia-linux.utility .ardia-window {
+.ardia-linux.utility[data-ardia-linux-window="settings"] .ardia-window {
   overflow-x: auto;
+}
+
+.ardia-linux.utility[data-ardia-linux-window="import"] .ardia-window > div:first-child {
+  min-width: 0;
+  width: 100%;
+}
+
+.ardia-linux.utility[data-ardia-linux-window="import"] .ardia-window {
+  overflow-x: hidden;
 }
 
 .ardia-menu-item {

@@ -520,6 +520,19 @@ test("an automatic run whose password prompt went unanswered offers Update, not 
   await settled(() => appimage.seen.ready.length === 1);
   assert.equal(appimage.seen.offeredInstalls.length, 0, "an AppImage never needs a password, so it still updates by itself");
 
+  const acceptedEngine = fakeEngine({ kind: "tarball", fail: "timeout", failWhile: "installing" });
+  const accepted = harness({ engine: acceptedEngine, wait: async () => { throw new Error("stopped following"); } });
+  await accepted.updater.methods.setAutomaticUpdateDownloads(false);
+  await accepted.updater.check(false);
+  accepted.seen.offeredInstalls[0].run();
+  await settled(() => acceptedEngine.updates.length === 1);
+  acceptedEngine.finish();
+  await accepted.updater.watch();
+  await accepted.updater.watch();
+  await settled(() => accepted.seen.offered.length === 1);
+  assert.deepEqual([accepted.seen.offered, accepted.seen.offeredInstalls.length], [["0.2.46 failed"], 1], "an Update the user clicked keeps the release page, even when watch settles it");
+  assert.equal(JSON.parse(accepted.docs.get(UPDATE_PREFERENCES)).askFirst, false);
+
   const asked = harness({ engine: fakeEngine({ kind: "deb", fail: "timeout", failWhile: "installing" }) });
   await asked.updater.methods.checkForUpdates();
   await settled(() => asked.seen.asked.length === 1);

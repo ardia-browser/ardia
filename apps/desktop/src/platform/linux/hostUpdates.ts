@@ -122,6 +122,7 @@ export function linuxUpdater(deps: UpdateDeps) {
   let sightedRun = 0;
   let shownReady = false;
   const installingRuns = new Set<number>();
+  const ownRuns = new Map<number, OwnRun>();
   const preferences = async () => {
     await deps.refresh?.(UPDATE_PREFERENCES).catch(() => {});
     return readPreferences(deps.read);
@@ -203,7 +204,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     const current = version();
     switchCheck = { phase: "found", channel: switchCheck?.channel ?? channelOf(release.version), version: release.version };
     if (from === "automatic" && failure && passwordUnanswered(failure)) {
-      await remember({ notified: release.version, askFirst: true });
+      await remember({ notified: release.version, askFirst: true }).catch(() => {});
       deps.offerInstall(release, () => installOffered(release));
       return;
     }
@@ -218,7 +219,8 @@ export function linuxUpdater(deps: UpdateDeps) {
     deps.offer(release, true);
   }
 
-  async function settle(status: EngineStatus, consent: ConsentToken | null, own: OwnRun | null) {
+  async function settle(status: EngineStatus, consent: ConsentToken | null, followed: OwnRun | null) {
+    const own = followed ?? ownRuns.get(status.run) ?? null;
     if (!finished(status) || status.run <= settledRun) return;
     if (status.phase === "ready" && deps.showsToasts === false) return;
     if (!(await claim(status.run))) return;
@@ -248,6 +250,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       return fallBack(release, from, consent);
     }
     if (started.phase === "installing") installingRuns.add(started.run);
+    ownRuns.set(started.run, { release, from });
     void followRun(started, { release, from }, consent).catch((error: unknown) => console.info(`[ardia linux] the update to ${release.version} stopped: ${String(error)}`));
   }
 

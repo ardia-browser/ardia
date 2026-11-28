@@ -10,7 +10,10 @@ import { handleSystemBack, openPageMenu, pageMenuHidden } from "../state/page/ac
 import { usePageUi } from "../state/page/store";
 import { usePages } from "../state/pages/store";
 import { useBrowse } from "../state/browse/store";
-import { useLongScreenshot } from "../state/longScreenshot/store";
+import { saveLongScreenshot as saveShot, shareLongScreenshot as shareShot, takeLongScreenshot as takeShot, useLongScreenshot } from "../state/longScreenshot/store";
+import { currentTabs } from "../state/tabs/store";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as telemetry from "../state/telemetry/telemetry";
 import { useTabs } from "../state/tabs/store";
 import { useToasts } from "../state/toasts/store";
@@ -305,5 +308,68 @@ onAndroid("a save that fails keeps the preview open to try again", async () => {
   expect(useToasts.getState().toast?.message).toBe("Couldn’t Save the Screenshot");
   expect(counted).toHaveBeenCalledWith("long_screenshot_failed");
   expect(counted).not.toHaveBeenCalledWith("long_screenshot_saved");
+  unmount(root);
+});
+
+const HOSTILE_VALUES: { id: string; value: unknown }[] = new Function(`${readFileSync(join(__dirname, "../../../../scripts/security/hostile-inputs.mjs"), "utf8").replace(/^export /gm, "")}\nreturn HOSTILE_VALUES;`)();
+
+const imageSources = (root: ReactTestRenderer) =>
+  root.root.findAll((node) => node.type === "Image" && node.props.source).map((node) => (node.props.source as { uri?: unknown }).uri);
+
+onAndroid("hostile module answers never reach Image or the share sheet: only the capture's own tiles render and only the address the save wrote is shared", async () => {
+  const root = renderSurface(
+    <DesignProvider design="redesigned">
+      <LongScreenshotHost />
+    </DesignProvider>,
+  );
+  const tabId = currentTabs().selectedId!;
+  const legit = new Set(SHOT.tiles.map((tile) => tile.uri));
+  const fields = ["id", "uri", "width", "height", "screens", "complete", "tiles"] as const;
+  const answers: unknown[] = [];
+  HOSTILE_VALUES.forEach(({ value }, index) => {
+    const field = fields[index % fields.length]!;
+    if (field !== "complete" || typeof value !== "boolean") answers.push({ ...SHOT, [field]: value });
+    answers.push({ ...SHOT, tiles: SHOT.tiles.map((tile, at) => (at === index % SHOT.tiles.length ? { ...tile, uri: value } : tile)) });
+    if (typeof value === "string" && value !== "") answers.push({ ...SHOT, tiles: SHOT.tiles.map((tile, at) => (at === 1 ? { ...tile, uri: `${tile.uri}${value}` } : tile)) });
+  });
+  answers.push({ ...SHOT, tiles: [SHOT.tiles[0], SHOT.tiles[0], SHOT.tiles[2]] });
+  answers.push({ ...SHOT, tiles: [SHOT.tiles[0], { ...SHOT.tiles[1], uri: "file:///sdcard/DCIM/private.jpg" }, SHOT.tiles[2]] });
+  for (const answer of answers) {
+    taken.mockResolvedValueOnce(answer);
+    await act(async () => {
+      const done = takeShot(tabId, false);
+      jest.advanceTimersByTime(1000);
+      await done;
+    });
+    expect(imageSources(root).filter((uri) => !legit.has(uri as string))).toEqual([]);
+    if (useLongScreenshot.getState().stage.kind !== "idle") throw new Error(`a hostile answer reached the preview: ${JSON.stringify(answer)}`);
+  }
+  expect(counted.mock.calls.filter(([field]) => field === "long_screenshot_failed")).toHaveLength(answers.length);
+  taken.mockResolvedValueOnce(SHOT);
+  await act(async () => {
+    const done = takeShot(tabId, false);
+    jest.advanceTimersByTime(1000);
+    await done;
+  });
+  expect(imageSources(root)).toEqual(SHOT.tiles.map((tile) => tile.uri));
+  for (const { value } of HOSTILE_VALUES) {
+    saved.mockResolvedValueOnce({ ...SAVED, uri: value });
+    await act(async () => {
+      await saveShot({ top: 0, bottom: SHOT.height });
+    });
+    expect(useLongScreenshot.getState().stage.kind).toBe("preview");
+    await act(async () => {
+      await shareShot();
+    });
+  }
+  expect(shared).not.toHaveBeenCalled();
+  saved.mockResolvedValueOnce(SAVED);
+  await act(async () => {
+    await saveShot({ top: 0, bottom: SHOT.height });
+  });
+  await act(async () => {
+    await shareShot();
+  });
+  expect(shared.mock.calls).toEqual([[SAVED.uri]]);
   unmount(root);
 });

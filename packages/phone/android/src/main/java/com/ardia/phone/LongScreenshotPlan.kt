@@ -10,9 +10,11 @@ internal object LongScreenshotPlan {
     const val MAX_BUDGET_BYTES = 160L * 1024 * 1024
     const val MIN_OUTPUT_BYTES = 16L * 1024 * 1024
     private const val WORKING_COPIES = 3
+    const val COMPLETE_TOLERANCE = 24
     const val TILE_HEIGHT = 2048
     private const val BYTES_PER_PIXEL = 4
     private const val OVERLAP_SHARE = 4
+    private const val WARM_SHARE = 8
     private const val MIN_OVERLAP = 16
     private const val SAMPLED_COLUMNS = 96
     private const val ROW_STEP = 2
@@ -38,12 +40,13 @@ internal object LongScreenshotPlan {
 
     fun workingBytes(width: Int, viewport: Int): Long = maxOf(0, width).toLong() * maxOf(0, viewport) * BYTES_PER_PIXEL * WORKING_COPIES
 
-    fun outputBudget(availableBytes: Long, width: Int, viewport: Int): Long = (budget(availableBytes) - workingBytes(width, viewport)).coerceAtLeast(MIN_OUTPUT_BYTES)
+    fun outputBudget(availableBytes: Long, width: Int, viewport: Int): Long? = (budget(availableBytes) - workingBytes(width, viewport)).takeIf { it >= MIN_OUTPUT_BYTES }
 
     enum class Ending { Complete, Stopped, Failed }
 
-    fun ending(filled: Int, pageHeight: Int, viewport: Int, matchFailed: Boolean): Ending = when {
-        !matchFailed || filled >= pageHeight -> Ending.Complete
+    fun ending(filled: Int, pageHeight: Int, viewport: Int, atBottom: Boolean): Ending = when {
+        filled >= pageHeight - COMPLETE_TOLERANCE -> Ending.Complete
+        atBottom && filled > viewport -> Ending.Complete
         filled <= viewport -> Ending.Failed
         else -> Ending.Stopped
     }
@@ -58,6 +61,13 @@ internal object LongScreenshotPlan {
     }
 
     fun stride(viewport: Int): Int = maxOf(1, viewport - viewport / OVERLAP_SHARE)
+
+    fun warmStops(pageHeight: Int, viewport: Int): List<Int> {
+        val bottom = pageHeight - viewport
+        if (viewport <= 0 || bottom <= 0) return emptyList()
+        val step = maxOf(1, viewport / WARM_SHARE)
+        return ((step until bottom step step) + bottom).toList()
+    }
 
     fun maxSteps(pageHeight: Int, viewport: Int): Int = if (viewport <= 0) 1 else (maxOf(0, pageHeight - viewport) + stride(viewport) - 1) / stride(viewport) + 3
 
@@ -125,23 +135,5 @@ internal object LongScreenshotPlan {
         val from = top.roundToInt().coerceIn(0, height - 1)
         val to = bottom.roundToInt().coerceIn(from + 1, height)
         return Crop(from, to)
-    }
-}
-
-internal class CaptureDocument(url: String?, isLoading: Boolean, private val webUrl: String?) {
-    private val document = com.ardia.browsing.PageDocument().also { it.saw(url, isLoading) }
-    private val start = document.generation
-
-    @Volatile
-    var replaced = false
-        private set
-
-    fun saw(url: String?, isLoading: Boolean) {
-        if (document.saw(url, isLoading) != start) replaced = true
-    }
-
-    fun check(webUrl: String?): Boolean {
-        if (webUrl != this.webUrl) replaced = true
-        return replaced
     }
 }

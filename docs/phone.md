@@ -2122,33 +2122,51 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   content match (ties go to the move `scrollY` reports). On the F4, `scrollY` on English Wikipedia's Lisbon article
   once lagged a step behind the page (it said 1,262 px for a 1,740 px move), which stitched a repeated block and
   dropped another before matching. A step whose rows match nothing is drawn once more after another paint and matched
-  again; if it still matches nothing the capture ends there rather than leave a seam, and the preview says so
-  ("Stopped after 3 screens", `complete: false` from the module). If only the first screen lined up on a taller page,
-  the capture fails with its toast instead of offering one screen as the whole page. Before
-  the first step a quick pass scrolls to the bottom and back (a frame and 80 ms a step), so lazily loaded images and
+  again; if it still matches nothing the capture ends there rather than leave a seam. A capture is complete only when
+  its rows cover the page's height (within 24 px) or its last step stood at the page's bottom and could not scroll
+  further (`LongScreenshotPlan.ending`); anything else is partial, which the preview says ("Stopped after 3 screens",
+  `complete: false` from the module), and only one screen on a taller page is a failure with its toast. Before
+  the first step a quick pass scrolls to the bottom and back, so lazily loaded images and
   Wikipedia's Related Articles are in place before anything is drawn; without it they appeared between two steps and
-  the last match failed, ending the picture above them. After the first screen a script hides every `position: fixed`
+  the last match failed, ending the picture above them. The pass moves an eighth of a screen at a time and waits for
+  each position to paint (`LongScreenshotPlan.warmStops`), then rests 300 ms at the bottom: loaders that fire only when
+  an element crosses the screen's bottom edge need it to be on that edge in some painted frame. Wikipedia's Related
+  Articles is one (an `IntersectionObserver` with `rootMargin: -100% 0% 0% 0%` on a 320 px box); with three-quarter
+  screen jumps the box never straddled the edge, so its space stayed blank in every capture of a freshly loaded
+  Lisbon article on the F4 (3 of 3, on this build and the one before), while scrolling by hand filled it.
+  After the first screen a script hides every `position: fixed`
   element (opacity 0) and turns `sticky` ones into `relative`, so headers and banners appear once and never repeat; the
   first screen is then drawn again, without them, as the picture the second step is matched against (a translucent
   fixed backdrop otherwise changes every overlapping row). The script keeps each element it changed and its original
-  `style` attribute in a list on `window` under a `Symbol.for` key made fresh for each capture, never in a DOM
-  attribute, so a page can't plant a marker that makes cleanup touch its own elements, and an element removed during
-  the capture still gets its style back (`lib/longScreenshotScripts.test.ts` runs the shipped scripts in jsdom). The
+  `style` attribute in a list under the capture's token (below), never in a DOM attribute, so a page can't plant a
+  marker that makes cleanup touch its own elements, and an element removed during the capture still gets its style back
+  (`lib/longScreenshotScripts.test.ts` runs the shipped scripts in jsdom). The
   draw happens on the main thread; reading a step's pixels and matching them run on a background thread, so Back and
   Cancel stay responsive on dense pages.
-- **Cancel, background and page changes.** A capture is a job the module owns. Back, Cancel, a tab switch and the app
-  going to the background cancel it (`cancelLongScreenshot`, and `OnActivityEntersBackground` natively): stepping
-  stops, the scroll position, the scroll bar and the styles are restored at once, and the next capture waits for that
-  cleanup instead of failing as busy. A reload, redirect or new address in the same WebView during the capture
-  (`CaptureDocument`: the page engine's URL and loading state, plus `WebView.getUrl`) aborts it, and cleanup then leaves
-  the new document's scroll and styles alone. JS drops a result that lands after its tab stopped being the current
-  one.
+- **Cancel, background and page changes.** Captures go through one slot (`CaptureSlot.kt`) that holds the newest
+  requested capture. Starting one cancels whatever waits there, and a new capture waits (without being able to skip
+  it) for the previous one to finish restoring the page before it touches anything, then checks it is still the newest.
+  Each capture starts atomically, so one cancelled before it ever ran still waits out its predecessor; without that, a
+  retry replaced before it started let the next one scroll while the first was still restoring (`CaptureSlotTest`
+  caught it).
+  Back, Cancel, a tab switch and the app going to the background cancel the newest request, waiting or running
+  (`cancelLongScreenshot`, and `OnActivityEntersBackground` natively); joining it waits for every older capture's
+  cleanup, so a retry never runs alongside a restore and two retries never both start (`CaptureSlotTest`). A cancelled
+  capture stops stepping and restores the scroll position, the scroll bar and the styles at once.
+- **Which document.** At the start the capture sets a token on `window` under a `Symbol.for` key made for that capture,
+  and treats the page as the same document exactly while that token is there. Every scroll checks it first, hiding and
+  restoring the styles check it in the same script, and the result is published only if it is still there after the
+  files are written. A reload, a redirect or another page drops the window and the token, so the capture fails and
+  cleanup leaves the new document's scroll alone (restoring the styles is a no-op there); an address change inside the
+  page (`pushState`, a fragment) keeps the token and the capture goes on. The token is removed when the capture ends.
+  JS drops a result that lands after its tab stopped being the current one.
 - **Why stitching.** `WebView.enableSlowWholeDocumentDraw()` would let one `draw` paint the whole document, but it is
   process-wide and must be called before any WebView exists, so every page in the app would pay for it. Stitching keeps
   the normal draw path and costs only while a capture runs.
 - **Caps.** At most 20 screens. The budget is an eighth of the memory the system reports free, kept between 48 and
   160 MB; the viewport picture and the two pixel arrays matching needs come out of it first, and the stitched bitmap
-  gets the rest, at least 16 MB. A taller page is scaled down to fit (on the F4, 1080 × 2320 with memory to spare, a page keeps full size up
+  gets the rest. If less than 16 MB is left (a 4,000 × 4,000 viewport's working copies alone fill the cap) the capture
+  is refused with its toast, so the total never exceeds the cap. A taller page is scaled down to fit (on the F4, 1080 × 2320 with memory to spare, a page keeps full size up
   to about 31,900 px).
   The page's height comes only from the WebView (`contentHeight` times its scale), clamped to one to 20 screens; a page
   that stops scrolling ends the capture where it stopped (boundary row `phone-page:longScreenshot`).
@@ -2191,9 +2209,11 @@ the whole page as a PDF, opened at the part that was on screen (#4706).
   `PAGELAB fullpage probe <n>: delegate installed yes, answered … bytes, … pages of WxH, page 0 rect x,y WxH, written to …`,
   or `answered nil` after a `PAGELAB fullpage none: <reason>` line. Trigger it with
   `xcrun simctl --set ~/.simlock/devices/ios spawn <udid> notifyutil -p com.ardia.browser.ios.lab.fullPage`. The suffixes
-  `.navigate`, `.scroll` and `.sheet` on that name load another page, scroll 600 pt or present a sheet while the PDF
-  renders; the delegate measures the rect after the PDF returns and answers nil when the page navigated, changed tab,
-  relaid out or got covered meanwhile (`PAGELAB fullpage none: while the PDF rendered, …`). When iOS
+  `.navigate`, `.scroll`, `.sheet` and `.grow` on that name load another page, scroll 600 pt, present a sheet, or add
+  3000 pt of content height and scroll past the PDF's end while the PDF renders; the delegate measures the rect after
+  the PDF returns, clamps it to the PDF page, and answers nil when the page navigated, changed tab, relaid out or got
+  covered meanwhile (`PAGELAB fullpage none: while the PDF rendered, …`) or when under a quarter of the part on screen
+  is in the PDF (`the part on screen is not in the PDF`). When iOS
   itself asks, the app logs `PAGELAB fullpage asked for a PDF`. Checked on the iPhone 18 Pro simulator: a scrolled
   Wikipedia article answered a one-page PDF and the rect of the part on screen; an Incognito tab, the deck and the
   Settings sheet answered nil. The simulator can't open the screenshot editor through `agent-device` (no hardware

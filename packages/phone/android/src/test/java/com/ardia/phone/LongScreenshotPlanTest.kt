@@ -102,37 +102,43 @@ class LongScreenshotPlanTest {
     }
 
     @Test
-    fun aCaptureThatStopsEarlyIsMarkedPartialAndOneThatNeverMatchedFails() {
-        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport, matchFailed = false))
-        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(3_000, 5_500, viewport, matchFailed = false))
-        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport, matchFailed = true))
-        assertEquals(LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(3_500, 5_500, viewport, matchFailed = true))
-        assertEquals(LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport, matchFailed = true))
+    fun aCaptureIsCompleteOnlyWhenItCoversThePageOrReachedItsBottom() {
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport, atBottom = false))
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500 - LongScreenshotPlan.COMPLETE_TOLERANCE, 5_500, viewport, atBottom = false))
+        assertEquals("steps ran out", LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(3_000, 5_500, viewport, atBottom = false))
+        assertEquals("the page ended sooner than it said", LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(3_000, 5_500, viewport, atBottom = true))
+        assertEquals("a taller page that never moved", LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport, atBottom = true))
+        assertEquals(LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport, atBottom = false))
+        assertEquals("a page one screen tall", LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(viewport, viewport, viewport, atBottom = false))
     }
 
     @Test
-    fun theViewportPictureAndBothPixelArraysComeOutOfTheBudget() {
+    fun theViewportPictureAndBothPixelArraysComeOutOfTheBudgetAndTooBigAViewportIsRefused() {
         assertEquals(1080L * 2400 * 4 * 3, LongScreenshotPlan.workingBytes(1080, 2400))
         val plenty = 16L * 1024 * 1024 * 1024
         assertEquals(LongScreenshotPlan.MAX_BUDGET_BYTES - LongScreenshotPlan.workingBytes(1080, 2400), LongScreenshotPlan.outputBudget(plenty, 1080, 2400))
-        assertEquals(LongScreenshotPlan.MIN_OUTPUT_BYTES, LongScreenshotPlan.outputBudget(0, 4000, 4000))
+        assertNull("4000 x 4000 needs more than the whole cap for its working copies", LongScreenshotPlan.outputBudget(plenty, 4_000, 4_000))
+        assertNull(LongScreenshotPlan.outputBudget(0, 2_000, 2_000))
+        for (available in listOf(0L, 512L * 1024 * 1024, plenty)) {
+            val output = LongScreenshotPlan.outputBudget(available, 1080, 2400) ?: continue
+            assertTrue(output + LongScreenshotPlan.workingBytes(1080, 2400) <= LongScreenshotPlan.budget(available))
+        }
         assertEquals(0L, LongScreenshotPlan.workingBytes(-1, 2400))
     }
 
     @Test
-    fun aReloadARedirectOrANewAddressMarksTheCapturedDocumentReplaced() {
-        val still = CaptureDocument("https://en.wikipedia.org/wiki/Lisbon", false, "https://en.m.wikipedia.org/wiki/Lisbon")
-        still.saw("https://en.wikipedia.org/wiki/Lisbon", false)
-        assertFalse(still.check("https://en.m.wikipedia.org/wiki/Lisbon"))
-        val reloaded = CaptureDocument("https://en.wikipedia.org/wiki/Lisbon", false, null)
-        reloaded.saw("https://en.wikipedia.org/wiki/Lisbon", true)
-        assertTrue(reloaded.replaced)
-        val redirected = CaptureDocument("https://en.wikipedia.org/wiki/Lisbon", true, null)
-        redirected.saw("https://en.wikipedia.org/wiki/Lisboa", true)
-        assertTrue(redirected.replaced)
-        val swapped = CaptureDocument("https://example.com/", false, "https://example.com/")
-        assertTrue(swapped.check("https://example.com/next"))
-        assertTrue("it stays replaced", swapped.check("https://example.com/"))
+    fun theWarmPassDragsEveryBandAnEighthOfAScreenTallAcrossTheScreensBottomEdge() {
+        val pageHeight = 18_604
+        val viewport = 2_320
+        val stops = LongScreenshotPlan.warmStops(pageHeight, viewport)
+        assertEquals(pageHeight - viewport, stops.last())
+        assertTrue(stops.zipWithNext().all { (a, b) -> b > a })
+        val band = viewport / 8
+        for (top in viewport..(pageHeight - band) step 7) {
+            assertTrue("a band at $top crosses the bottom edge", (listOf(0) + stops).any { stop -> stop + viewport in top until top + band })
+        }
+        assertEquals(emptyList<Int>(), LongScreenshotPlan.warmStops(viewport, viewport))
+        assertEquals(emptyList<Int>(), LongScreenshotPlan.warmStops(5_000, 0))
     }
 
     @Test

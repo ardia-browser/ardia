@@ -73,16 +73,18 @@ final class FullPageScreenshots: NSObject {
       return nil
     }
     guard let placed = place(FullPageTarget.visibleContent(of: after.webView), content: after.webView.scrollView.contentSize, in: data) else {
-      if PhoneTestBuild.isOn { NSLog("PAGELAB fullpage none: the PDF has no page") }
+      if PhoneTestBuild.isOn { NSLog("PAGELAB fullpage none: the part on screen is not in the PDF") }
       return nil
     }
     PhonePages.shared.pageSink?(["name": providedEvent])
     return placed
   }
 
+  static let smallestShownShare: CGFloat = 0.25
+
   static func place(_ seen: CGRect, content: CGSize, in data: Data) -> Provided? {
     let pages = pageBoxes(of: data)
-    guard content.width > 0 else { return nil }
+    guard content.width > 0, seen.height > 0, seen.width > 0 else { return nil }
     guard let first = pages.first, first.width > 0 else { return nil }
     let scale = first.width / content.width
     var top = seen.minY * scale
@@ -92,8 +94,13 @@ final class FullPageScreenshots: NSObject {
       index += 1
     }
     let page = pages[index]
-    let height = min(seen.height * scale, page.height - top)
-    let rect = CGRect(x: page.minX + seen.minX * scale, y: page.maxY - top - height, width: min(seen.width * scale, page.width), height: max(height, 0))
+    let wanted = seen.height * scale
+    let height = min(wanted, page.height - top)
+    guard top >= 0, height >= wanted * smallestShownShare else { return nil }
+    let left = min(max(seen.minX * scale, 0), page.width)
+    let width = min(seen.width * scale, page.width - left)
+    guard width > 0 else { return nil }
+    let rect = CGRect(x: page.minX + left, y: page.maxY - top - height, width: width, height: height)
     return Provided(data: data, pageIndex: index, visibleRect: rect, pageCount: pages.count, pageSize: first.size)
   }
 
@@ -189,7 +196,7 @@ enum FullPageTarget {
 @MainActor
 enum FullPageProbe {
   static let notification = "com.ardia.browser.ios.lab.fullPage"
-  static let disturbances = ["navigate", "scroll", "sheet"]
+  static let disturbances = ["navigate", "scroll", "sheet", "grow"]
   private static var probes = 0
 
   static var folder: URL { URL.documentsDirectory.appending(path: "FullPageProbe", directoryHint: .isDirectory) }
@@ -232,6 +239,11 @@ enum FullPageProbe {
       webView?.load(URLRequest(url: URL(string: "https://en.wikipedia.org/wiki/Beacon")!))
     case "scroll":
       if let scroll = webView?.scrollView { scroll.contentOffset.y += 600 }
+    case "grow":
+      if let scroll = webView?.scrollView {
+        scroll.contentSize.height += 3000
+        scroll.contentOffset.y = scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom
+      }
     default:
       let sheet = UIViewController()
       sheet.view.backgroundColor = .systemBackground

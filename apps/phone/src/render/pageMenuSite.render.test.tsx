@@ -115,8 +115,7 @@ test("the menu's Site Settings starts with a group for the site, headed by its h
   const root = await siteSettings();
   const words = textOf(root);
   expect(words).toContain("site0.example");
-  expect(words).toContain("Desktop Site applies to this tab.");
-  expect(words).toContain("Change one site from Site Settings in its page menu.");
+  for (const footer of ["Desktop Site applies to this tab.", "Change one site from Site Settings in its page menu."]) expect(words).not.toContain(footer);
   expect(words.indexOf("site0.example")).toBeLessThan(words.indexOf("Block Cookie Banners"));
   expect(control(root, "switch", "Night Shade")!.props.accessibilityState).toMatchObject({ checked: false, disabled: false });
   expect(control(root, "switch", "Desktop Site")!.props.accessibilityState).toMatchObject({ checked: false });
@@ -256,8 +255,7 @@ onAndroid("Site Settings opened from Settings has no group for a site, even whil
   await flush();
   const words = textOf(root);
   expect(words).toContain("Block Cookie Banners");
-  expect(words).toContain("Change one site from Site Settings in its page menu.");
-  for (const gone of ["site0.example", "Page Zoom", "Desktop Site", "Desktop Site applies to this tab."]) expect(words).not.toContain(gone);
+  for (const gone of ["Change one site from Site Settings in its page menu.", "site0.example", "Page Zoom", "Desktop Site", "Desktop Site applies to this tab."]) expect(words).not.toContain(gone);
   expect(control(root, "switch", "Night Shade")).toBeUndefined();
   unmount(root);
   unmount(menu);

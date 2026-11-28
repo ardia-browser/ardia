@@ -11,9 +11,9 @@ import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, ChromeSurface, deckChromeLayout, font, iconRoles, menuLook, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
+import { browseLayout, capsule, ChromeSurface, deckChromeLayout, font, iconRoles, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
-import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuOpener } from "../ui/MenuTrigger";
+import { MenuTrigger, spaceSystemImage, type MenuOpener } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
 import { FadingGlyphs, GlassCircleButton, type ChromeFade } from "./ChromeButtons";
 import { DeckHitTarget } from "./DeckHitTarget";
@@ -33,12 +33,6 @@ type Props = {
 
 export const deckHeaderBottom = () => deckChromeLayout.headerCenter + deckChromeLayout.headerCircle / 2;
 
-const menuGroupsRuled = () => nativeMenus() || menuLook.dividerLine > 0;
-
-function joinMenuGroups(groups: readonly MenuItem[][], ruled: boolean = menuGroupsRuled()): MenuItem[] {
-  return groups.filter((group) => group.length > 0).flatMap((group, index): MenuItem[] => (index > 0 && ruled ? ["divider", ...group] : group));
-}
-
 export function libraryMenuItems(material = false): MenuItem[] {
   return [
     { label: destinationWords.history, icon: "clockArrow", onPress: () => openLibraryFromDeck("history") },
@@ -48,14 +42,13 @@ export function libraryMenuItems(material = false): MenuItem[] {
 }
 
 export function deckMoreMenuItems({ syncEnabled, archive = true, material = false, updateDot = false }: { syncEnabled: boolean; archive?: boolean; material?: boolean; updateDot?: boolean }): MenuItem[] {
-  return joinMenuGroups(
-    [
-      [...(archive ? [{ label: destinationWords.archive, icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
-      libraryMenuItems(material),
-      [{ label: destinationWords.settings, icon: "gearshape", dot: updateDot, onPress: () => openSettings() }],
-    ],
-    material ? true : menuGroupsRuled(),
-  );
+  const groups: MenuItem[][] = [
+    [...(archive ? [{ label: destinationWords.archive, icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
+    libraryMenuItems(material),
+    [{ label: destinationWords.settings, icon: "gearshape", dot: updateDot, onPress: () => openSettings() }],
+  ];
+  const filled = groups.filter((group) => group.length > 0);
+  return material ? filled.flatMap((group, index): MenuItem[] => (index > 0 ? ["divider", ...group] : group)) : filled.flat();
 }
 
 export function useDeckSpaces() {

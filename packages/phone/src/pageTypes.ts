@@ -224,7 +224,9 @@ export type PageEngineEvent =
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" }
   | { name: "pages.dark"; dark: boolean }
-  | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean };
+  | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean }
+  | { name: "pages.fullPagePdf" }
+  | { name: "pages.scrollCapture"; outcome: string };
 
 export type PageEventPayload =
   | ({ name: "state" } & Partial<Omit<PageState, "url" | "title" | "progress" | "isLoading" | "canGoBack" | "canGoForward">> &

@@ -178,6 +178,14 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["launch_looks_stale"],
       },
       {
+        text: "In the same daily counts, on iPhone: how often a screenshot’s Full Page tab got the page as a PDF, never while browsing privately. Counts only, never which page",
+        fields: ["full_page_pdf_provided"],
+      },
+      {
+        text: "In the same daily counts, on Android: how often a system screenshot’s Capture more scrolled a page for a longer picture, and whether that ended with every part drawn, was cut short, or couldn’t draw the page, never while browsing privately. Counts only, never which page or what it showed",
+        fields: ["scroll_capture_started", "scroll_capture_ended_complete", "scroll_capture_ended_cancelled", "scroll_capture_failed"],
+      },
+      {
         text: "In the same daily counts: how often you opened one of the Settings panes, such as General or Tabs. Counts only, never which pane or what you changed",
         fields: ["settings_panes_opened"],
       },

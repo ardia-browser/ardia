@@ -40,7 +40,11 @@ enum KeyboardWarmUp {
     UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive }
   }
 
-  private static func mainWindow(in scene: UIWindowScene? = activeScene()) -> UIWindow? {
+  private static func mainWindow() -> UIWindow? {
+    mainWindow(in: activeScene())
+  }
+
+  private static func mainWindow(in scene: UIWindowScene?) -> UIWindow? {
     guard let scene else { return nil }
     if let window = (scene.delegate as? UIWindowSceneDelegate)?.window ?? nil { return window }
     return scene.windows.first { !$0.isHidden && $0.windowLevel == .normal }

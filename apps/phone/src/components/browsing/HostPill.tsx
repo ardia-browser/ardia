@@ -6,7 +6,7 @@ import { haptics } from "../../state/app/haptics";
 import { launchArguments } from "../../state/app/launchFlags";
 import { usePageBusy } from "../../state/page/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { capsule, chromeInk, chromeLayout, ChromeSurface, controlSize, Favicon, floatingBarLayout, motionAliases, pressedLook, slopToReach, Symbol, tabsMotion, useTheme } from "../ui";
+import { capsule, chromeInk, chromeLayout, ChromeSurface, controlSize, Favicon, floatingBarLayout, LoadWash, motionAliases, pressedLook, slopToReach, Symbol, tabsMotion, useTheme, useWashTint, type LoadWashValues } from "../ui";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { barAddress, spokenAddress } from "./FloatingBar";
 import { hostPillLayout } from "./hostPillTokens";
@@ -20,9 +20,10 @@ export const pillHoldAsked = () => isLabBuild && launchArguments().pillHold;
 export const pillSampleHold = (android: boolean, collapsed: boolean, asked: boolean, tabId: string, isPrivate: boolean, dark: boolean): string | null =>
   android && collapsed && asked ? `${tabId}:${isPrivate ? "private" : "open"}:${dark ? "dark" : "light"}` : null;
 
-export function HostPill({ tab, dark, shown, anchors = false, sampleHold = null, contentStyle, onExpand }: { tab: BrowserTab; dark: boolean; shown: boolean; anchors?: boolean; sampleHold?: string | null; contentStyle: ComponentProps<typeof Animated.View>["style"]; onExpand: () => void }) {
+export function HostPill({ tab, dark, wash = null, shown, anchors = false, sampleHold = null, contentStyle, onExpand }: { tab: BrowserTab; dark: boolean; wash?: LoadWashValues | null; shown: boolean; anchors?: boolean; sampleHold?: string | null; contentStyle: ComponentProps<typeof Animated.View>["style"]; onExpand: () => void }) {
   const ink = dark ? chromeInk.dark : chromeInk.light;
   const { rowPressed } = useTheme();
+  const washTint = useWashTint(tab.isPrivate, dark);
   const address = barAddress(tab);
   const busy = usePageBusy(address.tabId);
   const back = useBarReturn();
@@ -45,6 +46,7 @@ export function HostPill({ tab, dark, shown, anchors = false, sampleHold = null,
     <ChromeSurface testID="hostPill" shape="capsule" cornerRadius={capsule(hostPillLayout.height)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glassShown} shownMs={Platform.OS === "android" ? 0 : centreFlips ? back.centreGlass.shownMs : hostPillLayout.glassMs} sampleHold={glassShown ? sampleHold : null} style={styles.pill}>
       <Animated.View testID="hostPillCentreGlyphs" collapsable={false} style={[styles.content, back.centreGlyphs]}>
       <Animated.View testID="hostPillContent" nativeID={ids?.face} collapsable={false} style={[styles.content, contentStyle]}>
+      {wash ? <LoadWash testID="hostPillLoadWash" values={wash} tint={washTint} cornerRadius={capsule(hostPillLayout.height)} /> : null}
       <Pressable testID="hostPillButton" accessibilityRole="button" accessibilityLabel="Show Toolbar" accessibilityValue={{ text: spokenAddress(address) }} accessibilityState={{ busy }} onPress={onExpand} onPressIn={pressIn} onPressOut={pressOut} style={[styles.hit, pressedLook("text", pressed, false, rowPressed)]}>
         {address.isPrivate ? <Symbol name={privateMark} size={hostPillLayout.siteIcon * hostPillLayout.privateSymbolShare} color={ink.secondary} /> : null}
         {address.insecure ? (

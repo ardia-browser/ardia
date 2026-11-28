@@ -143,7 +143,7 @@ test("the pill reads Show Toolbar with the host as its value, and a tap on it br
   unmount(root);
 });
 
-test("the collapsed pill carries the page's busy state while it loads, as the address it stands in for does, and the progress line stays hidden from screen readers", () => {
+test("the collapsed pill carries the page's busy state while it loads, as the address it stands in for does, and its load wash stays hidden from screen readers", () => {
   const root = page("redesigned");
   scrolled("down");
   settle();
@@ -152,7 +152,7 @@ test("the collapsed pill carries the page's busy state while it loads, as the ad
   expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: false });
   loading(true);
   expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: true });
-  expect(host(root, "loadingLine")?.props.accessibilityElementsHidden ?? true).toBe(true);
+  expect(host(root, "hostPillLoadWash")!.props.accessibilityElementsHidden).toBe(true);
   loading(false);
   expect(showToolbar(root)!.props.accessibilityState).toEqual({ busy: false });
   unmount(root);

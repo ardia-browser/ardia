@@ -8,7 +8,7 @@ import { consentNow, consentToken, type ConsentToken } from "../telemetry/choice
 import { warnFor } from "../telemetry/consoleConsent";
 import { listingOf, NO_CLAIMS, type ProgramClaims } from "./appChecks";
 import { loadProgramClaims } from "./programRegistry";
-import { programControlOn, userTurnedControlOff } from "../app/programControlSetting";
+import { controlOnByApproval } from "../app/programControlSetting";
 import { applySettingsPatch, planDisable, planEnable, spliceApplied } from "./defaults";
 import { pluginRecordsSaved, writePluginRecords } from "./savedState";
 import { settleInstall } from "./installWaiters";
@@ -246,8 +246,8 @@ export function enablePlugin(name: string, hash: string): boolean {
     return false;
   }
   if (candidate) void promoteCandidate(name, listing, consent);
-  const asksControl = manifest.permissions.control;
-  applySettingsPatch(kept || !asksControl || programControlOn(useBrowser.getState()) || userTurnedControlOff() ? plan.patch : { ...plan.patch, cliControl: true });
+  const turnsControlOn = !kept && manifest.permissions.control && controlOnByApproval(consent);
+  applySettingsPatch(turnsControlOn ? { ...plan.patch, cliControl: true } : plan.patch);
   usePlugins.setState({ consent: null });
   clearUnsaved(name);
   notePlugin("plugin_enables", consent);

@@ -42,6 +42,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["color_choice"],
       },
       {
+        text: "With each launch, whether your theme keeps Ardia Light or Dark whatever you chose, while web pages keep your choice. Never which theme",
+        fields: ["theme_fixed_scheme"],
+      },
+      {
         text: "With each launch, the best glass this phone can draw, not what each surface drew: the Liquid Glass lens, frosted glass, clear glass when the lens can’t be drawn, or no blur on Android, the system’s own glass, Classic, or none in Material You",
         fields: ["glass_render"],
       },
@@ -74,7 +78,11 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["perf_launch_tray", "tray_ms"],
       },
       {
-        text: "At most once a day, for the last day you used Ardia before today: how many tabs you opened, searches you made, pages you pinned to your Mac, tabs you sent to another device, pages that stopped working because their page process ended, links from other apps Ardia gave up on because they took too long, and pages that reloaded by themselves when the phone came back online, how often the tab switcher opened before a page’s picture was ready, how often a tap on the tabs button had to copy the page right then because its picture wasn’t up to date, how often you opened a card while the tab switcher was still settling, how often you searched your tabs, how often you picked a space from its menu, how many tabs you moved to another space, how many pages you printed, how many you translated, how often a pinned site took you back to its tab after the page had moved on, how often + opened search on a new tab and how often you opened one of your space’s pinned sites from the tiles above it, how often you showed the tab switcher as a grid, how often you opened the tab switcher by swiping up on the bottom bar instead of tapping its tabs button, how often a back swipe closed a tab or a forward swipe reopened one, how often Archive or History took more than 0.4 seconds to show its list, how often you scrolled far enough in them to show older days, how often you swiped a long address in the search field to read the rest of it, how often you swiped up on the bottom bar and let go early so the page came back, how often you switched tabs by swiping the bottom bar sideways, whether the one-time hint about that swipe was shown on Android, how often the page stalled for more than a twentieth of a second while it shrank into the tab switcher, how often the bottom bar folded away as a page scrolled, and how often you opened a menu or a confirmation, counted apart for the phone’s own menus and the ones Ardia draws, never while browsing privately. Counts only, never which",
+        text: "Once each time Ardia opens, how long the first search panel took to open from your tap, and for the first search you typed, how long the first suggestions from your own tabs and history took to show and how long your search engine’s suggestions took, from the first letter. Times only, never what you typed, and never while browsing privately",
+        fields: ["perf_search_open", "open_ms", "perf_search_suggest", "local_ms", "remote_ms"],
+      },
+      {
+        text: "At most once a day, for the last day you used Ardia before today: how many tabs you opened, searches you made, pages you pinned to your Mac, tabs you sent to another device, pages whose page process ended, links from other apps Ardia gave up on because they took too long, and pages that reloaded by themselves when the phone came back online, how often the tab switcher opened before a page’s picture was ready, how often a tap on the tabs button had to copy the page right then because its picture wasn’t up to date, how often you opened a card while the tab switcher was still settling, how often you searched your tabs, how often you picked a space from its menu, how many tabs you moved to another space, how many pages you printed, how many you translated, how often a pinned site took you back to its tab after the page had moved on, how often + opened search on a new tab and how often you opened one of your space’s pinned sites from the tiles above it, how often you showed the tab switcher as a grid, how often you opened the tab switcher by swiping up on the bottom bar instead of tapping its tabs button, how often a back swipe closed a tab or a forward swipe reopened one, how often Archive or History took more than 0.4 seconds to show its list, how often you scrolled far enough in them to show older days, how often you swiped a long address in the search field to read the rest of it, how often you swiped up on the bottom bar and let go early so the page came back, how often you switched tabs by swiping the bottom bar sideways, whether the one-time hint about that swipe was shown on Android, how often the page stalled for more than a twentieth of a second while it shrank into the tab switcher, how often the bottom bar folded away as a page scrolled, and how often you opened a menu or a confirmation, counted apart for the phone’s own menus and the ones Ardia draws, never while browsing privately. Counts only, never which",
         fields: ["usage_counts", "tabs_opened", "searches", "pins_to_mac", "tabs_sent", "page_processes_gone", "links_given_up", "pages_reloaded_online", "find_opened_system", "find_opened_bar", "find_closed_bar", "spaces_swiped", "tray_hidden_rows_opened", "deck_pictures_late", "deck_pictures_at_press", "deck_opens_while_landing", "tray_back_swiped", "search_tabs_opened", "spaces_picked", "tabs_moved_to_space", "pages_printed", "pages_translated", "pinned_tabs_refound", "site_permissions_revoked", "card_opens_waited", "native_menus_opened", "drawn_menus_opened", "library_opened", "deck_grid_shown", "landscape_shown", "duo_layout_shown", "list_sheets_late", "list_pages_added", "search_reveals_late", "address_field_scrolled", "deck_bar_swipes", "tabs_swiped_closed", "tabs_swiped_reopened", "page_menu_tapped_away", "new_tab_search_opened", "new_tab_pins_opened", "deck_incognito_switches", "deck_bar_swipes_returned", "tabs_bar_swiped", "tab_swipe_hints_shown", "deck_pulls_hitched", "bottom_bar_collapses"],
       },
       {
@@ -134,7 +142,7 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["page_covers_capped"],
       },
       {
-        text: "In the same daily counts: how often you chose Custom in Settings › Appearance, and how many changes you made on its Theme page. Counts only, never the colors or settings you picked",
+        text: "In the same daily counts: how often you chose Custom in Settings › Appearance, and how many changes you made on the Theme page, to Custom or to a color. Counts only, never the colors or settings you picked",
         fields: ["custom_theme_chosen", "theme_edits"],
       },
       {
@@ -154,12 +162,20 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["glass_lens_withheld"],
       },
       {
+        text: "In the same daily counts, on iPhone: how often Ardia opened with a different space’s colors, or light or dark, than the space you were in when you left it, before your space showed. Counts only, never which space or colors",
+        fields: ["launch_looks_stale"],
+      },
+      {
         text: "In the same daily counts: how often you opened one of the Settings panes, such as General or Tabs. Counts only, never which pane or what you changed",
         fields: ["settings_panes_opened"],
       },
       {
         text: "In the same daily counts, on Android: how many actions you chose in menus Ardia draws, never which action or while browsing privately",
         fields: ["drawn_menu_actions_chosen"],
+      },
+      {
+        text: "In the same daily counts: how many pages loaded again cleanly after their page process ended, whether Ardia reloaded them by itself or you reloaded them, and how many stopped working because their process ended again during that reload or within a minute of it. Counts only, never which page, and never while browsing privately",
+        fields: ["page_processes_recovered", "page_process_recoveries_failed"],
       },
       {
         text: "In the same daily counts, on iPhone: how often you left Ardia while a web video was in Picture in Picture or full screen, and how often it was still playing 5 seconds later with Ardia in the background. Counts only, never which video or page, and never while browsing privately",
@@ -188,6 +204,14 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
       {
         text: "In the same daily counts: how often you opened Site Settings from the page menu, how often you changed a site’s Page Zoom, Night Shade or Desktop Site there, and how often you opened History, Bookmarks or Downloads from the tab switcher’s menu, never while browsing privately. Counts only, never which site",
         fields: ["page_menu_site_settings_opened", "site_settings_zoom_changed", "site_settings_night_shade_changed", "site_settings_desktop_site_changed", "deck_menu_history_opened", "deck_menu_bookmarks_opened", "deck_menu_downloads_opened"],
+      },
+      {
+        text: "In the same daily counts: how many page loads took long enough to show their progress in the address bar, never while browsing privately. A count only, never which page",
+        fields: ["bar_load_washes"],
+      },
+      {
+        text: "In the same daily counts, on Android: how often the content blocker built and installed its rule engine. Counts only, never which lists or sites",
+        fields: ["blocker_engines_installed"],
       },
     ],
   },

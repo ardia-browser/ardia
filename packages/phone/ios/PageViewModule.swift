@@ -253,6 +253,10 @@ public final class PageViewModule: Module {
       Self.main(promise) { try await PhonePages.shared.evaluate(pageID, script: script) }
     }.runOnQueue(.main)
 
+    AsyncFunction("setShownPage") { (pageID: String?) in
+      MainActor.assumeIsolated { PhonePages.shared.setShownPage(pageID) }
+    }.runOnQueue(.main)
+
     AsyncFunction("discardBackgroundPages") { (keeping: String?) in
       MainActor.assumeIsolated { PhonePages.shared.discardBackgroundPages(keeping: keeping) }
     }.runOnQueue(.main)
@@ -358,6 +362,18 @@ public final class PageViewModule: Module {
           "siteMode": site.map(PagePayloads.nightShade),
           "mode": PagePayloads.nightShade(preferences.nightShade(for: host, isPrivate: isPrivate == true)),
         ]
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("setPageScheme") { (scheme: String?) -> Bool in
+      try MainActor.assumeIsolated {
+        let parsed = try scheme.map { raw in
+          guard let value = PageScheme(rawValue: raw) else { throw PagePayloads.badArgs("Unknown page scheme \(raw)") }
+          return value
+        }
+        let engine = PhonePages.shared.engine
+        if engine.preferences.pageScheme != parsed { engine.preferences.pageScheme = parsed } else { engine.applyPageStyle() }
+        return engine.pageIsDark
       }
     }.runOnQueue(.main)
 

@@ -356,13 +356,14 @@ void WindowRegistry::OpenRequested(ShellHostView* requester,
         false, Failure("ERR_WINDOW_LIMIT", "Too many windows are open"));
   }
   const bool utility = webui_window::IsUtility(*kind);
-  const std::string requested_profile =
-      options && options->FindString("profile") ? *options->FindString("profile")
-                                                : std::string();
+  const std::string* requested_profile =
+      options ? options->FindString("profile") : nullptr;
   const std::string profile =
       utility ? std::string(kAppProfileName)
-              : (requested_profile.empty() ? requester->page_profile_id()
-                                           : requested_profile);
+              : (requested_profile
+                     ? std::string(
+                           webui_window::RegularProfileName(*requested_profile))
+                     : requester->page_profile_id());
   const base::DictValue* private_seed =
       options ? options->FindDict("privateWindow") : nullptr;
   const base::DictValue* small_seed =
@@ -410,7 +411,8 @@ void WindowRegistry::OpenRequested(ShellHostView* requester,
                                       weak_factory_.GetWeakPtr(),
                                       requester->GetWeakPtr(),
                                       requester->renderer_generation(),
-                                      std::move(config), frame, std::move(done)));
+                                      std::move(config), frame, std::move(done)),
+              kAppProfileName);
 }
 
 void WindowRegistry::OpenInProfile(base::WeakPtr<ShellHostView> requester,
@@ -487,6 +489,17 @@ ShellHostView* WindowRegistry::HostOf(
     return found == hosts_.end() ? nullptr : found->second.get();
   }
   return nullptr;
+}
+
+bool WindowRegistry::DispatchReservedShortcut(
+    const views::FocusManager* focus,
+    const ui::Accelerator& accelerator) const {
+  for (ShellHostView* host : Hosts()) {
+    if (host->ReservesShortcut(focus, accelerator)) {
+      return host->AcceleratorPressed(accelerator);
+    }
+  }
+  return false;
 }
 
 std::vector<ShellHostView*> WindowRegistry::Hosts() const {

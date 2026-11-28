@@ -302,7 +302,7 @@ def git_commands(text, start=None):
             results = [outcome for shell, _ in running for outcome in outcomes(shell, name, current[1:], isolated)]
             candidates = distinct(skipped + results)
         if terminator is not None:
-            gate = terminator if terminator in GATES else None
+            gate = terminator if terminator in GATES else gate if terminator in ("|", "|&") else None
             in_pipeline = terminator in ("|", "|&")
 
     for kind, value in tokenize(text):

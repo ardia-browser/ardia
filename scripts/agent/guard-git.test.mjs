@@ -153,6 +153,9 @@ test("an && chain that stops early falls through to the next list in the old dir
   assert.equal(verdict(`cd ${missing} && cd ${worktree}; git stash`), "blocked");
   assert.equal(verdict(`cd ${worktree} && false; git stash`), "blocked");
   assert.equal(verdict(`cd ${worktree} && { echo hi; } && git stash`), "allowed");
+  assert.equal(verdict(`cd ${worktree} && git show --stat x | head -3 && git stash`), "allowed");
+  assert.equal(verdict(`cd ${missing} && git show --stat x | head -3 && git stash`, worktree), "allowed");
+  assert.equal(verdict(`cd ${worktree} && git log | head -1; git stash`), "blocked");
 });
 
 test("a subshell's exit never moves the outer shell", () => {

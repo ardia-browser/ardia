@@ -198,6 +198,7 @@ enum Opening {
     Read,
     CreateNew,
     Lock,
+    Hold,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -267,7 +268,7 @@ mod sys {
             | match opening {
                 Opening::Read => libc::O_RDONLY | libc::O_NONBLOCK,
                 Opening::CreateNew => libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
-                Opening::Lock => libc::O_RDWR | libc::O_CREAT,
+                Opening::Lock | Opening::Hold => libc::O_RDWR | libc::O_CREAT,
             };
         let fd = unsafe { libc::openat(dir.as_raw_fd(), c.as_ptr(), flags, 0o600 as libc::c_uint) };
         if fd < 0 {
@@ -357,6 +358,70 @@ mod sys {
         }
         Ok(())
     }
+
+    pub fn remove_folder(dir: &File, name: &str) -> io::Result<()> {
+        let c = c_name(name)?;
+        if unsafe { libc::unlinkat(dir.as_raw_fd(), c.as_ptr(), libc::AT_REMOVEDIR) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    pub fn move_entry(from: &File, name: &str, to: &File, to_name: &str) -> io::Result<()> {
+        let (name, to_name) = (c_name(name)?, c_name(to_name)?);
+        if unsafe { rename_no_replace(from.as_raw_fd(), name.as_ptr(), to.as_raw_fd(), to_name.as_ptr()) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    unsafe fn rename_no_replace(
+        from: libc::c_int,
+        name: *const libc::c_char,
+        to: libc::c_int,
+        to_name: *const libc::c_char,
+    ) -> libc::c_int {
+        unsafe { libc::renameatx_np(from, name, to, to_name, libc::RENAME_EXCL) }
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    unsafe fn rename_no_replace(
+        from: libc::c_int,
+        name: *const libc::c_char,
+        to: libc::c_int,
+        to_name: *const libc::c_char,
+    ) -> libc::c_int {
+        unsafe { libc::renameat2(from, name, to, to_name, libc::RENAME_NOREPLACE) }
+    }
+
+    #[cfg(not(any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))))]
+    unsafe fn rename_no_replace(
+        from: libc::c_int,
+        name: *const libc::c_char,
+        to: libc::c_int,
+        to_name: *const libc::c_char,
+    ) -> libc::c_int {
+        unsafe { libc::renameat(from, name, to, to_name) }
+    }
+
+    pub fn held_open(dir: &File, name: &str) -> io::Result<bool> {
+        Ok(!matches!(child_entry(dir, name)?, Entry::Missing))
+    }
+
+    pub fn delete_when_closed(_file: &File) -> io::Result<()> {
+        Ok(())
+    }
+
+    pub fn free_space(path: &std::path::Path) -> io::Result<u64> {
+        use std::os::unix::ffi::OsStrExt;
+        let c = CString::new(path.as_os_str().as_bytes()).map_err(|_| unsafe_path(path.to_path_buf()))?;
+        let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c.as_ptr(), &mut stat) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok((stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64))
+    }
 }
 
 #[cfg(windows)]
@@ -396,6 +461,7 @@ mod sys {
     const ERROR_NO_MORE_FILES: i32 = 18;
     const ERROR_CANT_ACCESS_FILE: i32 = 1920;
     const ERROR_STOPPED_ON_SYMLINK: i32 = 681;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
 
     fn status_error(status: NTSTATUS) -> io::Error {
         io::Error::from_raw_os_error(unsafe { RtlNtStatusToDosError(status) } as i32)
@@ -406,6 +472,24 @@ mod sys {
     }
 
     fn nt_open(dir: &File, name: &str, access: u32, disposition: u32, options: u32) -> io::Result<File> {
+        nt_open_shared(
+            dir,
+            name,
+            access,
+            disposition,
+            options,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        )
+    }
+
+    fn nt_open_shared(
+        dir: &File,
+        name: &str,
+        access: u32,
+        disposition: u32,
+        options: u32,
+        share: u32,
+    ) -> io::Result<File> {
         let wide: Vec<u16> = name.encode_utf16().collect();
         let bytes = u16::try_from(wide.len() * 2).map_err(|_| unsafe_path(name.into()))?;
         let object_name = UNICODE_STRING {
@@ -431,7 +515,7 @@ mod sys {
                 &mut status_block,
                 null(),
                 FILE_ATTRIBUTE_NORMAL,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                share,
                 disposition,
                 options | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
                 null(),
@@ -485,12 +569,17 @@ mod sys {
     }
 
     pub fn child_file(dir: &File, name: &str, opening: Opening) -> io::Result<File> {
-        let (access, disposition) = match opening {
-            Opening::Read => (FILE_GENERIC_READ, FILE_OPEN),
-            Opening::CreateNew => (FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE, FILE_CREATE),
-            Opening::Lock => (FILE_GENERIC_READ | FILE_GENERIC_WRITE, FILE_OPEN_IF),
+        let share = match opening {
+            Opening::Hold => FILE_SHARE_READ,
+            _ => FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         };
-        nt_open(dir, name, access, disposition, FILE_NON_DIRECTORY_FILE)
+        let (access, disposition, options) = match opening {
+            Opening::Read => (FILE_GENERIC_READ, FILE_OPEN, 0),
+            Opening::CreateNew => (FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE, FILE_CREATE, 0),
+            Opening::Lock => (FILE_GENERIC_READ | FILE_GENERIC_WRITE, FILE_OPEN_IF, 0),
+            Opening::Hold => (FILE_GENERIC_WRITE | FILE_READ_ATTRIBUTES | DELETE, FILE_OPEN_IF, 0),
+        };
+        nt_open_shared(dir, name, access, disposition, FILE_NON_DIRECTORY_FILE | options, share)
     }
 
     pub fn child_entry(dir: &File, name: &str) -> io::Result<Entry> {
@@ -575,6 +664,61 @@ mod sys {
         set_information(staged, plain.as_ptr() as *const c_void, length, FileRenameInformation)
     }
 
+    pub fn remove_folder(dir: &File, name: &str) -> io::Result<()> {
+        remove(dir, name)
+    }
+
+    pub fn move_entry(from: &File, name: &str, to: &File, to_name: &str) -> io::Result<()> {
+        let moving = nt_open(from, name, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, FILE_OPEN, 0)?;
+        if super::is_link(&moving.metadata()?) {
+            return Err(unsafe_path(name.into()));
+        }
+        let (plain, length) = rename_buffer(to, to_name, 0);
+        set_information(&moving, plain.as_ptr() as *const c_void, length, FileRenameInformation)
+    }
+
+    pub fn held_open(dir: &File, name: &str) -> io::Result<bool> {
+        match nt_open(
+            dir,
+            name,
+            FILE_GENERIC_WRITE | DELETE,
+            FILE_OPEN,
+            FILE_NON_DIRECTORY_FILE,
+        ) {
+            Ok(_) => Ok(false),
+            Err(error) if missing(&error) => Ok(false),
+            Err(error) if error.raw_os_error() == Some(ERROR_SHARING_VIOLATION) => Ok(true),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn delete_when_closed(file: &File) -> io::Result<()> {
+        let disposition = FILE_DISPOSITION_INFO { DeleteFile: true };
+        let set = unsafe {
+            SetFileInformationByHandle(
+                handle(file),
+                FileDispositionInfo,
+                &disposition as *const _ as *const c_void,
+                std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32,
+            )
+        };
+        if set == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    pub fn free_space(path: &std::path::Path) -> io::Result<u64> {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let mut available = 0u64;
+        if unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, null_mut(), null_mut()) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(available)
+    }
+
     pub fn remove(dir: &File, name: &str) -> io::Result<()> {
         let file = nt_open(dir, name, DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, FILE_OPEN, 0)?;
         let posix = FILE_DISPOSITION_INFORMATION_EX {
@@ -616,9 +760,38 @@ pub enum Fetched {
     TooLarge,
 }
 
+pub enum Opened {
+    File(File, Metadata),
+    Missing,
+    Link,
+    NotRegular,
+    HardLinked,
+}
+
 pub struct Staged {
     file: File,
     temp: String,
+}
+
+pub struct HeldLock {
+    file: File,
+    #[cfg(unix)]
+    dir: File,
+    #[cfg(unix)]
+    name: String,
+}
+
+impl Drop for HeldLock {
+    #[cfg(unix)]
+    fn drop(&mut self) {
+        let _ = sys::delete_when_closed(&self.file);
+        let _ = sys::remove(&self.dir, &self.name);
+    }
+
+    #[cfg(windows)]
+    fn drop(&mut self) {
+        let _ = sys::delete_when_closed(&self.file);
+    }
 }
 
 pub struct Dir {
@@ -642,6 +815,13 @@ pub fn partial_name() -> String {
 impl Dir {
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn try_clone(&self) -> io::Result<Dir> {
+        Ok(Dir {
+            file: self.file.try_clone()?,
+            path: self.path.clone(),
+        })
     }
 
     pub fn entry(&self, name: &str) -> io::Result<Entry> {
@@ -706,6 +886,137 @@ impl Dir {
             return Ok(Fetched::TooLarge);
         }
         Ok(Fetched::Data(bytes))
+    }
+
+    pub fn open_source(&self, name: &str) -> io::Result<Opened> {
+        match self.entry(name)? {
+            Entry::Missing => return Ok(Opened::Missing),
+            Entry::Link => return Ok(Opened::Link),
+            Entry::File => {}
+            Entry::Directory | Entry::Other => return Ok(Opened::NotRegular),
+        }
+        let file = match sys::child_file(&self.file, name, Opening::Read) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Opened::Missing),
+            Err(error) if is_unsafe(&error) => return Ok(Opened::Link),
+            Err(error) => return Err(error),
+        };
+        let meta = file.metadata()?;
+        if is_link(&meta) {
+            return Ok(Opened::Link);
+        }
+        if !meta.is_file() {
+            return Ok(Opened::NotRegular);
+        }
+        if link_count(&file)? != 1 {
+            return Ok(Opened::HardLinked);
+        }
+        Ok(Opened::File(file, meta))
+    }
+
+    pub fn remove_file(&self, name: &str) -> io::Result<()> {
+        sys::remove(&self.file, child_name(name)?)
+    }
+
+    pub fn move_to(&self, name: &str, to: &Dir, to_name: &str) -> io::Result<()> {
+        let (name, to_name) = (child_name(name)?, child_name(to_name)?);
+        if !matches!(self.entry(name)?, Entry::Directory | Entry::File) {
+            return Err(unsafe_path(self.path.join(name)));
+        }
+        if to.entry(to_name)? != Entry::Missing {
+            return Err(io::Error::new(io::ErrorKind::AlreadyExists, "the destination is taken"));
+        }
+        sys::move_entry(&self.file, name, &to.file, to_name)?;
+        let _ = self.file.sync_all();
+        let _ = to.file.sync_all();
+        Ok(())
+    }
+
+    pub fn remove_tree(&self, name: &str) -> io::Result<usize> {
+        let name = child_name(name)?;
+        match self.entry(name)? {
+            Entry::Missing => return Ok(0),
+            Entry::Directory => {}
+            _ => {
+                sys::remove(&self.file, name)?;
+                return Ok(1);
+            }
+        }
+        let mut removed = 0;
+        if let Some(child) = self.child(name, false)? {
+            for inner in child.list()? {
+                removed += child.remove_tree(&inner)?;
+            }
+        }
+        sys::remove_folder(&self.file, name)?;
+        Ok(removed + 1)
+    }
+
+    pub fn held_open(&self, name: &str) -> io::Result<bool> {
+        sys::held_open(&self.file, child_name(name)?)
+    }
+
+    pub fn hold_lockfile(&self, name: &str) -> io::Result<HeldLock> {
+        let name = child_name(name)?;
+        if !matches!(self.entry(name)?, Entry::Missing | Entry::File) {
+            return Err(unsafe_path(self.path.join(name)));
+        }
+        let file = sys::child_file(&self.file, name, Opening::Hold)?;
+        let meta = file.metadata()?;
+        if is_link(&meta) || !meta.is_file() || link_count(&file)? != 1 {
+            return Err(unsafe_path(self.path.join(name)));
+        }
+        Ok(HeldLock {
+            file,
+            #[cfg(unix)]
+            dir: self.file.try_clone()?,
+            #[cfg(unix)]
+            name: name.to_string(),
+        })
+    }
+
+    pub fn stage_copy(
+        &self,
+        source: &mut File,
+        buffer: &mut [u8],
+        modified: Option<std::time::SystemTime>,
+    ) -> io::Result<(Staged, u64)> {
+        let temp = partial_name();
+        let mut file = sys::child_file(&self.file, &temp, Opening::CreateNew)?;
+        let mut copied = 0u64;
+        let written = (|| -> io::Result<()> {
+            loop {
+                let read = match source.read(buffer) {
+                    Ok(0) => break,
+                    Ok(read) => read,
+                    Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                    Err(error) => return Err(error),
+                };
+                file.write_all(&buffer[..read])?;
+                copied += read as u64;
+            }
+            if let Some(time) = modified {
+                file.set_modified(time)?;
+            }
+            file.sync_all()
+        })();
+        if let Err(error) = written {
+            drop(file);
+            let _ = sys::remove(&self.file, &temp);
+            return Err(error);
+        }
+        Ok((Staged { file, temp }, copied))
+    }
+
+    pub fn stage_from(&self, source: &mut impl Read) -> io::Result<Staged> {
+        let temp = partial_name();
+        let mut file = sys::child_file(&self.file, &temp, Opening::CreateNew)?;
+        if let Err(error) = io::copy(source, &mut file).and_then(|_| file.sync_all()) {
+            drop(file);
+            let _ = sys::remove(&self.file, &temp);
+            return Err(error);
+        }
+        Ok(Staged { file, temp })
     }
 
     pub fn stage(&self, bytes: &[u8]) -> io::Result<Staged> {
@@ -870,6 +1181,10 @@ impl Root {
         }
         Ok(Some(current))
     }
+}
+
+pub fn free_space(path: &Path) -> io::Result<u64> {
+    sys::free_space(path)
 }
 
 fn random_hex(bytes: usize) -> String {

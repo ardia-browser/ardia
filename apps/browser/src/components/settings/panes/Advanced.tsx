@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { describeCommandInstall, installCommandInBackground, useCommandInstall } from "../../../state/app/linuxCommandInstall";
 import { useControlServer } from "../../../state/app/programControl";
-import { programControlOn, setControlFromSettings, setProgramControl } from "../../../state/app/programControlSetting";
+import { programControlOn, setControlByUser } from "../../../state/app/programControlSetting";
 import { usePluginsWithPrograms, usePluginPrograms } from "../../../state/plugins/hooks";
 import { useProgramRegistry } from "../../../state/plugins/programRegistry";
 import { canRelink, relinkPrograms } from "../../../state/plugins/actions";
@@ -203,7 +203,7 @@ function ProgramControlRow() {
           : null;
   return (
     <Row anchor="advanced.programControl" description={note ?? undefined}>
-      <Toggle value={on} accessibilityLabel="Let programs control Ardia" onChange={setControlFromSettings} />
+      <Toggle value={on} accessibilityLabel="Let programs control Ardia" onChange={setControlByUser} />
     </Row>
   );
 }
@@ -255,7 +255,7 @@ function CommandLineSection() {
           : "Installs the ardia command to read and act in your signed-in pages.";
   const failed = !!install.error && !install.installing;
   const setOn = (next: boolean) => {
-    setProgramControl(next);
+    setControlByUser(next);
     if (next && !install.installing && (!install.installedVersion || install.error)) void installCommandInBackground("settings");
   };
   const tryAgain = () => void installCommandInBackground("settings");

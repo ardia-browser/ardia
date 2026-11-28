@@ -749,6 +749,29 @@ test("an engine protected by its full path survives eviction with no room and no
   assert.deepEqual(fs.readdirSync(join(cache, "engines")), ["aaaaaaaaaaaa"]);
 });
 
+test("an evicted engine copy that won't delete stays as trash for the sweep instead of failing eviction", (t) => {
+  const cache = scratch();
+  for (const key of ["a", "b"].map((c) => c.repeat(32))) write(cache, `engine-copies/${key}/Chromium Framework.framework/x`, "");
+  lib.touch(join(cache, "engine-copies", "b".repeat(32)), new Date(2e12));
+  const realRmSync = fs.rmSync;
+  const rmSync = t.mock.method(fs, "rmSync", (path, opts) => {
+    if (String(path).includes(".tmp-evict-")) throw Object.assign(new Error("directory not empty"), { code: "ENOTEMPTY" });
+    return realRmSync(path, opts);
+  });
+  t.mock.method(process.stderr, "write", () => true);
+  assert.doesNotThrow(() => lib.evict(cache, { maxBytes: 100, maxEntries: 10, keepEngines: 1, graceMs: 0 }));
+  const copies = join(cache, "engine-copies");
+  const trash = fs.readdirSync(copies).filter((n) => n.startsWith(".tmp-evict-"));
+  assert.equal(trash.length, 1);
+  assert.ok(trash[0].endsWith("a".repeat(32)));
+  assert.deepEqual(fs.readdirSync(copies).filter((n) => !n.startsWith(".")), ["b".repeat(32)]);
+  rmSync.mock.restore();
+  const old = new Date(Date.now() - 2 * 3600e3);
+  fs.utimesSync(join(copies, trash[0]), old, old);
+  lib.evict(cache, { maxBytes: 100, maxEntries: 10, keepEngines: 1, graceMs: 0 });
+  assert.deepEqual(fs.readdirSync(copies), ["b".repeat(32)]);
+});
+
 test("a folder where the slot had a file counts as drift instead of failing the sync", () => {
   const src = repo();
   const slot = join(scratch(), "1");

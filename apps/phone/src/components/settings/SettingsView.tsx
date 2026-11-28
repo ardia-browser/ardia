@@ -22,6 +22,7 @@ import { PageSummaryPage } from "./PageSummaryPage";
 import { ExperimentalPane, GeneralPane, SearchPane, TabsPane } from "./SettingsPanes";
 import { DesignProvider, rolesFor, useDesign, useTheme } from "../ui";
 import { SettingsFormColorsContext } from "./SettingsKit";
+import { SettingsPageOpenedContext } from "./settingsOpened";
 
 export function SettingsPageFor({ route }: { route: SettingsRoute }) {
   switch (route.page) {
@@ -128,7 +129,9 @@ function HandBuiltSettings({ material }: { material: boolean }) {
     <View testID="settingsStack" style={StyleSheet.absoluteFill}>
       <View key={`${generation}:${shown.key}`} testID="settingsPage" style={StyleSheet.absoluteFill}>
         <SettingsFormColorsContext.Provider value={form}>
-          <SettingsPageFor route={shown.route} />
+          <SettingsPageOpenedContext.Provider value={latest?.key === shown.key}>
+            <SettingsPageFor route={shown.route} />
+          </SettingsPageOpenedContext.Provider>
         </SettingsFormColorsContext.Provider>
       </View>
     </View>

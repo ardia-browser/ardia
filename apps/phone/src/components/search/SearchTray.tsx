@@ -1,7 +1,7 @@
-import { probes } from "../../state/app/launchFlags";
-import { createContext, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { labTrace, markShownFrame, traceSlice } from "../../platform/lab";
-import { hardwareKeyboardShown } from "@ardia/phone-native";
+import { launchArguments, probes } from "../../state/app/launchFlags";
+import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { labLog, labTrace, markShownFrame, traceSlice } from "../../platform/lab";
+import { hardwareKeyboardShown, system, type KeyboardWarmUp } from "@ardia/phone-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { countRender } from "../../state/app/interactionPerf";
@@ -11,7 +11,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, FadeIn, FadeOut, runOnJS, runOnUI, useAnimatedProps, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import type { GestureType } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { activateRow, cancelSearch, submitSearch, toggleTrayIncognito } from "../../state/browse/store";
+import { activateRow, cancelSearch, pageCovered, submitSearch, toggleTrayIncognito } from "../../state/browse/store";
 import { copyLink, menuOpenedHaptic, trayRowActions, trayRowHoldAction, type RowAction } from "../../state/browse/tabMenus";
 import { rowMenuItems, useRowConfirm } from "./rowConfirm";
 import { useSearchEditsPage, useSearchFieldVersion, useSearchInitialText, useSearchOpen, useSearchOrigin, useSearchRows, useSearchSession, useSearchText } from "../../state/search/hooks";
@@ -33,7 +33,8 @@ import { completingFieldIsNative } from "../../platform/completingField";
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { preparedIdleKey, preparedIdleRows, searchPresented, searchState, setSearchClearsPagePrefill, setSearchText, typeSearch, warmSearchWhenIdle, whenSearchPresents, type SearchOrigin, type SearchPresenting } from "../../state/search/store";
 import { useBrowse } from "../../state/browse/store";
-import { endSearchTiming, markSearchClosePhase, markSearchPhase } from "../../state/search/searchTiming";
+import { pageUi } from "../../state/page/store";
+import { endSearchTiming, markSearchClosePhase, markSearchPhase, markSearchPresented } from "../../state/search/searchTiming";
 import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../state/search/trayBack";
 import { useIncognito, useSelectedTab, useSelectedTabId } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
@@ -118,7 +119,46 @@ function useTrayTheme() {
 export function SearchTray() {
   const design = useDesign();
   if (design === "material") return <MaterialSearchTray />;
-  return searchStageIsNative() ? <StagedTray /> : <SheetTray />;
+  if (!searchStageIsNative()) return <SheetTray />;
+  return (
+    <>
+      <StagedTray />
+      <FirstKeyboardWarmUp />
+    </>
+  );
+}
+
+const KEYBOARD_WARM_AFTER_LAUNCH_MS = 2500;
+const KEYBOARD_WARM_RETRY_MS = 1500;
+const KEYBOARD_WARM_ATTEMPTS = 6;
+const KEYBOARD_WARM_FINAL = new Set(["warmed", "refused", "done", "unsupported", "failed"]);
+
+const overlayOpen = () => pageCovered() || pageUi().findOpen || useBrowse.getState().surface === "deck";
+
+function FirstKeyboardWarmUp() {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    let attempts = 0;
+    system.prepareKeyboardWarmUp();
+    const attempt = async () => {
+      timer = null;
+      attempts += 1;
+      const result: KeyboardWarmUp = searchState().open ? { outcome: "searchOpen" } : overlayOpen() ? { outcome: "overlay" } : await system.warmKeyboard();
+      if (stopped) return;
+      labLog(`PAGELAB search warm keyboard ${result.outcome}${typeof result.ms === "number" ? ` ${Math.round(result.ms)}ms` : ""}${result.holder ? ` ${result.holder}` : ""} attempt ${attempts}`);
+      if (KEYBOARD_WARM_FINAL.has(result.outcome) || attempts >= KEYBOARD_WARM_ATTEMPTS) return system.endKeyboardWarmUp();
+      timer = setTimeout(attempt, KEYBOARD_WARM_RETRY_MS);
+    };
+    const delaySeconds = launchArguments().keyboardWarmDelaySeconds;
+    timer = setTimeout(attempt, delaySeconds === null ? KEYBOARD_WARM_AFTER_LAUNCH_MS : delaySeconds * 1000);
+    return () => {
+      stopped = true;
+      if (timer !== null) clearTimeout(timer);
+      system.endKeyboardWarmUp();
+    };
+  }, []);
+  return null;
 }
 
 function SheetTray() {
@@ -752,7 +792,7 @@ function StagedTray() {
     void stage.current?.present().then(() => {
       if (live.current.presentation !== presentation || live.current.closing) return;
       if (launch) launchTrayUp();
-      markSearchPhase("presented");
+      markSearchPresented();
       setPresented(true);
       stagePresented();
       searchPresented(searchState().session);
@@ -1284,7 +1324,7 @@ function StandbyRowsKey() {
   return null;
 }
 
-function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
+const TrayRows = memo(function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
   const leaving = useLeavingActions();
   const theme = useTrayTheme();
   const standby = useContext(StandbyContext);
@@ -1303,6 +1343,7 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
   const refine = useCallback((row: TrayRow) => setSearchText(refinedText(row)), []);
   const [menu, setMenu] = useState<{ row: TrayRow; at: Point } | null>(null);
   const confirm = useRowConfirm();
+  const rowMenus = useMemo(() => rows.map((row) => confirm.guarded(trayRowActions(row))), [rows, confirm.guarded]);
   const menuOpen = menu !== null;
   useEffect(() => (menuOpen ? coverTray() : undefined), [menuOpen]);
   const window = useWindowDimensions();
@@ -1385,7 +1426,7 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
   };
   const rowViews = rows.map((row, index) => (
     <View key={index} onLayout={arc ? undefined : (event) => measure(index, event.nativeEvent.layout)}>
-      <SuggestionRow row={row} typed={typed} roles={theme} menu={confirm.guarded(trayRowActions(row))} onActivate={leaving.activate} onRefine={refine} onMenu={showMenu} />
+      <SuggestionRow row={row} typed={typed} roles={theme} menu={rowMenus[index]} onActivate={leaving.activate} onRefine={refine} onMenu={showMenu} />
     </View>
   ));
   if (window.fontScale <= LARGE_FONT_SCALE && !arc) {
@@ -1411,6 +1452,8 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
         </GestureDetector>
       ) : (
         <ScrollView
+          bounces={false}
+          overScrollMode="never"
           testID={arc ? "searchPanelRowsScroll" : undefined}
           style={arc || shown === null ? styles.rows : { height: shown, flexGrow: 0 }}
           contentContainerStyle={arc ? styles.searchPanelRowsContent : styles.rowsContent}
@@ -1425,7 +1468,7 @@ function TrayRows({ dismissDrag }: { dismissDrag: GestureType }) {
       {menuView}
     </Animated.View>
   );
-}
+});
 
 type OpenedPage = { key: string; url: string; title: string; faviconUrl: string | null; initialText: string };
 

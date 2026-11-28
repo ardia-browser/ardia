@@ -2,7 +2,9 @@
 
 #include <cassert>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -149,6 +151,58 @@ void TestClaims() {
   assert(!CanReclaim("c1", ""));
 }
 
+struct PendingFind {
+  explicit PendingFind(std::vector<std::string>* reported, const std::string* claim)
+      : reported_(reported), claim_(claim) {}
+  ~PendingFind() { ++dropped; }
+  void Deliver() const { reported_->push_back(*claim_ + ":3 matches"); }
+
+  static int dropped;
+
+ private:
+  std::vector<std::string>* reported_;
+  const std::string* claim_;
+};
+
+int PendingFind::dropped = 0;
+
+void TestClaimBoundHelpers() {
+  std::vector<std::string> reported;
+  ClaimBound<PendingFind> binding;
+  assert(binding.empty() && !binding.helper());
+
+  assert(binding.epoch() == 0);
+  binding.Assign("c1");
+  assert(binding.epoch() == 1);
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  binding.helper()->Deliver();
+  assert(reported.size() == 1 && reported.back() == "c1:3 matches");
+
+  binding.Clear();
+  assert(binding.empty() && !binding.helper() && PendingFind::dropped == 1 && binding.epoch() == 2);
+  binding.Assign("c2");
+  assert(binding.value() == "c2" && !binding.helper());
+  assert(reported.size() == 1);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  binding.Assign("c3");
+  assert(!binding.helper() && PendingFind::dropped == 2);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  const uint64_t before_same_claim = binding.epoch();
+  binding.Assign("c3");
+  assert(!binding.helper() && PendingFind::dropped == 3 && binding.epoch() == before_same_claim + 1);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  const uint64_t before_drop = binding.epoch();
+  binding.DropHelper();
+  assert(binding.value() == "c3" && !binding.helper() && PendingFind::dropped == 4 && binding.epoch() == before_drop);
+
+  binding.Hold(std::make_unique<PendingFind>(&reported, &binding.value()));
+  binding.helper()->Deliver();
+  assert(reported.size() == 2 && reported.back() == "c3:3 matches");
+}
+
 void TestUnclaimedTabs() {
   assert(NextUnclaimedStep(false, false, true, false, 0) == UnclaimedStep::kDrop);
   assert(NextUnclaimedStep(true, true, true, false, 0) == UnclaimedStep::kDrop);
@@ -167,6 +221,56 @@ void TestUnclaimedTabs() {
   assert(!ParseAdoptId("tab:1a"));
   assert(!ParseAdoptId("restore:1"));
   assert(!ParseAdoptId("tab:99999999999"));
+}
+
+void TestProfileNames() {
+  assert(IsAppProfileName(""));
+  assert(IsAppProfileName("default"));
+  assert(!IsAppProfileName("p-work"));
+  assert(!IsAppProfileName("Default"));
+  assert(!IsAppProfileName("incognito:w@default"));
+
+  assert(RegularProfileName("") == "default");
+  assert(RegularProfileName("default") == "default");
+  assert(RegularProfileName("p-work") == "p-work");
+  assert(RegularProfileName("incognito:w@") == "incognito:w@");
+
+  assert(SameRegularProfile("", "default"));
+  assert(SameRegularProfile("default", ""));
+  assert(SameRegularProfile("p-work", "p-work"));
+  assert(!SameRegularProfile("", "p-work"));
+  assert(!SameRegularProfile("default", "p-work"));
+  assert(!SameRegularProfile("incognito:w@", "default"));
+
+  assert(TabProfileName(false, "", "p-work") == "p-work");
+  assert(TabProfileName(true, "", "p-work") == "default");
+  assert(!SameRegularProfile(TabProfileName(true, "", "p-work"), "p-work"));
+  assert(TabProfileName(true, "p-work", "default") == "p-work");
+  assert(TabProfileName(false, "", "incognito:w@") == "incognito:w@");
+  assert(TabProfileName(true, "", "incognito:w@") == "default");
+  assert(!SameRegularProfile(TabProfileName(true, "", "incognito:w@"),
+                             "incognito:w@"));
+  assert(SameRegularProfile(TabProfileName(true, "", "default"), "default"));
+  assert(SameRegularProfile(TabProfileName(false, "", "default"), "default"));
+
+  assert(ShellProfileName("default").empty());
+  assert(ShellProfileName("").empty());
+  assert(ShellProfileName("p-work") == "p-work");
+  assert(ShellProfileName("incognito:w@") == "incognito:w@");
+  assert(ShellProfileName(PrivateLinkProfile("default")).empty());
+  assert(ShellProfileName(PrivateLinkProfile("p-work")) == "p-work");
+}
+
+void TestFullScreenReports() {
+  assert(ReportsWindowFullScreen(true, false));
+  assert(!ReportsWindowFullScreen(true, true));
+  assert(!ReportsWindowFullScreen(false, false));
+  assert(!ReportsWindowFullScreen(false, true));
+
+  assert(ReleasesPageFullScreen(false, true));
+  assert(!ReleasesPageFullScreen(true, true));
+  assert(!ReleasesPageFullScreen(false, false));
+  assert(!ReleasesPageFullScreen(true, false));
 }
 
 void TestDocumentVerbs() {
@@ -459,6 +563,23 @@ void TestStartFocus() {
   assert(NextStartStep(true, false, true, false) == StartStep::kFocusFront);
   assert(NextStartStep(true, false, false, true) == StartStep::kFocusFront);
 }
+
+void TestShortcutPriority() {
+  for (const char* command :
+       {"newTab", "newWindow", "newIncognitoWindow", "reopenClosedTab",
+        "closeTab", "closeWindow", "nextTab", "previousTab", "tabSwitcher",
+        "quit"}) {
+    assert(ShortcutReservedFromPages(command));
+  }
+  for (const char* command :
+       {"toggleSidebar", "findInPage", "focusCommandBar", "selectAll", "copyUrl",
+        "selectTab", "back", "forward", "reload", "print", "", "NEWTAB",
+        "newTab "}) {
+    assert(!ShortcutReservedFromPages(command));
+  }
+  assert(ShortcutRegisters(false));
+  assert(!ShortcutRegisters(true));
+}
 }
 
 int main() {
@@ -469,7 +590,10 @@ int main() {
   TestPrivateHandOver();
   TestBindingGenerations();
   TestClaims();
+  TestClaimBoundHelpers();
   TestUnclaimedTabs();
+  TestProfileNames();
+  TestFullScreenReports();
   TestDocumentVerbs();
   TestRects();
   TestPlacement();
@@ -478,6 +602,7 @@ int main() {
   TestRequestedMaximized();
   TestHostileSinks();
   TestStartFocus();
+  TestShortcutPriority();
   std::cout << "webui_window_policy_test: all assertions passed\n";
   return 0;
 }

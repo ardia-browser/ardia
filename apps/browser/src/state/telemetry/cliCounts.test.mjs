@@ -7,7 +7,7 @@ const client = await import("./client.ts");
 client.loadChoice();
 client.setSharing(true, "settings");
 after(() => client.setSharing(false, "settings"));
-const { notePageSignals, noteTokenCommands, noteWindowlessPages, takeCliCounts } = await import("./cliCounts.ts");
+const { controlStopKind, noteControlRestored, noteControlRestoreTry, noteControlSelfStop, notePageSignals, noteTokenCommands, noteWindowlessPages, takeCliCounts } = await import("./cliCounts.ts");
 
 const windowless = (counts) => [counts.windowless_pages_given_geometry, counts.windowless_pages_missing_geometry];
 
@@ -74,4 +74,35 @@ test("the engine's page check totals turn into counts since the last take, and A
   assert.equal(counts.cli_cdp_commands_ardia, 7);
   notePageSignals({ consoleReads: 99 }, null);
   assert.equal(takeCliCounts().cli_page_signal_console_reads, 0);
+});
+
+test("what stopped the control server is counted by cause, and never carries the message", () => {
+  const reasons = {
+    policy: "Remote debugging is turned off by your administrator.",
+    listen: "Couldn't listen on 127.0.0.1.",
+    deadline: "The control server didn't start.",
+    stopped: "The control server stopped.",
+    other: "Others can write to /Users/someone/Library/Application Support/Ardia.",
+  };
+  takeCliCounts();
+  for (const [kind, reason] of Object.entries(reasons)) {
+    assert.equal(controlStopKind(reason), kind);
+    noteControlSelfStop(reason);
+  }
+  noteControlSelfStop("a message this build has never heard of");
+  noteControlRestoreTry("launch");
+  noteControlRestoreTry("approval");
+  noteControlRestoreTry("approval");
+  noteControlRestored();
+  const counts = takeCliCounts();
+  assert.deepEqual(
+    Object.keys(reasons).map((kind) => counts[`cli_control_self_stop_${kind}`]),
+    [1, 1, 1, 1, 2],
+  );
+  assert.deepEqual([counts.cli_control_restore_tries_launch, counts.cli_control_restore_tries_approval, counts.cli_control_restored], [1, 2, 1]);
+  noteControlSelfStop(reasons.deadline, null);
+  noteControlRestoreTry("launch", null);
+  noteControlRestored(null);
+  const none = takeCliCounts();
+  assert.deepEqual([none.cli_control_self_stop_deadline, none.cli_control_restore_tries_launch, none.cli_control_restored], [0, 0, 0], "an earlier or missing consent period counts nothing");
 });

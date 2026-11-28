@@ -41,7 +41,7 @@ using CredentialsOrError = base::expected<Credentials, PasswordStoreBackendError
 enum class Store { kProfile, kAccount };
 
 constexpr size_t kEscapedBytesPerUnit = 6;
-constexpr size_t kBytesPerLogin = 96;
+constexpr size_t kBytesPerLogin = 128;
 
 std::string_view NameOf(Store store) {
   return store == Store::kProfile ? "profile" : "account";
@@ -99,6 +99,10 @@ bool AppendLogin(const StoredCredential& credential, bool first, std::string& js
   json += base::NumberToString(credential.date_created.is_null()
                                    ? 0.0
                                    : credential.date_created.InMillisecondsFSinceUnixEpoch());
+  json += ",\"modified\":";
+  const base::Time modified =
+      credential.date_password_modified.is_null() ? credential.date_created : credential.date_password_modified;
+  json += base::NumberToString(modified.is_null() ? 0.0 : modified.InMillisecondsFSinceUnixEpoch());
   json += '}';
   return valid;
 }

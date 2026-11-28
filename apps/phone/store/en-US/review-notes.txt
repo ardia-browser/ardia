@@ -1,0 +1,25 @@
+Ardia is a web browser. There is no account and no sign-in, so no demo account is needed. Everything below works on an iPhone with no Mac nearby.
+
+TRYING IT WITHOUT A MAC
+- Browsing: tap the bar at the bottom, type an address or a search, and go. Swipe up from the bar, or tap the tab button at its left, to see open tabs as a deck of cards. Swipe a card up to close it. Tap + for a new tab.
+- Browse for Me: type a question of three letters or more (for example "what to see in sintra in one day") and tap the Browse for Me row under it. Ardia reads the top results and writes one answer with numbered sources. Apple Intelligence writes it on the iPhone. On an iPhone without Apple Intelligence, the answer is the most relevant sentences from those pages, each cited, and the page says why.
+- Pinch to Summarize: it is off by default. Turn it on in Settings › Experimental › Pinch to Summarize. Then open a page (a Wikipedia article works well) and pinch in, or choose Summarize Page from the page menu (the … button in the bar). Apple Intelligence writes the summary on the iPhone.
+- Also there: the page menu (Find on Page, Reader, Block Ads and Trackers, Page Zoom, Desktop Site, Translate), Incognito (the eyes button), voice search (the microphone), History and Bookmarks, the share extension (Open in Ardia), Home Screen widgets and Control Center controls.
+
+PAIRING WITH A MAC IS OPTIONAL
+People who also use Ardia on a Mac can connect the two. On the Mac, Ardia's Settings › General › Sync › Connect Another Device shows a QR code. On the iPhone, the Sync row at the top of Settings scans it and asks for the "Ardia Sync" folder in iCloud Drive once. After that the iPhone shows the Mac's Spaces, pinned sites and open tabs, and the page menu's Send to <Mac name> sends the open page to that Mac. The data sits in the user's own iCloud Drive, locked with a key that only their devices hold. It never passes through a server of ours. How it works: https://github.com/ardia-browser/ardia/blob/main/docs/phone.md#sync-on-iphone
+None of this is needed to review the app, and the app never asks for it.
+
+CHATGPT IS OPTIONAL
+Browse for Me and Pinch to Summarize answer on the iPhone by default, and need no account. In Settings › Experimental › Browse for Me, a user with their own ChatGPT Plus or Pro plan can choose Continue with ChatGPT to sign in with OpenAI. Before they connect, that page says what is sent: their search and the text of the pages it read, straight from the iPhone to OpenAI, never through a server of ours. Disconnecting goes back to answering on the iPhone. No ChatGPT account is supplied for review because nothing in the app depends on one.
+
+TALK TO ME
+Settings › Experimental › Browse for Me › Talk to Me reads answers aloud with an on-device voice. Turning it on downloads the voice's model data (about 133 MB) from our GitHub release. It is data only, checked against a pinned SHA-256 before use, and nothing downloads until the user turns the switch on.
+
+DEFAULT BROWSER
+Apple granted the default web browser entitlement (com.apple.developer.web-browser) for com.ardia.browser.ios. Ardia can be chosen in Settings › Apps › Default Apps › Browser App, and Ardia's own Settings › General › Default browser opens that page.
+
+PERMISSIONS
+Microphone and speech recognition: voice search, Talk to Me through the earpiece, and websites that ask. Camera: scanning the Mac's QR code, and websites that ask. Location: only when a website asks. Photos (add only): saving an image the user chooses. The audio background mode keeps a page's video playing in Picture in Picture and its audio playing when Ardia leaves the screen, as other browsers do.
+
+Usage stats are off unless the user turns on "Share anonymous usage stats" in Settings. Then they are counts and timings only, never the sites visited or what was typed.

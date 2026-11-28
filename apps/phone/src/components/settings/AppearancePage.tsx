@@ -9,7 +9,8 @@ import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offered
 import { syncOffered } from "../../state/sync/offer";
 import { setColorChoice, setDynamicColors, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { useAppearanceSummary } from "../../state/settings/appearance";
-import { openThemeEditor } from "../../state/settings/customTheme";
+import { chooseCustomTheme, resetPresetTheme } from "../../state/settings/customTheme";
+import { selectedSwatch } from "../../state/settings/themeDraft";
 import { usePreferences } from "../../state/settings/hooks";
 import { popSettings, pushSettings } from "../../state/settings/nav";
 import { matchMyMac } from "../../state/sync/actions";
@@ -118,8 +119,9 @@ export function ColorRow({ labelled = true, plainIcon = false, customAvailable =
   const look = useProfileLook();
   const choice = usePreferences((p) => p.colorChoice);
   const material = useDesign() === "material";
-  const selected = material ? choice ?? "plum" : look.preset;
-  const custom = !material && choice === "custom";
+  const selected = usePreferences((p) => selectedSwatch(p, look, material));
+  const custom = selected === "custom";
+  const editedPreset = usePreferences((p) => (!material && p.colorChoice && p.colorChoice !== "custom" && p.presetThemes[p.colorChoice] ? p.colorChoice : null));
   return (
     <>
       <View style={[styles.colorRow, labelled ? null : styles.colorRowPlain]}>
@@ -134,10 +136,16 @@ export function ColorRow({ labelled = true, plainIcon = false, customAvailable =
           {material ? null : <CustomSwatch selected={custom} disabled={!customAvailable} />}
         </View>
       </View>
-      {custom && customAvailable ? (
+      {customAvailable ? (
         <>
           <Divider />
           <NavRow title="Edit Theme" onPress={() => pushSettings({ page: "theme" })} />
+        </>
+      ) : null}
+      {customAvailable && editedPreset ? (
+        <>
+          <Divider />
+          <NavRow title={`Reset to ${PROFILE_COLORS[editedPreset].name}`} onPress={() => resetPresetTheme(editedPreset)} />
         </>
       ) : null}
     </>
@@ -172,10 +180,9 @@ function CustomSwatch({ selected, disabled }: { selected: boolean; disabled: boo
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel="Custom"
-      accessibilityHint="Opens the theme editor"
       accessibilityState={{ selected, ...(disabled ? { disabled } : {}) }}
       disabled={disabled}
-      onPress={() => openThemeEditor(look)}
+      onPress={() => chooseCustomTheme(look)}
       style={pressStyle}
     >
       <SwatchRing ring={ring} selected={selected}>
@@ -186,19 +193,22 @@ function CustomSwatch({ selected, disabled }: { selected: boolean; disabled: boo
 }
 
 function Swatch({ color, selected, grid, disabled }: { color: ProfileColor; selected: boolean; grid: boolean; disabled: boolean }) {
-  const swatch = PROFILE_COLORS[color].swatch;
+  const edits = usePreferences((p) => (grid ? (p.presetThemes[color] ?? null) : null));
+  const swatch = edits ? themeAccent(edits) : PROFILE_COLORS[color].swatch;
+  const colors = useMemo(() => (edits ? themePalette(edits) : null), [edits]);
+  const side = settingsLayout.swatch;
   const pressStyle = usePressStyle("icon", { style: grid ? CUSTOM_SWATCH_HIT : styles.swatchHit });
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityLabel={PROFILE_COLORS[color].name}
+      accessibilityLabel={edits ? `${PROFILE_COLORS[color].name}, edited` : PROFILE_COLORS[color].name}
       accessibilityState={{ selected, ...(disabled ? { disabled } : {}) }}
       disabled={disabled}
       onPress={() => setColorChoice(color)}
       style={pressStyle}
     >
       <SwatchRing ring={swatch} selected={selected}>
-        <View style={[styles.swatch, { backgroundColor: swatch }]} />
+        <View style={[styles.swatch, colors ? { experimental_backgroundImage: linearGradientCss(colors, true, side, side) } : { backgroundColor: swatch }]} />
       </SwatchRing>
     </Pressable>
   );

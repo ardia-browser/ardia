@@ -33,13 +33,27 @@ class WebContents;
 struct ContextMenuParams;
 }
 
+namespace ui {
+class Accelerator;
+}
+
 namespace url {
 class Origin;
+}
+
+namespace views {
+class FocusManager;
 }
 
 extern bool g_ardia_win_hosts_normal_windows;
 
 extern bool g_ardia_win_shell_frame;
+
+extern bool (*g_ardia_win_dispatch_reserved_shortcut)(
+    const views::FocusManager* focus,
+    const ui::Accelerator& accelerator);
+
+extern bool g_ardia_win_priority_shortcut_pass;
 
 extern std::unique_ptr<BrowserFrameView> (*g_ardia_win_frame_view)(
     BrowserWidget* widget,

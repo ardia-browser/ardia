@@ -318,6 +318,92 @@ test("in WebKit only, a link from a website into the Web Store moves to Chromium
   webviews.clear();
 });
 
+test("a same-site page after the hold ends, while the stopped move is still settling, gets the site's rule", async () => {
+  const { cliHoldsClockForTests, holdForCli, releaseFromCli } = await import("../tabs/cliHolds.ts");
+  S().hydrate({});
+  S().updateSettings({ websiteEngines: { "https://read.example": "webkit" } });
+  const w = S().createWindow({ url: "https://search.example/" });
+  const tabId = model.activeTabId(S(), w);
+  S().updateTab(tabId, { engine: "chromium", url: "https://search.example/" });
+  webviews.set(tabId, { evaluate: () => new Promise((resolve) => setTimeout(() => resolve(false), 20)), pageCookies: () => new Promise((resolve) => setTimeout(() => resolve([]), 20)) });
+  S().updateTab(tabId, { url: "https://read.example/a" });
+  followSiteChoice(tabId, "chromium", "https://read.example/a", "https://search.example/");
+  const base = performance.now();
+  holdForCli("cli-session", [tabId], 60);
+  let navigatedWhileSettling = false;
+  let guardSawHold = false;
+  cliHoldsClockForTests(() => {
+    if (guardSawHold) return base + 120_000;
+    if (!new Error().stack?.includes("routedHere")) return base;
+    guardSawHold = true;
+    queueMicrotask(() => {
+      releaseFromCli("cli-session");
+      S().updateTab(tabId, { url: "https://read.example/b" });
+      followSiteChoice(tabId, "chromium", "https://read.example/b", "https://read.example/a");
+      navigatedWhileSettling = true;
+    });
+    return base;
+  });
+  assert.ok(await waitFor(() => navigatedWhileSettling), "the same-site page arrived before the stopped move settled");
+  cliHoldsClockForTests(() => performance.now());
+  assert.ok(await waitFor(() => tabEngine(S(), tabId) === "webkit"), "the rule the hold put off applies to that page");
+  dropSwap(tabId);
+  webviews.clear();
+  S().updateSettings({ websiteEngines: {} });
+});
+
+test("a page that can't move, like about:blank, doesn't use up the site check a CLI hold put off", async () => {
+  const { holdForCli, releaseFromCli } = await import("../tabs/cliHolds.ts");
+  S().hydrate({});
+  S().updateSettings({ websiteEngines: { "https://read.example": "webkit" } });
+  const w = S().createWindow({ url: "https://search.example/" });
+  const tabId = model.activeTabId(S(), w);
+  S().updateTab(tabId, { engine: "chromium", url: "https://search.example/" });
+  webviews.set(tabId, { evaluate: () => Promise.resolve(false), pageCookies: () => Promise.resolve([]) });
+  holdForCli("cli-session", [tabId]);
+  S().updateTab(tabId, { url: "https://read.example/a" });
+  followSiteChoice(tabId, "chromium", "https://read.example/a", "https://search.example/");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "chromium", "held, so it stays");
+  releaseFromCli("cli-session");
+  S().updateTab(tabId, { url: "about:blank" });
+  followSiteChoice(tabId, "chromium", "about:blank", "https://read.example/a");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "chromium");
+  S().updateTab(tabId, { url: "https://read.example/b" });
+  followSiteChoice(tabId, "chromium", "https://read.example/b", "https://read.example/a");
+  assert.ok(await waitFor(() => tabEngine(S(), tabId) === "webkit"), "the next page on the site gets the rule the hold put off");
+  dropSwap(tabId);
+  webviews.clear();
+  S().updateSettings({ websiteEngines: {} });
+});
+
+test("in WebKit only, a site check a CLI hold put off waits out a Google sign-in instead of moving it to WebKit", async () => {
+  const { holdForCli, releaseFromCli } = await import("../tabs/cliHolds.ts");
+  S().hydrate({});
+  S().updateSettings({ engineMode: "webkit" });
+  const w = S().createWindow({ url: "chrome://extensions/" });
+  const tabId = model.activeTabId(S(), w);
+  webviews.set(tabId, { evaluate: () => Promise.resolve(false), pageCookies: () => Promise.resolve([]) });
+  assert.equal(tabEngine(S(), tabId), "chromium");
+  holdForCli("cli-session", [tabId]);
+  S().updateTab(tabId, { url: "https://developer.chrome.com/docs" });
+  followSiteChoice(tabId, "chromium", "https://developer.chrome.com/docs", "chrome://extensions/");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "chromium", "held, so it stays");
+  releaseFromCli("cli-session");
+  S().updateTab(tabId, { url: "https://accounts.google.com/signin" });
+  followSiteChoice(tabId, "chromium", "https://accounts.google.com/signin", "https://developer.chrome.com/docs");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "chromium", "Google sign-in keeps its Chromium exception");
+  S().updateTab(tabId, { url: "https://developer.chrome.com/docs/next" });
+  followSiteChoice(tabId, "chromium", "https://developer.chrome.com/docs/next", "https://developer.chrome.com/docs");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "webkit", "the check the hold put off applies once sign-in is over");
+  dropSwap(tabId);
+  webviews.clear();
+});
+
 test("in WebKit only, leaving the Web Store or its Google sign-in for another site moves the tab back to WebKit", async () => {
   S().hydrate({});
   S().updateSettings({ engineMode: "webkit" });
@@ -519,6 +605,106 @@ test("a move after a link to a streaming site still lands when the page moves on
   assert.deepEqual(pageOf(tabId).engineBack, { engine: "chromium", url: "https://search.example/?q=film" });
   dropSwap(tabId);
   webviews.clear();
+});
+
+test("a tab the ardia command holds stays in Chromium when it lands on a site routed to WebKit, so its session isn't detached", async () => {
+  const { holdForCli, releaseFromCli } = await import("../tabs/cliHolds.ts");
+  S().hydrate({});
+  S().updateSettings({ protectedVideoInWebKit: true, websiteEngines: { "https://read.example": "webkit" } });
+  setConsentPeriod(true, "test-epoch");
+  const w = S().createWindow({ url: "https://search.example/?q=film" });
+  const tabId = model.activeTabId(S(), w);
+  S().updateTab(tabId, { engine: "chromium", url: "https://search.example/?q=film" });
+  webviews.set(tabId, { evaluate: () => Promise.resolve(false), pageCookies: () => Promise.resolve([]) });
+  assert.deepEqual(holdForCli("cli-session", [tabId]).started, [tabId]);
+  takeEngineSwitchCounts();
+  S().updateTab(tabId, { url: "https://www.netflix.com/" });
+  followSiteChoice(tabId, "chromium", "https://www.netflix.com/", "https://search.example/?q=film");
+  S().updateTab(tabId, { url: "https://read.example/a" });
+  followSiteChoice(tabId, "chromium", "https://read.example/a", "https://www.netflix.com/");
+  for (let i = 0; i < 10; i++) await settle();
+  assert.equal(tabEngine(S(), tabId), "chromium", "a protected-video site and a WebKit rule both leave a held tab where the command attached");
+  let counts = takeEngineSwitchCounts();
+  assert.deepEqual([counts.engine_site_moves_kept_for_cli, counts.engine_site_moves], [2, 0]);
+  releaseFromCli("cli-session");
+  S().updateTab(tabId, { url: "https://www.netflix.com/title/1" });
+  followSiteChoice(tabId, "chromium", "https://www.netflix.com/title/1", "https://read.example/a");
+  assert.ok(await waitFor(() => tabEngine(S(), tabId) === "webkit"), "once the command lets go, the site's engine applies again");
+  counts = takeEngineSwitchCounts();
+  assert.deepEqual([counts.engine_site_moves_kept_for_cli, counts.engine_site_moves], [0, 1]);
+  dropSwap(tabId);
+  webviews.clear();
+  setConsentPeriod(false, null);
+  S().updateSettings({ websiteEngines: {} });
+});
+
+test("a hold the ardia command takes while a move is getting ready stops the move, and the same site's next page after the hold applies the rule", async () => {
+  const { holdForCli, releaseFromCli } = await import("../tabs/cliHolds.ts");
+  S().hydrate({});
+  S().updateSettings({ websiteEngines: { "https://read.example": "webkit" } });
+  setConsentPeriod(true, "test-epoch");
+  const w = S().createWindow({ url: "https://search.example/" });
+  const tabId = model.activeTabId(S(), w);
+  S().updateTab(tabId, { engine: "chromium", url: "https://search.example/" });
+  webviews.set(tabId, { evaluate: () => new Promise((resolve) => setTimeout(() => resolve(false), 20)), pageCookies: () => new Promise((resolve) => setTimeout(() => resolve([]), 20)) });
+  takeEngineSwitchCounts();
+  S().updateTab(tabId, { url: "https://read.example/a" });
+  followSiteChoice(tabId, "chromium", "https://read.example/a", "https://search.example/");
+  assert.deepEqual(holdForCli("cli-session", [tabId]).started, [tabId]);
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(tabEngine(S(), tabId), "chromium", "the swap that was getting ready doesn't land on a tab the command now holds");
+  let counts = takeEngineSwitchCounts();
+  assert.deepEqual([counts.engine_site_moves_kept_for_cli, counts.engine_site_moves, counts.engine_site_moves_dropped], [1, 0, 0]);
+  releaseFromCli("cli-session");
+  S().updateTab(tabId, { url: "https://read.example/b" });
+  followSiteChoice(tabId, "chromium", "https://read.example/b", "https://read.example/a");
+  assert.ok(await waitFor(() => tabEngine(S(), tabId) === "webkit"), "a page on the same site after the hold still gets the site's engine");
+  counts = takeEngineSwitchCounts();
+  assert.deepEqual([counts.engine_site_moves_kept_for_cli, counts.engine_site_moves], [0, 1]);
+  S().updateTab(tabId, { url: "https://read.example/c" });
+  followSiteChoice(tabId, "webkit", "https://read.example/c", "https://read.example/b");
+  for (let i = 0; i < 6; i++) await settle();
+  assert.equal(takeEngineSwitchCounts().engine_site_moves, 0, "after that the same site's pages move nothing again");
+  dropSwap(tabId);
+  webviews.clear();
+  setConsentPeriod(false, null);
+  S().updateSettings({ websiteEngines: {} });
+});
+
+test("a hold that ends right after it stopped a move still counts as kept for the command and owes the site its rule", async () => {
+  const { cliHoldsClockForTests, holdForCli, releaseFromCli } = await import("../tabs/cliHolds.ts");
+  S().hydrate({});
+  S().updateSettings({ websiteEngines: { "https://read.example": "webkit" } });
+  setConsentPeriod(true, "test-epoch");
+  const w = S().createWindow({ url: "https://search.example/" });
+  const tabId = model.activeTabId(S(), w);
+  S().updateTab(tabId, { engine: "chromium", url: "https://search.example/" });
+  webviews.set(tabId, { evaluate: () => new Promise((resolve) => setTimeout(() => resolve(false), 20)), pageCookies: () => new Promise((resolve) => setTimeout(() => resolve([]), 20)) });
+  takeEngineSwitchCounts();
+  S().updateTab(tabId, { url: "https://read.example/a" });
+  followSiteChoice(tabId, "chromium", "https://read.example/a", "https://search.example/");
+  const base = performance.now();
+  holdForCli("cli-session", [tabId], 60);
+  let guardSawHold = false;
+  cliHoldsClockForTests(() => {
+    if (guardSawHold) return base + 120_000;
+    if (new Error().stack?.includes("routedHere")) guardSawHold = true;
+    return base;
+  });
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(guardSawHold, "the move's own check saw the hold");
+  assert.equal(tabEngine(S(), tabId), "chromium");
+  const counts = takeEngineSwitchCounts();
+  assert.deepEqual([counts.engine_site_moves_kept_for_cli, counts.engine_site_moves_dropped], [1, 0], "the hold had ended by the time the move settled, but it was what stopped it");
+  cliHoldsClockForTests(() => performance.now());
+  releaseFromCli("cli-session");
+  S().updateTab(tabId, { url: "https://read.example/b" });
+  followSiteChoice(tabId, "chromium", "https://read.example/b", "https://read.example/a");
+  assert.ok(await waitFor(() => tabEngine(S(), tabId) === "webkit"), "the same site's next page gets the rule the hold put off");
+  dropSwap(tabId);
+  webviews.clear();
+  setConsentPeriod(false, null);
+  S().updateSettings({ websiteEngines: {} });
 });
 
 function streamingWindow(source = "https://blog.example/", settings = {}) {

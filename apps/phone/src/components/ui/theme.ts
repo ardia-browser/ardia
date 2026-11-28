@@ -1,11 +1,12 @@
 import { createContext, useContext, useMemo } from "react";
-import { useDarkScheme } from "../../state/settings/appearance";
+import { useDarkScheme, usePageDarkScheme } from "../../state/settings/appearance";
 import { backdropStops, presetLook, showsTheme, windowTintStops, type PresetSpec, type ProfileLook } from "../../lib/profileLook";
 import { withAlpha } from "../../lib/color";
 import { colorRoles, PROFILE_COLORS, tabsInk, type ColorRoles, type ProfileColor } from "./tokens";
 import { useDesign } from "./design";
 import { rolesFromScheme } from "./materialRoles";
-import { useMaterialTheme } from "./materialTheme";
+import { schemeFor } from "../../lib/material/schemePick";
+import { useMaterialSchemePair } from "./materialTheme";
 import { spaceAccentFor, type SpaceAccent } from "./accentRoles";
 
 export { spaceAccentFor, type SpaceAccent } from "./accentRoles";
@@ -44,15 +45,18 @@ export const IncognitoLook = IncognitoLookContext.Provider;
 
 export const useIncognitoLook = () => useContext(IncognitoLookContext);
 
-export function useTheme(): Theme {
+export const useTheme = (): Theme => useThemeFor(useDarkScheme(), useIncognitoLook());
+
+export const usePageTheme = (): Theme => useThemeFor(usePageDarkScheme(), false);
+
+function useThemeFor(schemeDark: boolean, incognitoLook: boolean): Theme {
   const look = useProfileLook();
-  const schemeDark = useDarkScheme();
-  const incognitoLook = useIncognitoLook();
   const material = useDesign() === "material";
-  const { scheme } = useMaterialTheme();
+  const pair = useMaterialSchemePair();
   return useMemo(() => {
     const dark = schemeDark || (incognitoLook && !material);
     if (material) {
+      const scheme = schemeFor(pair, dark);
       const canvas = scheme.surface;
       return { ...rolesFromScheme(scheme, dark), spaceAccent: scheme.primary, spaceAccentInk: scheme.primary, spaceAccentGlyph: scheme.primary, onSpaceAccent: scheme.onPrimary, spaceAccentWash: withAlpha(scheme.primary, 0.12), backdrop: [canvas, canvas], canvas, start: { colors: [canvas, scheme.surfaceContainerLow], diagonal: false } };
     }
@@ -60,5 +64,5 @@ export function useTheme(): Theme {
     const start = { colors: backdropStops(look, dark, true), diagonal: showsTheme(look, dark, true) };
     const space = incognitoLook ? PRIVATE_ACCENT : spaceAccentFor(look, dark);
     return { ...rolesFor(dark), ...space, accent: space.spaceAccent, formAccent: space.spaceAccentInk, backdrop, canvas: backdrop[0], start };
-  }, [look, schemeDark, incognitoLook, material, scheme]);
+  }, [look, schemeDark, incognitoLook, material, pair]);
 }

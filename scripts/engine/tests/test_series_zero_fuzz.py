@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -963,6 +964,211 @@ class RealSeries(unittest.TestCase):
             self.assertTrue(required)
             for path in list(required) + list(optional):
                 self.assertTrue(series_base.safe_relative(path), path)
+
+
+class Extend(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="ac-series-extend-test-")
+        self.src = os.path.join(self.dir, "chromium_git/chromium/src")
+        os.makedirs(os.path.join(self.src, "chrome"))
+        os.makedirs(os.path.join(self.src, "components/store"))
+        files = {"chrome/VERSION": "MAJOR=1\nMINOR=2\nBUILD=3\nPATCH=4\n", "chrome/f.cc": ORIGINAL,
+                 "components/store/new.cc": "store\n", "components/store/edited.cc": "upstream\n",
+                 "components/store/helium.cc": "upstream\n", "components/store/domsub.cc": "google.com\n"}
+        for path, text in files.items():
+            pathlib.Path(self.src, path).write_text(text)
+        os.chmod(os.path.join(self.src, "chrome/f.cc"), 0o755)
+        git = ["git", "-C", self.src, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git[:3] + ["init", "-q"], check=True)
+        subprocess.run(git + ["add", "."], check=True)
+        subprocess.run(git + ["commit", "-qm", "tag"], check=True)
+        pathlib.Path(self.src, "components/store/edited.cc").write_text("changed by step 3\n")
+        pathlib.Path(self.src, "components/store/untracked.cc").write_text("new\n")
+        self.helium = os.path.join(self.dir, "helium")
+        os.makedirs(os.path.join(self.helium, "patches/core"))
+        pathlib.Path(self.helium, "patches/core/p.patch").write_text(
+            "--- a/components/store/helium.cc\n+++ b/components/store/helium.cc\n")
+        pathlib.Path(self.helium, "domain_substitution.list").write_text("components/store/domsub.cc\n")
+        hgit = ["git", "-C", self.helium, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(hgit[:3] + ["init", "-q"], check=True)
+        subprocess.run(hgit + ["add", "."], check=True)
+        subprocess.run(hgit + ["commit", "-qm", "pinned"], check=True)
+        self.pinned = subprocess.run(hgit[:3] + ["rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        self.checkouts = [(self.helium, self.pinned)]
+        self.ident = {"platform": "linux", "cpu": "x64", "chromium": "1.2.3.4", "helium_chromium": "a" * 40,
+                      "inputs": "c" * 64, "helium_platform": "b" * 40}
+
+    def tearDown(self):
+        subprocess.run(["rm", "-rf", self.dir])
+
+    def test_a_file_the_tree_holds_as_chromium_has_it_is_taken_with_its_mode(self):
+        got = packer.pristine_extensions(self.src, self.checkouts, ["components/store/new.cc", "chrome/f.cc"], "HEAD")
+        self.assertEqual(got, {"components/store/new.cc": (b"store\n", 0o644), "chrome/f.cc": (ORIGINAL.encode(), 0o755)})
+
+    def test_a_file_step_3_may_change_or_the_tree_changed_is_refused_with_its_reason(self):
+        cases = {"components/store/edited.cc": "isn't Chromium's at the tag",
+                 "components/store/untracked.cc": "doesn't track it",
+                 "components/store/helium.cc": "helium/patches/core/p.patch",
+                 "components/store/domsub.cc": "helium/domain_substitution.list",
+                 "chrome/app/strings.grdp": "a step-3 stage rewrites it",
+                 "chrome/app/STRINGS.GRD": "a step-3 stage rewrites it",
+                 "chrome/app/resources/x_fr.xtb": "a step-3 stage rewrites it",
+                 "chrome/VERSION": "a step-3 stage rewrites it",
+                 "chrome/browser/prefs/fixed.cc": "a step-3 stage rewrites it",
+                 "ardia/layer.cc": "records it as absent",
+                 "../outside.cc": "isn't a safe relative path"}
+        for path, reason in cases.items():
+            with self.subTest(path=path):
+                with self.assertRaises(series_base.Problem) as caught:
+                    packer.pristine_extensions(self.src, self.checkouts, ["components/store/new.cc", path], "HEAD",
+                                               absent=["ardia/layer.cc"],
+                                               named={"chrome/VERSION", "chrome/browser/prefs/fixed.cc"})
+                self.assertIn(reason, str(caught.exception))
+                self.assertIn("fresh step-3 run", str(caught.exception))
+
+    def test_a_mode_that_differs_from_head_is_refused(self):
+        os.chmod(os.path.join(self.src, "components/store/new.cc"), 0o755)
+        with self.assertRaises(series_base.Problem):
+            packer.pristine_extensions(self.src, self.checkouts, ["components/store/new.cc"], "HEAD")
+
+    def base_archive(self):
+        base = os.path.join(self.dir, "base")
+        os.makedirs(os.path.join(base, "chrome"))
+        pathlib.Path(base, "chrome/f.cc").write_text(ORIGINAL)
+        fields = dict(self.ident, verified=list(series_base.VERIFIED),
+                      provenance={"step3_run": "r", "step3_stamp_sha256": "s", "capture_sha256": "c"})
+        dest = os.path.join(self.dir, "packed")
+        os.makedirs(dest)
+        return series_base.write_tarball(base, {"chrome/f.cc", "ardia/layer.cc"}, fields, dest)
+
+    def test_the_extended_archive_keeps_the_base_and_its_provenance_and_names_what_it_added(self):
+        manifest, archive = self.base_archive()
+        extensions = packer.pristine_extensions(self.src, self.checkouts, ["components/store/new.cc"], "HEAD")
+        dest = os.path.join(self.dir, "extended")
+        os.makedirs(dest)
+        extended, out = packer.extend_archive(archive, extensions, dest, "chromium abc", "def")
+        series_base.require_provenance(extended, out)
+        self.assertEqual(extended["provenance"], manifest["provenance"])
+        self.assertEqual(sorted(extended["files"]), ["chrome/f.cc", "components/store/new.cc"])
+        self.assertEqual(extended["absent"], ["ardia/layer.cc"])
+        self.assertEqual([entry["path"] for entry in extended["extensions"]], ["components/store/new.cc"])
+        self.assertEqual(extended["extensions"][0]["origin"], "chromium abc")
+        self.assertEqual(extended["extended_from"]["asset"], os.path.basename(archive))
+        self.assertNotEqual(os.path.basename(out), os.path.basename(archive))
+        self.assertEqual(os.path.basename(out), series_base.asset_name(self.ident, series_base.content_revision(extended)))
+        unpacked = os.path.join(self.dir, "unpacked")
+        os.makedirs(unpacked)
+        series_base.extract(out, unpacked)
+        self.assertEqual(pathlib.Path(unpacked, "components/store/new.cc").read_text(), "store\n")
+        self.assertEqual(pathlib.Path(unpacked, "chrome/f.cc").read_text(), ORIGINAL)
+
+    def test_a_file_the_base_already_holds_is_not_added_again(self):
+        _, archive = self.base_archive()
+        dest = os.path.join(self.dir, "extended")
+        os.makedirs(dest)
+        with self.assertRaises(series_base.Problem):
+            packer.extend_archive(archive, {"chrome/f.cc": (b"x", 0o644)}, dest, "chromium abc", "def")
+
+    def test_a_file_the_archive_records_as_absent_is_not_added(self):
+        _, archive = self.base_archive()
+        dest = os.path.join(self.dir, "extended")
+        os.makedirs(dest)
+        with self.assertRaises(series_base.Problem):
+            packer.extend_archive(archive, {"ardia/layer.cc": (b"x", 0o644)}, dest, "chromium abc", "def")
+
+    def test_blobs_come_from_the_given_commit_not_from_a_later_head(self):
+        first = subprocess.run(["git", "-C", self.src, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        pathlib.Path(self.src, "components/store/new.cc").write_text("later\n")
+        subprocess.run(["git", "-C", self.src, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "later"],
+                       check=True)
+        with self.assertRaises(series_base.Problem):
+            packer.pristine_extensions(self.src, self.checkouts, ["components/store/new.cc"], first)
+
+    def test_the_pinned_archive_must_have_the_table_sha256_even_when_given(self):
+        manifest, archive = self.base_archive()
+        row = dict(self.ident, tag="t", asset=os.path.basename(archive), sha256=series_base.sha256_file(archive))
+        private = os.path.join(self.dir, "private")
+        os.makedirs(private)
+        with mock.patch.object(series_base, "find_row", return_value=row):
+            copy = packer.pinned_archive(self.ident, archive, private)
+            self.assertEqual(series_base.sha256_file(copy), row["sha256"])
+            self.assertTrue(copy.startswith(private))
+            pathlib.Path(archive).write_bytes(b"swapped after the check")
+            self.assertEqual(series_base.sha256_file(copy), row["sha256"])
+            other = os.path.join(self.dir, "private2")
+            os.makedirs(other)
+            with mock.patch.object(series_base, "find_row", return_value=dict(row, sha256="0" * 64)):
+                with self.assertRaises(SystemExit):
+                    packer.pinned_archive(self.ident, copy, other)
+
+    def test_a_sparse_or_edited_helium_checkout_still_names_what_the_pinned_commit_names(self):
+        os.unlink(os.path.join(self.helium, "domain_substitution.list"))
+        os.unlink(os.path.join(self.helium, "patches/core/p.patch"))
+        for path in ("components/store/domsub.cc", "components/store/helium.cc"):
+            with self.subTest(path=path):
+                with self.assertRaises(series_base.Problem):
+                    packer.pristine_extensions(self.src, self.checkouts, [path], "HEAD")
+
+    def test_a_patch_the_series_lists_under_any_name_still_names_its_file(self):
+        pathlib.Path(self.helium, "patches/core/update.diff").write_text("+++ b/components/store/new.cc\n")
+        subprocess.run(["git", "-C", self.helium, "-c", "user.email=t@t", "-c", "user.name=t", "add", "."], check=True)
+        subprocess.run(["git", "-C", self.helium, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "diff"],
+                       check=True)
+        pinned = subprocess.run(["git", "-C", self.helium, "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+        with self.assertRaises(series_base.Problem):
+            packer.pristine_extensions(self.src, [(self.helium, pinned.strip())], ["components/store/new.cc"], "HEAD")
+
+    def test_an_extended_archive_the_reader_would_refuse_is_not_left_behind(self):
+        _, archive = self.base_archive()
+        dest = os.path.join(self.dir, "extended")
+        os.makedirs(dest)
+        real = series_base.extract
+        calls = []
+
+        def extract(tarball, where):
+            calls.append(tarball)
+            if len(calls) == 2:
+                raise series_base.Problem("refused")
+            return real(tarball, where)
+
+        with mock.patch.object(series_base, "extract", side_effect=extract):
+            with self.assertRaises(series_base.Problem):
+                packer.extend_archive(archive, {"components/store/new.cc": (b"x" * 64, 0o644)}, dest, "c", "d")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(os.listdir(dest), [])
+
+    def test_the_default_cache_is_the_one_the_checker_downloads_into(self):
+        with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": "/tmp/xdg"}):
+            self.assertEqual(series_base.default_cache(), "/tmp/xdg/ardia/series-base")
+
+    def test_a_git_replacement_ref_cant_change_the_blob_read_for_the_commit(self):
+        git = ["git", "-C", self.src, "-c", "user.email=t@t", "-c", "user.name=t"]
+        commit = subprocess.run(git[:3] + ["rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        blob = subprocess.run(git[:3] + ["rev-parse", "HEAD:components/store/new.cc"], capture_output=True,
+                              text=True).stdout.strip()
+        other = subprocess.run(git[:3] + ["hash-object", "-w", "--stdin"], input="replaced\n", capture_output=True,
+                               text=True).stdout.strip()
+        subprocess.run(git[:3] + ["replace", blob, other], check=True)
+        self.assertEqual(packer.head_blob(self.src, "components/store/new.cc", commit), (b"store\n", 0o644))
+
+    def test_the_tag_commit_is_the_peeled_commit_the_remote_lists(self):
+        listed = subprocess.CompletedProcess([], 0, stdout="aaa\trefs/tags/1.2.3.4\nbbb\trefs/tags/1.2.3.4^{}\n", stderr="")
+        with mock.patch.object(packer.subprocess, "run", return_value=listed):
+            self.assertEqual(packer.tag_commit("1.2.3.4"), "bbb")
+        with mock.patch.object(packer.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")):
+            with self.assertRaises(series_base.Problem):
+                packer.tag_commit("1.2.3.4")
+
+    def test_step_3_names_its_version_and_fixup_files(self):
+        named = packer.step3_named_files()
+        self.assertIn("chrome/VERSION", named)
+        self.assertGreater(len(named), 1)
+
+    def test_an_archive_without_extensions_keeps_the_revision_it_always_had(self):
+        manifest, _ = self.base_archive()
+        content = {"files": manifest["files"], "absent": manifest["absent"], "provenance": manifest["provenance"]}
+        self.assertEqual(series_base.content_revision(manifest),
+                         hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest()[:12])
 
 
 if __name__ == "__main__":

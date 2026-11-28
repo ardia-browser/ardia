@@ -18,6 +18,16 @@ export function summarizeFrames(deltas: readonly number[], budgetMs: number = FR
 
 const ms = (value: number) => value.toFixed(1);
 
+export function slowFrameOffsets(deltas: readonly number[], budgetMs: number = FRAME_BUDGET_MS.at60): string[] {
+  const slow: string[] = [];
+  let at = 0;
+  for (const delta of deltas) {
+    if (delta > budgetMs * 1.5) slow.push(`${Math.round(at)}+${Math.round(delta)}`);
+    at += delta;
+  }
+  return slow;
+}
+
 const frameText = (thread: string, summary: FrameSummary) =>
   `${thread} ${summary.frames} frames p50 ${ms(summary.p50)} p90 ${ms(summary.p90)} max ${ms(summary.max)} slow ${summary.overBudget}`;
 

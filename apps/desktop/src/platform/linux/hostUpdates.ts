@@ -32,7 +32,6 @@ const FOLLOW_RUN_EVERY_MS = 2_000;
 const FOLLOW_RUN_FOR_MS = 75 * 60 * 1000;
 export const UPDATE_CHECK_LOCK = "ardia.linux.update-checks";
 const UPDATE_PREFERENCES_LOCK = "ardia.linux.update-preferences";
-export const AUR_UPDATE_COMMAND = "yay -Syu ardia-bin";
 const FLATPAK_ID = "dev.ardia.Ardia";
 
 type InstallKind = UpdateInstallKind | "managed" | "unsupported";

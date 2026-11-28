@@ -34,7 +34,7 @@ export { forcedDuoCanvas, ScreenLayoutProbe, screenLayoutIsNative, type DuoCanva
 export * as settingsUI from "./settingsUI";
 export { sync } from "./sync";
 export { syncLab, type SyncRuntimeCheck } from "./syncLab";
-export { hardwareKeyboardShown, labFrameMark, labLog, labSlice, restorableState, system, systemLab, type SystemLink, type SystemLinkSource } from "./system";
+export { hardwareKeyboardShown, labFrameMark, labLog, labSlice, restorableState, system, systemLab, type KeyboardWarmUp, type SystemLink, type SystemLinkSource } from "./system";
 export { predictiveBack, TRAY_BACK_TRAVEL, trayBack, type PredictiveBackHandlers, type TrayBackHandlers } from "./back";
 export { scanLab, scanner, ScanView, type ScanError, type ScanPermission, type ScanViewProps } from "./scan";
 export { clipboard, type ClipboardOffer } from "./clipboard";
@@ -53,6 +53,9 @@ export {
   type NativeGlassRender,
   lookIsNative,
   lookLab,
+  rememberLaunchLook,
+  type SavedLaunchLook,
+  type LaunchLookSlot,
   type LookCounts,
   ProfileBackdrop,
   type DeckBackdropProps,
@@ -119,6 +122,7 @@ export type {
   NightShadeMode,
   PageEngineCapabilities,
   PageEngineEvent,
+  PageProcessOutcome,
   PageError,
   PageLoadFailure,
   PageNavigationState,

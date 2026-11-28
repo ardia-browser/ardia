@@ -1,9 +1,13 @@
 import type { ArdiaHost } from "./host";
-import { reportHostError } from "./host.ts";
+import { reportHostError, shellProfile } from "./host.ts";
 import type { AdoptId, BrowserWindow, Profile } from "../../browser/src/state/browser/types";
 import { engineProfile } from "../../browser/src/state/browser/model";
 import type { NewTabOptions } from "../../browser/src/state/tabs/tabs";
 import { asAdoptId } from "../../browser/src/state/tabs/adoptIds";
+import { noteUnclaimedTab } from "../../browser/src/state/telemetry/windowPlacementCounts";
+import { consentToken, type ConsentToken } from "../../browser/src/state/telemetry/client";
+
+const COUNTED_DROPS_LIMIT = 512;
 
 export type UnclaimedTab = { adoptId: string; url: string; active: boolean; profile?: string };
 
@@ -32,30 +36,46 @@ function offeredProfile(s: ProfileState, w: BrowserWindow, engine: unknown): str
   return candidates.find((id) => !!s.profiles[id] && engineProfile(known, id) === engine);
 }
 
-export function adoptUnclaimedTab(store: TabStore, windowId: string, offer: unknown) {
+type UnclaimedOutcome = "adopted" | "dropped";
+
+export function adoptUnclaimedTab(store: TabStore, windowId: string, offer: unknown, host?: Pick<ArdiaHost, "bootstrap">, note?: (outcome: UnclaimedOutcome) => void) {
   const adoptId = unclaimedAdoptId(offer);
   const s = store.getState();
   const w = s.windows[windowId];
   if (!adoptId || !w) return undefined;
-  const { url, active } = offer as UnclaimedTab;
-  const profileId = offeredProfile(s, w, (offer as UnclaimedTab).profile);
-  if (!profileId) return undefined;
+  const { url, active, profile } = offer as UnclaimedTab;
+  const profileId = offeredProfile(s, w, typeof profile === "string" && host ? shellProfile(profile, host) : profile);
+  if (!profileId) {
+    note?.("dropped");
+    return undefined;
+  }
+  note?.("adopted");
   return s.newTab(windowId, { url: url || undefined, adoptId, profileId, background: active !== true || w.kind === "small" || profileId !== w.profileId });
 }
 
 export function watchUnclaimedTabs(host: ArdiaHost, store: TabStore, windowId = host.bootstrap.windowId) {
   let stopped = false;
   const adopted = new Set<string>();
-  const adopt = (offer: unknown) => {
+  const dropped = new Set<string>();
+  const adopt = (offer: unknown, consent: ConsentToken | null) => {
     const adoptId = unclaimedAdoptId(offer);
     if (stopped || !adoptId || adopted.has(adoptId)) return;
-    if (adoptUnclaimedTab(store, windowId, offer)) adopted.add(adoptId);
+    const note = (outcome: UnclaimedOutcome) => {
+      if (outcome === "dropped" && dropped.has(adoptId)) return;
+      if (outcome === "dropped") {
+        if (dropped.size >= COUNTED_DROPS_LIMIT) dropped.clear();
+        dropped.add(adoptId);
+      }
+      noteUnclaimedTab(outcome, consent);
+    };
+    if (adoptUnclaimedTab(store, windowId, offer, host, note)) adopted.add(adoptId);
   };
   const stopEvents = host.onEvent((module, event, payload) => {
-    if (module === "ArdiaTabs" && event === "unclaimed") adopt(payload);
+    if (module === "ArdiaTabs" && event === "unclaimed") adopt(payload, consentToken());
   });
+  const listConsent = consentToken();
   void Promise.resolve(host.invoke("ArdiaTabs.unclaimedTabs", { args: [] })).then((tabs) => {
-    if (Array.isArray(tabs)) for (const offer of tabs) adopt(offer);
+    if (Array.isArray(tabs)) for (const offer of tabs) adopt(offer, listConsent);
   }).catch((error) => { if (!stopped) reportHostError(error); });
   return () => {
     stopped = true;

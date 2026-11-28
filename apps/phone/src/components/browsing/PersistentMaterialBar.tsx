@@ -12,7 +12,7 @@ import { useSelectedTab } from "../../state/tabs/hooks";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import type { MaterialScheme } from "../../lib/material/schemes";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { Favicon, Symbol, useReduceMotion } from "../ui";
+import { Favicon, LoadWash, materialWashTint, Symbol, useReduceMotion, type LoadWashValues } from "../ui";
 import { MaterialBottomBar, type MaterialBottomBarProps } from "../ui/MaterialBottomBar";
 import { barAddress, spokenAddress } from "./FloatingBar";
 import { NotSecureLock } from "./NotSecureLock";
@@ -180,7 +180,7 @@ function MaterialBarHost({ store, enabled }: { store: ReturnType<typeof makeStor
           accessibilityElementsHidden={!folded}
           style={[styles.pillPlace, { bottom: insets.bottom + materialBottomBar.inset - materialBarPill.shadowRoom, left: Math.max(insets.left, insets.right) + materialBottomBar.edge, right: Math.max(insets.left, insets.right) + materialBottomBar.edge }, pillStyle]}
         >
-          <MaterialBarPill tab={bar.tab} scheme={scheme} onExpand={fold.expand} />
+          <MaterialBarPill tab={bar.tab} scheme={scheme} wash={bar.wash} onExpand={fold.expand} />
         </Animated.View>
       ) : null}
       {enabled && surface === "browsing" && matches && page?.siteSettingsSheet ? (
@@ -214,7 +214,7 @@ export function useMaterialPillFold(progress: SharedValue<number> | null) {
   }, [progress, shrink]);
 }
 
-export function MaterialBarPill({ tab, scheme, onExpand }: { tab: BrowserTab; scheme: MaterialScheme; onExpand: () => void }) {
+export function MaterialBarPill({ tab, scheme, wash = null, onExpand }: { tab: BrowserTab; scheme: MaterialScheme; wash?: LoadWashValues | null; onExpand: () => void }) {
   const address = barAddress(tab);
   return (
     <Pressable
@@ -227,6 +227,7 @@ export function MaterialBarPill({ tab, scheme, onExpand }: { tab: BrowserTab; sc
       onPress={onExpand}
       style={[styles.pill, { backgroundColor: scheme.surfaceContainer }]}
     >
+      {wash ? <LoadWash testID="materialBarPillLoadWash" values={wash} tint={materialWashTint(scheme, tab.isPrivate)} cornerRadius={materialShape.full} /> : null}
       {address.isPrivate ? (
         <Symbol name="eyes" size={materialBarPill.siteIcon} color={scheme.onSurfaceVariant} />
       ) : address.insecure ? (

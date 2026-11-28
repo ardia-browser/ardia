@@ -28,6 +28,7 @@ class ContentBlocker(
     val filterLists: FilterLists,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
     private val workDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val onEngineInstalled: (() -> Unit)? = null,
 ) {
     private val seeds = SeedRules.sources()
     private val mutableState = MutableStateFlow<ContentBlockerState>(ContentBlockerState.Preparing)
@@ -141,7 +142,10 @@ class ContentBlocker(
                 null
             }
         }
-        if (next != null) engine = next
+        if (next != null) {
+            engine = next
+            runCatching { onEngineInstalled?.invoke() }
+        }
         installedRevision = latest.revision
     }
 

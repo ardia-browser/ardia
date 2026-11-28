@@ -126,6 +126,22 @@ test("with sharing on, a profile no other window shows moves to the open window 
   assert.ok(!S().closedWindows.some((c) => c.tabs.some((t) => t.url?.startsWith("https://w"))), "not recorded as closed");
 });
 
+test("with sharing on, a handed-over folder that also held a blank tab moves to the open window with its other tabs", async () => {
+  const { a, b } = twoWindows();
+  const work = S().createProfile({ name: "Work" });
+  const blank = S().newTab(b, { profileId: work, background: true });
+  const w1 = S().newTab(b, { url: "https://w1.com", profileId: work, background: true });
+  const w2 = S().newTab(b, { url: "https://w2.com", profileId: work, background: true });
+  const group = S().createGroup([blank, w1, w2], { name: "Jobs" });
+  await closeByUser(b);
+  assert.equal(S().windows[b], undefined, "B closed");
+  assert.equal(S().tabs[blank], undefined, "the blank tab closed with B");
+  assert.deepEqual(listed(a, work).sort(), [w1, w2].sort(), "the other tabs are in A");
+  assert.equal(S().groups[group]?.windowId, a, "with their folder");
+  assert.deepEqual(S().groups[group].tabIds, [w1, w2]);
+  assert.ok(Object.values(S().groups).every((g) => S().windows[g.windowId]), "no folder is left in a closed window");
+});
+
 test("with sharing on, a profile handed to the open window keeps its pinned tabs and pinned folders (#2175)", async () => {
   const { a, b } = twoWindows();
   const work = S().createProfile({ name: "Work" });

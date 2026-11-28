@@ -54,9 +54,9 @@ export function handOverTabs(s: BrowserState, windowId: string, keepsTabs: Keeps
   for (const id of ids) tabs[id] = { ...tabs[id]!, windowId: heir.id, page: withNavigationAt(tabs[id]!) };
   let groups = s.groups;
   for (const g of Object.values(s.groups)) {
-    if (g.windowId !== windowId || g.pinned || !g.tabIds.length || !g.tabIds.every((id) => moving.has(id))) continue;
+    if (g.windowId !== windowId || g.pinned || !g.tabIds.some((id) => moving.has(id))) continue;
     if (groups === s.groups) groups = { ...s.groups };
-    groups[g.id] = { ...g, windowId: heir.id };
+    groups[g.id] = { ...g, windowId: heir.id, tabIds: g.tabIds.filter((id) => moving.has(id)) };
   }
   let splits = s.splits;
   for (const v of Object.values(s.splits)) {

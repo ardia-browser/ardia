@@ -175,7 +175,7 @@ patchedDependencies:
   expo-constants@18.0.14: 3f8b2c29ae86b933377cfad3fe90c5fef442c0547389feee513a4a0cdfd9c914
   expo-modules-core@3.0.30: 337a95f8c8d761424dcab431b793da289b11d26d5748341e27ea6b66b3430719
   react-native-macos@0.81.9: 0c2d060f3c65060df1d10c52918f4ff3d2a86c3183bd9d122b1b9bf7a931943f
-  react-native-web@0.21.4: d42ea91bfb8729962845a63e1cc346b9ac7715c5302d3315372b86ab4ef7bcb2
+  react-native-web@0.21.4: c7c357f85171309a4b755267cceea8ffe68fe3f5196db47e090e8997cbb0b5ee
 
 importers:
 
@@ -289,7 +289,7 @@ importers:
         version: 19.1.4(react@19.1.4)
       react-native-web:
         specifier: ^0.21.1
-        version: 0.21.4(patch_hash=d42ea91bfb8729962845a63e1cc346b9ac7715c5302d3315372b86ab4ef7bcb2)(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
+        version: 0.21.4(patch_hash=c7c357f85171309a4b755267cceea8ffe68fe3f5196db47e090e8997cbb0b5ee)(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
       zustand:
         specifier: ^5.0.8
         version: 5.0.15(@types/react@19.1.17)(react@19.1.4)
@@ -356,7 +356,7 @@ importers:
         version: 19.1.4(react@19.1.4)
       react-native-web:
         specifier: ^0.21.1
-        version: 0.21.4(patch_hash=d42ea91bfb8729962845a63e1cc346b9ac7715c5302d3315372b86ab4ef7bcb2)(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
+        version: 0.21.4(patch_hash=c7c357f85171309a4b755267cceea8ffe68fe3f5196db47e090e8997cbb0b5ee)(react-dom@19.1.4(react@19.1.4))(react@19.1.4)
       zustand:
         specifier: ^5.0.8
         version: 5.0.15(@types/react@19.1.17)(react@19.1.4)
@@ -7903,7 +7903,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  react-native-web@0.21.4(patch_hash=d42ea91bfb8729962845a63e1cc346b9ac7715c5302d3315372b86ab4ef7bcb2)(react-dom@19.1.4(react@19.1.4))(react@19.1.4):
+  react-native-web@0.21.4(patch_hash=c7c357f85171309a4b755267cceea8ffe68fe3f5196db47e090e8997cbb0b5ee)(react-dom@19.1.4(react@19.1.4))(react@19.1.4):
     dependencies:
       '@babel/runtime': 7.29.7
       '@react-native/normalize-colors': 0.74.89

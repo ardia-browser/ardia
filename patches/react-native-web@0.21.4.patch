@@ -26,6 +26,27 @@ index dd697f33308523ebf91a98b75991e0d140899b4f..3d260aa1e3d82006028b44e0835ed0ea
    var wasNegotiated = false;
    var wantsResponder;
  
+diff --git a/dist/cjs/modules/useResponderEvents/utils.js b/dist/cjs/modules/useResponderEvents/utils.js
+index 8dfd30644df620ec7aff9e1f457cb8fe08f8bcb7..79d33df3b182c6ac134cbab57d95a19d12c6bf9b 100644
+--- a/dist/cjs/modules/useResponderEvents/utils.js
++++ b/dist/cjs/modules/useResponderEvents/utils.js
+@@ -158,6 +158,7 @@ function hasValidSelection(domEvent) {
+ /**
+  * Events are only valid if the primary button was used without specific modifier keys.
+  */
++var ctrlClickIsSecondary = typeof navigator === 'undefined' || /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+ function isPrimaryPointerDown(domEvent) {
+   var altKey = domEvent.altKey,
+     button = domEvent.button,
+@@ -167,7 +168,7 @@ function isPrimaryPointerDown(domEvent) {
+   var isTouch = type === 'touchstart' || type === 'touchmove';
+   var isPrimaryMouseDown = type === 'mousedown' && (button === 0 || buttons === 1);
+   var isPrimaryMouseMove = type === 'mousemove' && buttons === 1;
+-  var noModifiers = altKey === false && ctrlKey === false;
++  var noModifiers = altKey === false && (ctrlKey === false || !ctrlClickIsSecondary);
+   if (isTouch || isPrimaryMouseDown && noModifiers || isPrimaryMouseMove && noModifiers) {
+     return true;
+   }
 diff --git a/dist/modules/useResponderEvents/ResponderSystem.js b/dist/modules/useResponderEvents/ResponderSystem.js
 index 0aec2d67c73c0d1e3f5bd034e4be0a2712439d70..cc8e39b6da31c0517177279c9d90311f58fb07c6 100644
 --- a/dist/modules/useResponderEvents/ResponderSystem.js
@@ -54,3 +75,24 @@ index 0aec2d67c73c0d1e3f5bd034e4be0a2712439d70..cc8e39b6da31c0517177279c9d90311f
    var wasNegotiated = false;
    var wantsResponder;
  
+diff --git a/dist/modules/useResponderEvents/utils.js b/dist/modules/useResponderEvents/utils.js
+index 7382cdd041a169d751672f2b56fa861c68d7868d..dad0e25fa1e4a6326e5e7e083ad9038ba1eaa24f 100644
+--- a/dist/modules/useResponderEvents/utils.js
++++ b/dist/modules/useResponderEvents/utils.js
+@@ -148,6 +148,7 @@ export function hasValidSelection(domEvent) {
+ /**
+  * Events are only valid if the primary button was used without specific modifier keys.
+  */
++var ctrlClickIsSecondary = typeof navigator === 'undefined' || /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+ export function isPrimaryPointerDown(domEvent) {
+   var altKey = domEvent.altKey,
+     button = domEvent.button,
+@@ -157,7 +158,7 @@ export function isPrimaryPointerDown(domEvent) {
+   var isTouch = type === 'touchstart' || type === 'touchmove';
+   var isPrimaryMouseDown = type === 'mousedown' && (button === 0 || buttons === 1);
+   var isPrimaryMouseMove = type === 'mousemove' && buttons === 1;
+-  var noModifiers = altKey === false && ctrlKey === false;
++  var noModifiers = altKey === false && (ctrlKey === false || !ctrlClickIsSecondary);
+   if (isTouch || isPrimaryMouseDown && noModifiers || isPrimaryMouseMove && noModifiers) {
+     return true;
+   }

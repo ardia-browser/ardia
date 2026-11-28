@@ -193,3 +193,39 @@ test("collapsing a group the shown tab isn't in still gives one stop at its newe
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.includes(b) && !ids.includes(c), `one stop, the newest: ${ids.join(",")}`);
 });
+
+test("a click on a shown card switches to it, and a mouse-up that closes the switcher first leaves the tab as it was; each is counted while sharing, a mouse-up only once the switcher shows (#4432)", async () => {
+  globalThis.fetch = async () => ({ status: 200 });
+  const client = await import("../telemetry/client.ts");
+  const { takeTabSwitcherModeCounts } = await import("../telemetry/tabSwitcherOpens.ts");
+  const { closeSwitcherOnMouseUp } = await import("./switcher.ts");
+  client.setSharing(true, "onboarding");
+  try {
+    takeTabSwitcherModeCounts();
+    const [w, a, b, c] = setup("recent", "thumbnails", "a", "b", "c");
+    S().activate(a);
+    S().activate(b);
+    S().activate(c);
+    switcherStep(w, false);
+    pastShow();
+    commitSwitcher(sidebarUi().switcher.ids.indexOf(a));
+    assert.equal(shown(w), "a", "the clicked card, not the selected one");
+    assert.equal(sidebarUi().switcher, null);
+    switcherStep(w, false);
+    pastShow();
+    closeSwitcherOnMouseUp();
+    assert.equal(shown(w), "a");
+    assert.equal(sidebarUi().switcher, null);
+    closeSwitcherOnMouseUp();
+    switcherStep(w, false);
+    closeSwitcherOnMouseUp();
+    assert.equal(sidebarUi().switcher, null, "a mouse-up before the switcher shows still closes it");
+    switcherStep(w, false);
+    commitSwitcher();
+    const counts = takeTabSwitcherModeCounts();
+    assert.equal(counts.tab_switcher_clicks, 1);
+    assert.equal(counts.tab_switcher_mouse_up_closes, 1, "only a mouse-up that closes a shown switcher is counted");
+  } finally {
+    client.setSharing(false, "settings");
+  }
+});

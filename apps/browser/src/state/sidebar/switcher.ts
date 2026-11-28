@@ -9,7 +9,7 @@ import { inOrderTabIds, isSwitchableTab, stepFrom, steppedTabId } from "../tabs/
 import { rememberPicture } from "../tabs/tabPictures";
 import { noteTabSwitcherOpened } from "../telemetry/usage";
 import { closeTab } from "../browser/actions";
-import { noteTabSwitcherMode, noteTabSwitcherOpenedInWebKit, noteTabSwitcherQuickSwitch, noteTabSwitcherRowClosed, noteTabSwitcherShown } from "../telemetry/tabSwitcherOpens";
+import { noteTabSwitcherClicked, noteTabSwitcherMode, noteTabSwitcherMouseUpClosed, noteTabSwitcherOpenedInWebKit, noteTabSwitcherQuickSwitch, noteTabSwitcherRowClosed, noteTabSwitcherShown } from "../telemetry/tabSwitcherOpens";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import { isWindowClosing } from "../windows/closingWindows";
 import { setSidebarUi, sidebarUi } from "./sidebarUi";
@@ -174,6 +174,7 @@ export function commitSwitcher(index?: number) {
   if (!s) return;
   const pointed = pointedRow(s);
   endSwitcher();
+  if (index !== undefined) noteTabSwitcherClicked(openedWith);
   const id = s.ids[index ?? pointed ?? s.index];
   const state = useBrowser.getState();
   if (!id || !viewTabIds(state, s.windowId).includes(id) || !isSwitchableTab(state, id)) return;
@@ -183,6 +184,13 @@ export function commitSwitcher(index?: number) {
 
 export function cancelSwitcher() {
   if (sidebarUi().switcher) endSwitcher();
+}
+
+export function closeSwitcherOnMouseUp() {
+  const s = sidebarUi().switcher;
+  if (!s) return;
+  if (s.visible) noteTabSwitcherMouseUpClosed(openedWith);
+  endSwitcher();
 }
 
 function endSwitcher() {

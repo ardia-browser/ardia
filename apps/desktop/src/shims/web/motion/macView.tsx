@@ -141,6 +141,7 @@ export const MacPressable = forwardRef<unknown, MacProps & { style?: PressableSt
   const style = props.style;
   return (
     <BasePressable
+      delayPressIn={0}
       {...strip(props)}
       {...domHover}
       tabIndex={props.tabIndex ?? (focusable ? 0 : -1)}

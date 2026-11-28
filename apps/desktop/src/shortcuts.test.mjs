@@ -206,3 +206,31 @@ test("a key an input method is composing with is never taken as a shortcut, Ctrl
   assert.equal(composingKey({ isComposing: false, key: "l", keyCode: 229 }), true);
   assert.equal(composingKey({ isComposing: false, key: "l", keyCode: 76 }), false);
 });
+
+test("shortcuts follow the typed letter on a remapped layout such as Colemak, and fall back to the physical key on a non-Latin one", () => {
+  const bindings = linuxBindings();
+  const colemakT = keyboardCombo({ ...event("KeyF", { ctrlKey: true }), key: "t" });
+  assert.equal(commandAt(bindings, colemakT.keyCode, colemakT.flags)?.command, "newTab");
+  const colemakSemicolon = keyboardCombo({ ...event("KeyP"), key: ";" });
+  assert.equal(colemakSemicolon.key, ";");
+  const cyrillic = keyboardCombo({ ...event("KeyT", { ctrlKey: true }), key: "е" });
+  assert.equal(commandAt(bindings, cyrillic.keyCode, cyrillic.flags)?.command, "newTab");
+  const shiftedDigit = keyboardCombo({ ...event("Digit1", { ctrlKey: true, shiftKey: true }), key: "!" });
+  assert.equal(shiftedDigit.key, "1");
+});
+
+test("AltGr from Ctrl+Alt records as Ctrl+Alt with the layout's own letter on Windows only", async () => {
+  const { ALTGR_IS_CONTROL_ALT } = await import("@platform/shortcutKeys");
+  const { readKeyboardLayout } = await import("./shortcuts.ts");
+  await readKeyboardLayout({ getLayoutMap: async () => new Map([["KeyD", "s"]]) });
+  const altGr = { code: "KeyD", key: "ß", ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, getModifierState: (key) => key === "AltGraph" };
+  if (ALTGR_IS_CONTROL_ALT) {
+    assert.equal(recordableShortcut(altGr), true);
+    assert.deepEqual(keyboardCombo(altGr).modifiers, ["command", "option"]);
+    assert.equal(keyboardCombo(altGr).key, "s");
+  } else {
+    assert.equal(recordableShortcut(altGr), false);
+    assert.deepEqual(keyboardCombo(altGr).modifiers, []);
+  }
+  await readKeyboardLayout({ getLayoutMap: async () => new Map() });
+});

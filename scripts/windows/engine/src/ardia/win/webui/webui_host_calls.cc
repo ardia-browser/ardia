@@ -618,6 +618,13 @@ void ShellHostView::SetKeyboardShortcuts(const base::ListValue* values,
     }
     shortcuts.emplace(ui::Accelerator(static_cast<ui::KeyboardCode>(key), flags),
                       binding.Clone());
+    constexpr int kControlAlt = ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN;
+    if ((flags & kControlAlt) == kControlAlt) {
+      shortcuts.emplace(
+          ui::Accelerator(static_cast<ui::KeyboardCode>(key),
+                          (flags & ~kControlAlt) | ui::EF_ALTGR_DOWN),
+          binding.Clone());
+    }
   }
   UnregisterShortcutsEverywhere();
   shortcuts_ = std::move(shortcuts);

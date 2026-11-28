@@ -16,3 +16,5 @@ const CARET_KEYS: ReadonlySet<number> = new Set([8, 33, 34, 35, 36, 37, 38, 39, 
 
 export const EDITS_TEXT = (keyCode: number, modifiers: number): boolean =>
   CARET_KEYS.has(keyCode) && !(modifiers & MODIFIER_FLAGS.control) && !!(modifiers & (MODIFIER_FLAGS.command | MODIFIER_FLAGS.option));
+
+export const ALTGR_IS_CONTROL_ALT = false;

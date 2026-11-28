@@ -1696,7 +1696,9 @@ bool ShellHostView::AcceleratorPressed(const ui::Accelerator& accelerator) {
     payload.Set("arg", base::Value());
   }
   payload.Set("windowId", config_.window_id);
-  payload.Set("shortcutModifiers", accelerator.modifiers());
+  payload.Set("shortcutModifiers",
+              found->second.FindInt("modifiers").value_or(
+                  accelerator.modifiers()));
   Emit("ArdiaShell", "onCommand", base::Value(std::move(payload)));
   return true;
 }

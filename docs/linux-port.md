@@ -2096,6 +2096,16 @@ It works as on the Mac ([cli.md](cli.md), [automation.md](automation.md)); what 
   native sends the OTLP body to the fixed `https://ardia.dev/otel/v1/logs` with the app's ingest key, over the system
   network context with no cookies, and answers the HTTP status (0 for a network error). JS keeps its queue, batching and
   backoff. Events carry `$os: Linux` and `os.type: linux`; the `ardia` command reports the same on Linux.
+- **Stopping an upload.** Turning sharing off or resetting the anonymous ID aborts the uploads under way, so each post
+  carries a request id (`hostTelemetrySend.ts`: `telemetry-<a UUID made once per shell document>-<counter>`, so a
+  reloaded shell never repeats an id the window's native client still holds). On abort the sender answers 0 at once
+  and calls `ArdiaTelemetry.cancelPost` with the id; native destroys that post's `SimpleURLLoader`, which cancels the
+  request, and answers the post 0. A post aborted before it left the shell is never sent. Both routes refuse an id
+  that isn't 1 to 64 characters of `A-Z a-z 0-9 _ -`; a second post under an id still in flight answers 0 without
+  starting, and a cancel for an id the window's client doesn't hold does nothing. A host that doesn't advertise
+  `ArdiaTelemetry.cancelPost` (an older Linux engine, the Windows WebUI host) gets the two-argument post, and there an
+  abort only stops the shell waiting. Nothing is counted for a stopped upload: every abort comes with a change of
+  consent period, and a measurement that crosses one is dropped.
 - **One owner.** Every window runs its own copy of the UI, so one browser window holds the `ardia.linux.telemetry` lock
   and runs the client (queue, flush, hourly usage, the daily ping) (`telemetryLeader.ts`). The others, utility windows
   included, forward `capture` and log calls to it over a `BroadcastChannel`. The owner acknowledges each one, and a

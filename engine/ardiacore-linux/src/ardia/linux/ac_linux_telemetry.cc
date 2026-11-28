@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 
+#include "ardia/desktop/ac_desktop_suggest_policy.h"
 #include "ardia/desktop/ac_desktop_telemetry_policy.h"
 #include "base/functional/bind.h"
 #include "base/memory/raw_ptr.h"
@@ -81,8 +83,11 @@ scoped_refptr<network::SharedURLLoaderFactory> SystemLoaderFactory() {
 
 class TelemetryPost {
  public:
-  TelemetryPost(TelemetryClient* owner, PostReply reply)
-      : owner_(owner), reply_(std::move(reply)) {
+  TelemetryPost(TelemetryClient* owner, std::string request_id,
+                PostReply reply)
+      : owner_(owner),
+        request_id_(std::move(request_id)),
+        reply_(std::move(reply)) {
     ++InFlight();
   }
   TelemetryPost(const TelemetryPost&) = delete;
@@ -110,6 +115,7 @@ class TelemetryPost {
         base::BindOnce(&TelemetryPost::OnLoaded, base::Unretained(this)));
   }
 
+  const std::string& request_id() const { return request_id_; }
   PostReply TakeReply() { return std::move(reply_); }
 
  private:
@@ -120,17 +126,34 @@ class TelemetryPost {
   }
 
   raw_ptr<TelemetryClient> owner_;
+  std::string request_id_;
   PostReply reply_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
 };
+
+bool RequestIdAcceptable(std::string_view request_id) {
+  return ardia::desktop_suggest_policy::ValidRequestId(request_id);
+}
 
 TelemetryClient::TelemetryClient() = default;
 
 TelemetryClient::~TelemetryClient() = default;
 
+TelemetryClient::Posts::iterator TelemetryClient::Held(
+    const std::string& request_id) {
+  return std::find_if(
+      posts_.begin(), posts_.end(),
+      [&request_id](const std::unique_ptr<TelemetryPost>& owned) {
+        return owned->request_id() == request_id;
+      });
+}
+
 void TelemetryClient::Post(std::string body, const std::string& ingest_key,
-                           PostReply reply) {
+                           std::string request_id, PostReply reply) {
+  const bool identified = !request_id.empty();
   if (!policy::PostAcceptable(body, ingest_key) ||
+      (identified && (!RequestIdAcceptable(request_id) ||
+                      Held(request_id) != posts_.end())) ||
       !policy::AdmitPost(InFlight())) {
     return PostStatus(std::move(reply), 0);
   }
@@ -139,10 +162,24 @@ void TelemetryClient::Post(std::string body, const std::string& ingest_key,
   if (!factory) {
     return PostStatus(std::move(reply), 0);
   }
-  auto post = std::make_unique<TelemetryPost>(this, std::move(reply));
+  auto post = std::make_unique<TelemetryPost>(this, std::move(request_id),
+                                              std::move(reply));
   TelemetryPost* started = post.get();
   posts_.push_back(std::move(post));
   started->Load(factory.get(), std::move(body), ingest_key);
+}
+
+void TelemetryClient::Cancel(const std::string& request_id) {
+  if (!RequestIdAcceptable(request_id)) {
+    return;
+  }
+  const auto found = Held(request_id);
+  if (found == posts_.end()) {
+    return;
+  }
+  std::unique_ptr<TelemetryPost> cancelled = std::move(*found);
+  posts_.erase(found);
+  PostStatus(cancelled->TakeReply(), 0);
 }
 
 void TelemetryClient::Finish(TelemetryPost* post, int status) {

@@ -87,6 +87,13 @@ test("a checkpoint saved before it carried a version still loads", async () => {
   assert.deepEqual(doc.scopes.app.records, { "bm:x": record });
 });
 
+test("#4759: a checkpoint another device sealed is never loaded into this one's setup, and one this device sealed is", async () => {
+  const theirs = await opening({ docs: { "sync-state.nns": sealed({ covers: 0, device: "devOld", scopes: { b: scope }, version: 1 }) } });
+  assert.equal(theirs.doc.scopes.b, undefined);
+  const mine = await opening({ docs: { "sync-state.nns": sealed({ covers: 0, device: "devA", scopes: { b: scope }, version: 1 }) } });
+  assert.deepEqual(mine.doc.scopes.b.records, scope.records);
+});
+
 test("a checkpoint from a newer app, or one whose scopes are damaged, reads as empty instead of throwing", async () => {
   assert.deepEqual((await opening({ docs: { "sync-state.nns": sealed({ version: 9, covers: 1, scopes: { app: scope } }) } })).doc.scopes.app?.records ?? {}, {});
   const { doc } = await opening({ docs: { "sync-state.nns": sealed({ version: 1, covers: 1, scopes: { app: "broken", other: { records: null } } }) } });

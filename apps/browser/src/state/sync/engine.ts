@@ -255,17 +255,20 @@ export const recreateSyncFolder = (): Promise<FolderRecreateResult> => {
   );
 };
 
-function begin(folder: string, deviceId: string, joining: boolean) {
-  const consent = consentToken();
+function begin(folder: string, deviceId: string, joining: boolean, consent: ConsentToken | null) {
   doc = { ...emptyDoc(), types: doc.types, enabled: true, folder, deviceId, setupAt: Date.now(), joining };
+  const begun = doc;
   markNewSync(doc);
-  void startOver().catch((error: unknown) => warnFor(consent, "[sync] couldn't save sync.json to start syncing", error));
+  void startOver(consent).catch((error: unknown) => {
+    warnFor(consent, "[sync] couldn't save sync.json to start syncing", error);
+    if (doc === begun) publishUi({ status: "stalled", error: `Sync couldn’t save its settings on this ${PLATFORM_TERMS.computer}: ${errorText(error)}` });
+  });
   publishUi({ status: "starting", error: null });
   scheduleSync(0);
 }
 
 export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ ok: true } | { error: string }> {
-  const native = SyncNative;
+  const native = SyncNative, consent = consentToken();
   if (!native) return { error: "Sync isn’t available in this build." };
   await folderOpSettled();
   const deviceId = native.newDeviceId();
@@ -276,13 +279,13 @@ export async function turnOnSync(folder: string, how?: TurnOnFolder): Promise<{ 
     await native.forget(deviceId);
     return { error: `Couldn’t use that folder: ${errorText(error)}` };
   }
-  begin(folder, deviceId, false);
+  begin(folder, deviceId, false, consent);
   noteTurnOn(how);
   return { ok: true };
 }
 
 export async function enterRecoveryPhrase(folder: string, phrase: Secret<"syncPhrase">): Promise<PhraseResult | { error: "unavailable" }> {
-  const native = SyncNative;
+  const native = SyncNative, consent = consentToken();
   if (!native) return { error: "unavailable" };
   await folderOpSettled();
   if (doc.enabled && doc.deviceId && useSync.getState().status === "locked") {
@@ -296,7 +299,7 @@ export async function enterRecoveryPhrase(folder: string, phrase: Secret<"syncPh
   }
   const deviceId = native.newDeviceId();
   const result = await native.enterPhrase(deviceId, reveal(phrase), folder);
-  if ("ok" in result) begin(folder, deviceId, true);
+  if ("ok" in result) begin(folder, deviceId, true, consent);
   return result;
 }
 
@@ -316,10 +319,11 @@ async function retire(native: NonNullable<typeof SyncNative>, deleteIn: (string 
   clearTimeout(timer);
   const folder = doc.folder;
   for (const target of deleteIn) if (target) await native.deleteChain(target).catch((error: unknown) => warnFor(consent, "[sync] deleting sync data failed", error));
-  if (doc.deviceId) await native.forget(doc.deviceId);
+  const device = doc.deviceId;
   doc = { ...emptyDoc(), folder, types: doc.types };
   forgetScopeAdapters();
-  void startOver().catch((error: unknown) => warnFor(consent, "[sync] couldn't save sync.json to stop syncing, so its data is kept", error));
+  const stopped = await startOver(consent).then(() => true, (error: unknown) => (warnFor(consent, "[sync] couldn't save sync.json to stop syncing, so its data and key are kept", error), false));
+  if (stopped && device) await native.forget(device);
   publishUi({ status: "off", error: null });
 }
 

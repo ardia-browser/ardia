@@ -9,6 +9,7 @@ globalThis.__DEV__ = false;
 const folder = new Map();
 const downloading = new Set();
 const failing = { writes: 0, stateSeals: false, onWrite: null, onRead: null };
+const forgotten = [];
 let ids = 0;
 globalThis.acTestNativeModules = {
   ArdiaSync: {
@@ -18,7 +19,7 @@ globalThis.acTestNativeModules = {
     createChain: async () => {},
     enterPhrase: async () => ({ ok: true }),
     unlock: async () => true,
-    forget: async () => {},
+    forget: async (account) => void forgotten.push(account),
     chainStatus: async () => "ok",
     write: async (_folder, scope, payload) => {
       failing.onWrite?.(payload);
@@ -886,7 +887,7 @@ test("#4759: when sync.json can't save a new mark, the session keeps the mark sy
   });
 });
 
-test("#4759: Stop Syncing keeps the journal and the saved state when sync.json can't save, so the old setup reopens whole", async () => {
+test("#4759: Stop Syncing keeps the journal, the saved state and the key when sync.json can't save, even through a new setup, so the old setup reopens whole", async () => {
   folder.clear();
   downloading.clear();
   const a = new Mac();
@@ -897,27 +898,77 @@ test("#4759: Stop Syncing keeps the journal and the saved state when sync.json c
     pin(["https://three.example/"]);
     await engineA1.syncNow();
   });
+  const device = JSON.parse(a.docs.get("sync.json")).deviceId;
   const recorded = (docs) => [...docs].filter(([name, contents]) => /^sync-(journal-\d+|state)\.nns$/.test(name) && contents).map(([name]) => name).sort();
   const before = recorded(a.docs);
   assert.ok(before.length > 0, "sync recorded its data");
+  forgotten.length = 0;
   shell.refusedSaves.of.add("sync.json");
   try {
     await a.with(async () => {
       await engineA1.stopSync();
       engineA1.setTypeSynced("history", true);
       await settle();
+      assert.ok("ok" in (await engineA1.turnOnSync("/new")));
+      await settle();
+      assert.equal(engineA1.useSync.getState().status, "stalled", "a new setup that can't save says so");
+      assert.match(engineA1.useSync.getState().error ?? "", /couldn’t save/);
+      await engineA1.syncNow();
+      await settle();
     });
   } finally {
     shell.refusedSaves.of.delete("sync.json");
   }
-  assert.equal(JSON.parse(a.docs.get("sync.json")).enabled, true, "sync.json still holds the setup");
+  assert.equal(forgotten.includes(device), false, "the old setup's key is kept");
+  const onDisk = JSON.parse(a.docs.get("sync.json"));
+  assert.equal(onDisk.enabled, true, "sync.json still holds the old setup");
+  assert.equal(onDisk.deviceId, device);
   assert.deepEqual(before.filter((name) => !recorded(a.docs).includes(name)), [], "nothing it recorded was cleared");
   const tombstonesBefore = tombstones();
   const engineA2 = await relaunch(a, "startOverA2");
   await a.with(async () => {
     await engineA2.syncNow();
     assert.equal(engineA2.useSync.getState().enabled, true);
+    assert.equal(engineA2.useSync.getState().folder, "/sync");
     assert.deepEqual(pinnedUrls(), ["https://one.example/", "https://three.example/", "https://two.example/"]);
   });
   assert.equal(tombstones(), tombstonesBefore, "no pin is deleted");
+});
+
+test("#4759: Stop Syncing forgets the key once sync.json records sync as off", async () => {
+  folder.clear();
+  downloading.clear();
+  const a = new Mac();
+  const engineA1 = await import("./engine.ts?stopForgetsA1");
+  await turnOn(a, engineA1);
+  const device = JSON.parse(a.docs.get("sync.json")).deviceId;
+  forgotten.length = 0;
+  await a.with(() => engineA1.stopSync());
+  assert.equal(JSON.parse(a.docs.get("sync.json")).enabled, false);
+  assert.deepEqual(forgotten, [device]);
+  assert.equal(a.docs.get("sync-state.nns") ?? "", "");
+});
+
+test("#4759: a sync.json save that lands after the setup changed, or after a newer mark, never hands its mark to the session", async () => {
+  const { markNewSync, sessionMarkHooks } = await import("./sessionMarks.ts");
+  const { emptyDoc } = await import("./syncDoc.ts");
+  const a = new Mac();
+  await a.with(() => {
+    useBrowser.setState({ syncMark: "" });
+    const first = { ...emptyDoc(), enabled: true };
+    let now = first;
+    const hooks = sessionMarkHooks(() => now);
+    markNewSync(first);
+    const mark = first.sessionMark;
+    now = { ...emptyDoc() };
+    hooks.docSaved(first, mark);
+    assert.equal(S().syncMark, "", "a save for a setup that's gone");
+    now = first;
+    first.sessionMark = "sm-newer";
+    hooks.docSaved(first, mark);
+    assert.equal(S().syncMark, "", "a save of a mark the setup has moved past");
+    first.sessionMark = mark;
+    hooks.docSaved(first, mark);
+    assert.equal(S().syncMark, mark, "the save of the setup's own mark");
+  });
 });

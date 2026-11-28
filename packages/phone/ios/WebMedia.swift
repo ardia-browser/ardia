@@ -20,6 +20,7 @@ final class WebMedia {
     var frame: WKFrameInfo
     var updatedAt: TimeInterval
     var startedAt: TimeInterval
+    var startedWallMs: Double
   }
 
   static let keptPlayingCheck: TimeInterval = 5
@@ -132,7 +133,8 @@ final class WebMedia {
     if report.state == .none {
       pageFrames[report.token] = nil
     } else {
-      pageFrames[report.token] = Frame(report: report, frame: frame, updatedAt: now, startedAt: started ? now : previous?.startedAt ?? now)
+      let wallMs = (Date().timeIntervalSince1970 * 1000).rounded()
+      pageFrames[report.token] = Frame(report: report, frame: frame, updatedAt: now, startedAt: started ? now : previous?.startedAt ?? now, startedWallMs: started ? wallMs : previous?.startedWallMs ?? wallMs)
     }
     if pageFrames.count > Self.framesPerPage, let oldest = pageFrames.min(by: { $0.value.updatedAt < $1.value.updatedAt })?.key { pageFrames[oldest] = nil }
     frames[pageID] = pageFrames.isEmpty ? nil : pageFrames
@@ -177,7 +179,7 @@ final class WebMedia {
       "position": report.position,
       "rate": report.rate,
       "at": Date().timeIntervalSince1970 * 1000,
-      "startedAt": Date().timeIntervalSince1970 * 1000 - (ProcessInfo.processInfo.systemUptime - frame.startedAt) * 1000,
+      "startedAt": frame.startedWallMs,
       "canPrevious": report.canPrevious,
       "canNext": report.canNext,
       "canPictureInPicture": report.canPictureInPicture && Self.pictureInPictureSupported,

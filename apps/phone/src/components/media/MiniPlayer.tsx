@@ -50,7 +50,7 @@ export function MiniPlayer() {
   if (!present || !showing) return null;
   return (
     <View testID="miniPlayerPlace" pointerEvents="box-none" style={[styles.place, { left: span.left, right: span.right, bottom: miniPlayerBottom(insets.bottom) }]}>
-      <Animated.View testID="miniPlayer" pointerEvents={shows ? "box-none" : "none"} style={[styles.motion, motion]}>
+      <Animated.View testID="miniPlayer" collapsable={false} pointerEvents={shows ? "box-none" : "none"} accessibilityElementsHidden={!shows} importantForAccessibility={shows ? "auto" : "no-hide-descendants"} style={[styles.motion, motion]}>
         <MiniPlayerCard media={showing} skipSeconds={skipSeconds} />
       </Animated.View>
     </View>

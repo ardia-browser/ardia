@@ -2866,6 +2866,21 @@
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#noteInstallRequest"
    ],
    "detected": false
+  },
+  {
+   "id": "phone-page-media:ardiaMedia",
+   "source": "main-world",
+   "guard": "iPhone: the page media script's messages come from the page world, which the page can rewrite, so WebMedia treats every field as the page's own claim: PageMediaMessage.parse takes only the media and left types with a 6 to 16 character lowercase token and a known state or outcome; PageMediaReport.parse clamps durations to a week, positions to the duration, rates to 16 and play counts, takes only real booleans, keeps titles and artists to one 200-character line without control, format or separator characters, and artwork only as a plain https address without credentials, spaces or non-ASCII; a message is tied to the page by its web view, never by anything it says. Commands go back only through PageMediaCommand's fixed scripts carrying a checked token and an offered skip length, so nothing the page sent is ever evaluated. The JS side keeps only https artwork, finite numbers and 200-character text (nowPlaying.mediaFromEvent) and never loads artwork for an Incognito tab",
+   "checks": [
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Web/PageMedia.swift#static func parse",
+    "packages/phone/ios/ArdiaKit/Sources/ArdiaBrowser/Web/PageMedia.swift#func script(token",
+    "packages/phone/ios/WebMedia.swift#func received",
+    "packages/phone/ios/ArdiaKit/Tests/ArdiaBrowserTests/PageMediaTests.swift#titlesComeOutAsOneShortCleanLine",
+    "packages/phone/ios/ArdiaKit/Tests/ArdiaBrowserTests/PageMediaTests.swift#artworkIsOnlyAPlainSecureAddress",
+    "packages/phone/ios/ArdiaKit/Tests/ArdiaBrowserTests/PageMediaTests.swift#commandsNeedTheFramesOwnToken",
+    "apps/phone/src/state/media/nowPlaying.ts#mediaFromEvent"
+   ],
+   "detected": false
   }
  ]
 }

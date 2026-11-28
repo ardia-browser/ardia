@@ -15,16 +15,14 @@ import { syncedEngineName } from "../../state/sync/syncRules";
 import { dismissWords } from "../../lib/sharedWords";
 
 export const SWIPE_NAVIGATION = [
-  { id: "anywhere" as const, title: "From Anywhere" },
-  { id: "screenEdges" as const, title: "From Screen Edges" },
+  { id: "anywhere" as const, title: "Anywhere" },
+  { id: "screenEdges" as const, title: "Edges" },
   { id: "disabled" as const, title: "Off" },
 ];
 
-export const SITE_DEFAULTS_FOOTER = "Change one site from Site Settings in its page menu.";
-
 export const NIGHT_SHADE = [
   { id: "disabled" as const, title: "Off" },
-  { id: "automatic" as const, title: "Automatic" },
+  { id: "automatic" as const, title: "Auto" },
   { id: "always" as const, title: "Always" },
 ];
 
@@ -78,23 +76,19 @@ export function SiteSettingsPage() {
   );
 }
 
-export function AllowedSites() {
-  const theme = useTheme();
+export function AllowedSites({ host }: { host?: string } = {}) {
   const listed = useSitePermissions((s) => s.listed);
-  const grants = useSitePermissions((s) => s.grants);
+  const every = useSitePermissions((s) => s.grants);
+  const grants = host === undefined ? every : every.filter((grant) => grant.host === host);
   useEffect(() => {
     void refreshSitePermissions();
   }, []);
-  if (!listed) return null;
+  if (!listed || !grants.length) return null;
   return (
-    <Group header="Camera, Microphone and Location" footer="Sites you allowed keep access on this phone until you revoke it. Private tabs always ask.">
-      {grants.length ? (
-        grants.map((grant, index) => <AllowedSite key={grant.origin} grant={grant} divider={index < grants.length - 1} />)
-      ) : (
-        <View style={styles.row}>
-          <Text style={[font.body, { color: theme.secondaryLabel }]}>None</Text>
-        </View>
-      )}
+    <Group header="Permissions">
+      {grants.map((grant, index) => (
+        <AllowedSite key={grant.origin} grant={grant} divider={index < grants.length - 1} />
+      ))}
     </Group>
   );
 }
@@ -165,7 +159,7 @@ export function SiteSettingsGroups({ openRoute }: { openRoute: (route: SettingsR
         <NavRow title="Filter Lists" icon="line3HorizontalDecrease" tint={settingsTint.neutral} value={formatNumber(enabledLists)} divider onPress={() => openRoute({ page: "filterLists" })} />
         <NavRow title="Trusted Sites" icon="checkmarkShield" tint={settingsTint.green} value={trusted ? String(trusted) : "None"} onPress={() => openRoute({ page: "trustedSites" })} />
       </Group>
-      <Group footer={SITE_DEFAULTS_FOOTER}>
+      <Group>
         <PickerRow title="Night Shade" icon="moonFill" tint={settingsTint.nightShade} options={NIGHT_SHADE} selected={nightShade} divider onSelect={setDefaultNightShade} />
         <PickerRow
           title="Swipe to Navigate"

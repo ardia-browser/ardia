@@ -17,7 +17,6 @@ import {
   menuStop,
   openInDefaultBrowser,
   openSiteSettings,
-  openSiteSettingsRoute,
   pinCurrentToMac,
   printCurrentPage,
   sendCurrentTab,
@@ -35,8 +34,7 @@ import { syncOffered } from "../../state/sync/offer";
 import { useTab } from "../../state/tabs/hooks";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
 import { MaterialSettingsSheetSurface } from "../settings/MaterialSettingsKit";
-import { AllowedSites, SiteSettingsGroups } from "../settings/SitePages";
-import { ThisSiteGroup } from "../settings/ThisSite";
+import { ThisSiteSections } from "../settings/ThisSite";
 import { Favicon, iconRoles, MaterialIconButton, Symbol, Toggle, type MenuItem, type SymbolName } from "../ui";
 import { MATERIAL_STATE } from "../ui/materialRoles";
 import { useMaterialRipple } from "../ui/MaterialSurfaces";
@@ -85,9 +83,7 @@ export function MaterialSiteSettingsHeader({ onBack }: { onBack: () => void }) {
 export function MaterialSiteSettingsContent() {
   return (
     <MaterialSettingsSheetSurface>
-      <ThisSiteGroup />
-      <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
-      <AllowedSites />
+      <ThisSiteSections />
     </MaterialSettingsSheetSurface>
   );
 }
@@ -131,7 +127,7 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
               onChange={setBlockersOn}
             />
           ) : null}
-          <ListRow icon="gearshape" title="Site Settings" enabled onPress={openSiteSettings} />
+          {model.isWebPage ? <ListRow icon="gearshape" title="Site Settings" enabled onPress={openSiteSettings} /> : null}
         </Group>
         {model.pageRows && model.offersDefaultBrowser ? (
           <Group>

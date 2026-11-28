@@ -2,6 +2,7 @@ import { Children, useState, type ReactNode, type RefObject } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type ScrollViewInstance, type ScrollViewProps } from "react-native";
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
+import { PERMISSION_NAMES, sortedPermissions, type PermissionKind } from "../../lib/sitePermissionNames";
 import { actionWords, blockingWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
@@ -15,7 +16,6 @@ import {
   menuStop,
   openInDefaultBrowser,
   openSiteSettings,
-  openSiteSettingsSheet,
   pinCurrentToMac,
   printCurrentPage,
   sendCurrentTab,
@@ -25,13 +25,26 @@ import {
   shareOverPageMenu,
   showFind,
   showReader,
+  resetZoom,
+  setDesktopSite,
+  setNightShadeOn,
+  zoomIn,
+  zoomOut,
+  openSiteSettingsRoute,
 } from "../../state/page/actions";
+import { revokeSiteAccess, useSitePermissions } from "../../state/settings/sitePermissions";
+import { setBlockingCategory, setCollapsesBottomBar, setDefaultNightShade, setSwipeNavigation, useBlocking, useEngines } from "../../state/settings/actions";
+import { usePreferences } from "../../state/settings/hooks";
+import { formatNumber } from "../../state/settings/settingsRules";
+import { bottomBarCollapses } from "../../lib/barCollapse";
+import { NIGHT_SHADE, SWIPE_NAVIGATION } from "../settings/SitePages";
+import { useThisSite } from "../settings/ThisSite";
 import { actionColumns } from "../../state/page/menuActionColumns";
 import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/page/pageMenu";
 import { useMenuTitle, useTitleFeedback } from "../../state/page/hooks";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useTab } from "../../state/tabs/hooks";
-import { font, iconRoles, pageMenuLayout, pageMenuMotion, PressInPlace, SheetScrollView, smoothCorners, space, Symbol, ToggleRow as SharedToggleRow, usePressStyle, useTheme, type MenuItem, type SymbolName } from "../ui";
+import { font, iconRoles, pageMenuLayout, pageMenuMotion, PressInPlace, SheetScrollView, smoothCorners, space, Symbol, ToggleRow as SharedToggleRow, useDesign, usePressStyle, useTheme, type MenuItem, type PressKind, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { syncOffered } from "../../state/sync/offer";
 import { usePageSummariesEnabled } from "../../state/pageSummary/enabled";
@@ -98,7 +111,7 @@ export function PageMenuWords({ tabId, model, onTranslate, systemSheet = false, 
       <Group>
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
         {canPrintPages() && !shareOffersPrint() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
-        <Row icon="gearshape" title="Site Settings" enabled onPress={systemSheet ? openSiteSettingsSheet : openSiteSettings} />
+        {model.isWebPage ? <Row icon="gearshape" title="Site Settings" enabled onPress={openSiteSettings} /> : null}
       </Group>
       {model.pageRows && model.offersDefaultBrowser ? (
         <Group>
@@ -106,6 +119,181 @@ export function PageMenuWords({ tabId, model, onTranslate, systemSheet = false, 
         </Group>
       ) : null}
     </MenuScroll>
+  );
+}
+
+const PERMISSION_ICONS: Record<PermissionKind, SymbolName> = { camera: "camera", microphone: "mic", location: "globe" };
+
+export function MenuSiteHeader({ onBack, preMounted = false }: { onBack?: () => void; preMounted?: boolean }) {
+  const theme = useTheme();
+  const site = useThisSite({ whileClosed: preMounted });
+  if (!site) return null;
+  return (
+    <View style={[styles.siteHeader, styles.siteHeaderPinned]}>
+      {onBack ? <BarButton icon="chevronLeft" label="Back" enabled onPress={onBack} /> : <View style={styles.siteHeaderSide} />}
+      <Text accessibilityRole="header" style={[font.body, styles.semibold, styles.centered, styles.siteHost, { color: theme.label }]} numberOfLines={1}>
+        {site.host}
+      </Text>
+      <View style={styles.siteHeaderSide} />
+    </View>
+  );
+}
+
+export function MenuSiteWords({ onContentHeight, preMounted = false, headed = true, lastBottomRadius }: { onContentHeight?: (height: number) => void; preMounted?: boolean; headed?: boolean; lastBottomRadius?: number }) {
+  const theme = useTheme();
+  const site = useThisSite({ whileClosed: preMounted });
+  const large = useAccessibilityText();
+  const isPrivate = useTab(site?.tabId ?? "")?.isPrivate ?? false;
+  const grant = useSitePermissions((s) => (site && !isPrivate ? s.grants.find((one) => one.host === site.host) : undefined));
+  if (!site) return null;
+  const { host, model } = site;
+  const kinds = grant ? sortedPermissions(grant.permissions) : [];
+  return (
+    <View testID="menuSiteWords" style={[styles.column, large ? styles.largeBottom : null]} onLayout={(event) => onContentHeight?.(event.nativeEvent.layout.height)}>
+      {headed ? (
+        <Text accessibilityRole="header" style={[font.body, styles.semibold, styles.centered, styles.siteHost, { color: theme.label }]} numberOfLines={1}>
+          {host}
+        </Text>
+      ) : null}
+      <Group>
+        <ToggleRow which="nightShade" icon={model.nightShadeOn ? "moonFill" : "moon"} title="Night Shade" value={model.nightShadeOn} enabled={model.siteSwitches} onChange={setNightShadeOn} />
+        <ZoomRow model={model} large={large} />
+        <ToggleRow which="desktopSite" icon="desktop" title="Desktop Site" value={model.desktopSite} enabled={model.isWebPage} onChange={setDesktopSite} />
+      </Group>
+      {grant && kinds.length ? (
+        <Group>
+          {kinds.map((kind) => (
+            <PlainToggleRow key={kind} testID={`menuPermission:${kind}`} icon={PERMISSION_ICONS[kind]} title={PERMISSION_NAMES[kind]} hint="Turning it off revokes this site's access" value onChange={(on) => (on ? undefined : void revokeSiteAccess(grant.origin, kind))} />
+          ))}
+        </Group>
+      ) : null}
+      <EverySiteGroups lastBottomRadius={lastBottomRadius} />
+    </View>
+  );
+}
+
+function EverySiteGroups({ lastBottomRadius }: { lastBottomRadius?: number }) {
+  const design = useDesign();
+  const state = useBlocking((s) => s.state);
+  const nightShade = useEngines((s) => s.nightShade);
+  const swipe = usePreferences((p) => p.swipeNavigation);
+  const collapses = bottomBarCollapses(design, usePreferences((p) => p.collapsesBottomBar));
+  const enabledLists = state?.lists.filter((list) => list.isEnabled).length ?? 0;
+  const trusted = state?.exemptHosts.length ?? 0;
+  return (
+    <>
+      <SectionHeader title="Content blocking" />
+      <Group>
+        <PlainToggleRow icon="handRaised" title="Block Ads" value={state?.blocksAds ?? true} onChange={(on) => setBlockingCategory("ads", on)} />
+        <PlainToggleRow icon="eyeglasses" title="Block Trackers" value={state?.blocksTrackers ?? true} onChange={(on) => setBlockingCategory("trackers", on)} />
+        <PlainToggleRow icon="listBulletFill" title="Block Cookie Banners" value={state?.hidesCookieBanners ?? true} onChange={(on) => setBlockingCategory("cookieBanners", on)} />
+        <ValueRow icon="line3HorizontalDecrease" title="Filter Lists" value={formatNumber(enabledLists)} onPress={() => openSiteSettingsRoute({ page: "filterLists" })} />
+        <ValueRow icon="checkmarkShield" title="Trusted Sites" value={trusted ? formatNumber(trusted) : "None"} onPress={() => openSiteSettingsRoute({ page: "trustedSites" })} />
+      </Group>
+      <SectionHeader title="Browsing" />
+      <Group bottomRadius={lastBottomRadius}>
+        <ChoiceRow icon="moon" title="Night Shade" options={NIGHT_SHADE} selected={nightShade} onSelect={setDefaultNightShade} />
+        <ChoiceRow icon="handDrawFill" title="Swipe to Navigate" options={SWIPE_NAVIGATION} selected={swipe} onSelect={setSwipeNavigation} />
+        <PlainToggleRow icon="platterBottomArrowDown" title="Collapse Bottom Bar" value={collapses} onChange={setCollapsesBottomBar} />
+      </Group>
+    </>
+  );
+}
+
+function SectionHeader({ title }: { title: string }) {
+  const theme = useTheme();
+  return (
+    <Text accessibilityRole="header" style={[font.footnote, styles.sectionHeader, { color: theme.secondaryLabel }]}>
+      {title}
+    </Text>
+  );
+}
+
+function PlainToggleRow({ testID, icon, title, hint, value, onChange }: { testID?: string; icon: SymbolName; title: string; hint?: string; value: boolean; onChange: (value: boolean) => void }) {
+  const theme = useTheme();
+  return (
+    <SharedToggleRow testID={testID ?? `menuToggle:${title}`} press={copy().menuRowTogglesSwitch ? "row" : "knob"} label={title} hint={hint} value={value} onChange={onChange} style={styles.toggleRow}>
+      <View style={styles.toggleWords}>
+        <RowIcon name={icon} enabled />
+        <Text style={[font.body, styles.rowTitle, { color: theme.label }]}>{title}</Text>
+      </View>
+    </SharedToggleRow>
+  );
+}
+
+function ValueRow({ icon, title, value, onPress }: { icon: SymbolName; title: string; value: string; onPress: () => void }) {
+  const theme = useTheme();
+  const rowStyle = usePressStyle("row", { style: styles.row });
+  return (
+    <Pressable testID={`pageMenuRow:${title}`} accessibilityRole="button" accessibilityLabel={title} accessibilityValue={{ text: value }} onPress={onPress} style={rowStyle}>
+      <RowIcon name={icon} enabled />
+      <Text style={[font.body, styles.rowTitle, { color: theme.label }]}>{title}</Text>
+      <Text style={[font.body, { color: theme.secondaryLabel }]}>{value}</Text>
+      <Symbol name="chevronRight" size={pageMenuCards.sendChevron} color={theme.tertiaryLabel} />
+    </Pressable>
+  );
+}
+
+function ChoiceRow<T extends string>({ icon, title, options, selected, onSelect }: { icon: SymbolName; title: string; options: readonly { id: T; title: string }[]; selected: T; onSelect: (id: T) => void }) {
+  const theme = useTheme();
+  const rowStyle = usePressStyle("row", { style: styles.row });
+  const current = options.find((option) => option.id === selected)?.title ?? "";
+  const items: MenuItem[] = options.map((option) => ({ label: option.title, checked: option.id === selected, onPress: () => onSelect(option.id) }));
+  return (
+    <MenuTrigger items={items} trigger="tap" place={{ right: space.xxl, width: pageMenuCards.sendMenuWidth }}>
+      {({ onPress }) => (
+        <Pressable testID={`pageMenuRow:${title}`} accessibilityRole="button" accessibilityLabel={title} accessibilityValue={{ text: current }} onPress={onPress} style={rowStyle}>
+          <RowIcon name={icon} enabled />
+          <Text style={[font.body, styles.rowTitle, { color: theme.label }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={[font.body, { color: theme.secondaryLabel }]} numberOfLines={1}>
+            {current}
+          </Text>
+          <Symbol name="chevronUpChevronDown" size={pageMenuCards.sendChevron} color={theme.tertiaryLabel} />
+        </Pressable>
+      )}
+    </MenuTrigger>
+  );
+}
+
+function ZoomSegment({ kind, label, value, enabled, onPress, style, children }: { kind: PressKind; label: string; value?: string; enabled: boolean; onPress: () => void; style: object; children: ReactNode }) {
+  const pressStyle = usePressStyle(kind, { style });
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityValue={value ? { text: value } : undefined} accessibilityState={{ disabled: !enabled }} disabled={!enabled} onPress={onPress} style={pressStyle}>
+      {children}
+    </Pressable>
+  );
+}
+
+function ZoomRow({ model, large }: { model: MenuModel; large: boolean }) {
+  const theme = useTheme();
+  const ink = usePageMenuInk();
+  const enabledInk = (on: boolean) => (on ? theme.label : theme.tertiaryLabel);
+  const heading = (
+    <>
+      <RowIcon name="textformatSize" enabled={model.isWebPage} />
+      <Text style={[font.body, styles.rowTitle, { color: enabledInk(model.isWebPage) }]}>Page Zoom</Text>
+    </>
+  );
+  return (
+    <View testID="menuZoom" style={large ? styles.zoomStacked : styles.row}>
+      {large ? <View style={styles.zoomHeading}>{heading}</View> : heading}
+      <View style={[styles.zoom, large ? styles.zoomIndented : null]}>
+        <View pointerEvents="none" style={[styles.zoomFill, { backgroundColor: ink.stepper }]} />
+        <ZoomSegment kind="icon" label="Zoom Out" enabled={model.zoomOut} onPress={zoomOut} style={styles.zoomButton}>
+          <Symbol name="minus" size={pageMenuCards.stepperGlyph} color={enabledInk(model.zoomOut)} />
+        </ZoomSegment>
+        <ZoomSegment kind="text" label="Reset Zoom" value={model.zoomPercent} enabled={model.isWebPage} onPress={resetZoom} style={styles.zoomReset}>
+          <Text testID="menuZoomPercent" style={[font.subheadline, styles.digits, styles.semibold, { color: enabledInk(model.isWebPage) }]}>
+            {model.zoomPercent}
+          </Text>
+        </ZoomSegment>
+        <ZoomSegment kind="icon" label="Zoom In" enabled={model.zoomIn} onPress={zoomIn} style={styles.zoomButton}>
+          <Symbol name="plus" size={pageMenuCards.stepperGlyph} color={enabledInk(model.zoomIn)} />
+        </ZoomSegment>
+      </View>
+    </View>
   );
 }
 
@@ -184,12 +372,12 @@ function ActionTile({ icon, label, enabled, square, large, onPress }: Action & {
   );
 }
 
-function Group({ children }: { children: ReactNode }) {
+function Group({ children, bottomRadius }: { children: ReactNode; bottomRadius?: number }) {
   const ink = usePageMenuInk();
   const rows = Children.toArray(children);
   if (!rows.length) return null;
   return (
-    <View testID="pageMenuGroup" style={[styles.group, { backgroundColor: ink.cell }]}>
+    <View testID="pageMenuGroup" style={[styles.group, { backgroundColor: ink.cell }, bottomRadius === undefined ? null : { borderBottomLeftRadius: bottomRadius, borderBottomRightRadius: bottomRadius }]}>
       {rows.map((row, index) => (
         <View key={index}>
           {index > 0 ? <View style={[styles.divider, { backgroundColor: ink.separator }]} /> : null}
@@ -298,4 +486,16 @@ const styles = StyleSheet.create({
   rowTitle: { flex: 1, paddingVertical: space.s },
   digits: { fontVariant: ["tabular-nums"] },
   semibold: { fontWeight: "600" },
+  sectionHeader: { paddingHorizontal: pageMenuCards.rowInset, marginBottom: -space.s },
+  siteHeader: { flexDirection: "row", alignItems: "center", minHeight: pageMenuCards.barHeight },
+  siteHeaderSide: { width: pageMenuCards.barButton },
+  siteHeaderPinned: { paddingHorizontal: space.xs, paddingTop: pageMenuCards.padding },
+  siteHost: { flex: 1, paddingHorizontal: space.xs },
+  zoom: { flexDirection: "row", alignItems: "center", height: pageMenuCards.rowHeight },
+  zoomFill: { position: "absolute", left: 0, right: 0, top: (pageMenuCards.rowHeight - pageMenuCards.stepperHeight) / 2, height: pageMenuCards.stepperHeight, borderRadius: pageMenuCards.stepperRadius, ...smoothCorners },
+  zoomStacked: { paddingHorizontal: pageMenuCards.rowInset, paddingVertical: space.m, gap: space.s, alignItems: "flex-start", minHeight: pageMenuCards.rowHeight },
+  zoomHeading: { flexDirection: "row", alignItems: "center", gap: pageMenuCards.iconGap, alignSelf: "stretch" },
+  zoomIndented: { marginLeft: pageMenuCards.iconSlot + pageMenuCards.iconGap },
+  zoomButton: { width: pageMenuCards.stepperButton, height: pageMenuCards.rowHeight, alignItems: "center", justifyContent: "center" },
+  zoomReset: { minWidth: pageMenuCards.stepperReset, height: pageMenuCards.rowHeight, alignItems: "center", justifyContent: "center" },
 });

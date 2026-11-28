@@ -1109,6 +1109,24 @@ class Extend(unittest.TestCase):
                 with self.assertRaises(series_base.Problem):
                     packer.pristine_extensions(self.src, self.checkouts, [path], "HEAD")
 
+    def test_a_patch_the_series_lists_under_any_name_still_names_its_file(self):
+        pathlib.Path(self.helium, "patches/core/update.diff").write_text("+++ b/components/store/new.cc\n")
+        subprocess.run(["git", "-C", self.helium, "-c", "user.email=t@t", "-c", "user.name=t", "add", "."], check=True)
+        subprocess.run(["git", "-C", self.helium, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "diff"],
+                       check=True)
+        pinned = subprocess.run(["git", "-C", self.helium, "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+        with self.assertRaises(series_base.Problem):
+            packer.pristine_extensions(self.src, [(self.helium, pinned.strip())], ["components/store/new.cc"], "HEAD")
+
+    def test_an_extended_archive_the_reader_would_refuse_is_not_left_behind(self):
+        _, archive = self.base_archive()
+        dest = os.path.join(self.dir, "extended")
+        os.makedirs(dest)
+        with mock.patch.object(series_base, "MAX_MEMBER_BYTES", 8):
+            with self.assertRaises(series_base.Problem):
+                packer.extend_archive(archive, {"components/store/new.cc": (b"x" * 64, 0o644)}, dest, "c", "d")
+        self.assertEqual(os.listdir(dest), [])
+
     def test_a_git_replacement_ref_cant_change_the_blob_read_for_the_commit(self):
         git = ["git", "-C", self.src, "-c", "user.email=t@t", "-c", "user.name=t"]
         commit = subprocess.run(git[:3] + ["rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()

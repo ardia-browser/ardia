@@ -517,8 +517,8 @@ way the copy's sha256 must be the one `series-bases.tsv` pins) and adds each fil
 only when:
 - **no step-3 stage selects it.** Its name doesn't end in `grd`, `grdp` or `xtb`, in any case (the name
   substitution, translation and branding passes rewrite every such file). It isn't `chrome/VERSION` or a file
-  `03-helium.py`'s `FIXUPS` edits. No Helium patch, `domain_substitution.list`, `pruning.list` or resource list at the
-  pinned Helium commits names it (they're read from git, so a sparse or edited checkout can't hide one), nor does
+  `03-helium.py`'s `FIXUPS` edits. No file under Helium's `patches/` (whatever its suffix), `domain_substitution.list`,
+  `pruning.list` or resource list at the pinned Helium commits names it (they're read from git, so a sparse or edited checkout can't hide one), nor does
   `ardia_resources.txt`;
 - **it's Chromium's own file at the tag.** Chromium's repository tracks it as a regular file at the pinned tag's
   commit (resolved on chromium.googlesource.com), which must be the tree's HEAD. The bytes and mode come from that

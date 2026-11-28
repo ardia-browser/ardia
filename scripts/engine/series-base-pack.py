@@ -297,15 +297,13 @@ def helium_mentions(helium_checkouts, path):
         if listed.returncode:
             raise series_base.Problem(f"can't list {checkout} at {commit}: {listed.stderr.strip()}")
         names = listed.stdout.splitlines()
-        selectors = [name for name in names if name in HELIUM_LISTINGS or
-                     (name.startswith("patches/") and name.endswith(".patch"))]
+        selectors = [name for name in names if name in HELIUM_LISTINGS or name.startswith("patches/")]
         for name in selectors:
             shown = pinned_git(checkout, "show", f"{commit}:{name}", text=False)
             if shown.returncode:
                 raise series_base.Problem(f"can't read {name} at {commit} in {checkout}")
             text = shown.stdout.decode(errors="replace")
-            if (name.endswith(".patch") and (f"a/{path}" in text or f"b/{path}" in text)) or \
-                    (not name.endswith(".patch") and path in text):
+            if path in text:
                 mentions.append(f"{os.path.basename(checkout)}/{name}")
     resources = series_base.BUILD / "ardia_resources.txt"
     if resources.is_file() and path in resources.read_text(errors="replace"):
@@ -367,7 +365,14 @@ def extend_archive(archive, extensions, dest, origin, series_commit):
     fields["series_commit"] = series_commit
     fields["extended_at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     paths = set(manifest["files"]) | set(manifest["absent"]) | set(extensions)
-    return series_base.write_tarball(snapshot, paths, fields, dest)
+    extended, out = series_base.write_tarball(snapshot, paths, fields, dest)
+    try:
+        with tempfile.TemporaryDirectory(prefix="ac-series-extended-") as check:
+            series_base.extract(out, check)
+    except series_base.Problem:
+        os.unlink(out)
+        raise
+    return extended, out
 
 
 def pinned_archive(ident, given, private):

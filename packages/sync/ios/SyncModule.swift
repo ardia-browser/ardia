@@ -230,14 +230,12 @@ public class SyncModule: Module, SyncNative {
       NSLog("[sync] a synced password didn't open for its login; not saving it")
       return promise.resolve(false)
     }
-    let save = {
-      ArdiaServices.savePassword(profile: engineProfile, origin: origin, username: username, password: password) { _, error in
-        if let error { NSLog("[sync] saving a synced password: \(error)") }
-        promise.resolve(error == nil)
-      }
-    }
-    if replaced.isEmpty { return DispatchQueue.main.async(execute: save) }
-    guard let expected = try? keys.openPassword(replaced, origin: origin, username: username) else {
+    let expected: String?
+    if replaced.isEmpty {
+      expected = nil
+    } else if let opened = try? keys.openPassword(replaced, origin: origin, username: username) {
+      expected = opened
+    } else {
       NSLog("[sync] the saved password a synced change replaces didn't open for its login; not saving it")
       return promise.resolve(false)
     }

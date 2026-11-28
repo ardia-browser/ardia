@@ -20,6 +20,7 @@
 #include "base/functional/bind.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/json/json_reader.h"
+#include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/task/sequenced_task_runner.h"
@@ -32,6 +33,7 @@
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/download/download_prefs.h"
+#include "chrome/browser/password_manager/factories/account_password_store_factory.h"
 #include "chrome/browser/password_manager/factories/profile_password_store_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
@@ -575,12 +577,17 @@ class SyncLoginReader : public password_manager::PasswordStoreConsumer {
  public:
   using Read = base::OnceCallback<void(linux_sync::LoginRead)>;
 
-  static void Start(scoped_refptr<password_manager::PasswordStoreInterface> store, Read read) {
-    auto* reader = new SyncLoginReader(std::move(read));
+  static void Start(scoped_refptr<password_manager::PasswordStoreInterface> profile_store,
+                    scoped_refptr<password_manager::PasswordStoreInterface> account_store,
+                    Read read) {
+    auto* reader = new SyncLoginReader(std::move(read), profile_store.get(), account_store.get());
     reader->timeout_.Start(FROM_HERE, kLoginReadTimeout,
                            base::BindOnce(&SyncLoginReader::Finish, reader->weak_factory_.GetWeakPtr(),
                                           linux_sync::LoginRead()));
-    store->GetAutofillableLogins(reader->weak_factory_.GetWeakPtr());
+    profile_store->GetAutofillableLogins(reader->weak_factory_.GetWeakPtr());
+    if (account_store) {
+      account_store->GetAutofillableLogins(reader->weak_factory_.GetWeakPtr());
+    }
   }
 
   SyncLoginReader(const SyncLoginReader&) = delete;
@@ -588,41 +595,54 @@ class SyncLoginReader : public password_manager::PasswordStoreConsumer {
   ~SyncLoginReader() override = default;
 
   void OnGetPasswordStoreResultsOrErrorFrom(
-      password_manager::PasswordStoreInterface*,
+      password_manager::PasswordStoreInterface* from,
       base::expected<std::vector<password_manager::StoredCredential>, password_manager::PasswordStoreBackendError>
           results) override {
-    linux_sync::LoginRead read;
-    if (results.has_value()) {
-      read.complete = true;
-      read.logins.reserve(results->size());
-      for (password_manager::StoredCredential& credential : *results) {
-        if (!credential.blocked_by_user && !credential.federation_origin.IsValid()) {
-          crypto::SecureU16String password = credential.password_value.secure_value();
-          std::string utf8 = SecretUTF8(std::u16string_view(password.data(), password.size()));
-          read.logins.emplace_back(credential.signon_realm, base::UTF16ToUTF8(credential.username_value),
-                                   std::move(utf8),
-                                   credential.date_created.is_null()
-                                       ? 0
-                                       : credential.date_created.InMillisecondsFSinceUnixEpochIgnoringNull());
-        }
-        credential.password_value.clear();
-      }
+    if (!results.has_value()) {
+      return Finish(linux_sync::LoginRead());
     }
-    Finish(std::move(read));
+    for (password_manager::StoredCredential& credential : *results) {
+      if (!credential.blocked_by_user && !credential.federation_origin.IsValid()) {
+        crypto::SecureU16String password = credential.password_value.secure_value();
+        std::string utf8 = SecretUTF8(std::u16string_view(password.data(), password.size()));
+        read_.logins.emplace_back(credential.signon_realm, base::UTF16ToUTF8(credential.username_value),
+                                  std::move(utf8), Milliseconds(credential.date_created));
+        read_.logins.back().modified_ms = credential.date_password_modified.is_null()
+                                              ? read_.logins.back().created_ms
+                                              : Milliseconds(credential.date_password_modified);
+      }
+      credential.password_value.clear();
+    }
+    (from == profile_ ? profile_read_ : account_read_) = true;
+    if (profile_read_ && account_read_) {
+      read_.complete = true;
+      Finish(std::move(read_));
+    }
   }
 
  private:
-  explicit SyncLoginReader(Read read) : read_(std::move(read)) {}
+  SyncLoginReader(Read read,
+                  password_manager::PasswordStoreInterface* profile,
+                  password_manager::PasswordStoreInterface* account)
+      : done_(std::move(read)), profile_(profile), account_read_(!account) {}
+
+  static double Milliseconds(base::Time time) {
+    return time.is_null() ? 0 : time.InMillisecondsFSinceUnixEpochIgnoringNull();
+  }
 
   void Finish(linux_sync::LoginRead read) {
     weak_factory_.InvalidateWeakPtrs();
     timeout_.Stop();
-    Read done = std::move(read_);
+    Read done = std::move(done_);
     base::SequencedTaskRunner::GetCurrentDefault()->DeleteSoon(FROM_HERE, this);
     std::move(done).Run(std::move(read));
   }
 
-  Read read_;
+  Read done_;
+  raw_ptr<password_manager::PasswordStoreInterface> profile_;
+  bool profile_read_ = false;
+  bool account_read_;
+  linux_sync::LoginRead read_;
   base::OneShotTimer timeout_;
   base::WeakPtrFactory<SyncLoginReader> weak_factory_{this};
 };
@@ -640,7 +660,10 @@ void ReadLoginsFor(base::OnceCallback<void(linux_sync::LoginRead)> done, Profile
         if (!store || !credentials::Assess(credentials::Store::kPasswords, probes.passwords).available) {
           return std::move(done).Run(linux_sync::LoginRead());
         }
-        SyncLoginReader::Start(std::move(store), std::move(done));
+        SyncLoginReader::Start(
+            std::move(store),
+            AccountPasswordStoreFactory::GetForProfile(profile.get(), ServiceAccessType::EXPLICIT_ACCESS),
+            std::move(done));
       },
       profile->GetWeakPtr(), std::move(done)));
 }

@@ -107,6 +107,7 @@ class StoredLogin {
   std::string username;
   std::string password;
   double created_ms = 0;
+  double modified_ms = 0;
 };
 
 struct LoginRead {

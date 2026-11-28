@@ -19,7 +19,7 @@ typedef void (^ArdiaServiceReply)(id _Nullable value, NSString *_Nullable error)
 + (void)savePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username password:(NSString *)password
                reply:(ArdiaServiceReply)reply NS_SWIFT_NAME(savePassword(profile:origin:username:password:reply:));
 + (void)replacePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username password:(NSString *)password
-               expected:(NSString *)expected reply:(ArdiaServiceReply)reply
+               expected:(nullable NSString *)expected reply:(ArdiaServiceReply)reply
     NS_SWIFT_NAME(replacePassword(profile:origin:username:password:expected:reply:));
 + (void)updatePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username
            newUsername:(nullable NSString *)newUsername newPassword:(nullable NSString *)newPassword reply:(ArdiaServiceReply)reply

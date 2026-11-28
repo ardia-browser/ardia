@@ -94,6 +94,7 @@ chromium-apple-passwords-host-skipped.patch
 chromium-extension-tab-move-closing-window.patch
 chromium-webstore-icon-optional.patch
 chromium-enterprise-context-info.patch
+chromium-password-store-compare-and-set.patch
 chromium-ardia-layer.patch
 chromium-linux-background-windows.patch
 chromium-linux-companion-browsers.patch

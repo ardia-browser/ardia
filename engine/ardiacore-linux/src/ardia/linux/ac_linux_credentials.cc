@@ -823,15 +823,18 @@ Plan PlanSyncedLogin(std::string_view profile, std::string_view origin, std::str
   values.push_back(Arg::String(password));
   Plan save = PlanInvoke("ArdiaPasswords.save", values);
   values.clear();
-  if (!expected || !save.ok()) {
+  if (!save.ok()) {
     return save;
   }
-  if (expected->empty() || !PlainText(*expected, kMaxSecretBytes)) {
+  if (expected && (expected->empty() || !PlainText(*expected, kMaxSavedSecretBytes))) {
     return Invalid("ERR_CREDENTIAL_REQUEST", "A non-empty password of bounded length is required");
   }
   Json json;
   json.Text("origin", std::string(origin)).Text("username", std::string(username));
-  json.Secret("password", password).Secret("expected", *expected);
+  json.Secret("password", password);
+  if (expected) {
+    json.Secret("expected", *expected);
+  }
   return Engine("ac_passwords_replace", json, Reply::kOk, {Store::kPasswords});
 }
 

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <functional>
@@ -129,8 +130,50 @@ class FakeStore : public password_manager::PasswordStoreInterface {
     }), std::move(completion));
   }
 
+  void UpdateLoginsIfPasswordIs(std::vector<StoredCredential> forms, std::u16string expected,
+                                base::OnceCallback<void(bool)> completion) override {
+    ++updates;
+    Checked(base::OnceCallback<bool()>([this, forms = std::move(forms), expected = std::move(expected)]() mutable {
+      for (const StoredCredential& form : forms) {
+        const bool holds = std::ranges::any_of(rows, [&](const StoredCredential& row) {
+          return SameKey(row, form) && row.password_value == expected;
+        });
+        if (!holds) return false;
+      }
+      for (StoredCredential& form : forms) {
+        for (StoredCredential& row : rows) {
+          if (SameKey(row, form)) row = Copy(form);
+        }
+      }
+      return true;
+    }), std::move(completion));
+  }
+
+  void AddLoginIfAbsent(StoredCredential form, base::OnceCallback<void(bool)> completion) override {
+    ++adds;
+    Checked(base::OnceCallback<bool()>([this, form = std::move(form)]() mutable {
+      if (std::ranges::any_of(rows, [&](const StoredCredential& row) {
+            return !row.blocked_by_user && !row.federation_origin.IsValid() &&
+                   row.signon_realm == form.signon_realm && row.username_value == form.username_value;
+          })) {
+        return false;
+      }
+      rows.push_back(std::move(form));
+      return true;
+    }), std::move(completion));
+  }
+
  private:
   using OnceWrite = base::OnceClosure;
+
+  void Checked(base::OnceCallback<bool()> write, base::OnceCallback<void(bool)> completion) {
+    Runner().PostTask(FROM_HERE, base::OnceClosure([this, write = std::move(write),
+                                                    completion = std::move(completion)]() mutable {
+      if (before_write) std::exchange(before_write, nullptr)(*this);
+      const bool applied = drops_writes || std::move(write).Run();
+      std::move(completion).Run(applied);
+    }));
+  }
 
   void Write(OnceWrite write, base::OnceClosure completion) {
     Runner().PostTask(FROM_HERE, base::OnceClosure([this, write = std::move(write),
@@ -339,14 +382,21 @@ void LoginThatNoLongerHoldsTheExpectedPasswordIsLeftAlone() {
   assert(world.profile_store->adds == 0 && world.account_store->adds == 0);
 }
 
-void CallersWithoutAnExpectedPasswordReplaceEveryCopy() {
+void NewLoginThatIsAlreadyHereIsLeftAlone() {
   World world;
   world.profile_store->Seed({{"https://a.test/", u"me", u"profile"}});
   world.account_store->Seed({{"https://a.test/", u"me", u"account"}});
-  Ok(Replace(world, "https://a.test", "me", "again"));
-  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"again");
-  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"again");
+  Failed(Replace(world, "https://a.test", "me", "again"), "The login changed while it was being saved");
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"profile");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"account");
   assert(world.profile_store->adds == 0 && world.account_store->adds == 0);
+}
+
+void NewLoginAlreadyHereWithTheSamePasswordWritesNothing() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"same"}});
+  Ok(Replace(world, "https://a.test", "me", "same"));
+  assert(world.profile_store->adds == 0 && world.profile_store->updates == 0);
 }
 
 void LoginDeletedBeforeTheReplaceIsNotAddedBack() {
@@ -403,6 +453,25 @@ void CopyInTheOtherStoreDoesNotStandInForTheOneWritten() {
   Failed(Replace(world, "https://a.test", "me", "remote", "old"), "The login changed while it was being saved");
   assert(world.profile_store->rows.empty() && world.profile_store->adds == 0);
   assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"remote");
+}
+
+void EditToTheSameFormDuringTheWriteIsKept() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
+  world.profile_store->before_write = [](FakeStore& store) {
+    store.rows.front().password_value = password_manager::PasswordString(std::u16string(u"edited"));
+  };
+  Failed(Replace(world, "https://a.test", "me", "new", "old"), "The login changed while it was being saved");
+  assert(world.profile_store->rows.size() == 1);
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"edited");
+}
+
+void LoginAddedHereDuringTheAddIsKept() {
+  World world;
+  world.profile_store->before_write = [](FakeStore& store) { store.Seed({{"https://a.test/", u"me", u"local"}}); };
+  Failed(Replace(world, "https://a.test", "me", "synced"), "The login changed while it was being saved");
+  assert(world.profile_store->rows.size() == 1);
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"local");
 }
 
 void ConcurrentChangeIsKept() {
@@ -485,7 +554,7 @@ void BadRequestsAreRefused() {
 }
 
 int main() {
-  assert(ac_passwords_replace_sensitive.max_bytes == 64 * 1024);
+  assert(ac_passwords_replace_sensitive.max_bytes >= 2 * (4096 + 65536) + 2 * 2048 + 2 * 1024 + 256);
   GroupedRealmsKeepTheirOwnPasswords();
   EveryFormOfTheLoginChanges();
   MissingLoginIsAddedToTheProfileStore();
@@ -498,13 +567,16 @@ int main() {
   SameLoginInBothStoresChangesInBoth();
   DivergentPasswordsKeepTheOneThatWasNotSynced();
   LoginThatNoLongerHoldsTheExpectedPasswordIsLeftAlone();
-  CallersWithoutAnExpectedPasswordReplaceEveryCopy();
+  NewLoginThatIsAlreadyHereIsLeftAlone();
+  NewLoginAlreadyHereWithTheSamePasswordWritesNothing();
   LoginDeletedBeforeTheReplaceIsNotAddedBack();
   ProfileLoginLeavesTheAccountStoreAlone();
   AccountStoreThatDropsTheChangeFails();
   MissingAccountStoreUsesTheProfileStore();
   LoginDeletedDuringTheWriteStaysDeleted();
   CopyInTheOtherStoreDoesNotStandInForTheOneWritten();
+  EditToTheSameFormDuringTheWriteIsKept();
+  LoginAddedHereDuringTheAddIsKept();
   ConcurrentChangeIsKept();
   StoreThatNeverTakesTheChangeFails();
   UnreadableAndSilentStoresFail();

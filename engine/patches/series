@@ -118,6 +118,7 @@ chromium chromium-extension-renderer-relaunch.patch mac
 chromium chromium-extension-tab-move-closing-window.patch
 chromium chromium-webstore-icon-optional.patch
 chromium chromium-enterprise-context-info.patch
+chromium chromium-password-store-compare-and-set.patch
 chromium chromium-ardia-layer.patch mac
 chromium chromium-ardia-linux-layer.patch linux
 chromium chromium-linux-background-windows.patch linux

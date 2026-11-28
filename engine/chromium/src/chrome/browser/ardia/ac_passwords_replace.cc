@@ -41,7 +41,7 @@ using password_manager::StoredCredential;
 using Credentials = std::vector<StoredCredential>;
 using CredentialsOrError = base::expected<Credentials, PasswordStoreBackendError>;
 
-constexpr size_t kMaxReplaceArgsBytes = 64 * 1024;
+constexpr size_t kMaxReplaceArgsBytes = 256 * 1024;
 constexpr base::TimeDelta kReplaceTimeout = base::Seconds(30);
 
 struct Login {
@@ -218,36 +218,31 @@ class Replace : public password_manager::PasswordStoreConsumer {
     return found;
   }
 
-  base::OnceClosure Wrote() {
-    return base::BindOnce(&Replace::OneWritten, weak_factory_.GetWeakPtr());
+  base::OnceCallback<void(bool)> Applied() {
+    return base::BindOnce(&Replace::OneApplied, weak_factory_.GetWeakPtr());
   }
 
-  void OneWritten() {
+  void OneApplied(bool applied) {
+    if (!applied) {
+      return Finish("The login changed while it was being saved");
+    }
     if (--writes_ == 0) {
       Read(Step::kVerify);
     }
   }
 
   void Write() {
-    Credentials profile_changes;
-    Credentials account_changes;
-    const bool in_profile = Changes(*profile_, profile_changes, false);
-    const bool in_account = Changes(*account_, account_changes, true);
-    if (in_profile || in_account) {
-      writes_ = !profile_changes.empty() + !account_changes.empty();
-      if (writes_ == 0) {
-        return Finish({});
-      }
-      if (!profile_changes.empty()) {
-        profile_store_->UpdateLogins(std::move(profile_changes), Wrote());
-      }
-      if (!account_changes.empty()) {
-        account_store_->UpdateLogins(std::move(account_changes), Wrote());
-      }
-      return;
-    }
     if (expected_) {
-      return Finish("The login changed while it was being saved");
+      return WriteOver(*expected_);
+    }
+    const auto here = [this](const StoredCredential& credential) { return Replaceable(credential, login_); };
+    if (std::ranges::any_of(*profile_, here) || std::ranges::any_of(*account_, here)) {
+      const auto same = [this](const StoredCredential& credential) {
+        return !Replaceable(credential, login_) || credential.password_value == password_;
+      };
+      return Finish(std::ranges::all_of(*profile_, same) && std::ranges::all_of(*account_, same)
+                        ? std::string_view()
+                        : std::string_view("The login changed while it was being saved"));
     }
     if (std::ranges::any_of(*profile_, [this](const StoredCredential& credential) {
           return HoldsKeyOf(credential, login_);
@@ -257,7 +252,27 @@ class Replace : public password_manager::PasswordStoreConsumer {
     writes_ = 1;
     StoredCredential added = Added();
     written_.push_back(Written::Of(added, false));
-    profile_store_->AddLogin(std::move(added), Wrote());
+    profile_store_->AddLoginIfAbsent(std::move(added), Applied());
+  }
+
+  void WriteOver(const std::u16string& expected) {
+    Credentials profile_changes;
+    Credentials account_changes;
+    const bool in_profile = Changes(*profile_, profile_changes, false);
+    const bool in_account = Changes(*account_, account_changes, true);
+    if (!in_profile && !in_account) {
+      return Finish("The login changed while it was being saved");
+    }
+    writes_ = !profile_changes.empty() + !account_changes.empty();
+    if (writes_ == 0) {
+      return Finish({});
+    }
+    if (!profile_changes.empty()) {
+      profile_store_->UpdateLoginsIfPasswordIs(std::move(profile_changes), expected, Applied());
+    }
+    if (!account_changes.empty()) {
+      account_store_->UpdateLoginsIfPasswordIs(std::move(account_changes), expected, Applied());
+    }
   }
 
   StoredCredential Added() const {

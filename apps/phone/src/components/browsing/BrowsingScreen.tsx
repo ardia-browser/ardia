@@ -83,7 +83,7 @@ import { PageProgressLine } from "./PageProgressLine";
 import { useBarLoadWash } from "./barLoadWash";
 import { labTrace } from "../../platform/lab";
 import { barIsDark, shownTone } from "../../lib/pageTone";
-import { besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
+import { barSwipeSpan, besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
 import { useScreenLayout } from "../../state/app/screenLayout";
 
 export function BrowsingScreen({ tabId }: { tabId: string }) {
@@ -266,6 +266,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   }, []);
   const pager = useTabPager({
     width,
+    dragSpan: barSwipeSpan(width, duoStrip ? barLayout : { span: barSpan, strip: null }),
     selectedId: tab.id,
     left: left?.id ?? null,
     right: right?.id ?? null,

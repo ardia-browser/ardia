@@ -224,6 +224,8 @@ export type PageEngineEvent =
   | { name: "pages.privateSessionEnded" }
   | { name: "pages.dark"; dark: boolean }
   | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean }
+  | { name: "pages.fullPagePdf" }
+  | { name: "pages.scrollCapture"; outcome: string }
   | { name: "pages.scriptlets"; isPrivate: boolean };
 
 export type PageEventPayload =

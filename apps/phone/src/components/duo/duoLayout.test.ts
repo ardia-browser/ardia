@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { commandBarKeyboardTop, commandBarPlacement, commandBarRise, DUO, duoCardBottom, duoCardTop, sidebarFrame, splitCardFrame, splitPanelFrame, toolbarFrame, toolbarLayout, wideCardFrame } from "./duoLayout.ts";
+import { commandBarKeyboardTop, commandBarPlacement, commandBarRise, DUO, duoCardBottom, duoCardTop, sidebarFrame, SPLIT_CARD_EDGE, splitCardFrame, splitPanelFrame, toolbarFrame, toolbarLayout, wideCardEdge, wideCardFrame } from "./duoLayout.ts";
+import { DEFAULT_PREFERENCES } from "../../state/settings/preferences.ts";
 
 const PORTRAIT = { width: 669, height: 951, insets: { top: 59, bottom: 34, left: 0, right: 0 } };
 const LANDSCAPE = { width: 951, height: 669, insets: { top: 0, bottom: 21, left: 59, right: 59 } };
+const IPAD_PRO_11 = { width: 1210, height: 834, insets: { top: 24, bottom: 20, left: 0, right: 0 } };
 
 test("main's DuoLayout constants hold, and the page's clearance is the toolbar plus 9 above and below", () => {
   assert.equal(DUO.toolbarClearance, 63);
@@ -66,4 +68,35 @@ test("half open, the card runs edge to edge less 11 and stops 11 over the fold, 
   assert.deepEqual(splitCardFrame(669, PORTRAIT.insets, fold), { x: 11, y: 63, width: 647, height: 391.5 });
   assert.equal(splitCardFrame(669, PORTRAIT.insets, { top: 100, bottom: 120 }).height, 120);
   assert.deepEqual(splitPanelFrame(669, 951, PORTRAIT.insets, fold), { x: 0, y: 485.5, width: 669, height: 465.5, paddingBottom: 34 });
+});
+
+test("with Page Border on, an 11-inch iPad Pro on its side gets today's card: 1188 by 792 at 11, 33, the toolbar at 42 and the sidebar 260 by 814 at 11, 11", () => {
+  const { width, height, insets } = IPAD_PRO_11;
+  const card = wideCardFrame(width, height, insets, true);
+  assert.deepEqual(card, wideCardFrame(width, height, insets));
+  assert.deepEqual(card, { x: 11, y: 33, width: 1188, height: 792 });
+  assert.deepEqual(toolbarFrame(card), { x: 11, y: 42, width: 1188, height: 45 });
+  assert.deepEqual(sidebarFrame(width, height, insets), { x: 11, y: 11, width: 260, height: 814 });
+});
+
+test("with Page Border off, the card fills the safe width from the status bar down to the screen's bottom edge, and the toolbar follows it", () => {
+  const ipad = IPAD_PRO_11;
+  const card = wideCardFrame(ipad.width, ipad.height, ipad.insets, false);
+  assert.deepEqual(card, { x: 0, y: 24, width: 1210, height: 810 });
+  assert.deepEqual(toolbarFrame(card), { x: 0, y: 33, width: 1210, height: 45 });
+  assert.deepEqual(sidebarFrame(ipad.width, ipad.height, ipad.insets), { x: 11, y: 11, width: 260, height: 814 });
+  assert.deepEqual(wideCardFrame(LANDSCAPE.width, LANDSCAPE.height, LANDSCAPE.insets, false), { x: 59, y: 0, width: 833, height: 669 });
+  assert.deepEqual(wideCardFrame(PORTRAIT.width, PORTRAIT.height, PORTRAIT.insets, false), { x: 0, y: 59, width: 669, height: 892 });
+});
+
+test("the card's corner is the chosen radius with the border on, held to 0 to 24 and whole points, square with it off, and main's 16 by default and half open", () => {
+  assert.deepEqual(wideCardEdge(DEFAULT_PREFERENCES.pageBorder, DEFAULT_PREFERENCES.pageCornerRadius), { bordered: true, radius: DUO.cardRadius });
+  assert.deepEqual(wideCardEdge(true, 0), { bordered: true, radius: 0 });
+  assert.deepEqual(wideCardEdge(true, 24), { bordered: true, radius: 24 });
+  assert.equal(wideCardEdge(true, 40).radius, 24);
+  assert.equal(wideCardEdge(true, -3).radius, 0);
+  assert.equal(wideCardEdge(true, 7.6).radius, 8);
+  assert.equal(wideCardEdge(true, Number.NaN).radius, 16);
+  assert.deepEqual(wideCardEdge(false, 20), { bordered: false, radius: 0 });
+  assert.deepEqual(SPLIT_CARD_EDGE, { bordered: true, radius: 16 });
 });

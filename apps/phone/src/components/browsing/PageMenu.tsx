@@ -25,7 +25,6 @@ import {
   pinCurrentToMac,
   sendCurrentTab,
   openSiteSettings,
-  openSiteSettingsRoute,
   pageMenuPresentation,
   releaseTranslationAsk,
   type MenuPresentation,
@@ -44,8 +43,7 @@ import { menuSwitchHint, type MenuModel, type MenuSwitch } from "../../state/pag
 import { useMenuDocked, useMenuModel, useMenuOpen, useMenuOpening, useMenuPage, useMenuTitle, usePageQuiet, useTitleFeedback, useTranslationAsk } from "../../state/page/hooks";
 import { endMenuTiming, markMenuPhase } from "../../state/page/menuTiming";
 import { pageUi, type MenuPage } from "../../state/page/store";
-import { AllowedSites, SiteSettingsGroups } from "../settings/SitePages";
-import { ThisSiteGroup } from "../settings/ThisSite";
+import { ThisSiteSections } from "../settings/ThisSite";
 import { useIsPinned, useSendTargets } from "../../state/sync/hooks";
 import { useSearchFromDockedMenu, useSearchOpen, useSearchSession } from "../../state/search/hooks";
 import { cancelSearch } from "../../state/browse/store";
@@ -321,7 +319,7 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
               detail={model.blockedCount}
               onChange={setBlockersOn}
             />
-            <Row icon="gearshape" title="Site Settings" enabled divider={model.offersDefaultBrowser} onPress={openSiteSettings} />
+            {model.isWebPage ? <Row icon="gearshape" title="Site Settings" enabled divider={model.offersDefaultBrowser} onPress={openSiteSettings} /> : null}
             {model.offersDefaultBrowser ? (
               <Row icon="safariFill" title="Open in Default Browser" enabled divider={false} onPress={openInDefaultBrowser} />
             ) : null}
@@ -343,9 +341,7 @@ function MenuSiteSettings() {
         </Text>
         <View style={styles.subpageBalance} />
       </View>
-      <ThisSiteGroup />
-      <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
-      <AllowedSites />
+      <ThisSiteSections />
     </ScrollView>
   );
 }

@@ -3,8 +3,6 @@ import { StyleSheet, View } from "react-native";
 import { BottomSheet, Host, NavigationDestination, NavigationStack, RNHostView, VStack } from "@expo/ui/swift-ui";
 import { accessibilityHidden, ignoreSafeArea, navigationBarTitleDisplayMode, navigationTitle } from "@expo/ui/swift-ui/modifiers";
 import { refreshSettings } from "../../state/settings/actions";
-import { settingsInMenu } from "../../state/page/actions";
-import { usePageUi } from "../../state/page/store";
 import { useSettingsNav } from "../../state/settings/hooks";
 import { closeSettingsFrom, followSettingsPath, settingsDestinationKeys, settingsPath, settingsRouteFromKey, type SettingsRoute } from "../../state/settings/nav";
 import { nativeLookColors } from "../../lib/profileLook";
@@ -97,13 +95,11 @@ export function ExpoSettingsStack() {
 export function ExpoSettingsSheet() {
   const open = useSettingsNav((s) => s.open);
   const generation = useSettingsNav((s) => s.generation);
-  const inPageMenu = usePageUi((ui) => settingsInMenu(ui, generation));
-  const presented = open && !inPageMenu;
   useRefreshWhileOpen(open);
   usePublishNativeChromeLook();
   return (
     <Host testID="expoSettingsSheet" style={styles.anchor} pointerEvents="none">
-      <BottomSheet isPresented={presented} presentationToken={generation} onIsPresentedChange={presentationIgnored} onPresentation={settingsSheetPresentation}>
+      <BottomSheet isPresented={open} presentationToken={generation} onIsPresentedChange={presentationIgnored} onPresentation={settingsSheetPresentation}>
         <SettingsNavigation />
       </BottomSheet>
     </Host>

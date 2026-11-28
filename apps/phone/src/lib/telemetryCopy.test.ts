@@ -43,6 +43,17 @@ test("What’s Sent says in its own words that menu and confirmation opens are c
   assert.match(usage.text, /never while browsing privately/);
 });
 
+test("What’s Sent says in its own words that Capture more and full-page PDFs are counted, and never while browsing privately", () => {
+  const items = PHONE_WHATS_SENT.flatMap((section) => section.items);
+  const pdf = items.find((item) => item.fields.includes("full_page_pdf_provided"))!;
+  const shots = items.find((item) => item.fields.includes("scroll_capture_started"))!;
+  assert.deepEqual(pdf.fields, ["full_page_pdf_provided"]);
+  assert.deepEqual(shots.fields, ["scroll_capture_started", "scroll_capture_ended_complete", "scroll_capture_ended_cancelled", "scroll_capture_failed"]);
+  assert.match(pdf.text, /on iPhone: how often a screenshot’s Full Page tab got the page as a PDF/);
+  assert.match(shots.text, /on Android: how often a system screenshot’s Capture more scrolled a page/);
+  for (const item of [pdf, shots]) assert.match(item.text, /never while browsing privately/);
+});
+
 test("What’s Sent is written in US spelling with typographic apostrophes, as the rest of the app’s copy is", () => {
   const copy = [...Object.values(PHONE_SHARING_COPY), ...PHONE_WHATS_SENT.flatMap((section) => [section.title, ...section.items.map((item) => item.text)])];
   assert.deepEqual(copy.filter((text) => /colour/i.test(text)), []);

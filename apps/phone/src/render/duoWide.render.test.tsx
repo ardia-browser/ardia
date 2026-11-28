@@ -13,6 +13,8 @@ import * as tabHooks from "../state/tabs/hooks";
 import { useLibrary } from "../state/library/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { usePageUi } from "../state/page/store";
+import { setPageBorder, setPageCornerRadius } from "../state/settings/actions";
+import { usePreferences } from "../state/settings/store";
 import { actionWords } from "../lib/sharedWords";
 import { OFF_STATUS, useSync, type SyncedProfile } from "../state/sync/store";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
@@ -32,6 +34,7 @@ const safeArea = require("react-native-safe-area-context") as { useSafeAreaInset
 const PORTRAIT_WINDOW = Dimensions.get("window");
 const OPEN = { width: 669, height: 951, insets: { top: 59, bottom: 34, left: 0, right: 0 } };
 const OPEN_SIDEWAYS = { width: 951, height: 669, insets: { top: 0, bottom: 21, left: 59, right: 59 } };
+const IPAD_SIDEWAYS = { width: 1210, height: 834, insets: { top: 24, bottom: 20, left: 0, right: 0 } };
 
 type Shape = typeof OPEN;
 
@@ -49,6 +52,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  act(() => usePreferences.setState({ pageBorder: true, pageCornerRadius: 16 }));
   act(() => dismissSearch());
   act(() => jest.runOnlyPendingTimers());
   act(() => useScreenLayout.setState({ layout: PHONE_LAYOUT }));
@@ -152,7 +156,7 @@ test("the sidebar's More menu reads Archive, Spaces, then History, Bookmarks and
   settle();
   const more = triggerAround(root, "duoSidebarMore");
   expect(more.props.trigger).toBe("tap");
-  expect(menuWords(more)).toEqual(["Archive", "Spaces", "—", "History", "Bookmarks", "Downloads", "—", "Settings"]);
+  expect(menuWords(more)).toEqual(["Archive", "Spaces", "History", "Bookmarks", "Downloads", "Settings"]);
   act(() => menuItem(more, "Bookmarks").onPress());
   expect(useLibrary.getState()).toMatchObject({ open: true, section: "bookmarks" });
   expect(counted.mock.calls.map(([field]) => field)).toContain("deck_menu_bookmarks_opened");
@@ -372,5 +376,53 @@ test("with no tab, Duo's address face is named New Tab and starts one, not a sea
   press(face);
   expect(started).toHaveBeenCalledTimes(1);
   expect(host(root, "duoHost").props.children).toBe(actionWords.newTab);
+  unmount(root);
+});
+
+test("on an iPad with Page Border on, the card keeps today's 1188 by 792 at 11, 33 with its shadow, and the chosen corner rounds both the card and its clip, live", () => {
+  useShape(IPAD_SIDEWAYS, { name: "wide" });
+  const root = redesigned();
+  expect(frame(root, "duoCard")).toEqual({ left: 11, top: 33, width: 1188, height: 792 });
+  expect(flat(host(root, "duoCard"))).toMatchObject({ borderRadius: 16, borderCurve: "continuous", boxShadow: shadowCss("control", false) });
+  expect(flat(host(root, "duoCardClip"))).toMatchObject({ borderRadius: 16, borderCurve: "continuous", overflow: "hidden" });
+  act(() => setPageCornerRadius(22));
+  expect(usePreferences.getState().pageCornerRadius).toBe(22);
+  expect(flat(host(root, "duoCard")).borderRadius).toBe(22);
+  expect(flat(host(root, "duoCardClip")).borderRadius).toBe(22);
+  expect(frame(root, "duoCard")).toEqual({ left: 11, top: 33, width: 1188, height: 792 });
+  act(() => setPageCornerRadius(60));
+  expect(flat(host(root, "duoCard")).borderRadius).toBe(24);
+  unmount(root);
+});
+
+test("on an iPad with Page Border off, the card runs edge to edge from the status bar to the bottom with square corners and no shadow, the toolbar and the page's 63 clearance follow it, and the sidebar keeps its frame", () => {
+  useShape(IPAD_SIDEWAYS, { name: "wide" });
+  act(() => browse.useBrowse.setState({ surface: "deck" }));
+  const root = redesigned();
+  settle();
+  act(() => setPageBorder(false));
+  expect(usePreferences.getState().pageBorder).toBe(false);
+  expect(frame(root, "duoCard")).toEqual({ left: 0, top: 24, width: 1210, height: 810 });
+  const card = flat(host(root, "duoCard"));
+  expect(card.borderRadius).toBe(0);
+  expect(card.boxShadow).toBeUndefined();
+  expect(flat(host(root, "duoCardClip")).borderRadius).toBe(0);
+  expect(frame(root, "duoToolbarPlace")).toEqual({ left: 0, top: 33, width: 1210, height: 45 });
+  const page = root.root.findAll((node) => node.props.testID === "duoPage" && "obscuredInsets" in node.props)[0]!;
+  expect(page.props.topClearance).toBe(63);
+  expect(page.props.obscuredInsets).toEqual({ top: 0, bottom: 0 });
+  expect(frame(root, "duoSidebarPlace")).toEqual({ left: 11, top: 11, width: 260, height: 814 });
+  act(() => setPageBorder(true));
+  expect(frame(root, "duoCard")).toEqual({ left: 11, top: 33, width: 1188, height: 792 });
+  expect(flat(host(root, "duoCard")).boxShadow).toBe(shadowCss("control", false));
+  unmount(root);
+});
+
+test("half open, the card ignores Page Border and the corner setting: the owner keeps them to the iPad's full screen", () => {
+  act(() => usePreferences.setState({ pageBorder: false, pageCornerRadius: 4 }));
+  useShape(OPEN, { name: "split", fold: { top: 465.5, bottom: 485.5 } });
+  const root = redesigned();
+  expect(frame(root, "duoCard")).toEqual({ left: 11, top: 63, width: 647, height: 391.5 });
+  expect(flat(host(root, "duoCard"))).toMatchObject({ borderRadius: 16, boxShadow: shadowCss("control", false) });
   unmount(root);
 });

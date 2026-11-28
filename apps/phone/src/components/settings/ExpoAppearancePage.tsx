@@ -1,15 +1,17 @@
 import { useMemo } from "react";
 import { PlatformColor } from "react-native";
 import { themeAccent, themePalette } from "@ardia/core/src/theme.ts";
-import { Button, Form, HStack, NavigationLink, Section, Text, Toggle, VStack } from "@expo/ui/swift-ui";
-import { accessibilityAddTraits, accessibilityLabel, buttonStyle, frame, navigationBarTitleDisplayMode, navigationTitle, padding, tint } from "@expo/ui/swift-ui/modifiers";
+import { Button, Form, HStack, LabeledContent, NavigationLink, Section, Slider, Text, Toggle, VStack } from "@expo/ui/swift-ui";
+import { accessibilityAddTraits, accessibilityHidden, accessibilityLabel, accessibilityValue, buttonStyle, frame, monospacedDigit, navigationBarTitleDisplayMode, navigationTitle, padding, tint } from "@expo/ui/swift-ui/modifiers";
 import { actionWords } from "../../lib/sharedWords";
 import { rainbow } from "../../lib/themeEditor";
 import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES } from "../../lib/appearance";
-import { setColorChoice, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
+import { useScreenLayout } from "../../state/app/screenLayout";
+import { setColorChoice, setInterfaceStyle, setPageBorder, setPageCornerRadius, setSchemeChoice } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
 import { chooseCustomTheme, resetPresetTheme } from "../../state/settings/customTheme";
 import { selectedSwatch } from "../../state/settings/themeDraft";
+import { PAGE_CORNER_RADIUS } from "../../state/settings/preferences";
 import { settingsRouteKey } from "../../state/settings/nav";
 import { CUSTOM_CHOICE } from "../../lib/profileLook";
 import type { PresetColor } from "../../state/settings/preferences";
@@ -25,6 +27,13 @@ const SWATCH_HIT = controlSize.hitTarget;
 const ROW_LENGTH = 5;
 const RAINBOW = rainbow(themeEditorLayout.rainbowStops);
 export const CUSTOM_SWATCH_LABEL = "Custom";
+export const PAGE_BORDER_WORDS = {
+  section: "Page",
+  border: "Page Border",
+  radius: "Corner Radius",
+  footerOn: "The page sits in a rounded card with a margin around it.",
+  footerOff: "The page fills the screen edge to edge.",
+} as const;
 
 export function ExpoAppearancePage() {
   const syncEnabled = useSyncEnabled();
@@ -37,6 +46,7 @@ export function ExpoAppearancePage() {
   const edited = usePreferences((p) => (p.colorChoice && p.colorChoice !== CUSTOM_CHOICE ? Boolean(p.presetThemes[p.colorChoice]) : false));
   const look = useProfileLook();
   const picked = usePreferences((p) => selectedSwatch(p, look));
+  const wide = useScreenLayout((s) => s.layout.name === "wide");
   return (
     <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
@@ -74,7 +84,29 @@ export function ExpoAppearancePage() {
           <ExpoChoiceRow key={choice} title={SCHEME_NAMES[choice]} checked={scheme === choice} onPress={() => setSchemeChoice(choice)} />
         ))}
       </Section>
+      {wide ? <PageBorderSection /> : null}
     </Form>
+  );
+}
+
+function PageBorderSection() {
+  const bordered = usePreferences((p) => p.pageBorder);
+  const radius = usePreferences((p) => p.pageCornerRadius);
+  const shown = `${radius} pt`;
+  return (
+    <Section title={PAGE_BORDER_WORDS.section} footer={<Text>{bordered ? PAGE_BORDER_WORDS.footerOn : PAGE_BORDER_WORDS.footerOff}</Text>}>
+      <Toggle isOn={bordered} onIsOnChange={setPageBorder} modifiers={modifierList(settingsSwitchStyle())}>
+        <Text>{PAGE_BORDER_WORDS.border}</Text>
+      </Toggle>
+      {bordered ? (
+        <VStack alignment="leading" spacing={8} modifiers={[padding({ vertical: 4 })]}>
+          <LabeledContent label={PAGE_BORDER_WORDS.radius} modifiers={[accessibilityHidden(true)]}>
+            <Text modifiers={[monospacedDigit()]}>{shown}</Text>
+          </LabeledContent>
+          <Slider value={radius} min={PAGE_CORNER_RADIUS.min} max={PAGE_CORNER_RADIUS.max} step={1} onValueChange={setPageCornerRadius} modifiers={[accessibilityLabel(PAGE_BORDER_WORDS.radius), accessibilityValue(shown)]} />
+        </VStack>
+      ) : null}
+    </Section>
   );
 }
 

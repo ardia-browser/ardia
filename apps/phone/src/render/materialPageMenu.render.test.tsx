@@ -143,7 +143,8 @@ onAndroid("the Material Site Settings starts with the site's group: its host abo
   expect(words.indexOf("site0.example")).toBeGreaterThanOrEqual(0);
   expect(words.indexOf("site0.example")).toBeLessThan(words.indexOf("Night Shade"));
   expect(words.indexOf("Night Shade")).toBeLessThan(words.indexOf("Block Cookie Banners"));
-  expect(words).toEqual(expect.arrayContaining(["Page Zoom", "Desktop Site", "Desktop Site applies to this tab."]));
+  expect(words).toEqual(expect.arrayContaining(["Page Zoom", "Desktop Site"]));
+  expect(words).not.toContain("Desktop Site applies to this tab.");
   const shade = pressable(root, "materialSettingsRow:Night Shade");
   expect(shade.props.accessibilityRole).toBe("switch");
   expect(shade.props.accessibilityState).toMatchObject({ checked: false, disabled: false });

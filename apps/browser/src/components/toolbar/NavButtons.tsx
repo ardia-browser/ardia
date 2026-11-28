@@ -2,7 +2,7 @@ import { createContext, memo, useContext, useEffect, useMemo, useRef, useState }
 import { AccessibilityInfo, Animated, View, type ViewStyle } from "react-native";
 import { webviews } from "../../state/tabs/webviewHandles";
 import { withLivePage } from "../../state/tabs/livePage";
-import { newTab } from "../../state/tabs/actions";
+import { newTab, duplicateTab } from "../../state/tabs/actions";
 import type { Tab } from "../../state/browser/types";
 import { useScopedTheme } from "../ui/theme";
 import { noteStopBreathing } from "../../state/telemetry/stopBreathing";
@@ -152,21 +152,27 @@ export const ReloadButton = memo(function ReloadButton({
     onFocus();
     void showReloadMenu(tab.id);
   });
+  const onMiddleClick = useStableHandler((e: ClickModifiers) => {
+    onFocus();
+    if (!tab.url) return;
+    void duplicateTab(tab.id, { background: openModeFor({ ...e, middle: true }) === "background" });
+  });
   const color = tab.url ? palette.icon : palette.iconDisabled;
   const glyph = useMemo(() => <ReloadGlyph loading={loading} color={color} />, [loading, color]);
   return (
-    <Button variant="icon" toolbar
-      style={place?.style}
-      palette={palette}
-      glyph={GLYPH}
-      hit={place?.hit}
-      disabled={!tab.url}
-      onPress={onPress}
-      onContextMenu={onContextMenu}
-      tooltip={loading ? "Stop Loading This Page" : withShortcut("Refresh", reloadHint)}
-    >
-      {glyph}
-    </Button>
+    <MouseArea style={place?.style} onMiddleClick={onMiddleClick}>
+      <Button variant="icon" toolbar
+        palette={palette}
+        glyph={GLYPH}
+        hit={place?.hit}
+        disabled={!tab.url}
+        onPress={onPress}
+        onContextMenu={onContextMenu}
+        tooltip={loading ? "Stop Loading This Page" : withShortcut("Refresh", reloadHint)}
+      >
+        {glyph}
+      </Button>
+    </MouseArea>
   );
 });
 

@@ -15,7 +15,7 @@ import type { BatterySaverWhen, Settings } from "../../../state/settings/setting
 import { keepSiteActive, stopKeepingSiteActive, type MemorySaverMode } from "../../../state/tabs/memorySaver";
 import { keptSitesListed } from "../../../state/tabs/keptSites";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
-import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle } from "../../ui";
+import { Button, DialogActions, DialogTitle, lineHeight, PopUp, Sheet, space, Text, TextField, Toggle, type Option } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { Favicon } from "../../favicon/Favicon";
 import { FormField, Group, Row, SectionHeader, SettingToggle } from "../Form";
@@ -237,9 +237,15 @@ function ProgramsRows() {
   );
 }
 
+const PILL_POSITIONS: Option<Settings["cliPillPosition"]>[] = [
+  { value: "bottom", title: "Bottom" },
+  { value: "top", title: "Top" },
+];
+
 function CommandLineSection() {
   const on = useSettings((settings) => programControlOn({ settings }));
   const showCliPill = useSettings((s) => s.showCliPill);
+  const position = useSettings((s) => s.cliPillPosition);
   const install = useCommandInstall();
   const server = useControlServer((s) => s.server);
   const ruleRows = useAutomationRuleRows();
@@ -287,6 +293,9 @@ function CommandLineSection() {
         )}
         <SettingToggle anchor="advanced.showCliPill" />
         <SettingToggle anchor="advanced.compactCliPill" disabled={!showCliPill} />
+        <Row anchor="advanced.cliPillPosition">
+          <PopUp value={position} options={PILL_POSITIONS} disabled={!showCliPill} onChange={(cliPillPosition) => updateSettings({ cliPillPosition })} />
+        </Row>
         {ruleRows}
       </Group>
     </>

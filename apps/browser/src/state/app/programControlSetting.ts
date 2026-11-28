@@ -53,3 +53,5 @@ export function restoreControlAtLaunch(consent: ConsentToken | null) {
 export const showControlPill = (s: Pick<BrowserState, "settings">) => s.settings.showCliPill;
 
 export const compactControlPill = (s: Pick<BrowserState, "settings">) => s.settings.compactCliPill;
+
+export const controlPillPosition = (s: Pick<BrowserState, "settings">) => s.settings.cliPillPosition;

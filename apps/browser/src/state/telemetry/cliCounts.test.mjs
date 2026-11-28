@@ -7,9 +7,18 @@ const client = await import("./client.ts");
 client.loadChoice();
 client.setSharing(true, "settings");
 after(() => client.setSharing(false, "settings"));
-const { controlStopKind, noteControlRestored, noteControlRestoreTry, noteControlSelfStop, notePageSignals, noteTokenCommands, noteWindowlessPages, takeCliCounts } = await import("./cliCounts.ts");
+const { controlStopKind, noteCliPillShown, noteControlRestored, noteControlRestoreTry, noteControlSelfStop, notePageSignals, noteTokenCommands, noteWindowlessPages, takeCliCounts } = await import("./cliCounts.ts");
 
 const windowless = (counts) => [counts.windowless_pages_given_geometry, counts.windowless_pages_missing_geometry];
+
+test("a control pill at the top is in the totals and resets", () => {
+  takeCliCounts();
+  noteCliPillShown(false, true);
+  noteCliPillShown(true, false);
+  const counts = takeCliCounts();
+  assert.deepEqual([counts.cli_pill_shows, counts.cli_pill_compact_shows, counts.cli_pill_top_shows], [2, 1, 1]);
+  assert.equal(takeCliCounts().cli_pill_top_shows, 0);
+});
 
 test("the engine's running totals of windowless pages turn into counts since the last take", () => {
   noteWindowlessPages(undefined);

@@ -436,3 +436,9 @@ test("searching for hiding or showing the control pill surfaces advanced.showCli
     assert.ok(ids(query).includes("advanced.showCliPill"), query);
   }
 });
+
+test("searching for moving the control pill surfaces advanced.cliPillPosition", () => {
+  for (const query of ["move control pill", "control pill top"]) {
+    assert.ok(ids(query).includes("advanced.cliPillPosition"), query);
+  }
+});

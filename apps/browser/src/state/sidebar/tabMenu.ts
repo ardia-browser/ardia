@@ -70,7 +70,13 @@ function pinItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
 }
 
 function splitItems(s: BrowserState, f: Facts): MenuItem[] {
-  if (f.split) return [{ id: "unsplit", title: "Remove from Split View", symbol: "rectangle.split.2x1.slash" }];
+  if (f.split) {
+    const horizontal = f.split.orientation === "horizontal";
+    return [
+      { id: "unsplit", title: "Remove from Split View", symbol: "rectangle.split.2x1.slash" },
+      { id: "convertSplit", title: horizontal ? "Convert to Vertical Split View" : "Convert to Horizontal Split View", symbol: horizontal ? "rectangle.split.1x2" : "rectangle.split.2x1" },
+    ];
+  }
   if (f.section === "tile" || !splitViewAvailable) return [];
   return [{ id: "split", title: "Open in Split View", symbol: "rectangle.split.2x1", ...hintWhen(f.active, "openSplitPane", s) }];
 }
@@ -309,6 +315,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "ungroupTab") s.removeTabsFromGroup([tab.id]);
   else if (choice === "newGroup") newGroupWithSelection(windowId, [tab.id]);
   else if (choice === "unsplit") s.removeTabFromSplit(tab.id);
+  else if (choice === "convertSplit" && f.split) s.toggleSplitOrientation(f.split.id);
   else if (choice === "mute") toggleMute(tab.id);
   else if (choice === "muteSite") toggleSiteMute(tab.id);
   else if (choice === "siteUnread") toggleSiteUnread(tab.id);

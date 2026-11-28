@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { keyboardIsUp } from "../../lib/trayMotion";
 import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
-import { useDeckBarTop, useToast } from "../../state/toasts/hooks";
+import { useDeckBarTop, usePageBarDark, useToast } from "../../state/toasts/hooks";
 import { floatingBarClearance, pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace, type ToastPlacement } from "../../state/toasts/placement";
 import { FLOATING_BAR_PLACE, floatingBarCenter } from "../../lib/deckGeometry";
 import { dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics, toastSpokenLabel } from "../../state/toasts/semantics";
@@ -112,8 +112,16 @@ function ResizedPlace({ spot, children }: PlaceProps) {
 
 const ToastPlace = Platform.OS === "ios" ? KeyboardRidingPlace : ResizedPlace;
 
+function useToastShadeDark() {
+  const material = useDesign() === "material";
+  const browsing = useSurface() === "browsing";
+  const pageBarDark = usePageBarDark();
+  return !material && browsing && pageBarDark !== null ? pageBarDark : null;
+}
+
 function ToastView({ spot }: { spot: ToastSpot }) {
   const toast = useToast();
+  const shadeDark = useToastShadeDark();
   const reduceMotion = useReduceMotion();
   const drag = useSharedValue(0);
   const actionLabel = toast?.action?.label ?? null;
@@ -150,7 +158,7 @@ function ToastView({ spot }: { spot: ToastSpot }) {
   };
   const escape = semantics.escapes ? dismissToast : undefined;
   const content = (
-    <ToastPlate>
+    <ToastPlate dark={shadeDark}>
       <PlateSymbol name={ICONS[toast.icon]} size={toastLayout.iconSize} role="toastLabel" />
       <PlateText inkRole="toastLabel" style={[font.subheadline, styles.text]} numberOfLines={3}>
         {toast.message}
@@ -177,11 +185,11 @@ function ToastView({ spot }: { spot: ToastSpot }) {
   );
 }
 
-function ToastPlate({ children }: { children: ReactNode }) {
+function ToastPlate({ dark, children }: { dark: boolean | null; children: ReactNode }) {
   const theme = useTheme();
   if (useDesign() === "material") return <View testID="toastPlate" style={[styles.toast, styles.materialPlate, { backgroundColor: theme.toastFill, borderColor: theme.panelBorder, shadowColor: theme.toastShadow, borderRadius: toastLayout.radius }]}>{children}</View>;
   return (
-    <ChromeSurface testID="toastPlate" shape="rounded" cornerRadius={toastLayout.radius} interactive={false} barShadow style={styles.toast}>
+    <ChromeSurface testID="toastPlate" shape="rounded" cornerRadius={toastLayout.radius} interactive={false} barShadow dark={dark ?? undefined} style={styles.toast}>
       {children}
     </ChromeSurface>
   );

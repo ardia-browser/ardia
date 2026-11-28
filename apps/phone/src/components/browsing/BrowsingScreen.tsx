@@ -86,6 +86,7 @@ import { labTrace } from "../../platform/lab";
 import { pageBarDark, shownTone } from "../../lib/pageTone";
 import { barSwipeSpan, besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
 import { useScreenLayout } from "../../state/app/screenLayout";
+import { notePageBarDark } from "../../state/toasts/store";
 
 export function BrowsingScreen({ tabId }: { tabId: string }) {
   const tab = useChromeTab(tabId);
@@ -292,6 +293,8 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   const barKept = tabSwitchCuts() && design === "redesigned";
   const sourceHold = usePageSourceHold(barKept);
   const barDark = pageBarDark({ design, glassTone: failed ? undefined : tone?.barDark, toneBottom: pageTone?.bottom, themeDark: theme.dark, bottomDark: isDarkColor(bottom), incognitoLook: tab.isPrivate, os: Platform.OS, nativeGlass: usesGlass() });
+  useEffect(() => notePageBarDark(barDark), [barDark]);
+  useEffect(() => () => notePageBarDark(null), []);
   const bodyStyle = useAnimatedStyle(() => ({ transform: [{ translateX: barKept && pageBodyShown.value === 0 ? BODY_UNDER_DECK : 0 }] }));
   const bodyProps = useAnimatedProps<{ pointerEvents: "box-none" | "none"; importantForAccessibility: "auto" | "no-hide-descendants" }>(() => ({
     pointerEvents: barKept && (pageBodyShown.value === 0 || deckCutOwns()) ? "none" : "box-none",

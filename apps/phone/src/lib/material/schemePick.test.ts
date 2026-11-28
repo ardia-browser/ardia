@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { materialColorSource, MATERIAL_FALLBACK_SEED, schemeFor, schemePairFor } from "./schemePick.ts";
+import { contrastBetween, luminance } from "../color.ts";
+import { materialColorSource, MATERIAL_FALLBACK_SEED, readableSchemePair, schemeFor, schemePairFor, unreadableInks } from "./schemePick.ts";
 import { MATERIAL_SCHEME_KEYS, SEEDED_SCHEMES, type MaterialSchemePair } from "./schemes.ts";
 
 const wallpaper: MaterialSchemePair = { light: { ...SEEDED_SCHEMES.purple.light, primary: "#123456" }, dark: { ...SEEDED_SCHEMES.purple.dark, primary: "#654321" } };
@@ -52,4 +53,31 @@ test("the launch event's colour source says wallpaper, a picked profile colour, 
   assert.equal(materialColorSource(true, null, null), "fallback");
   assert.equal(materialColorSource(true, MATERIAL_FALLBACK_SEED, null), "fallback");
   assert.equal(materialColorSource(false, "pink", wallpaper), "not_material");
+});
+
+const contrastOf = (fill: string, ink: string) => contrastBetween(fill, ink);
+
+test("every built-in palette already reads at 4.5:1 or better, so the guard leaves it as it is", () => {
+  for (const [name, pair] of Object.entries(SEEDED_SCHEMES)) {
+    assert.equal(readableSchemePair(pair), pair, name);
+    assert.deepEqual(unreadableInks(pair.light), [], name);
+    assert.deepEqual(unreadableInks(pair.dark), [], name);
+  }
+});
+
+test("a wallpaper palette whose toast text nearly matches its fill, as a POCO F4 hands us, gets text that reads in light and dark", () => {
+  const broken: MaterialSchemePair = {
+    light: { ...SEEDED_SCHEMES.purple.light, inverseSurface: "#131318", inverseOnSurface: "#25252F" },
+    dark: { ...SEEDED_SCHEMES.purple.dark, inverseSurface: "#F5F7FF", inverseOnSurface: "#FFFFFF" },
+  };
+  assert.deepEqual(unreadableInks(broken.light), ["inverseOnSurface"]);
+  assert.deepEqual(unreadableInks(broken.dark), ["inverseOnSurface"]);
+  const fixed = readableSchemePair(broken)!;
+  assert.ok(contrastOf(fixed.light.inverseSurface, fixed.light.inverseOnSurface) >= 4.5);
+  assert.ok(contrastOf(fixed.dark.inverseSurface, fixed.dark.inverseOnSurface) >= 4.5);
+  assert.ok(luminance(fixed.dark.inverseOnSurface) < luminance(fixed.dark.inverseSurface), "on a near-white fill the text goes dark");
+  assert.ok(luminance(fixed.light.inverseOnSurface) > luminance(fixed.light.inverseSurface), "on a near-black fill it goes light");
+  assert.equal(fixed.light.inverseSurface, "#131318", "the fill is the phone's own");
+  assert.equal(fixed.light.primary, broken.light.primary, "roles that already read are untouched");
+  assert.equal(readableSchemePair(null), null);
 });

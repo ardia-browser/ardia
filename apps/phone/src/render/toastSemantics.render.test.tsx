@@ -104,6 +104,38 @@ test("Material You keeps its own snackbar plate, the inverse surface, with the n
   unmount(root);
 });
 
+test("Material You's toast reads on a wallpaper palette whose inverse text nearly matches its fill, in light and in dark", () => {
+  const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
+  const { setDynamicScheme } = require("../state/app/dynamicScheme") as typeof import("../state/app/dynamicScheme");
+  const { SEEDED_SCHEMES } = require("../lib/material/schemes") as typeof import("../lib/material/schemes");
+  const { contrastBetween } = require("../lib/color") as typeof import("../lib/color");
+  const { currentPreferences, setPreference } = require("../state/settings/store") as typeof import("../state/settings/store");
+  const choiceWas = currentPreferences().colorChoice;
+  const schemeWas = currentPreferences().schemeChoice;
+  setPreference("colorChoice", null);
+  setDynamicScheme({
+    light: { ...SEEDED_SCHEMES.purple.light, inverseSurface: "#131318", inverseOnSurface: "#25252F" },
+    dark: { ...SEEDED_SCHEMES.purple.dark, inverseSurface: "#F5F7FF", inverseOnSurface: "#FFFFFF" },
+  });
+  for (const scheme of ["light", "dark"] as const) {
+    setPreference("schemeChoice", scheme);
+    act(() => useToasts.setState({ toast: null }));
+    const root = renderSurface(
+      <DesignProvider design="material">
+        <ToastHost />
+      </DesignProvider>,
+    );
+    act(() => showToast("Couldn’t Download otter.pdf", "warning"));
+    const fill = StyleSheet.flatten(root.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!.props.style).backgroundColor as string;
+    const ink = StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Couldn’t Download otter.pdf")[0]!.props.style).color as string;
+    expect(contrastBetween(fill, ink)).toBeGreaterThanOrEqual(4.5);
+    unmount(root);
+  }
+  setDynamicScheme(null);
+  setPreference("colorChoice", choiceWas);
+  setPreference("schemeChoice", schemeWas);
+});
+
 test("in Incognito the toast's shared plate and ink take the private look, never the profile tint, though the host sits outside the deck", () => {
   const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
   const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
@@ -132,4 +164,29 @@ test("in Incognito the toast's shared plate and ink take the private look, never
   expect(StyleSheet.flatten(face.props.style).backgroundColor).toBe(chromeInk.dark.surface);
   unmount(drawn);
   act(() => useTabs.setState({ incognito: false }));
+});
+
+test("over a page the toast takes the bar's shade, so a light page in dark mode gets dark ink on a light plate, and away from the page it follows the app again", () => {
+  const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
+  const { useBrowse } = require("../state/browse/store") as typeof import("../state/browse/store");
+  const { notePageBarDark } = require("../state/toasts/store") as typeof import("../state/toasts/store");
+  const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
+  const surfaceWas = useBrowse.getState().surface;
+  const scheme = jest.spyOn(require("react-native"), "useColorScheme").mockReturnValue("dark");
+  const plate = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "toastPlate" && node.props.source !== undefined)[0]!;
+  const label = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Couldn’t Download otter.pdf")[0]!.props.style).color;
+  act(() => useBrowse.setState({ surface: "browsing" }));
+  act(() => notePageBarDark(false));
+  const overPage = renderSurface(<ToastHost />);
+  act(() => showToast("Couldn’t Download otter.pdf", "warning"));
+  expect(plate(overPage).props.dark).toBe(false);
+  expect(label(overPage)).toBe(rolesFor(false).toastLabel);
+  act(() => useBrowse.setState({ surface: "deck" }));
+  expect(plate(overPage).props.dark).toBe(true);
+  expect(label(overPage)).toBe(rolesFor(true).toastLabel);
+  unmount(overPage);
+  act(() => notePageBarDark(null));
+  act(() => useBrowse.setState({ surface: surfaceWas }));
+  glass.mockRestore();
+  scheme.mockRestore();
 });

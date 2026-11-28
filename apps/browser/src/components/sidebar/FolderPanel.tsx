@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Animated, Pressable, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, View } from "react-native";
 import { layout, useTheme } from "../ui/theme";
 import { useIsActiveTab, useTab } from "../../state/browser/hooks";
 import { plural, tabTitle } from "../../state/browser/model";
@@ -19,6 +19,8 @@ import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMo
 import { tailKey } from "./dragModel";
 import { useStruckTitle } from "../../state/sidebar/rowState";
 import { watchSidebarControlsRow } from "../../state/windows/layout";
+import { onWindowRootSize } from "../../state/windows/rootSize";
+import { useSidebarScroller } from "./sidebarScroller";
 
 const PANEL_GAP = space.s;
 
@@ -39,11 +41,18 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
   const shown = useMemo(() => new Animated.Value(0), []);
   const opacity = useGated(!away, shown, 0);
   const tail = useDragItem(tailKey("folder"), { kind: "tail", tabIds: [], section: "folder" });
+  const scroll = useRef<ScrollView>(null);
+  const scroller = useSidebarScroller(scroll);
 
   useEffect(() => {
     const measureRoot = () => controller?.root?.measureInWindow((x, y, w, h) => setRoot({ x, y, w, h }));
     measureRoot();
-    return watchSidebarControlsRow(windowId, () => requestAnimationFrame(measureRoot));
+    const stopRow = watchSidebarControlsRow(windowId, () => requestAnimationFrame(measureRoot));
+    const stopSize = onWindowRootSize(windowId, () => requestAnimationFrame(measureRoot));
+    return () => {
+      stopRow();
+      stopSize();
+    };
   }, [controller, windowId]);
   useEffect(() => {
     if (!root) return;
@@ -58,10 +67,12 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
   useEffect(
     () => () => {
       controller?.regions.delete("folder");
+      controller?.folderScrolled(0);
     },
     [controller],
   );
   if (!root) return null;
+  const top = anchor.y + anchor.height + PANEL_GAP - root.y;
 
   return (
     <Animated.View
@@ -73,22 +84,28 @@ function PanelBody({ windowId, folderId, anchor }: { windowId: string; folderId:
         position: "absolute",
         left: layout.sidebarInset,
         width: root.w - layout.sidebarInset * 2,
-        top: anchor.y + anchor.height + PANEL_GAP - root.y,
+        top,
         opacity,
         transform: [{ scale: shown.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }],
       }}
     >
       <OutsidePressArea onOutsidePress={closeFolderPanelOnPress}>
-        <HoverPanel width={root.w - layout.sidebarInset * 2} pad="s">
+        <HoverPanel width={root.w - layout.sidebarInset * 2} pad="s" style={{ maxHeight: Math.max(0, root.h - top - PANEL_GAP) }}>
           <ContextMenuArea onContextMenu={() => void openTileFolderMenu(windowId, folderId)}>
             <SectionLabel title={`${label} · ${plural(members.length, "tab")}`} inset={space.s} top={space.xxs} bottom={space.s} />
           </ContextMenuArea>
-          <View style={{ gap: layout.rowGap }}>
+          <ScrollView
+            ref={scroll}
+            {...scroller}
+            scrollEventThrottle={16}
+            onScroll={(e) => controller?.folderScrolled(e.nativeEvent.contentOffset.y)}
+            contentContainerStyle={{ gap: layout.rowGap }}
+          >
             {members.map((id) => (
               <MemberRow key={id} tabId={id} windowId={windowId} />
             ))}
             <Animated.View ref={tail.wrapper.ref} style={tail.wrapper.style} />
-          </View>
+          </ScrollView>
         </HoverPanel>
       </OutsidePressArea>
     </Animated.View>

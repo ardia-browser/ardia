@@ -15,6 +15,7 @@ export type DragSession = {
   sources: Item[];
   pointer: { x: number; y: number };
   startScrollY: number;
+  startFolderScrollY: number;
   measured: boolean;
   regionFrames: Map<string, Frame | null>;
   viewport: Frame | null;
@@ -46,6 +47,7 @@ export const newDragSession = (sources: Item[], pointer: { x: number; y: number 
   sources,
   pointer,
   startScrollY: scrollY,
+  startFolderScrollY: 0,
   measured: false,
   regionFrames: new Map(),
   viewport: null,
@@ -79,6 +81,7 @@ export class DragGeometry {
   root: View | null = null;
   scroll: ScrollView | null = null;
   scrollY = 0;
+  folderScrollY = 0;
   tilesFixed = true;
   tilesRoom = Infinity;
   splitView = splitViewAvailable;
@@ -107,6 +110,11 @@ export class DragGeometry {
 
   protected still(i: Item): boolean {
     return (this.tilesFixed && i.section === "tiles") || i.section === "folder";
+  }
+
+  protected placed(i: Item): Frame | null {
+    if (i.section !== "folder" || !i.frame) return this.at(i.frame, this.still(i));
+    return { ...i.frame, y: i.frame.y - (this.folderScrollY - this.drag.startFolderScrollY) };
   }
 
   protected at(f: Frame | null, fixed = false): Frame | null {
@@ -145,7 +153,7 @@ export class DragGeometry {
   }
 
   protected shown(i: Item): Frame {
-    const f = this.at(i.frame, this.still(i))!;
+    const f = this.placed(i)!;
     const { dropKey, gapKey, pitch, sources } = this.drag;
     if (!dropKey) return f;
     const [top, bottom] = [i.frame!.y, i.frame!.y + i.frame!.h];

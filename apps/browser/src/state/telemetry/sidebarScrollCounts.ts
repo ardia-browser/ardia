@@ -12,6 +12,7 @@ let heldHovers = 0;
 let heldTeardowns = 0;
 let newTabDocks = 0;
 let newTabUndocks = 0;
+let scrollerDrags = 0;
 let lastScrollAt = -Infinity;
 let lastScrollY = 0;
 let lastScrollList = "";
@@ -42,18 +43,23 @@ export function noteSidebarTeardownHeld(consent?: ConsentToken | null) {
   countFor(consentOrNow(consent), () => void heldTeardowns++);
 }
 
+export function noteSidebarScrollerDragged() {
+  countFor(consentOrNow(undefined), () => void scrollerDrags++);
+}
+
 export function noteNewTabDocked(docked: boolean) {
   if (docked) newTabDocks++;
   else newTabUndocks++;
 }
 
 export function takeSidebarScrollCounts() {
-  const taken = { sidebar_scrolls: scrolls, sidebar_scroll_stalls: stalls, sidebar_scroll_held_hovers: heldHovers, sidebar_scroll_held_teardowns: heldTeardowns, sidebar_new_tab_docks: newTabDocks, sidebar_new_tab_undocks: newTabUndocks };
+  const taken = { sidebar_scrolls: scrolls, sidebar_scroll_stalls: stalls, sidebar_scroll_held_hovers: heldHovers, sidebar_scroll_held_teardowns: heldTeardowns, sidebar_new_tab_docks: newTabDocks, sidebar_new_tab_undocks: newTabUndocks, sidebar_scroller_drags: scrollerDrags };
   scrolls = 0;
   stalls = 0;
   heldHovers = 0;
   heldTeardowns = 0;
   newTabDocks = 0;
   newTabUndocks = 0;
+  scrollerDrags = 0;
   return taken;
 }

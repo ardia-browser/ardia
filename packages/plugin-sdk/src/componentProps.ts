@@ -182,3 +182,101 @@ export type WebViewProps = {
   themed?: boolean;
   onMessage?: Handler<[message: unknown]>;
 };
+
+export type GridProps = {
+  columns?: number;
+  aspectRatio?: "1" | "3/2" | "2/3" | "4/3" | "3/4" | "16/9" | "9/16";
+  fit?: "contain" | "fill";
+  inset?: Space;
+  searchBarPlaceholder?: string;
+  searchText?: string;
+  filtering?: boolean;
+  isLoading?: boolean;
+  selectedItemId?: string;
+  onSearchTextChange?: Handler<[text: string]>;
+  onSelectionChange?: Handler<[id: string | null]>;
+  actions?: VNode;
+  emptyView?: VNode;
+  children?: Renderable;
+};
+
+export type GridSectionProps = { title?: string; subtitle?: string; columns?: number; children?: Renderable };
+
+export type GridItemProps = {
+  id?: string;
+  content: string | { source: string; tint?: Tone } | { color: string };
+  title?: string;
+  subtitle?: string;
+  keywords?: string[];
+  accessory?: ListAccessory;
+  actions?: VNode;
+  onSelect?: Handler;
+};
+
+export type TableColumn = { id: string; title: string; width?: number; align?: "start" | "center" | "end"; sortable?: boolean };
+
+export type TableProps = {
+  columns: TableColumn[];
+  sortColumn?: string;
+  sortDirection?: "ascending" | "descending";
+  isLoading?: boolean;
+  selectedRowId?: string;
+  onSortChange?: Handler<[column: string, direction: "ascending" | "descending"]>;
+  onSelectionChange?: Handler<[id: string | null]>;
+  emptyView?: VNode;
+  children?: Renderable;
+};
+
+export type TableRowProps = { id?: string; actions?: VNode; onSelect?: Handler; children?: Renderable };
+
+export type TableCellProps = { column?: string; tone?: Tone; monospace?: boolean; icon?: Icon; children?: Renderable };
+
+export type TabsProps = { selectedTabId?: string; defaultTabId?: string; onChange?: Handler<[id: string]>; children?: Renderable };
+
+export type TabProps = { id: string; title: string; icon?: Icon; badge?: string | number; children?: Renderable };
+
+export type CodeBlockProps = {
+  code?: string;
+  language?: string;
+  lineNumbers?: boolean;
+  wrap?: boolean;
+  maxLines?: number;
+  copyable?: boolean;
+  children?: string | string[];
+};
+
+export type ImageProps = {
+  source: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  fit?: "contain" | "cover" | "fill";
+  radius?: Space;
+  tint?: Tone;
+  onPress?: Handler;
+};
+
+export type TagListProps = { title?: string; wrap?: boolean; children?: Renderable };
+
+export type TagListItemProps = { text: string; icon?: Icon; color?: Tone; onPress?: Handler };
+
+export type DroppedFile = { name: string; size: number; mimeType: string; data: string; encoding: "base64" | "utf8" };
+
+export type FileDropZoneProps = {
+  title?: string;
+  description?: string;
+  icon?: Icon;
+  accept?: string[];
+  multiple?: boolean;
+  maxBytes?: number;
+  disabled?: boolean;
+  onDrop?: Handler<[files: DroppedFile[]]>;
+  children?: Renderable;
+};
+
+export type ListItemDetailProps = {
+  markdown?: string;
+  isLoading?: boolean;
+  metadata?: DetailMetadata[];
+  children?: Renderable;
+};

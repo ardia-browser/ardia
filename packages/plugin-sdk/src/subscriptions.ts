@@ -121,7 +121,7 @@ export function createSubscriptionSync(rpc: Rpc, registry: Registry, report: (er
     later(streak === 0 ? 0 : Math.min(backoff * 2 ** (streak - 1), MAX_RESYNC_DELAY_MS), () => void resync());
   };
 
-  const SNAPSHOT_TOPICS = new Set(["tabs", "workspace", "downloads"]);
+  const SNAPSHOT_TOPICS = new Set(["tabs", "workspace", "downloads", "media", "profiles"]);
 
   async function sendJoined() {
     const topics = [...joined].filter((t) => registry.state.has(t) && acknowledgedTopics.split(",").includes(t));

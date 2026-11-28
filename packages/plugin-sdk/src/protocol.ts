@@ -1,3 +1,7 @@
+export * from "./protocolV3";
+import type { MediaSession, PeekOpenOptions, ProfileInfo, SplitOpenOptions } from "./protocolV3";
+export { FORBIDDEN_KEYS, TreePatchError, applyTreePatch, deepEqual, diffTree, isTreeNode, type SurfacePatchParams, type TreeChild, type TreeOp, type TreePath } from "./treePatch";
+
 export type Tone = "default" | "secondary" | "tertiary" | "accent" | "success" | "warning" | "destructive";
 
 export type Size = "caption" | "small" | "body" | "heading" | "title";
@@ -29,7 +33,21 @@ export type PluginNodeType =
   | "Popover"
   | "ActionPanel"
   | "Action"
-  | "WebView";
+  | "WebView"
+  | "Grid"
+  | "GridSection"
+  | "GridItem"
+  | "Table"
+  | "TableRow"
+  | "TableCell"
+  | "Tabs"
+  | "Tab"
+  | "CodeBlock"
+  | "Image"
+  | "TagList"
+  | "TagListItem"
+  | "FileDropZone"
+  | "ListItemDetail";
 
 export const PLUGIN_NODE_TYPES: readonly PluginNodeType[] = [
   "Fragment",
@@ -57,6 +75,20 @@ export const PLUGIN_NODE_TYPES: readonly PluginNodeType[] = [
   "ActionPanel",
   "Action",
   "WebView",
+  "Grid",
+  "GridSection",
+  "GridItem",
+  "Table",
+  "TableRow",
+  "TableCell",
+  "Tabs",
+  "Tab",
+  "CodeBlock",
+  "Image",
+  "TagList",
+  "TagListItem",
+  "FileDropZone",
+  "ListItemDetail",
 ];
 
 export type SerializedHandler = { __handler: string };
@@ -84,7 +116,7 @@ export type SurfaceEventMessage = { surface: "event"; surfaceId: string; handler
 
 export type SurfaceMessage = SurfaceMountMessage | SurfaceUnmountMessage | SurfaceEventMessage;
 
-export type SurfaceRenderParams = { surfaceId: string; tree: PluginNode };
+export type SurfaceRenderParams = { surfaceId: string; tree: PluginNode; rev?: number };
 
 export type QuickPickItem = {
   id: string;
@@ -129,7 +161,7 @@ export type WorkspaceOp = Record<string, unknown> & { op: string };
 
 export type WorkspaceApplyResult = { ok: boolean; results?: unknown[] };
 
-export const STATE_TOPICS = ["tabs", "workspace", "navigation", "downloads"] as const;
+export const STATE_TOPICS = ["tabs", "workspace", "navigation", "downloads", "media", "profiles"] as const;
 
 export type StateTopic = (typeof STATE_TOPICS)[number];
 
@@ -151,7 +183,11 @@ export type NavigationChange = { more?: true; commits: NavigationCommit[] };
 
 export type DownloadsChange = { initial?: true; more?: true; downloads: StateDownload[]; removed: string[] };
 
-export type StateEventMap = { tabs: TabsChange; workspace: WorkspaceChange; navigation: NavigationChange; downloads: DownloadsChange };
+export type MediaChange = { initial?: true; more?: true; sessions: MediaSession[]; removed: string[] };
+
+export type ProfilesChange = { initial?: true; more?: true; profiles: ProfileInfo[]; removed: string[] };
+
+export type StateEventMap = { tabs: TabsChange; workspace: WorkspaceChange; navigation: NavigationChange; downloads: DownloadsChange; media: MediaChange; profiles: ProfilesChange };
 
 export type GroupColorName = "neutral" | "none" | "grey" | "blue" | "red" | "yellow" | "green" | "pink" | "purple" | "cyan" | "orange";
 
@@ -167,6 +203,8 @@ export type StateIntentArgs = {
   "tabs.unmute": { tabs: string[] };
   "tabs.activate": { tab: string };
   "groups.update": { group: string } & GroupLook;
+  "splits.open": SplitOpenOptions;
+  "peek.open": PeekOpenOptions;
 };
 
 export type StateIntent = keyof StateIntentArgs;
@@ -212,10 +250,11 @@ export type PluginWindowInfo = {
   tabs: PluginTabInfo[];
 };
 
-export type CallKind = "tool" | "command" | "omnibox" | "decide";
+export type CallKind = "tool" | "command" | "omnibox" | "decide" | "service";
 
 export type PluginCallMessage = {
   call: string;
+  method?: string;
   kind?: CallKind;
   name?: string;
   tool?: string;
@@ -247,9 +286,12 @@ export type ReadyParams = {
   omnibox: boolean;
   decide: string[];
   events: string[];
+  services?: Record<string, string[]>;
 };
 
-export const PLUGIN_PROTOCOL = 2;
+export const PLUGIN_PROTOCOL = 3;
+
+export const PATCH_PROTOCOL = 3;
 
 export type ProgramsStatus = { state: "none" | "linking" | "linked" | "failed"; linked: string[]; failed: { name: string; reason: string }[]; binDir: string | null };
 

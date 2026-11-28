@@ -2,6 +2,20 @@ import { hostComponent, jsx, type HostComponent, type VNode } from "./element";
 import type {
   ActionPanelProps,
   ActionProps,
+  CodeBlockProps,
+  FileDropZoneProps,
+  GridItemProps,
+  GridProps,
+  GridSectionProps,
+  ImageProps,
+  ListItemDetailProps,
+  TableCellProps,
+  TableProps,
+  TableRowProps,
+  TabProps,
+  TabsProps,
+  TagListItemProps,
+  TagListProps,
   BadgeProps,
   BoxProps,
   ButtonProps,
@@ -54,8 +68,32 @@ export const Action = Object.assign(ActionHost, { OpenInBrowser, CopyToClipboard
 
 export const List = Object.assign(hostComponent<ListProps>("List"), {
   Section: hostComponent<ListSectionProps>("ListSection"),
-  Item: hostComponent<ListItemProps>("ListItem"),
+  Item: Object.assign(hostComponent<ListItemProps>("ListItem"), {
+    Detail: hostComponent<ListItemDetailProps>("ListItemDetail"),
+  }),
 });
+
+export const Grid = Object.assign(hostComponent<GridProps>("Grid"), {
+  Section: hostComponent<GridSectionProps>("GridSection"),
+  Item: hostComponent<GridItemProps>("GridItem"),
+});
+
+export const Table = Object.assign(hostComponent<TableProps>("Table"), {
+  Row: hostComponent<TableRowProps>("TableRow"),
+  Cell: hostComponent<TableCellProps>("TableCell"),
+});
+
+export const Tabs = Object.assign(hostComponent<TabsProps>("Tabs"), {
+  Tab: hostComponent<TabProps>("Tab"),
+});
+
+export const TagList = Object.assign(hostComponent<TagListProps>("TagList"), {
+  Item: hostComponent<TagListItemProps>("TagListItem"),
+});
+
+export const CodeBlock: HostComponent<CodeBlockProps> = hostComponent("CodeBlock");
+export const Image: HostComponent<ImageProps> = hostComponent("Image");
+export const FileDropZone: HostComponent<FileDropZoneProps> = hostComponent("FileDropZone");
 
 export const Detail: HostComponent<DetailProps> = hostComponent("Detail");
 

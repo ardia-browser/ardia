@@ -647,7 +647,8 @@ describe("createHostRuntime", () => {
     });
     await settle();
     assert.equal(host.sent[0].method, "hello");
-    assert.equal(host.sent[0].params.protocol, 2);
+    assert.equal(host.sent[0].params.protocol, 3);
+    assert.equal(host.sent[0].params.sdk, "3.0.0");
     assert.equal(activatedWith, "Hi");
     assert.deepEqual(runtime.ardia.plugin, { name: "v2-test", app: "Ardia", version: "0.2.47", protocol: 2 });
     assert.deepEqual(host.calls("subscribe")[0].params, { events: ["tab.activated"] });

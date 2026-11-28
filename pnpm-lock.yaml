@@ -412,7 +412,27 @@ importers:
         specifier: workspace:*
         version: link:../core
 
-  packages/plugin-sdk: {}
+  packages/plugin-cli:
+    dependencies:
+      '@ardia/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.6
+        version: 24.13.6
+
+  packages/plugin-sdk:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
 
   packages/shaders:
     dependencies:

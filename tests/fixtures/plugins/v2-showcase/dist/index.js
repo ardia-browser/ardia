@@ -1,6 +1,126 @@
 "use strict";
 (() => {
-  var PLUGIN_PROTOCOL = 2;
+  var HOST_METHODS_V3 = {
+    surfacePatch: "surface.patch",
+    fetchStream: "net.fetch.stream",
+    fetchCancel: "net.fetch.cancel",
+    wsConnect: "net.ws.connect",
+    wsSend: "net.ws.send",
+    wsClose: "net.ws.close",
+    authSignIn: "auth.signIn",
+    servicesProvide: "services.provide",
+    servicesWithdraw: "services.withdraw",
+    servicesCall: "services.call",
+    servicesList: "services.list",
+    sidecarSend: "sidecar.send",
+    sidecarRequest: "sidecar.request",
+    pageReadActive: "page.readActive",
+    pageReadTab: "page.readTab",
+    pageSendToContent: "page.sendToContent",
+    bookmarksList: "bookmarks.list",
+    bookmarksSearch: "bookmarks.search",
+    bookmarksCreate: "bookmarks.create",
+    bookmarksUpdate: "bookmarks.update",
+    bookmarksRemove: "bookmarks.remove",
+    historySearch: "history.search",
+    historyRecent: "history.recent",
+    profilesList: "profiles.list",
+    profilesCurrent: "profiles.current",
+    profilesSwitch: "profiles.switch",
+    mediaSessions: "media.sessions",
+    mediaControl: "media.control",
+    splitsOpen: "splits.open",
+    peekOpen: "peek.open",
+    clipboardReadText: "clipboard.readText",
+    clipboardWriteText: "clipboard.writeText",
+    filesPick: "fs.pickFiles",
+    filesSave: "fs.saveFile",
+    notify: "ui.notify"
+  };
+  var CHANNEL_EVENTS = {
+    fetchChunk: "net.fetch.chunk",
+    fetchEnd: "net.fetch.end",
+    fetchError: "net.fetch.error",
+    wsOpen: "net.ws.open",
+    wsMessage: "net.ws.message",
+    wsClose: "net.ws.close",
+    wsError: "net.ws.error",
+    sidecarMessage: "sidecar.message",
+    contentMessage: "page.contentMessage"
+  };
+  var CHANNEL_EVENT_NAMES = Object.values(CHANNEL_EVENTS);
+
+  var definedKeys = (record) => Object.keys(record).filter((key) => record[key] !== void 0);
+  function deepEqual(a, b) {
+    if (a === b) return true;
+    if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    if (Array.isArray(a)) {
+      const other = b;
+      return a.length === other.length && a.every((item, i) => deepEqual(item, other[i]));
+    }
+    const left = a;
+    const right = b;
+    const keys = definedKeys(left);
+    if (keys.length !== definedKeys(right).length) return false;
+    return keys.every((key) => right[key] !== void 0 && deepEqual(left[key], right[key]));
+  }
+  var sameIdentity = (a, b) => {
+    if (a === void 0 || b === void 0) return false;
+    if (typeof a === "string" || typeof b === "string") return typeof a === typeof b;
+    return a.type === b.type && (a.key ?? null) === (b.key ?? null);
+  };
+  function withoutUndefined(node) {
+    if (typeof node === "string") return node;
+    const props = {};
+    for (const key of definedKeys(node.props)) props[key] = node.props[key];
+    return { ...node, props, children: node.children.map(withoutUndefined) };
+  }
+  function diffProps(a, b, path, ops) {
+    const set = {};
+    const unset = [];
+    for (const key of definedKeys(b.props)) if (!deepEqual(a.props[key], b.props[key])) set[key] = b.props[key];
+    for (const key of definedKeys(a.props)) if (b.props[key] === void 0) unset.push(key);
+    if (Object.keys(set).length || unset.length) ops.push({ op: "props", path, ...Object.keys(set).length ? { set } : {}, ...unset.length ? { unset } : {} });
+  }
+  function diffChildren(a, b, path, ops) {
+    let start = 0;
+    while (start < a.length && start < b.length && sameIdentity(a[start], b[start])) start++;
+    let endA = a.length;
+    let endB = b.length;
+    while (endA > start && endB > start && sameIdentity(a[endA - 1], b[endB - 1])) {
+      endA--;
+      endB--;
+    }
+    for (let i = 0; i < start; i++) diffNode(a[i], b[i], [...path, i], ops);
+    const removed = endA - start;
+    const added = endB - start;
+    if (removed === added) {
+      for (let i = start; i < endA; i++) diffNode(a[i], b[i], [...path, i], ops);
+    } else {
+      if (removed) ops.push({ op: "remove", path, index: start, count: removed });
+      if (added) ops.push({ op: "insert", path, index: start, nodes: b.slice(start, endB).map(withoutUndefined) });
+    }
+    for (let i = 0; i < a.length - endA; i++) diffNode(a[endA + i], b[endB + i], [...path, endB + i], ops);
+  }
+  function diffNode(a, b, path, ops) {
+    if (a === b) return;
+    if (typeof a === "string" || typeof b === "string" || !sameIdentity(a, b)) {
+      if (!deepEqual(a, b)) ops.push({ op: "replace", path, node: withoutUndefined(b) });
+      return;
+    }
+    diffProps(a, b, path, ops);
+    diffChildren(a.children, b.children, path, ops);
+  }
+  function diffTree(previous, next) {
+    if (!previous) return [{ op: "replace", path: [], node: withoutUndefined(next) }];
+    const ops = [];
+    diffNode(previous, next, [], ops);
+    return ops;
+  }
+
+  var PLUGIN_PROTOCOL = 3;
+  var PATCH_PROTOCOL = 3;
   var HOST_METHODS = {
     hello: "hello",
     ready: "ready",
@@ -77,26 +197,38 @@
     let next = 0;
     let closedBy = null;
     const send = (message) => transport.send(JSON.stringify(message));
+    function start(method, params = {}, onId) {
+      const id = ++next;
+      onId?.(id);
+      if (closedBy) return { id, done: Promise.reject(closedBy) };
+      let line;
+      try {
+        line = JSON.stringify({ id, method, params });
+      } catch (error) {
+        return { id, done: Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`)) };
+      }
+      const done = new Promise((resolve, reject) => {
+        waiting.set(id, { resolve, reject });
+        try {
+          transport.send(line);
+        } catch (error) {
+          waiting.delete(id);
+          reject(error);
+        }
+      });
+      return { id, done };
+    }
     return {
       send,
       request(method, params = {}) {
-        if (closedBy) return Promise.reject(closedBy);
-        const id = ++next;
-        let line;
-        try {
-          line = JSON.stringify({ id, method, params });
-        } catch (error) {
-          return Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`));
-        }
-        return new Promise((resolve, reject) => {
-          waiting.set(id, { resolve, reject });
-          try {
-            transport.send(line);
-          } catch (error) {
-            waiting.delete(id);
-            reject(error);
-          }
-        });
+        return start(method, params).done;
+      },
+      start,
+      forget(id, reason) {
+        const waiter = waiting.get(id);
+        if (!waiter) return;
+        waiting.delete(id);
+        waiter.reject(reason);
       },
       takeReply(message) {
         if (typeof message.method === "string" || !("id" in message)) return false;
@@ -131,7 +263,8 @@
       events: new Map(),
       state: new Map(),
       pages: new Set(),
-      settings: new Set()
+      settings: new Set(),
+      services: new Map()
     };
   }
   function disposable(dispose) {
@@ -154,6 +287,114 @@
   function addTo(set, value) {
     set.add(value);
     return disposable(() => set.delete(value));
+  }
+
+  var INTERFACE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/;
+  var METHOD = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+  var listOf = (value, key) => {
+    if (Array.isArray(value)) return value;
+    const inner = typeof value === "object" && value !== null ? value[key] : void 0;
+    return Array.isArray(inner) ? inner : [];
+  };
+  var nothing = () => void 0;
+  function checkInterface(iface) {
+    if (!INTERFACE.test(iface)) throw new PluginError("bad-interface", `${iface} isn't an interface name like ai.provider.`);
+  }
+  function httpsOnly(url, label) {
+    if (!/^https:\/\/[^\s/]+/.test(url) && !/^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\//.test(url)) throw new PluginError("bad-url", `${label} must be an https:// URL.`);
+  }
+  function createArdiaV3(rpc, registry, channels, state) {
+    const services = {
+      provide(iface, handlers) {
+        checkInterface(iface);
+        if (registry.services.has(iface)) throw new Error(`Service ${iface} is already provided.`);
+        const methods = Object.keys(handlers);
+        for (const method of methods) {
+          if (!METHOD.test(method) || typeof handlers[method] !== "function") throw new PluginError("bad-method", `${iface}.${method} must be a function named with letters, digits and _.`);
+        }
+        const table = { ...handlers };
+        registry.services.set(iface, table);
+        if (state.isReady()) rpc.request(HOST_METHODS_V3.servicesProvide, { iface, methods }).then(nothing, state.report);
+        return disposable(() => {
+          if (registry.services.get(iface) !== table) return;
+          registry.services.delete(iface);
+          if (state.isReady()) rpc.request(HOST_METHODS_V3.servicesWithdraw, { iface }).then(nothing, state.report);
+        });
+      },
+      call(iface, method, input, options = {}) {
+        checkInterface(iface);
+        return rpc.request(HOST_METHODS_V3.servicesCall, { iface, method, input: input ?? null, ...options });
+      },
+      async list(iface) {
+        checkInterface(iface);
+        return listOf(await rpc.request(HOST_METHODS_V3.servicesList, { iface }), "providers");
+      }
+    };
+    const page = {
+      readActive: (options = {}) => rpc.request(HOST_METHODS_V3.pageReadActive, { ...options }).then((r) => r ?? null),
+      readTab: (tabId, options = {}) => rpc.request(HOST_METHODS_V3.pageReadTab, { tabId, ...options }).then((r) => r ?? null),
+      sendToContent: (tabId, message, options = {}) => rpc.request(HOST_METHODS_V3.pageSendToContent, { tabId, message, ...options }).then(nothing),
+      onContentMessage: (listener) => channels.onContentMessage(listener)
+    };
+    return {
+      services,
+      page,
+      sidecar: {
+        send: (message) => rpc.request(HOST_METHODS_V3.sidecarSend, { message }).then(nothing),
+        request: (method, params) => rpc.request(HOST_METHODS_V3.sidecarRequest, { method, params: params ?? null }),
+        onMessage: (listener) => channels.onSidecarMessage(listener)
+      },
+      auth: {
+        signIn(options) {
+          httpsOnly(options.authorizeUrl, "authorizeUrl");
+          httpsOnly(options.tokenUrl, "tokenUrl");
+          if (!options.clientId) return Promise.reject(new PluginError("bad-args", "signIn needs a clientId."));
+          return rpc.request(HOST_METHODS_V3.authSignIn, { ...options, pkce: "S256" });
+        }
+      },
+      bookmarks: {
+        list: async (parentId) => listOf(await rpc.request(HOST_METHODS_V3.bookmarksList, parentId ? { parentId } : {}), "bookmarks"),
+        search: async (query, limit = 50) => listOf(await rpc.request(HOST_METHODS_V3.bookmarksSearch, { query, limit }), "bookmarks"),
+        create: (bookmark) => rpc.request(HOST_METHODS_V3.bookmarksCreate, { ...bookmark }),
+        update: (id, changes) => rpc.request(HOST_METHODS_V3.bookmarksUpdate, { id, ...changes }),
+        remove: (id) => rpc.request(HOST_METHODS_V3.bookmarksRemove, { id }).then(nothing)
+      },
+      history: {
+        search: async (query = {}) => listOf(await rpc.request(HOST_METHODS_V3.historySearch, { ...query }), "items"),
+        recent: async (limit = 20) => listOf(await rpc.request(HOST_METHODS_V3.historyRecent, { limit }), "items")
+      },
+      profiles: {
+        list: async () => listOf(await rpc.request(HOST_METHODS_V3.profilesList), "profiles"),
+        current: () => rpc.request(HOST_METHODS_V3.profilesCurrent),
+        switch: (profileId) => rpc.request(HOST_METHODS_V3.profilesSwitch, { profile: profileId }).then(nothing)
+      },
+      media: {
+        sessions: async () => listOf(await rpc.request(HOST_METHODS_V3.mediaSessions), "sessions"),
+        control: (tabId, action, value) => rpc.request(HOST_METHODS_V3.mediaControl, { tabId, action, ...value !== void 0 ? { value } : {} }).then(nothing)
+      },
+      splits: {
+        open: (options) => rpc.request(HOST_METHODS_V3.splitsOpen, { ...options })
+      },
+      peek: {
+        open: (url) => rpc.request(HOST_METHODS_V3.peekOpen, typeof url === "string" ? { url } : { ...url })
+      },
+      clipboard: {
+        readText: async () => {
+          const reply = await rpc.request(HOST_METHODS_V3.clipboardReadText);
+          return typeof reply === "string" ? reply : reply?.text ?? "";
+        },
+        writeText: (text) => rpc.request(HOST_METHODS_V3.clipboardWriteText, { text }).then(nothing)
+      },
+      fs: {
+        pickFiles: async (options = {}) => listOf(await rpc.request(HOST_METHODS_V3.filesPick, { ...options }), "files"),
+        saveFile: (options) => rpc.request(HOST_METHODS_V3.filesSave, { encoding: "utf8", ...options })
+      },
+      notify: (options) => rpc.request(HOST_METHODS_V3.notify, { ...options }).then(nothing),
+      net: {
+        fetchStream: channels.fetchStream,
+        connect: channels.connect
+      }
+    };
   }
 
   function unwrap(result, key) {
@@ -191,7 +432,8 @@
     }
     return pick;
   }
-  function createArdia(rpc, registry, state) {
+  function createArdia(rpc, registry, state, channels) {
+    const v3 = createArdiaV3(rpc, registry, channels, state);
     const settings = {
       get(key, fallback) {
         return key in state.values ? state.values[key] : fallback;
@@ -308,6 +550,18 @@
       downloads: {
         onChange: (listener) => stateApi.subscribe("downloads", listener)
       },
+      media: { ...v3.media, onChange: (listener) => stateApi.subscribe("media", listener) },
+      profiles: { ...v3.profiles, onChange: (listener) => stateApi.subscribe("profiles", listener) },
+      services: v3.services,
+      sidecar: v3.sidecar,
+      page: v3.page,
+      auth: v3.auth,
+      bookmarks: v3.bookmarks,
+      history: v3.history,
+      splits: v3.splits,
+      peek: v3.peek,
+      clipboard: v3.clipboard,
+      fs: v3.fs,
       state: stateApi,
       ui: {
         quickPick: quickPick(rpc),
@@ -318,7 +572,8 @@
         async confirm(options) {
           return unwrap(await rpc.request(HOST_METHODS.confirm, { options }), "confirmed") === true;
         },
-        toast: (title, message, options = {}) => rpc.request(HOST_METHODS.toast, { title, ...message ? { message } : {}, options }).then(() => void 0)
+        toast: (title, message, options = {}) => rpc.request(HOST_METHODS.toast, { title, ...message ? { message } : {}, options }).then(() => void 0),
+        notify: v3.notify
       },
       toolbar: {
         update: (itemId, update) => rpc.request(HOST_METHODS.toolbarUpdate, { itemId, update }).then(() => void 0)
@@ -361,9 +616,56 @@
         async fetch(input, init = {}) {
           const request = typeof input === "string" ? { ...init, url: input } : { ...input, ...init };
           return response(await rpc.request(HOST_METHODS.fetch, request));
-        }
+        },
+        fetchStream: v3.net.fetchStream,
+        connect: v3.net.connect
       }
     };
+  }
+
+  var MAX_BUFFERED_CHUNKS = 4096;
+  function chunkQueue(onDone, onFail) {
+    const buffered = [];
+    const readers = [];
+    let ended = false;
+    let failure = null;
+    const close = () => {
+      ended = true;
+      onDone();
+    };
+    const queue = {
+      push(data) {
+        if (ended) return;
+        const reader = readers.shift();
+        if (reader) reader.resolve({ value: data, done: false });
+        else if (buffered.length < MAX_BUFFERED_CHUNKS) buffered.push(data);
+        else queue.fail(new PluginError("overflow", "The stream sent more than the plugin read; it was cut off."), false);
+      },
+      end() {
+        if (ended) return;
+        close();
+        if (!buffered.length) for (const reader of readers.splice(0)) reader.resolve({ value: void 0, done: true });
+      },
+      fail(error, fromHost = true) {
+        if (ended) return;
+        failure = error;
+        buffered.length = 0;
+        close();
+        for (const reader of readers.splice(0)) reader.reject(error);
+        onFail(error, fromHost);
+      },
+      next() {
+        const value = buffered.shift();
+        if (value !== void 0) return Promise.resolve({ value, done: false });
+        if (failure) return Promise.reject(failure);
+        if (ended) return Promise.resolve({ value: void 0, done: true });
+        return new Promise((resolve, reject) => readers.push({ resolve, reject }));
+      },
+      get ended() {
+        return ended;
+      }
+    };
+    return queue;
   }
 
   var ELEMENT = Symbol.for("ardia.plugin.element");
@@ -835,6 +1137,330 @@
     return surface;
   }
 
+  var abortError = (signal) => signal.reason instanceof Error ? signal.reason : new PluginError("aborted", typeof signal.reason === "string" ? signal.reason : "The request was aborted.");
+  var MAX_HELD_MESSAGES = 256;
+  var quiet = () => void 0;
+  function createChannels(rpc, report) {
+    const streams = new Map();
+    const sockets = new Map();
+    const sidecarListeners = new Set();
+    const contentListeners = new Set();
+    let next = 0;
+    const safely = (listener) => {
+      try {
+        listener();
+      } catch (error) {
+        report(error);
+      }
+    };
+    function deliver(name, data) {
+      const stream = typeof data.stream === "string" ? streams.get(data.stream) : void 0;
+      const socket = typeof data.socket === "string" ? sockets.get(data.socket) : void 0;
+      switch (name) {
+        case CHANNEL_EVENTS.fetchChunk:
+          if (typeof data.data === "string") stream?.push(data.data);
+          return true;
+        case CHANNEL_EVENTS.fetchEnd:
+          stream?.end();
+          return true;
+        case CHANNEL_EVENTS.fetchError:
+          stream?.fail(new PluginError(typeof data.code === "string" ? data.code : "failed", typeof data.message === "string" ? data.message : "The stream failed."));
+          return true;
+        case CHANNEL_EVENTS.wsOpen:
+          socket?.opened(typeof data.protocol === "string" ? data.protocol : "");
+          return true;
+        case CHANNEL_EVENTS.wsMessage:
+          if (typeof data.data === "string") socket?.message(data.data, data.binary === true);
+          return true;
+        case CHANNEL_EVENTS.wsClose:
+          socket?.closed(typeof data.code === "number" ? data.code : 1006, typeof data.reason === "string" ? data.reason : "");
+          return true;
+        case CHANNEL_EVENTS.wsError:
+          socket?.failed(typeof data.message === "string" ? data.message : "The connection failed.");
+          return true;
+        case CHANNEL_EVENTS.sidecarMessage:
+          for (const listener of [...sidecarListeners]) safely(() => listener(data.message));
+          return true;
+        case CHANNEL_EVENTS.contentMessage:
+          if (typeof data.tabId === "string") {
+            const event = { tabId: data.tabId, message: data.message };
+            if (typeof data.frameId === "number") event.frameId = data.frameId;
+            if (typeof data.scriptId === "string") event.scriptId = data.scriptId;
+            for (const listener of [...contentListeners]) safely(() => listener(event));
+          }
+          return true;
+        default:
+          return false;
+      }
+    }
+    async function fetchStream(input, init = {}) {
+      const { signal, ...request } = typeof input === "string" ? { ...init, url: input } : { ...input, ...init };
+      if (signal?.aborted) throw abortError(signal);
+      const id = `f${++next}`;
+      let cancelled = false;
+      let rejectHead = null;
+      let headId = 0;
+      const cancelRemote = () => {
+        if (cancelled) return Promise.resolve();
+        cancelled = true;
+        return rpc.request(HOST_METHODS_V3.fetchCancel, { stream: id }).then(void 0, quiet);
+      };
+      const queue = chunkQueue(
+        () => {
+          streams.delete(id);
+          signal?.removeEventListener("abort", onAbort);
+        },
+        (error, fromHost) => {
+          if (rejectHead) {
+            rejectHead(error);
+            rpc.forget(headId, error instanceof Error ? error : new PluginError("failed", String(error)));
+          }
+          if (!fromHost) void cancelRemote();
+        }
+      );
+      const cancel = async () => {
+        if (cancelled || queue.ended) return;
+        queue.end();
+        await cancelRemote();
+      };
+      function onAbort() {
+        queue.fail(abortError(signal), false);
+      }
+      streams.set(id, queue);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      const head = await new Promise((resolve, reject) => {
+        rejectHead = reject;
+        rpc.start(HOST_METHODS_V3.fetchStream, { ...request, stream: id }, (requestId) => headId = requestId).done.then(resolve, (error) => {
+          rejectHead = null;
+          queue.fail(error, true);
+          reject(error);
+        });
+      });
+      rejectHead = null;
+      let consumed = false;
+      const body = {
+        [Symbol.asyncIterator]() {
+          if (consumed) throw new PluginError("used", "A stream's body can be read once.");
+          consumed = true;
+          return {
+            next: () => queue.next(),
+            return: async () => {
+              await cancel();
+              return { value: void 0, done: true };
+            }
+          };
+        }
+      };
+      return {
+        status: head.status,
+        statusText: head.statusText ?? "",
+        headers: head.headers ?? {},
+        url: head.url ?? request.url,
+        ok: head.status >= 200 && head.status < 300,
+        body,
+        async text() {
+          let out = "";
+          for await (const chunk of body) out += chunk;
+          return out;
+        },
+        cancel
+      };
+    }
+    function connect(url, options = {}) {
+      const id = `w${++next}`;
+      const listeners = { message: new Set(), close: new Set(), error: new Set() };
+      let state = "connecting";
+      let protocol = "";
+      let settle = null;
+      const pending = [];
+      let draining = false;
+      let deferredFlush = false;
+      const listening = (event) => listeners[event.kind].size > 0;
+      const deliverOne = (event) => {
+        if (event.kind === "message") for (const l of [...listeners.message]) safely(() => l(event.data, event.binary));
+        else if (event.kind === "error") for (const l of [...listeners.error]) safely(() => l(event.message));
+        else for (const l of [...listeners.close]) safely(() => l(event.code, event.reason));
+      };
+      const drain = (allowSkip = false) => {
+        if (draining) return;
+        draining = true;
+        try {
+          for (; ; ) {
+            if (!pending.length) return;
+            if (listening(pending[0])) {
+              deliverOne(pending.shift());
+              continue;
+            }
+            let last = -1;
+            for (let i = pending.length - 1; i >= 0; i--) {
+              if (listening(pending[i])) {
+                last = i;
+                break;
+              }
+            }
+            if (last < 0) return;
+            if (!allowSkip) {
+              if (!deferredFlush) {
+                deferredFlush = true;
+                enqueueMicrotask(() => {
+                  deferredFlush = false;
+                  drain(true);
+                });
+              }
+              return;
+            }
+            for (const event of pending.splice(0, last + 1)) if (listening(event)) deliverOne(event);
+          }
+        } finally {
+          draining = false;
+        }
+      };
+      const emit = (event) => {
+        pending.push(event);
+        drain(false);
+        if (pending[pending.length - 1] !== event) return;
+        if (event.kind === "message") {
+          let messages = 0;
+          for (const item of pending) if (item.kind === "message") messages++;
+          if (messages > MAX_HELD_MESSAGES) pending.pop();
+        } else if (event.kind === "error") {
+          let errors = 0;
+          for (const item of pending) if (item.kind === "error") errors++;
+          if (errors > 16) pending.pop();
+        }
+      };
+      const attach = (kind, listener) => {
+        const added = addTo(listeners[kind], listener);
+        drain(false);
+        return added;
+      };
+      const forget = () => {
+        sockets.delete(id);
+        options.signal?.removeEventListener("abort", onAbort);
+      };
+      const socket = {
+        id,
+        url,
+        get protocol() {
+          return protocol;
+        },
+        get state() {
+          return state;
+        },
+        send: (data) => {
+          if (state !== "open") return Promise.reject(new PluginError("closed", "The socket isn't open."));
+          return rpc.request(HOST_METHODS_V3.wsSend, { socket: id, data }).then(() => void 0);
+        },
+        close: (code = 1e3, reason = "") => {
+          if (state === "closed" || state === "closing") return Promise.resolve();
+          const before = state;
+          state = "closing";
+          return rpc.request(HOST_METHODS_V3.wsClose, { socket: id, code, reason }).then(
+            () => void 0,
+            (error) => {
+              if (state === "closing") state = before;
+              throw error;
+            }
+          );
+        },
+        onMessage: (listener) => attach("message", listener),
+        onClose: (listener) => attach("close", listener),
+        onError: (listener) => attach("error", listener)
+      };
+      sockets.set(id, {
+        opened(given) {
+          if (state !== "connecting") return;
+          state = "open";
+          protocol = given;
+          settle?.resolve();
+        },
+        message(data, binary) {
+          if (state === "closed") return;
+          emit({ kind: "message", data, binary });
+        },
+        closed(code, reason) {
+          if (state === "closed") return;
+          state = "closed";
+          forget();
+          handshakeFailed(new PluginError("closed", reason || `The socket closed (${code}) before it opened.`));
+          emit({ kind: "close", code, reason });
+        },
+        failed(message) {
+          if (state === "connecting") {
+            state = "closed";
+            forget();
+            handshakeFailed(new PluginError("failed", message));
+          }
+          emit({ kind: "error", message });
+        }
+      });
+      let connectId = 0;
+      function handshakeFailed(error) {
+        if (!settle) return;
+        settle.reject(error);
+        rpc.forget(connectId, error);
+      }
+      function onAbort() {
+        if (state === "connecting") {
+          state = "closed";
+          forget();
+          handshakeFailed(abortError(options.signal));
+          void rpc.request(HOST_METHODS_V3.wsClose, { socket: id, code: 1e3, reason: "aborted" }).then(void 0, quiet);
+          return;
+        }
+        void socket.close(1e3, "aborted").catch(report);
+      }
+      if (options.signal?.aborted) {
+        forget();
+        return Promise.reject(abortError(options.signal));
+      }
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+      const params = { socket: id, url, ...options.protocols ? { protocols: options.protocols } : {}, ...options.headers ? { headers: options.headers } : {} };
+      return new Promise((resolve, reject) => {
+        settle = {
+          resolve: () => {
+            settle = null;
+            resolve(socket);
+          },
+          reject: (error) => {
+            settle = null;
+            reject(error);
+          }
+        };
+        rpc.start(HOST_METHODS_V3.wsConnect, { ...params }, (requestId) => connectId = requestId).done.then(
+          (reply) => {
+            if (reply && reply.open === true) sockets.get(id)?.opened(typeof reply.protocol === "string" ? reply.protocol : "");
+          },
+          (error) => {
+            state = "closed";
+            forget();
+            settle?.reject(error);
+          }
+        );
+      });
+    }
+    return {
+      deliver,
+      fetchStream,
+      connect,
+      onSidecarMessage: (listener) => addTo(sidecarListeners, listener),
+      onContentMessage: (listener) => addTo(contentListeners, listener),
+      openCount: () => streams.size + sockets.size,
+      closeAll() {
+        const error = new PluginError("stopped", "The plugin stopped.");
+        for (const stream of [...streams.values()]) stream.fail(error, false);
+        for (const [socket, entry] of [...sockets]) {
+          void rpc.request(HOST_METHODS_V3.wsClose, { socket, code: 1001, reason: "The plugin stopped." }).then(void 0, quiet);
+          entry.closed(1001, "The plugin stopped.");
+        }
+        streams.clear();
+        sockets.clear();
+        sidecarListeners.clear();
+        contentListeners.clear();
+      }
+    };
+  }
+
   var SurfaceContext = createContext(null);
   function useSurface() {
     const surface = useContext(SurfaceContext);
@@ -857,7 +1483,7 @@
     return typeof value === "object" && value !== null && typeof value.then === "function";
   }
   var NO_HANDLERS = new Map();
-  function createSurfaceHost(rpc, registry, report) {
+  function createSurfaceHost(rpc, registry, report, protocol = () => 0) {
     const mounted = new Map();
     function unmount(surfaceId) {
       const entry = mounted.get(surfaceId);
@@ -880,20 +1506,52 @@
       let latest = NO_HANDLERS;
       let shown = NO_HANDLERS;
       const isCurrent = () => mounted.get(message.surfaceId)?.handle === handle;
-      const sendTree = (tree, sent, handlers) => rpc.request(HOST_METHODS.surfaceRender, { surfaceId: message.surfaceId, tree }).then(() => {
+      let sentTree = null;
+      let rev = 0;
+      const accept = (sent, handlers) => {
         if (sent < acceptedGeneration) return;
         acceptedGeneration = sent;
         shown = handlers;
-      });
+      };
+      const send = (tree, full) => {
+        const patching = protocol() >= PATCH_PROTOCOL;
+        const previous = full ? null : sentTree;
+        const base = rev;
+        const ops = previous && patching ? diffTree(previous, tree) : null;
+        if (ops && ops.length === 0) return { done: Promise.resolve(), patched: true };
+        sentTree = tree;
+        rev = base + 1;
+        const surfaceId = message.surfaceId;
+        const whole = !ops || ops.length === 1 && ops[0]?.op === "replace" && ops[0].path.length === 0;
+        const done = whole ? rpc.request(HOST_METHODS.surfaceRender, { surfaceId, tree, ...patching ? { rev } : {} }) : rpc.request(HOST_METHODS_V3.surfacePatch, { surfaceId, base, rev, ops });
+        return {
+          done: done.catch((error) => {
+            if (sentTree === tree) sentTree = null;
+            throw error;
+          }),
+          patched: !whole
+        };
+      };
+      const showError = (error, sent) => {
+        report(error);
+        if (sent !== generation || !isCurrent()) return;
+        latest = NO_HANDLERS;
+        send(errorNode(error), true).done.then(() => accept(sent, NO_HANDLERS)).catch(report);
+      };
       const commit = (tree, handlers) => {
         const sent = ++generation;
         latest = handlers;
-        sendTree(tree, sent, handlers).catch((error) => {
-          report(error);
-          if (sent !== generation || !isCurrent()) return;
-          latest = NO_HANDLERS;
-          sendTree(errorNode(error), sent, NO_HANDLERS).catch(report);
-        });
+        const first = send(tree, false);
+        first.done.then(
+          () => accept(sent, handlers),
+          (error) => {
+            if (!first.patched || sent !== generation || !isCurrent()) return showError(error, sent);
+            send(tree, true).done.then(
+              () => accept(sent, handlers),
+              (retryError) => showError(retryError, sent)
+            );
+          }
+        );
       };
       const handle = mountSurface(SurfaceRoot, { view, surface }, commit, { onError: report });
       mounted.set(message.surfaceId, { handle, handler: (handlerId) => shown.get(handlerId) ?? latest.get(handlerId) });
@@ -922,6 +1580,53 @@
         for (const id of [...mounted.keys()]) unmount(id);
       }
     };
+  }
+
+  function createSignal() {
+    const listeners = new Set();
+    let cancelled = false;
+    return {
+      get cancelled() {
+        return cancelled;
+      },
+      onCancel(listener) {
+        if (cancelled) listener();
+        else listeners.add(listener);
+        return disposable(() => listeners.delete(listener));
+      },
+      cancel() {
+        if (cancelled) return;
+        cancelled = true;
+        for (const listener of listeners) listener();
+        listeners.clear();
+      }
+    };
+  }
+  function cleanSuggestion(value) {
+    if (typeof value !== "object" || value === null) return null;
+    const { title, url, subtitle, icon, badge } = value;
+    if (typeof title !== "string" || typeof url !== "string") return null;
+    const out = { title, url };
+    if (typeof subtitle === "string") out.subtitle = subtitle;
+    if (typeof icon === "string") out.icon = icon;
+    if (typeof badge === "string") out.badge = badge;
+    return out;
+  }
+  function queryOf(input) {
+    if (typeof input === "string") return input;
+    if (typeof input === "object" && input !== null) {
+      const { query, text } = input;
+      if (typeof query === "string") return query;
+      if (typeof text === "string") return text;
+    }
+    return "";
+  }
+  var CALL_KINDS = ["tool", "command", "omnibox", "decide", "service"];
+  function inputOf(kind, message) {
+    if (message.input !== void 0) return message.input;
+    if (kind === "decide") return message.data;
+    if (kind === "omnibox") return message.query;
+    return void 0;
   }
 
   var STATE_PREFIX = "state.";
@@ -1029,7 +1734,7 @@
       waiting = true;
       later(streak === 0 ? 0 : Math.min(backoff * 2 ** (streak - 1), MAX_RESYNC_DELAY_MS), () => void resync());
     };
-    const SNAPSHOT_TOPICS = new Set(["tabs", "workspace", "downloads"]);
+    const SNAPSHOT_TOPICS = new Set(["tabs", "workspace", "downloads", "media", "profiles"]);
     async function sendJoined() {
       const topics = [...joined].filter((t) => registry.state.has(t) && acknowledgedTopics.split(",").includes(t));
       joined = new Set();
@@ -1059,54 +1764,8 @@
     return { sync, deliverState, noteDropped, listenerAdded };
   }
 
-  var SDK_VERSION = "2.0.0";
+  var SDK_VERSION = "3.0.0";
   var DEFAULT_STOP_GRACE_MS = 5e3;
-  function createSignal() {
-    const listeners = new Set();
-    let cancelled = false;
-    return {
-      get cancelled() {
-        return cancelled;
-      },
-      onCancel(listener) {
-        if (cancelled) listener();
-        else listeners.add(listener);
-        return disposable(() => listeners.delete(listener));
-      },
-      cancel() {
-        if (cancelled) return;
-        cancelled = true;
-        for (const listener of listeners) listener();
-        listeners.clear();
-      }
-    };
-  }
-  function cleanSuggestion(value) {
-    if (typeof value !== "object" || value === null) return null;
-    const { title, url, subtitle, icon, badge } = value;
-    if (typeof title !== "string" || typeof url !== "string") return null;
-    const out = { title, url };
-    if (typeof subtitle === "string") out.subtitle = subtitle;
-    if (typeof icon === "string") out.icon = icon;
-    if (typeof badge === "string") out.badge = badge;
-    return out;
-  }
-  function queryOf(input) {
-    if (typeof input === "string") return input;
-    if (typeof input === "object" && input !== null) {
-      const { query, text } = input;
-      if (typeof query === "string") return query;
-      if (typeof text === "string") return text;
-    }
-    return "";
-  }
-  var CALL_KINDS = ["tool", "command", "omnibox", "decide"];
-  function inputOf(kind, message) {
-    if (message.input !== void 0) return message.input;
-    if (kind === "decide") return message.data;
-    if (kind === "omnibox") return message.query;
-    return void 0;
-  }
   function createHostRuntime(transport, options = {}) {
     const rpc = createRpc(transport);
     const registry = createRegistry();
@@ -1120,7 +1779,13 @@
     let stopped = false;
     let stopping = null;
     let work = Promise.resolve();
-    let cleanup = async () => surfaces.closeAll();
+    let readySent = false;
+    let hostProtocol = 0;
+    let cleanup = async () => closeEverything();
+    const closeEverything = () => {
+      surfaces.closeAll();
+      channels.closeAll();
+    };
     const stop = () => {
       if (stopping) return stopping;
       stopped = true;
@@ -1155,10 +1820,12 @@
       info: { name: "", app: "", version: "", protocol: 0 },
       subscriptionsChanged: () => subscriptions.sync(),
       listenerAdded: (topic) => subscriptions.listenerAdded(topic),
-      report
+      report,
+      isReady: () => readySent && !stopped
     };
-    const ardia2 = createArdia(rpc, registry, state);
-    const surfaces = createSurfaceHost(rpc, registry, report);
+    const channels = createChannels(rpc, report);
+    const ardia2 = createArdia(rpc, registry, state, channels);
+    const surfaces = createSurfaceHost(rpc, registry, report, () => hostProtocol);
     const whenActive = (task, refuse) => {
       work = work.then(() => activation).then(
         () => stopped ? void 0 : task(),
@@ -1168,7 +1835,14 @@
         (error) => report(error)
       );
     };
-    async function dispatchCall(kind, name, input, call) {
+    async function dispatchCall(kind, name, input, call, method) {
+      if (kind === "service") {
+        const handlers = registry.services.get(name);
+        if (!handlers) throw new Error(`This plugin doesn't provide ${name}.`);
+        const handler = method !== void 0 && Object.hasOwn(handlers, method) ? handlers[method] : void 0;
+        if (!handler) throw new Error(`${name} has no method ${method ?? "(none)"}.`);
+        return handler(input, call);
+      }
       if (kind === "tool") {
         const tool = registry.tools.get(name);
         if (!tool) throw new Error(`This plugin has no tool ${name}.`);
@@ -1206,7 +1880,7 @@
       };
       let body;
       try {
-        const result = await dispatchCall(kind, name, inputOf(kind, message), call);
+        const result = await dispatchCall(kind, name, inputOf(kind, message), call, message.method);
         body = { call: message.call, result: result === void 0 ? null : result };
       } catch (error) {
         body = { call: message.call, error: errorMessage(error) };
@@ -1271,6 +1945,10 @@
           for (const listener of [...registry.pages]) listener(record.pageMessage, view);
         });
       }
+      if (typeof record.event === "string" && CHANNEL_EVENT_NAMES.includes(record.event)) {
+        const data = typeof record.data === "object" && record.data !== null ? record.data : {};
+        return void channels.deliver(record.event, data);
+      }
       if (typeof record.event === "string") {
         subscriptions.noteDropped(record.dropped);
         const data = typeof record.data === "object" && record.data !== null ? record.data : {};
@@ -1297,6 +1975,7 @@
       if (definition.omnibox) held.push(ardia2.omnibox.register(definition.omnibox));
       if (definition.onPageMessage) held.push(ardia2.pages.onMessage(definition.onPageMessage));
       if (definition.onSettingsChange) held.push(ardia2.settings.onChange(definition.onSettingsChange));
+      for (const [iface, handlers] of Object.entries(definition.services ?? {})) held.push(ardia2.services.provide(iface, handlers));
       return held;
     }
     const readyParams = () => ({
@@ -1305,12 +1984,13 @@
       views: [...registry.views.keys()],
       omnibox: registry.omnibox.size > 0,
       decide: [...registry.decide.keys()],
-      events: [...registry.events.keys()]
+      events: [...registry.events.keys()],
+      ...registry.services.size ? { services: Object.fromEntries([...registry.services].map(([iface, handlers]) => [iface, Object.keys(handlers)])) } : {}
     });
     function definePlugin2(definition) {
       const held = register(definition);
       cleanup = async () => {
-        surfaces.closeAll();
+        closeEverything();
         for (const item of held.splice(0).reverse()) {
           try {
             item.dispose();
@@ -1327,6 +2007,7 @@
         }) ?? { app: "", version: "", protocol: 0, plugin: "" };
         if (stopped) return;
         state.info = { name: hello.plugin, app: hello.app, version: hello.version, protocol: hello.protocol };
+        hostProtocol = typeof hello.protocol === "number" ? hello.protocol : 0;
         state.values = { ...hello.values ?? {}, ...state.values };
         const returned = definition.activate ? await definition.activate(ardia2) : void 0;
         if (returned && typeof returned.dispose === "function") {
@@ -1337,7 +2018,12 @@
         activated = true;
         subscriptions.sync();
       })();
-      const ready = activation.then(() => stopped ? void 0 : rpc.request(HOST_METHODS.ready, readyParams())).then(() => void 0);
+      const ready = activation.then(() => {
+        if (stopped) return void 0;
+        readySent = true;
+        return rpc.request(HOST_METHODS.ready, readyParams());
+      }).then(() => void 0);
+      activation.catch(() => channels.closeAll());
       ready.catch(report);
       return ready;
     }
@@ -1348,6 +2034,8 @@
       request: (method, params) => rpc.request(method, params),
       surfaceCount: () => surfaces.count(),
       callCount: () => calls.size,
+      channelCount: () => channels.openCount(),
+      hostProtocol: () => hostProtocol,
       surfaceTree: (surfaceId) => surfaces.tree(surfaceId),
       whenIdle: async () => {
         for (let i = 0; i < 20; i++) {
@@ -1388,8 +2076,27 @@
   var Action = Object.assign(ActionHost, { OpenInBrowser, CopyToClipboard });
   var List = Object.assign(hostComponent("List"), {
     Section: hostComponent("ListSection"),
-    Item: hostComponent("ListItem")
+    Item: Object.assign(hostComponent("ListItem"), {
+      Detail: hostComponent("ListItemDetail")
+    })
   });
+  var Grid = Object.assign(hostComponent("Grid"), {
+    Section: hostComponent("GridSection"),
+    Item: hostComponent("GridItem")
+  });
+  var Table = Object.assign(hostComponent("Table"), {
+    Row: hostComponent("TableRow"),
+    Cell: hostComponent("TableCell")
+  });
+  var Tabs = Object.assign(hostComponent("Tabs"), {
+    Tab: hostComponent("Tab")
+  });
+  var TagList = Object.assign(hostComponent("TagList"), {
+    Item: hostComponent("TagListItem")
+  });
+  var CodeBlock = hostComponent("CodeBlock");
+  var Image = hostComponent("Image");
+  var FileDropZone = hostComponent("FileDropZone");
   var Detail = hostComponent("Detail");
   var Form = Object.assign(hostComponent("Form"), {
     TextField: hostComponent("TextField"),

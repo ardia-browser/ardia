@@ -25,6 +25,10 @@ export type OmniboxProvider = (query: string, call: CallContext) => Awaitable<re
 
 export type DecideHandler<D = Record<string, unknown>, R = unknown> = (data: D, call: CallContext) => Awaitable<R>;
 
+export type ServiceHandler<I = any, O = unknown> = (input: I, call: CallContext) => Awaitable<O>;
+
+export type ServiceHandlers = Record<string, ServiceHandler>;
+
 export type EventListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined }) => void;
 
 export type StateListener<D = Record<string, unknown>> = (data: D, event: { name: string; time: number | undefined }) => void;
@@ -53,6 +57,7 @@ export type PluginDefinition<A = unknown> = {
   events?: Record<string, EventListener<any>>;
   onPageMessage?: PageMessageListener;
   onSettingsChange?: SettingsListener;
+  services?: Record<string, ServiceHandlers>;
 };
 
 export type Registry = {
@@ -65,6 +70,7 @@ export type Registry = {
   state: Map<string, Set<StateListener<any>>>;
   pages: Set<PageMessageListener>;
   settings: Set<SettingsListener>;
+  services: Map<string, ServiceHandlers>;
 };
 
 export function createRegistry(): Registry {
@@ -78,6 +84,7 @@ export function createRegistry(): Registry {
     state: new Map(),
     pages: new Set(),
     settings: new Set(),
+    services: new Map(),
   };
 }
 

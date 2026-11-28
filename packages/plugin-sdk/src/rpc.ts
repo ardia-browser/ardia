@@ -12,8 +12,12 @@ export class PluginError extends Error {
   }
 }
 
+export type Started<T> = { id: number; done: Promise<T> };
+
 export type Rpc = {
   request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
+  start<T = unknown>(method: string, params?: Record<string, unknown>, onId?: (id: number) => void): Started<T>;
+  forget(id: number, reason: Error): void;
   send(message: Record<string, unknown>): void;
   takeReply(message: Record<string, unknown>): boolean;
   pendingCount(): number;
@@ -52,26 +56,39 @@ export function createRpc(transport: Transport): Rpc {
 
   const send = (message: Record<string, unknown>) => transport.send(JSON.stringify(message));
 
+  function start<T>(method: string, params: Record<string, unknown> = {}, onId?: (id: number) => void): Started<T> {
+    const id = ++next;
+    onId?.(id);
+    if (closedBy) return { id, done: Promise.reject(closedBy) };
+    let line: string;
+    try {
+      line = JSON.stringify({ id, method, params });
+    } catch (error) {
+      return { id, done: Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`)) };
+    }
+    const done = new Promise<T>((resolve, reject) => {
+      waiting.set(id, { resolve: resolve as (value: unknown) => void, reject });
+      try {
+        transport.send(line);
+      } catch (error) {
+        waiting.delete(id);
+        reject(error);
+      }
+    });
+    return { id, done };
+  }
+
   return {
     send,
     request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-      if (closedBy) return Promise.reject(closedBy);
-      const id = ++next;
-      let line: string;
-      try {
-        line = JSON.stringify({ id, method, params });
-      } catch (error) {
-        return Promise.reject(new LocalEncodingError("unencodable", `The ${method} request couldn't be encoded: ${errorMessage(error)}`));
-      }
-      return new Promise<T>((resolve, reject) => {
-        waiting.set(id, { resolve: resolve as (value: unknown) => void, reject });
-        try {
-          transport.send(line);
-        } catch (error) {
-          waiting.delete(id);
-          reject(error);
-        }
-      });
+      return start<T>(method, params).done;
+    },
+    start,
+    forget(id, reason) {
+      const waiter = waiting.get(id);
+      if (!waiter) return;
+      waiting.delete(id);
+      waiter.reject(reason);
     },
     takeReply(message) {
       if (typeof message.method === "string" || !("id" in message)) return false;

@@ -11,6 +11,9 @@ export { createRpc, PluginError, type Rpc, type Transport } from "./rpc";
 export { useSurface, type SurfaceInfo } from "./surfaces";
 export { joinGroupPages, type GroupPages } from "./stateMirror";
 export type { Ardia, PluginInfo, PluginResponse } from "./api";
+export type { ArdiaV3 } from "./apiV3";
+export type { AbortSignalLike, ConnectOptions, PluginSocket, SocketState, StreamFetchInit, StreamResponse } from "./channels";
+export { readServerSentEvents, type ServerSentEvent } from "./sse";
 export type {
   Awaitable,
   CallContext,
@@ -22,6 +25,8 @@ export type {
   OmniboxProvider,
   PageMessageListener,
   PluginDefinition,
+  ServiceHandler,
+  ServiceHandlers,
   SettingsListener,
   StateListener,
   ToolHandler,
@@ -34,6 +39,22 @@ export type {
   BadgeProps,
   BoxProps,
   ButtonProps,
+  CodeBlockProps,
+  DroppedFile,
+  FileDropZoneProps,
+  GridItemProps,
+  GridProps,
+  GridSectionProps,
+  ImageProps,
+  ListItemDetailProps,
+  TableCellProps,
+  TableColumn,
+  TableProps,
+  TableRowProps,
+  TabProps,
+  TabsProps,
+  TagListItemProps,
+  TagListProps,
   CopyToClipboardProps,
   DetailMetadata,
   DetailProps,

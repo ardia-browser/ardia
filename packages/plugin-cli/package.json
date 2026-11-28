@@ -1,0 +1,39 @@
+{
+  "name": "@ardia/plugin-cli",
+  "version": "3.0.0",
+  "description": "Scaffold, check, build, pack, dev-link and release Ardia browser plugins.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "ardia-plugin": "./dist/cli.js",
+    "create-ardia-plugin": "./dist/create.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ardia-browser/ardia.git",
+    "directory": "packages/plugin-cli"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs",
+    "typecheck": "tsrs --noEmit",
+    "test": "node --no-warnings --import ../../apps/browser/src/test-loader.mjs --test src/*.test.mjs"
+  },
+  "dependencies": {
+    "@ardia/plugin-sdk": "workspace:*",
+    "esbuild": "0.28.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6"
+  }
+}

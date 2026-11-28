@@ -1,0 +1,1584 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ardia plugin (manifest 3)",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "manifest": {
+      "const": 3,
+      "description": "The manifest's version"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^@[a-z0-9][a-z0-9-]{0,38}/[a-z0-9][a-z0-9-]{0,39}$",
+      "maxLength": 80
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$",
+      "description": "The plugin's name, shown in Settings and the gallery"
+    },
+    "description": {
+      "type": "string",
+      "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,200}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d{0,8})\\.(0|[1-9]\\d{0,8})\\.(0|[1-9]\\d{0,8})(?:-((?:0|[1-9]\\d{0,8}|\\d*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9]\\d{0,8}|\\d*[A-Za-z-][0-9A-Za-z-]*))*))?$",
+      "maxLength": 256
+    },
+    "icon": {
+      "type": "string",
+      "pattern": "^[a-z0-9.]{1,64}$",
+      "description": "An SF Symbol name"
+    },
+    "iconUrl": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,252})(?::\\d{1,5})?(?:[/?#][^\\s]*)?$",
+      "maxLength": 2048,
+      "format": "uri"
+    },
+    "license": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9.+\\- ()]{1,64}$"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,252})(?::\\d{1,5})?(?:[/?#][^\\s]*)?$",
+      "maxLength": 2048,
+      "format": "uri"
+    },
+    "homepage": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]{0,252})(?::\\d{1,5})?(?:[/?#][^\\s]*)?$",
+      "maxLength": 2048,
+      "format": "uri"
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"
+      },
+      "maxItems": 6,
+      "uniqueItems": true
+    },
+    "keywords": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+      },
+      "maxItems": 12,
+      "description": "Words that find the plugin"
+    },
+    "engines": {
+      "type": "object",
+      "properties": {
+        "ardia": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "A semver range; a bare version like 0.3.0 means >=0.3.0"
+        },
+        "sdk": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "A semver range; a bare version like 0.3.0 means >=0.3.0"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "ardia"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "global",
+        "profile"
+      ],
+      "description": "profile: one copy per profile. global: one for the whole app (forced by programs and permissions.control)",
+      "default": "profile"
+    },
+    "dependencies": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^@[a-z0-9][a-z0-9-]{0,38}/[a-z0-9][a-z0-9-]{0,39}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "A semver range; a bare version like 0.3.0 means >=0.3.0"
+      },
+      "maxProperties": 16,
+      "description": "Plugin ids and the semver ranges this plugin works with"
+    },
+    "optionalDependencies": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^@[a-z0-9][a-z0-9-]{0,38}/[a-z0-9][a-z0-9-]{0,39}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "description": "A semver range; a bare version like 0.3.0 means >=0.3.0"
+      },
+      "maxProperties": 16,
+      "description": "Plugin ids and the semver ranges this plugin works with"
+    },
+    "provides": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$",
+        "maxLength": 80,
+        "description": "An interface name like ai.provider"
+      },
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "consumes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$",
+        "maxLength": 80,
+        "description": "An interface name like ai.provider"
+      },
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "release": {
+      "type": "object",
+      "properties": {
+        "github": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$"
+        },
+        "tagPrefix": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._/-]{0,40}$",
+          "description": "Put before the version in a tag, like \"v\" for v1.2.3"
+        },
+        "asset": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+        },
+        "assets": {
+          "type": "object",
+          "properties": {
+            "universal": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+            },
+            "macos-arm64": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+            },
+            "macos-x64": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+            },
+            "linux-x64": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+            },
+            "linux-arm64": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+            },
+            "windows-x64": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._{}-]{1,128}$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "github"
+      ],
+      "description": "Where Ardia finds the plugin's releases"
+    },
+    "main": {
+      "type": "string",
+      "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*\\.(?:m?js|cjs)$",
+      "maxLength": 1024
+    },
+    "sidecar": {
+      "type": "object",
+      "properties": {
+        "run": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "prefixItems": [
+            {
+              "type": "string",
+              "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*$",
+              "maxLength": 1024
+            }
+          ],
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\u0000]{1,1024}$"
+          },
+          "description": "The program, a relative path inside the plugin's folder, then its arguments"
+        },
+        "memoryMB": {
+          "type": "integer",
+          "minimum": 64,
+          "maximum": 4096,
+          "description": "The sidecar's memory limit"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "run"
+      ]
+    },
+    "memoryMB": {
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 4096,
+      "description": "main's memory limit"
+    },
+    "idleTimeoutSec": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 1800,
+      "description": "How long main and the sidecar keep running with nothing to do",
+      "default": 300
+    },
+    "activationEvents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 300
+      },
+      "maxItems": 32
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "tabs": {
+          "enum": [
+            false,
+            "read",
+            "write"
+          ],
+          "description": "read: see your tabs. write: also open, move and close them"
+        },
+        "fullUrls": {
+          "type": "boolean",
+          "description": "See whole addresses, with what follows ? and # (needs tabs)"
+        },
+        "activePage": {
+          "anyOf": [
+            {
+              "enum": [
+                false,
+                true
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "read": {
+                  "type": "boolean",
+                  "description": "Read the page's text, markdown and metadata"
+                },
+                "screenshot": {
+                  "type": "boolean",
+                  "description": "Take a screenshot of the visible page"
+                },
+                "multiTab": {
+                  "type": "boolean",
+                  "description": "Read tabs other than the active one, by id"
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "Read the page you're on, for 30 seconds after you use the plugin"
+        },
+        "pages": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?:https://(?:\\*|(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)|http://(?:localhost|127\\.0\\.0\\.1):(?:\\*|(?:[1-9]\\d{0,3}|[1-5]\\d{4}|6[0-4]\\d{3}|65[0-4]\\d{2}|655[0-2]\\d|6553[0-5])))/[^\\s]*$",
+                "maxLength": 512
+              },
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true
+            }
+          ],
+          "description": "Pages its pageStyles and contentScripts may run on"
+        },
+        "workspace": {
+          "type": "boolean",
+          "description": "See and rearrange every window, tab and group (needs tabs: write and fullUrls)"
+        },
+        "bookmarks": {
+          "enum": [
+            false,
+            "read",
+            "write"
+          ]
+        },
+        "history": {
+          "enum": [
+            false,
+            "read"
+          ]
+        },
+        "downloads": {
+          "enum": [
+            false,
+            "read"
+          ]
+        },
+        "media": {
+          "enum": [
+            false,
+            "read",
+            "control"
+          ]
+        },
+        "profiles": {
+          "enum": [
+            false,
+            "read",
+            "write"
+          ]
+        },
+        "clipboard": {
+          "enum": [
+            false,
+            "write",
+            "read"
+          ],
+          "description": "write: copy to the clipboard. read: also read it, when you use the plugin"
+        },
+        "notifications": {
+          "type": "boolean",
+          "description": "Show system notifications"
+        },
+        "files": {
+          "enum": [
+            false,
+            "picker"
+          ],
+          "description": "picker: open and save files you pick"
+        },
+        "commands": {
+          "type": "boolean",
+          "description": "Run Ardia commands"
+        },
+        "storage": {
+          "type": "boolean",
+          "description": "Keep its own data"
+        },
+        "secrets": {
+          "type": "boolean",
+          "description": "Keep secrets in the Keychain"
+        },
+        "control": {
+          "type": "boolean",
+          "description": "Let programs you run fully control Ardia, including your signed-in sites"
+        },
+        "network": {
+          "anyOf": [
+            {
+              "enum": [
+                false,
+                "*"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^(?:(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?|(?:localhost|127\\.0\\.0\\.1):(?:[1-9]\\d{0,3}|[1-5]\\d{4}|6[0-4]\\d{3}|65[0-4]\\d{2}|655[0-2]\\d|6553[0-5]))$",
+                "maxLength": 253
+              },
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true
+            }
+          ],
+          "description": "false, \"*\" or hosts like api.example.com, *.example.com and localhost:8080"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "events": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "tabs",
+                      "workspace",
+                      "navigation",
+                      "downloads",
+                      "media",
+                      "profiles"
+                    ]
+                  },
+                  "maxItems": 6,
+                  "uniqueItems": true,
+                  "description": "State changes the plugin hears after Ardia commits them, redacted"
+                },
+                "intents": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "tabs.group",
+                      "tabs.ungroup",
+                      "tabs.move",
+                      "tabs.pin",
+                      "tabs.unpin",
+                      "tabs.mute",
+                      "tabs.unmute",
+                      "tabs.activate",
+                      "groups.update",
+                      "splits.open",
+                      "peek.open"
+                    ]
+                  },
+                  "maxItems": 11,
+                  "uniqueItems": true,
+                  "description": "Changes the plugin may ask Ardia to make"
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "Redacted state events it hears and intents it may ask for"
+        }
+      },
+      "additionalProperties": false
+    },
+    "contributes": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z0-9.]{1,64}$",
+                "description": "An SF Symbol name"
+              },
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+                },
+                "maxItems": 8
+              },
+              "shortcut": {
+                "type": "string",
+                "maxLength": 40,
+                "description": "Modifiers and one key joined by +, like cmd+shift+k"
+              },
+              "tool": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+              },
+              "input": {
+                "type": "object"
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+              },
+              "view": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "panel": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "inputMode": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "handler": {
+                "const": true,
+                "description": "main handles it; the default when there's a main and nothing else"
+              },
+              "open": {
+                "enum": [
+                  "tab",
+                  "split"
+                ],
+                "description": "Open the plugin's page as a tab, or in Split View beside the current tab"
+              },
+              "context": {
+                "type": "boolean",
+                "description": "Hand the page the current tab (needs the tabs permission)"
+              },
+              "side": {
+                "enum": [
+                  "left",
+                  "right",
+                  "top",
+                  "bottom"
+                ]
+              },
+              "sideSetting": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^(/[^?#\\s]*)?(\\?[^#\\s]*)?$",
+                "maxLength": 512
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "title"
+            ]
+          },
+          "maxItems": 32
+        },
+        "inputModes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "placeholder": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z0-9.]{1,64}$",
+                "description": "An SF Symbol name"
+              },
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+                },
+                "maxItems": 8
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title"
+            ]
+          },
+          "maxItems": 4,
+          "description": "Modes the command bar switches into, each with its own placeholder"
+        },
+        "toolbar": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z0-9.]{1,64}$",
+                "description": "An SF Symbol name"
+              },
+              "command": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+              },
+              "view": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "tooltip": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,120}$"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "icon"
+            ]
+          },
+          "maxItems": 4
+        },
+        "sidebarViews": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z0-9.]{1,64}$",
+                "description": "An SF Symbol name"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title"
+            ]
+          },
+          "maxItems": 4
+        },
+        "panels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z0-9.]{1,64}$",
+                "description": "An SF Symbol name"
+              },
+              "mode": {
+                "enum": [
+                  "sidecar",
+                  "tab",
+                  "split"
+                ]
+              },
+              "file": {
+                "type": "string",
+                "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*$",
+                "maxLength": 1024
+              },
+              "view": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "retainContext": {
+                "type": "boolean"
+              },
+              "side": {
+                "enum": [
+                  "left",
+                  "right",
+                  "top",
+                  "bottom"
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "mode"
+            ]
+          },
+          "maxItems": 8
+        },
+        "menus": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9.]{1,64}$",
+                    "description": "An SF Symbol name"
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ]
+              },
+              "maxItems": 8
+            },
+            "group": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9.]{1,64}$",
+                    "description": "An SF Symbol name"
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ]
+              },
+              "maxItems": 8
+            },
+            "page": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9.]{1,64}$",
+                    "description": "An SF Symbol name"
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ]
+              },
+              "maxItems": 8
+            },
+            "selection": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9.]{1,64}$",
+                    "description": "An SF Symbol name"
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ]
+              },
+              "maxItems": 8
+            },
+            "link": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9.]{1,64}$",
+                    "description": "An SF Symbol name"
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ]
+              },
+              "maxItems": 8
+            },
+            "image": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9.]{1,64}$",
+                    "description": "An SF Symbol name"
+                  },
+                  "when": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ]
+              },
+              "maxItems": 8
+            }
+          },
+          "additionalProperties": false
+        },
+        "omnibox": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "keyword": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$"
+              },
+              "global": {
+                "type": "boolean",
+                "description": "Shows in every search; takes no keyword"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title"
+            ]
+          },
+          "maxItems": 4
+        },
+        "pageStyles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "matches": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?:https://(?:\\*|(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)|http://(?:localhost|127\\.0\\.0\\.1):(?:\\*|(?:[1-9]\\d{0,3}|[1-5]\\d{4}|6[0-4]\\d{3}|65[0-4]\\d{2}|655[0-2]\\d|6553[0-5])))/[^\\s]*$",
+                  "maxLength": 512
+                },
+                "minItems": 1,
+                "maxItems": 32
+              },
+              "css": {
+                "type": "string",
+                "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*\\.css$",
+                "maxLength": 1024
+              },
+              "when": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Shows only when this holds, like urlHost == \"github.com\" && !isPinned"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "matches",
+              "css"
+            ]
+          },
+          "maxItems": 16,
+          "description": "CSS Ardia adds to pages that match (needs permissions.pages to cover matches)"
+        },
+        "contentScripts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "matches": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?:https://(?:\\*|(?:\\*\\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?)|http://(?:localhost|127\\.0\\.0\\.1):(?:\\*|(?:[1-9]\\d{0,3}|[1-5]\\d{4}|6[0-4]\\d{3}|65[0-4]\\d{2}|655[0-2]\\d|6553[0-5])))/[^\\s]*$",
+                  "maxLength": 512
+                },
+                "minItems": 1,
+                "maxItems": 32
+              },
+              "js": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*\\.(?:m?js|cjs)$",
+                  "maxLength": 1024
+                },
+                "minItems": 1,
+                "maxItems": 8
+              },
+              "css": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*\\.css$",
+                  "maxLength": 1024
+                },
+                "maxItems": 8
+              },
+              "runAt": {
+                "enum": [
+                  "document_start",
+                  "document_idle"
+                ],
+                "default": "document_idle"
+              },
+              "allFrames": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "matches",
+              "js"
+            ]
+          },
+          "maxItems": 16,
+          "description": "Scripts Ardia runs in an isolated world on pages that match (needs permissions.pages to cover matches)"
+        },
+        "netRules": {
+          "type": "string",
+          "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*\\.json$",
+          "maxLength": 1024
+        },
+        "siteSwitches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,40}$"
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z0-9.]{1,64}$",
+                "description": "An SF Symbol name"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "title"
+            ]
+          },
+          "maxItems": 4
+        },
+        "pageBar": {
+          "type": "object",
+          "properties": {
+            "look": {
+              "const": "stripes"
+            },
+            "when": {
+              "type": "object",
+              "properties": {
+                "siteSwitch": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                },
+                "localAddresses": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "siteSwitch"
+              ]
+            },
+            "buttons": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "siteControls",
+                  "address",
+                  "copyLink",
+                  "console",
+                  "network",
+                  "inspect",
+                  "extensions",
+                  "split",
+                  "|"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 16
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "look",
+            "when",
+            "buttons"
+          ]
+        },
+        "themes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,40}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "file": {
+                "type": "string",
+                "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*\\.json$",
+                "maxLength": 1024
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title",
+              "file"
+            ]
+          },
+          "maxItems": 8
+        },
+        "hooks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]*(\\.[a-z][A-Za-z0-9]*)+$",
+            "maxLength": 80
+          },
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+              },
+              "title": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+              },
+              "description": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,200}$"
+              },
+              "timeout": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300,
+                "default": 30
+              },
+              "input": {
+                "type": "object",
+                "description": "A JSON Schema for the tool's input"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "title"
+            ]
+          },
+          "maxItems": 32
+        },
+        "programs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+              },
+              "path": {
+                "type": "string",
+                "pattern": "^(?![A-Za-z]:)(?![\\s\\S]*/$)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)[^/\\\\\\u0000-\\u001f\\u007f][^\\\\\\u0000-\\u001f\\u007f]*$",
+                "maxLength": 1024
+              },
+              "example": {
+                "type": "string",
+                "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,120}$"
+              },
+              "afterUpdate": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[^\\u0000]{1,1024}$"
+                  },
+                  "minItems": 1,
+                  "maxItems": 8
+                },
+                "maxItems": 4
+              },
+              "claim": {
+                "const": true
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "path"
+            ]
+          },
+          "maxItems": 4,
+          "description": "Commands Ardia puts on your PATH while the plugin is on"
+        },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "description": "Ardia settings, as in config.json"
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,200}$"
+                  },
+                  "type": {
+                    "enum": [
+                      "toggle",
+                      "text",
+                      "number",
+                      "choice",
+                      "secret"
+                    ]
+                  },
+                  "default": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 1024
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "choices": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,40}$"
+                        },
+                        "title": {
+                          "type": "string",
+                          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "value",
+                        "title"
+                      ]
+                    },
+                    "minItems": 2,
+                    "maxItems": 12
+                  },
+                  "min": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "step": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "placeholder": {
+                    "type": "string",
+                    "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "key",
+                  "title",
+                  "type"
+                ]
+              },
+              "maxItems": 20
+            }
+          },
+          "additionalProperties": false
+        },
+        "passwordManager": {
+          "type": "object",
+          "properties": {
+            "fill": {
+              "const": "system"
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "login",
+                  "oneTimeCode"
+                ]
+              },
+              "minItems": 1,
+              "maxItems": 2,
+              "uniqueItems": true
+            },
+            "verificationCodeSetup": {
+              "const": "system"
+            },
+            "passkeys": {
+              "const": "system"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "fill",
+            "fields"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,60}$"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]{1,800}$"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "items"
+      ],
+      "description": "What the plugin counts, shown before it's turned on"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "manifest",
+    "id",
+    "name",
+    "description",
+    "version",
+    "engines"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "contributes"
+            ],
+            "properties": {
+              "contributes": {
+                "required": [
+                  "programs"
+                ],
+                "properties": {
+                  "programs": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "required": [
+              "permissions"
+            ],
+            "properties": {
+              "permissions": {
+                "required": [
+                  "control"
+                ],
+                "properties": {
+                  "control": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "const": "global"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "permissions"
+        ],
+        "properties": {
+          "permissions": {
+            "required": [
+              "fullUrls"
+            ],
+            "properties": {
+              "fullUrls": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "permissions"
+        ],
+        "properties": {
+          "permissions": {
+            "required": [
+              "tabs"
+            ],
+            "properties": {
+              "tabs": {
+                "enum": [
+                  "read",
+                  "write"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "permissions"
+        ],
+        "properties": {
+          "permissions": {
+            "required": [
+              "workspace"
+            ],
+            "properties": {
+              "workspace": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "allOf": [
+          {
+            "required": [
+              "permissions"
+            ],
+            "properties": {
+              "permissions": {
+                "required": [
+                  "tabs"
+                ],
+                "properties": {
+                  "tabs": {
+                    "const": "write"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "required": [
+              "permissions"
+            ],
+            "properties": {
+              "permissions": {
+                "required": [
+                  "fullUrls"
+                ],
+                "properties": {
+                  "fullUrls": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "x-ardia-rules": [
+    "pageStyles[].matches and contentScripts[].matches must be covered by permissions.pages",
+    "a plugin can't depend on itself, nor list one id in both dependencies and optionalDependencies",
+    "views, sidebarViews, omnibox and inputModes need main; tools, hooks and handler commands need main or sidecar",
+    "commands, tools, panels and other contributions are unique by id or name, and what they name exists"
+  ]
+}

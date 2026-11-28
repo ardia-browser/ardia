@@ -1,7 +1,7 @@
 import { createContext, jsx, type Renderable } from "./element";
 import { useContext } from "./hooks";
 import { errorNode, mountSurface, type HandlerTable, type SurfaceHandle } from "./reconciler";
-import { HOST_METHODS, type PluginNode, type SurfaceMessage, type SurfaceMountMessage, type SurfaceKind } from "./protocol";
+import { HOST_METHODS, HOST_METHODS_V3, PATCH_PROTOCOL, diffTree, type PluginNode, type SurfaceMessage, type SurfaceMountMessage, type SurfaceKind } from "./protocol";
 import type { Rpc } from "./rpc";
 import type { Registry, ViewComponent, ViewProps } from "./types";
 
@@ -52,7 +52,7 @@ type MountedSurface = { handle: SurfaceHandle<RootProps>; handler(handlerId: str
 
 const NO_HANDLERS: HandlerTable = new Map();
 
-export function createSurfaceHost(rpc: Rpc, registry: Registry, report: (error: unknown) => void): SurfaceHost {
+export function createSurfaceHost(rpc: Rpc, registry: Registry, report: (error: unknown) => void, protocol: () => number = () => 0): SurfaceHost {
   const mounted = new Map<string, MountedSurface>();
 
   function unmount(surfaceId: string) {
@@ -77,21 +77,56 @@ export function createSurfaceHost(rpc: Rpc, registry: Registry, report: (error: 
     let latest: HandlerTable = NO_HANDLERS;
     let shown: HandlerTable = NO_HANDLERS;
     const isCurrent = () => mounted.get(message.surfaceId)?.handle === handle;
-    const sendTree = (tree: PluginNode, sent: number, handlers: HandlerTable) =>
-      rpc.request(HOST_METHODS.surfaceRender, { surfaceId: message.surfaceId, tree }).then(() => {
-        if (sent < acceptedGeneration) return;
-        acceptedGeneration = sent;
-        shown = handlers;
-      });
+    let sentTree: PluginNode | null = null;
+    let rev = 0;
+    const accept = (sent: number, handlers: HandlerTable) => {
+      if (sent < acceptedGeneration) return;
+      acceptedGeneration = sent;
+      shown = handlers;
+    };
+    const send = (tree: PluginNode, full: boolean): { done: Promise<unknown>; patched: boolean } => {
+      const patching = protocol() >= PATCH_PROTOCOL;
+      const previous = full ? null : sentTree;
+      const base = rev;
+      const ops = previous && patching ? diffTree(previous, tree) : null;
+      if (ops && ops.length === 0) return { done: Promise.resolve(), patched: true };
+      sentTree = tree;
+      rev = base + 1;
+      const surfaceId = message.surfaceId;
+      const whole = !ops || (ops.length === 1 && ops[0]?.op === "replace" && ops[0].path.length === 0);
+      const done = whole
+        ? rpc.request(HOST_METHODS.surfaceRender, { surfaceId, tree, ...(patching ? { rev } : {}) })
+        : rpc.request(HOST_METHODS_V3.surfacePatch, { surfaceId, base, rev, ops });
+      return {
+        done: done.catch((error) => {
+          if (sentTree === tree) sentTree = null;
+          throw error;
+        }),
+        patched: !whole,
+      };
+    };
+    const showError = (error: unknown, sent: number) => {
+      report(error);
+      if (sent !== generation || !isCurrent()) return;
+      latest = NO_HANDLERS;
+      send(errorNode(error), true)
+        .done.then(() => accept(sent, NO_HANDLERS))
+        .catch(report);
+    };
     const commit = (tree: PluginNode, handlers: HandlerTable) => {
       const sent = ++generation;
       latest = handlers;
-      sendTree(tree, sent, handlers).catch((error) => {
-        report(error);
-        if (sent !== generation || !isCurrent()) return;
-        latest = NO_HANDLERS;
-        sendTree(errorNode(error), sent, NO_HANDLERS).catch(report);
-      });
+      const first = send(tree, false);
+      first.done.then(
+        () => accept(sent, handlers),
+        (error) => {
+          if (!first.patched || sent !== generation || !isCurrent()) return showError(error, sent);
+          send(tree, true).done.then(
+            () => accept(sent, handlers),
+            (retryError) => showError(retryError, sent),
+          );
+        },
+      );
     };
     const handle = mountSurface<RootProps>(SurfaceRoot, { view, surface }, commit, { onError: report });
     mounted.set(message.surfaceId, { handle, handler: (handlerId) => shown.get(handlerId) ?? latest.get(handlerId) });

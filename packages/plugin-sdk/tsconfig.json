@@ -17,7 +17,11 @@
       "@ardia/plugin-sdk": ["./src/index.ts"],
       "@ardia/plugin-sdk/jsx-runtime": ["./src/jsxRuntime.ts"],
       "@ardia/plugin-sdk/jsx-dev-runtime": ["./src/jsxRuntime.ts"],
-      "@ardia/plugin-sdk/protocol": ["./src/protocol.ts"]
+      "@ardia/plugin-sdk/protocol": ["./src/protocol.ts"],
+      "@ardia/plugin-sdk/manifest": ["./src/manifest.ts"],
+      "@ardia/plugin-sdk/registry": ["./src/registry.ts"],
+      "@ardia/plugin-sdk/semver": ["./src/semver.ts"],
+      "@ardia/plugin-sdk/testing": ["./src/testing.ts"]
     }
   },
   "include": ["src"]

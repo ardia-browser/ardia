@@ -6,6 +6,8 @@ import {
   type FetchRequest,
   type FetchResponseData,
   type GroupLook,
+  type MediaChange,
+  type ProfilesChange,
   type NavigationCommit,
   type StateEventMap,
   type StateIntent,
@@ -27,6 +29,8 @@ import {
   type WorkspaceOp,
   type WorkspaceSnapshotOptions,
 } from "./protocol";
+import { createArdiaV3 } from "./apiV3";
+import type { Channels } from "./channels";
 import { PluginError, type Rpc } from "./rpc";
 import {
   addTo,
@@ -54,6 +58,7 @@ export type ApiState = {
   subscriptionsChanged(): void;
   listenerAdded(topic: string): void;
   report(error: unknown): void;
+  isReady(): boolean;
 };
 
 function unwrap(result: unknown, key: string): unknown {
@@ -100,7 +105,8 @@ function quickPick(rpc: Rpc) {
   return pick;
 }
 
-export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
+export function createArdia(rpc: Rpc, registry: Registry, state: ApiState, channels: Channels) {
+  const v3 = createArdiaV3(rpc, registry, channels, state);
   const settings = {
     get<T = unknown>(key: string, fallback?: T): T {
       return (key in state.values ? state.values[key] : fallback) as T;
@@ -229,6 +235,18 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
     downloads: {
       onChange: (listener: StateListener<DownloadsChange>): Disposable => stateApi.subscribe("downloads", listener),
     },
+    media: { ...v3.media, onChange: (listener: StateListener<MediaChange>): Disposable => stateApi.subscribe("media", listener) },
+    profiles: { ...v3.profiles, onChange: (listener: StateListener<ProfilesChange>): Disposable => stateApi.subscribe("profiles", listener) },
+    services: v3.services,
+    sidecar: v3.sidecar,
+    page: v3.page,
+    auth: v3.auth,
+    bookmarks: v3.bookmarks,
+    history: v3.history,
+    splits: v3.splits,
+    peek: v3.peek,
+    clipboard: v3.clipboard,
+    fs: v3.fs,
     state: stateApi,
     ui: {
       quickPick: quickPick(rpc),
@@ -241,6 +259,7 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
       },
       toast: (title: string, message?: string, options: ToastOptions = {}) =>
         rpc.request(M.toast, { title, ...(message ? { message } : {}), options }).then(() => undefined),
+      notify: v3.notify,
     },
     toolbar: {
       update: (itemId: string, update: ToolbarUpdate) => rpc.request(M.toolbarUpdate, { itemId, update }).then(() => undefined),
@@ -285,6 +304,8 @@ export function createArdia(rpc: Rpc, registry: Registry, state: ApiState) {
         const request: FetchRequest = typeof input === "string" ? { ...init, url: input } : { ...input, ...init };
         return response(await rpc.request<FetchReply>(M.fetch, request));
       },
+      fetchStream: v3.net.fetchStream,
+      connect: v3.net.connect,
     },
   };
 }

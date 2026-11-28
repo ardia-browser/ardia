@@ -1,18 +1,84 @@
 {
   "name": "@ardia/plugin-sdk",
-  "version": "2.0.0",
-  "private": true,
+  "version": "3.0.0",
+  "description": "Build Ardia browser plugins: the runtime, JSX components, manifest checks and registry tools.",
+  "license": "Apache-2.0",
   "type": "module",
+  "sideEffects": false,
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./jsx-runtime": "./src/jsxRuntime.ts",
     "./jsx-dev-runtime": "./src/jsxRuntime.ts",
-    "./protocol": "./src/protocol.ts"
+    "./protocol": "./src/protocol.ts",
+    "./manifest": "./src/manifest.ts",
+    "./registry": "./src/registry.ts",
+    "./semver": "./src/semver.ts",
+    "./testing": "./src/testing.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./jsx-runtime": {
+        "types": "./dist/jsxRuntime.d.ts",
+        "default": "./dist/jsxRuntime.js"
+      },
+      "./jsx-dev-runtime": {
+        "types": "./dist/jsxRuntime.d.ts",
+        "default": "./dist/jsxRuntime.js"
+      },
+      "./protocol": {
+        "types": "./dist/protocol.d.ts",
+        "default": "./dist/protocol.js"
+      },
+      "./manifest": {
+        "types": "./dist/manifest.d.ts",
+        "default": "./dist/manifest.js"
+      },
+      "./registry": {
+        "types": "./dist/registry.d.ts",
+        "default": "./dist/registry.js"
+      },
+      "./semver": {
+        "types": "./dist/semver.d.ts",
+        "default": "./dist/semver.js"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.ts",
+        "default": "./dist/testing.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ardia-browser/ardia.git",
+    "directory": "packages/plugin-sdk"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "node scripts/build.mjs",
+    "schema": "node scripts/write-schema.mjs",
     "typecheck": "tsrs --noEmit",
     "test": "node --no-warnings --import ../../apps/browser/src/test-loader.mjs --test src/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "~5.9.2"
   }
 }

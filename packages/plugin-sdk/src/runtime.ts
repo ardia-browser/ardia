@@ -1,7 +1,9 @@
 import { createArdia, type ApiState, type Ardia } from "./api";
+import { createChannels } from "./channels";
 import { enqueueMicrotask } from "./reconciler";
 import {
   HOST_METHODS as M,
+  CHANNEL_EVENT_NAMES,
   PLUGIN_PROTOCOL,
   isSurfaceMessage,
   type CallKind,
@@ -12,10 +14,11 @@ import {
 } from "./protocol";
 import { PluginError, createRpc, errorMessage, isUnencodable, type Transport } from "./rpc";
 import { createSurfaceHost } from "./surfaces";
+import { CALL_KINDS, cleanSuggestion, createSignal, inputOf, queryOf, type Signal } from "./calls";
 import { createSubscriptionSync, STATE_PREFIX, type ResyncOptions } from "./subscriptions";
-import { createRegistry, disposable, type CallContext, type CancelSignal, type Disposable, type PluginDefinition, type Registry } from "./types";
+import { createRegistry, type CallContext, type Disposable, type PluginDefinition, type Registry } from "./types";
 
-export const SDK_VERSION = "2.0.0";
+export const SDK_VERSION = "3.0.0";
 
 export type HostRuntimeOptions = { onError?: (error: unknown) => void; stopGraceMs?: number } & ResyncOptions;
 
@@ -30,63 +33,12 @@ export type HostRuntime = {
   request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
   surfaceCount(): number;
   callCount(): number;
+  channelCount(): number;
+  hostProtocol(): number;
   surfaceTree(surfaceId: string): unknown;
   whenIdle(): Promise<void>;
   dispose(): Promise<void>;
 };
-
-type Signal = CancelSignal & { cancel(): void };
-
-function createSignal(): Signal {
-  const listeners = new Set<() => void>();
-  let cancelled = false;
-  return {
-    get cancelled() {
-      return cancelled;
-    },
-    onCancel(listener) {
-      if (cancelled) listener();
-      else listeners.add(listener);
-      return disposable(() => listeners.delete(listener));
-    },
-    cancel() {
-      if (cancelled) return;
-      cancelled = true;
-      for (const listener of listeners) listener();
-      listeners.clear();
-    },
-  };
-}
-
-function cleanSuggestion(value: unknown): OmniboxSuggestion | null {
-  if (typeof value !== "object" || value === null) return null;
-  const { title, url, subtitle, icon, badge } = value as Record<string, unknown>;
-  if (typeof title !== "string" || typeof url !== "string") return null;
-  const out: OmniboxSuggestion = { title, url };
-  if (typeof subtitle === "string") out.subtitle = subtitle;
-  if (typeof icon === "string") out.icon = icon;
-  if (typeof badge === "string") out.badge = badge;
-  return out;
-}
-
-function queryOf(input: unknown): string {
-  if (typeof input === "string") return input;
-  if (typeof input === "object" && input !== null) {
-    const { query, text } = input as { query?: unknown; text?: unknown };
-    if (typeof query === "string") return query;
-    if (typeof text === "string") return text;
-  }
-  return "";
-}
-
-const CALL_KINDS: readonly CallKind[] = ["tool", "command", "omnibox", "decide"];
-
-function inputOf(kind: CallKind, message: PluginCallMessage): unknown {
-  if (message.input !== undefined) return message.input;
-  if (kind === "decide") return message.data;
-  if (kind === "omnibox") return message.query;
-  return undefined;
-}
 
 export function createHostRuntime(transport: Transport, options: HostRuntimeOptions = {}): HostRuntime {
   const rpc = createRpc(transport);
@@ -101,7 +53,13 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
   let stopped = false;
   let stopping: Promise<void> | null = null;
   let work = Promise.resolve();
-  let cleanup: () => Promise<void> = async () => surfaces.closeAll();
+  let readySent = false;
+  let hostProtocol = 0;
+  let cleanup: () => Promise<void> = async () => closeEverything();
+  const closeEverything = () => {
+    surfaces.closeAll();
+    channels.closeAll();
+  };
 
   const stop = (): Promise<void> => {
     if (stopping) return stopping;
@@ -141,9 +99,11 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     subscriptionsChanged: () => subscriptions.sync(),
     listenerAdded: (topic) => subscriptions.listenerAdded(topic),
     report,
+    isReady: () => readySent && !stopped,
   };
-  const ardia = createArdia(rpc, registry, state);
-  const surfaces = createSurfaceHost(rpc, registry, report);
+  const channels = createChannels(rpc, report);
+  const ardia = createArdia(rpc, registry, state, channels);
+  const surfaces = createSurfaceHost(rpc, registry, report, () => hostProtocol);
 
   const whenActive = (task: () => unknown, refuse?: (activationError: unknown) => unknown) => {
     work = work
@@ -158,7 +118,14 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       );
   };
 
-  async function dispatchCall(kind: CallKind, name: string, input: unknown, call: CallContext): Promise<unknown> {
+  async function dispatchCall(kind: CallKind, name: string, input: unknown, call: CallContext, method: string | undefined): Promise<unknown> {
+    if (kind === "service") {
+      const handlers = registry.services.get(name);
+      if (!handlers) throw new Error(`This plugin doesn't provide ${name}.`);
+      const handler = method !== undefined && Object.hasOwn(handlers, method) ? handlers[method] : undefined;
+      if (!handler) throw new Error(`${name} has no method ${method ?? "(none)"}.`);
+      return handler(input, call);
+    }
     if (kind === "tool") {
       const tool = registry.tools.get(name);
       if (!tool) throw new Error(`This plugin has no tool ${name}.`);
@@ -198,7 +165,7 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     };
     let body: Record<string, unknown>;
     try {
-      const result = await dispatchCall(kind, name, inputOf(kind, message), call);
+      const result = await dispatchCall(kind, name, inputOf(kind, message), call, message.method);
       body = { call: message.call, result: result === undefined ? null : result };
     } catch (error) {
       body = { call: message.call, error: errorMessage(error) };
@@ -267,6 +234,10 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
         for (const listener of [...registry.pages]) listener(record.pageMessage, view);
       });
     }
+    if (typeof record.event === "string" && CHANNEL_EVENT_NAMES.includes(record.event)) {
+      const data = (typeof record.data === "object" && record.data !== null ? record.data : {}) as Record<string, unknown>;
+      return void channels.deliver(record.event, data);
+    }
     if (typeof record.event === "string") {
       subscriptions.noteDropped(record.dropped);
       const data = (typeof record.data === "object" && record.data !== null ? record.data : {}) as Record<string, unknown>;
@@ -295,6 +266,7 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     if (definition.omnibox) held.push(ardia.omnibox.register(definition.omnibox));
     if (definition.onPageMessage) held.push(ardia.pages.onMessage(definition.onPageMessage));
     if (definition.onSettingsChange) held.push(ardia.settings.onChange(definition.onSettingsChange));
+    for (const [iface, handlers] of Object.entries(definition.services ?? {})) held.push(ardia.services.provide(iface, handlers));
     return held;
   }
 
@@ -305,12 +277,13 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     omnibox: registry.omnibox.size > 0,
     decide: [...registry.decide.keys()],
     events: [...registry.events.keys()],
+    ...(registry.services.size ? { services: Object.fromEntries([...registry.services].map(([iface, handlers]) => [iface, Object.keys(handlers)])) } : {}),
   });
 
   function definePlugin(definition: PluginDefinition<Ardia>): Promise<void> {
     const held = register(definition);
     cleanup = async () => {
-      surfaces.closeAll();
+      closeEverything();
       for (const item of held.splice(0).reverse()) {
         try {
           item.dispose();
@@ -327,6 +300,7 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       })) ?? { app: "", version: "", protocol: 0, plugin: "" };
       if (stopped) return;
       state.info = { name: hello.plugin, app: hello.app, version: hello.version, protocol: hello.protocol };
+      hostProtocol = typeof hello.protocol === "number" ? hello.protocol : 0;
       state.values = { ...(hello.values ?? {}), ...state.values };
       const returned = definition.activate ? await definition.activate(ardia) : undefined;
       if (returned && typeof returned.dispose === "function") {
@@ -337,7 +311,14 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
       activated = true;
       subscriptions.sync();
     })();
-    const ready = activation.then(() => (stopped ? undefined : rpc.request(M.ready, readyParams()))).then(() => undefined);
+    const ready = activation
+      .then(() => {
+        if (stopped) return undefined;
+        readySent = true;
+        return rpc.request(M.ready, readyParams());
+      })
+      .then(() => undefined);
+    activation.catch(() => channels.closeAll());
     ready.catch(report);
     return ready;
   }
@@ -349,6 +330,8 @@ export function createHostRuntime(transport: Transport, options: HostRuntimeOpti
     request: (method, params) => rpc.request(method, params),
     surfaceCount: () => surfaces.count(),
     callCount: () => calls.size,
+    channelCount: () => channels.openCount(),
+    hostProtocol: () => hostProtocol,
     surfaceTree: (surfaceId) => surfaces.tree(surfaceId),
     whenIdle: async () => {
       for (let i = 0; i < 20; i++) {

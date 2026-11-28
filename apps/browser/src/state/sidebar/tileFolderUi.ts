@@ -4,6 +4,10 @@ import { create } from "zustand";
 import { useBrowser } from "../browser/store";
 import { activeTabId, plural } from "../browser/model";
 import { dissolveTileFolder, folderIn, folderMembers, leaveTileFolder, newTileFolder, renameTileFolder } from "../pins/tileFolders";
+import { isPageUnloaded } from "../pins/pinShare";
+import { consentToken } from "../telemetry/client";
+import { noteTileFolderMiddleClose } from "../telemetry/tabPresses";
+import { middleClickSidebarTab } from "./clearTabs";
 import { dismissHover } from "./hover";
 import { measureRow } from "./sidebarUi";
 
@@ -68,6 +72,13 @@ export function newFolderWithTab(windowId: string, tabId: string) {
 
 export function removeFromFolder(tabId: string) {
   useBrowser.setState((s) => leaveTileFolder(s, [tabId]));
+}
+
+export function middleClickFolderMember(windowId: string, tabId: string) {
+  const consent = consentToken();
+  const wasLoaded = !isPageUnloaded(store(), tabId);
+  middleClickSidebarTab(windowId, tabId, { consent });
+  if (wasLoaded && isPageUnloaded(store(), tabId)) noteTileFolderMiddleClose(consent);
 }
 
 export function tileFolderContextItems(count: number): MenuItem[] {

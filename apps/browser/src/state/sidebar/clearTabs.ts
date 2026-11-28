@@ -9,6 +9,7 @@ import { duplicateTabIds } from "../pins/duplicateTabs";
 import { noteDuplicateTabsClosed, noteDuplicateTabsUndo } from "../telemetry/tidyTabsCounts";
 import { showUndoToast } from "./undoToast";
 import { userClose, type ByUser } from "../tabs/closeActivation";
+import { pressStripClose } from "../tabs/stripPress";
 
 const store = () => useBrowser.getState();
 
@@ -48,6 +49,10 @@ export function middleClickTab(tabId: string, user: ByUser) {
   const removed = store().removeClosedPin(tabId);
   if (!removed) return void closeTab(tabId, { user });
   if (removed.entries.length) showClearUndo(removed, "Removed Pinned Tab", "pin.slash");
+}
+
+export function middleClickSidebarTab(windowId: string, tabId: string, user: ByUser) {
+  pressStripClose(windowId, tabId, () => middleClickTab(tabId, user), (id) => !!store().tabs[id]);
 }
 
 const showClearUndo = (cleared: ClearedTabs, title: string, icon: string, onUndo?: () => void) =>

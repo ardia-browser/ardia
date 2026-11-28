@@ -15,7 +15,7 @@ import { clickTab } from "../../state/sidebar/actions";
 import { useDragController, useDragItem, useFolderAway } from "./DragProvider";
 import { openTabMenu } from "../../state/sidebar/menus";
 import { TabIcon } from "./TabIcon";
-import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMoves, openTileFolderMenu, useFolderPanel } from "../../state/sidebar/tileFolderUi";
+import { closeFolderPanel, closeFolderPanelOnPress, closeFolderPanelWhenWindowMoves, middleClickFolderMember, openTileFolderMenu, useFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { tailKey } from "./dragModel";
 import { useStruckTitle } from "../../state/sidebar/rowState";
 import { watchSidebarControlsRow } from "../../state/windows/layout";
@@ -107,7 +107,7 @@ function MemberRow({ tabId, windowId }: { tabId: string; windowId: string }) {
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
       <View {...hoverProps}>
-        <ContextMenuArea onContextMenu={() => void openTabMenu(windowId, tab)}>
+        <ContextMenuArea onMiddleClick={() => middleClickFolderMember(windowId, tabId)} onContextMenu={() => void openTabMenu(windowId, tab)}>
           <Pressable
             onPressIn={squish.onPressIn}
             onPressOut={squish.onPressOut}

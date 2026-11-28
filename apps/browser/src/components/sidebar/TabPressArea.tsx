@@ -4,9 +4,7 @@ import { hostOf } from "@ardia/core";
 import { useSettings } from "../../state/browser/hooks";
 import { tabTitle } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
-import { middleClickTab } from "../../state/sidebar/clearTabs";
-import { pressStripClose } from "../../state/tabs/stripPress";
-import { workspaceSnapshot } from "../../state/browser/current";
+import { middleClickSidebarTab } from "../../state/sidebar/clearTabs";
 import { dismissHover } from "../../state/sidebar/hover";
 import { openTabMenu } from "../../state/sidebar/menus";
 import { clickHeldTabPress, endPressGesture, holdTabPress, pressOutTabPress, type TabPress, type TileDoubleClick } from "../../state/sidebar/heldTabPress";
@@ -53,10 +51,7 @@ export function tabPressView({
 }: TabPressProps & { press: { current: TabPress | null }; inSplit: boolean; plainTooltip: boolean; onPressChange?: (pressed: boolean) => void }) {
   return (
     <ContextMenuArea
-      onMiddleClick={() => {
-        const user = { consent: consentToken() };
-        pressStripClose(windowId, tab.id, () => middleClickTab(tab.id, user), (tabId) => !!workspaceSnapshot().tabs[tabId]);
-      }}
+      onMiddleClick={() => middleClickSidebarTab(windowId, tab.id, { consent: consentToken() })}
       onContextMenu={() => {
         dismissHover();
         void openTabMenu(windowId, tab);

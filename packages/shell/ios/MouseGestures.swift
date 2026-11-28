@@ -16,6 +16,9 @@ final class MouseGestures {
   private var cancelled = false
   private var trail: MouseGestureTrail?
   private var replays: [NSEvent] = []
+  private var releaseWatch: Timer?
+  private var releasedSince: TimeInterval?
+  private var driven = false
   private(set) var lastOutcome = "none"
 
   var isTracking: Bool { press != nil }
@@ -92,7 +95,27 @@ final class MouseGestures {
     closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
       self?.cancel()
     }
+    releasedSince = nil
+    releaseWatch = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.checkRelease() }
     return nil
+  }
+
+  private static let lostReleaseSeconds: TimeInterval = 0.5
+
+  private func checkRelease() {
+    guard press != nil, !driven else { return }
+    guard NSEvent.pressedMouseButtons & 0b10 == 0 else {
+      releasedSince = nil
+      return
+    }
+    let now = ProcessInfo.processInfo.systemUptime
+    guard let since = releasedSince else {
+      releasedSince = now
+      return
+    }
+    guard now - since > Self.lostReleaseSeconds else { return }
+    lastOutcome = "abandoned"
+    finish()
   }
 
   private func screenPoint(_ event: NSEvent) -> NSPoint {
@@ -153,6 +176,10 @@ final class MouseGestures {
   private func finish() {
     press = nil
     page = nil
+    releaseWatch?.invalidate()
+    releaseWatch = nil
+    releasedSince = nil
+    driven = false
     pageTab = nil
     cancelled = false
     trail?.close()
@@ -180,6 +207,7 @@ final class MouseGestures {
     }
     for (index, point) in located.enumerated() {
       send(index == 0 && press == nil ? .rightMouseDown : .rightMouseDragged, point)
+      if press != nil { driven = true }
     }
     let trailWindow = trail?.windowNumber
     let title = trail?.title

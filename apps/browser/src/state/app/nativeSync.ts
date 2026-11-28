@@ -2,7 +2,7 @@ import { lastTabClosesWindow, onWindowRequest } from "../../platform/tabs";
 import { noteMouseShortcutRun } from "../telemetry/mouseShortcutCounts";
 import { noteMouseGestureRun } from "../telemetry/mouseGestureCounts";
 import { activateFocusedPane } from "../windows/card";
-import { gestureTab } from "../commands/gestureTab";
+import { gestureRoute } from "../commands/gestureTab";
 import { menuSyncTotals } from "./menuSyncTotals";
 import { nativeConsent } from "../telemetry/nativeConsent";
 import { onDownload } from "../../platform/downloads";
@@ -72,7 +72,8 @@ export function startNativeSync() {
   onCommand((e) => {
     if (e.mouseButton) noteMouseShortcutRun(e.mouseButton, nativeConsent(e));
     if (e.mouseGesture) noteMouseGestureRun(e.mouseGesture, nativeConsent(e));
-    const tabId = gestureTab(store.getState(), e);
+    const { run, tabId } = gestureRoute(store.getState(), e);
+    if (!run) return;
     if (tabId) activateFocusedPane(tabId);
     const user = { consent: nativeConsent(e) };
     settlingCommandFocus(e, (event) => runCommand(event, { user, tabId }));

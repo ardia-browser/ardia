@@ -3,7 +3,7 @@ import { after, test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { menuState } = await import("./menuState.ts");
 const { runCommand } = await import("./commands.ts");
-const { gestureTab } = await import("./gestureTab.ts");
+const { gestureRoute } = await import("./gestureTab.ts");
 const { settingsSnapshot } = await import("../telemetry/settingsSnapshot.ts");
 const { noteMouseGestureRun, takeMouseGestureCounts } = await import("../telemetry/mouseGestureCounts.ts");
 const { isConfigSettingKey } = await import("../settings/configAllowlist.ts");
@@ -60,23 +60,29 @@ test("Close Tab drawn on a page closes that tab only, even with a sidebar multi-
   S().activate(b);
   S().setSelection(w, [b, c]);
   const event = { command: "closeTab", arg: null, windowId: w, mouseGesture: "close_tab", gestureTabId: b };
-  runCommand(event, { tabId: gestureTab(S(), event) });
+  const route = gestureRoute(S(), event);
+  assert.deepEqual(route, { run: true, tabId: b });
+  runCommand(event, { tabId: route.tabId });
   assert.equal(S().tabs[b], undefined);
   assert.equal(S().tabs[a]?.url, "https://a.com/");
   assert.equal(S().tabs[c]?.url, "https://c.com/");
 });
 
-test("a gesture names its tab only for a page that is still in that regular window", () => {
+test("a gesture runs on its own tab, drops when that tab is gone, and keeps Little Ardia's limits", () => {
   S().hydrate({});
   const w = S().createWindow({ url: "https://a.com/" });
   const [a] = S().windows[w].tabIds;
+  const b = S().newTab(w, { url: "https://b.com/" });
+  const other = S().createWindow({ url: "https://c.com/" });
+  const [c] = S().windows[other].tabIds;
   const small = S().createWindow({ kind: "small", url: "https://little.example/" });
-  const [little] = S().windows[small].tabIds;
-  const gesture = (windowId, gestureTabId, mouseGesture = "back") => gestureTab(S(), { windowId, gestureTabId, mouseGesture });
-  assert.equal(gesture(w, a), a);
-  assert.equal(gesture(w, a, null), null, "only gestures carry a page tab");
-  assert.equal(gesture(small, little), null, "Little Ardia keeps its own command routing");
-  assert.equal(gesture(small, a), null, "a tab from another window is never targeted");
-  assert.equal(gesture(w, "tab-gone"), null);
-  assert.equal(gesture(w, ""), null);
+  const route = (windowId, gestureTabId, command = "back", mouseGesture = "back") => gestureRoute(S(), { command, windowId, gestureTabId, mouseGesture });
+  assert.deepEqual(route(w, a), { run: true, tabId: a });
+  assert.deepEqual(route(w, a, "back", null), { run: true, tabId: null }, "a command that isn't a gesture is untouched");
+  assert.deepEqual(route(w, null), { run: true, tabId: null }, "a gesture whose page tab is unknown runs as the window's command");
+  assert.deepEqual(route(w, c), { run: false, tabId: null }, "a tab that moved to another window is never acted on");
+  S().closeTab(b);
+  assert.deepEqual(route(w, b, "closeTab", "close_tab"), { run: false, tabId: null }, "a closed tab never falls back to the active tab or the selection");
+  assert.deepEqual(route(small, null, "nextTab", "next_tab"), { run: false, tabId: null }, "Little Ardia keeps Next Tab off, key window or not");
+  assert.deepEqual(route(small, null, "back"), { run: true, tabId: null });
 });

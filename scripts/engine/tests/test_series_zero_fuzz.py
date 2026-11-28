@@ -996,26 +996,33 @@ class Extend(unittest.TestCase):
         subprocess.run(["rm", "-rf", self.dir])
 
     def test_a_file_the_tree_holds_as_chromium_has_it_is_taken_with_its_mode(self):
-        got = packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc", "chrome/f.cc"])
+        got = packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc", "chrome/f.cc"], "HEAD")
         self.assertEqual(got, {"components/store/new.cc": (b"store\n", 0o644), "chrome/f.cc": (ORIGINAL.encode(), 0o755)})
 
     def test_a_file_step_3_may_change_or_the_tree_changed_is_refused_with_its_reason(self):
-        cases = {"components/store/edited.cc": "isn't Chromium's at HEAD",
+        cases = {"components/store/edited.cc": "isn't Chromium's at the tag",
                  "components/store/untracked.cc": "doesn't track it",
                  "components/store/helium.cc": "helium/patches/core/p.patch",
                  "components/store/domsub.cc": "helium/domain_substitution.list",
+                 "chrome/app/strings.grdp": "a step-3 stage rewrites it",
+                 "chrome/app/resources/x_fr.xtb": "a step-3 stage rewrites it",
+                 "chrome/VERSION": "a step-3 stage rewrites it",
+                 "chrome/browser/prefs/fixed.cc": "a step-3 stage rewrites it",
+                 "ardia/layer.cc": "records it as absent",
                  "../outside.cc": "isn't a safe relative path"}
         for path, reason in cases.items():
             with self.subTest(path=path):
                 with self.assertRaises(series_base.Problem) as caught:
-                    packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc", path])
+                    packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc", path], "HEAD",
+                                               absent=["ardia/layer.cc"],
+                                               named={"chrome/VERSION", "chrome/browser/prefs/fixed.cc"})
                 self.assertIn(reason, str(caught.exception))
                 self.assertIn("fresh step-3 run", str(caught.exception))
 
     def test_a_mode_that_differs_from_head_is_refused(self):
         os.chmod(os.path.join(self.src, "components/store/new.cc"), 0o755)
         with self.assertRaises(series_base.Problem):
-            packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc"])
+            packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc"], "HEAD")
 
     def base_archive(self):
         base = os.path.join(self.dir, "base")
@@ -1029,7 +1036,7 @@ class Extend(unittest.TestCase):
 
     def test_the_extended_archive_keeps_the_base_and_its_provenance_and_names_what_it_added(self):
         manifest, archive = self.base_archive()
-        extensions = packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc"])
+        extensions = packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc"], "HEAD")
         dest = os.path.join(self.dir, "extended")
         os.makedirs(dest)
         extended, out = packer.extend_archive(archive, extensions, dest, "chromium abc", "def")
@@ -1054,6 +1061,43 @@ class Extend(unittest.TestCase):
         os.makedirs(dest)
         with self.assertRaises(series_base.Problem):
             packer.extend_archive(archive, {"chrome/f.cc": (b"x", 0o644)}, dest, "chromium abc", "def")
+
+    def test_a_file_the_archive_records_as_absent_is_not_added(self):
+        _, archive = self.base_archive()
+        dest = os.path.join(self.dir, "extended")
+        os.makedirs(dest)
+        with self.assertRaises(series_base.Problem):
+            packer.extend_archive(archive, {"ardia/layer.cc": (b"x", 0o644)}, dest, "chromium abc", "def")
+
+    def test_blobs_come_from_the_given_commit_not_from_a_later_head(self):
+        first = subprocess.run(["git", "-C", self.src, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        pathlib.Path(self.src, "components/store/new.cc").write_text("later\n")
+        subprocess.run(["git", "-C", self.src, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "later"],
+                       check=True)
+        with self.assertRaises(series_base.Problem):
+            packer.pristine_extensions(self.src, [self.helium], ["components/store/new.cc"], first)
+
+    def test_the_pinned_archive_must_have_the_table_sha256_even_when_given(self):
+        manifest, archive = self.base_archive()
+        row = dict(self.ident, tag="t", asset=os.path.basename(archive), sha256=series_base.sha256_file(archive))
+        with mock.patch.object(series_base, "find_row", return_value=row):
+            self.assertEqual(packer.pinned_archive(self.ident, archive), os.path.realpath(archive))
+            with mock.patch.object(series_base, "find_row", return_value=dict(row, sha256="0" * 64)):
+                with self.assertRaises(SystemExit):
+                    packer.pinned_archive(self.ident, archive)
+
+    def test_the_tag_commit_is_the_peeled_commit_the_remote_lists(self):
+        listed = subprocess.CompletedProcess([], 0, stdout="aaa\trefs/tags/1.2.3.4\nbbb\trefs/tags/1.2.3.4^{}\n", stderr="")
+        with mock.patch.object(packer.subprocess, "run", return_value=listed):
+            self.assertEqual(packer.tag_commit("1.2.3.4"), "bbb")
+        with mock.patch.object(packer.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="", stderr="")):
+            with self.assertRaises(series_base.Problem):
+                packer.tag_commit("1.2.3.4")
+
+    def test_step_3_names_its_version_and_fixup_files(self):
+        named = packer.step3_named_files()
+        self.assertIn("chrome/VERSION", named)
+        self.assertGreater(len(named), 1)
 
     def test_an_archive_without_extensions_keeps_the_revision_it_always_had(self):
         manifest, _ = self.base_archive()

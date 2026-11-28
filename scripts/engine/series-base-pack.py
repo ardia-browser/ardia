@@ -28,17 +28,20 @@ a file a patch renames, copies or only changes the mode of (capture-base doesn't
 base from a tree step 3 just left.
 
 extend runs on the builder, read-only on its tree, when a series change starts reading files the pinned archive
-lacks (a patch for a file no earlier step touched). It packs a new archive: the pinned one (--archive, or the copy
-series-zero-fuzz.py cached under ~/.cache/ardia/series-base, checked against series-bases.tsv) plus each missing file,
-taken from the tree. It takes a file only when it is pristine, which makes it what step 3 left: the series never
-touched it before (it is missing from the base), so the tree holds step 3's output for it, and that output is
-Chromium's own:
-- Chromium's repository tracks the file at the tree's HEAD, whose chrome/VERSION is the pinned Chromium;
-- the tree's bytes and mode are HEAD's (a file step 3 or an applied step changed, or an unapplied edit, stops it);
-- no Helium patch, domain_substitution.list, pruning.list or resource list of the pinned Helium checkouts, and no
-  line of ardia_resources.txt, names it.
+lacks (a patch for a file no earlier step touched). It packs a new archive: the pinned one (its sha256 checked against
+series-bases.tsv, from --archive or the copy series-zero-fuzz.py cached under ~/.cache/ardia/series-base) plus each
+missing file as step 3 leaves it, which for these files is Chromium's own at the pinned tag. It takes a file only when
+step 3 can't have changed it:
+- no stage selects it: it isn't a .grd, .grdp or .xtb (the name substitution, translation and branding passes rewrite
+  every one), chrome/VERSION (the version stage) or a file 03-helium.py's FIXUPS edits, and no Helium patch,
+  domain_substitution.list, pruning.list or resource list of the pinned Helium checkouts, nor ardia_resources.txt,
+  names it;
+- Chromium's repository tracks it as a regular file at the pinned tag's commit (resolved on chromium.googlesource.com),
+  which must be the tree's HEAD, and the bytes and mode come from that commit;
+- the archive doesn't already hold it or record it as absent;
+- the tree holds the same bytes and mode (a difference means something touched it: re-pack).
 Any other file stops it with the reason: re-pack that one from a fresh step-3 run. The new archive keeps the pinned
-archive's provenance and records each added file under "extensions", with its source commit; publish it as usual.
+archive's provenance and records each added file under "extensions", with the tag commit; publish it as usual.
 
 publish runs where gh is signed in. It creates the prerelease series-base-<chromium>-<helium12> if needed, uploads
 the archive, its .sha256 and manifest (each one already there must match; an archive of the same files packed
@@ -49,6 +52,7 @@ row for the same pins, for you to commit.
 import argparse
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
@@ -246,8 +250,8 @@ def cmd_pack(args):
                                                                    digest]))
 
 
-def head_blob(src, path):
-    listed = subprocess.run(["git", "-C", src, "ls-tree", "HEAD", "--", path], capture_output=True, text=True)
+def head_blob(src, path, commit="HEAD"):
+    listed = subprocess.run(["git", "-C", src, "ls-tree", commit, "--", path], capture_output=True, text=True)
     fields = listed.stdout.split()
     if listed.returncode or len(fields) < 4 or fields[1] != "blob" or fields[3] != path or \
             fields[0] not in ("100644", "100755"):
@@ -260,6 +264,25 @@ def head_blob(src, path):
 
 HELIUM_LISTINGS = ("domain_substitution.list", "pruning.list", "resources/helium_resources.txt",
                    "resources/generate_resources.txt")
+STEP3_REWRITES_EVERY = (".grd", ".grdp", ".xtb")
+CHROMIUM_REMOTE = "https://chromium.googlesource.com/chromium/src"
+
+
+def step3_named_files():
+    spec = importlib.util.spec_from_file_location("helium_step3", series_base.BUILD / "03-helium.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return {"chrome/VERSION"} | {rel for rel, _, _ in module.FIXUPS}
+
+
+def tag_commit(version, remote=CHROMIUM_REMOTE):
+    listed = subprocess.run(["git", "ls-remote", remote, f"refs/tags/{version}", f"refs/tags/{version}^{{}}"],
+                            capture_output=True, text=True, timeout=120)
+    refs = dict(reversed(line.split("\t", 1)) for line in listed.stdout.splitlines() if "\t" in line)
+    commit = refs.get(f"refs/tags/{version}^{{}}") or refs.get(f"refs/tags/{version}")
+    if listed.returncode or not commit:
+        raise series_base.Problem(f"couldn't resolve Chromium's tag {version} on {remote}")
+    return commit
 
 
 def helium_mentions(helium_checkouts, path):
@@ -279,34 +302,39 @@ def helium_mentions(helium_checkouts, path):
     return mentions
 
 
-def pristine_extensions(src, helium_checkouts, paths):
+def pristine_extensions(src, helium_checkouts, paths, commit, absent=(), named=None):
+    named = step3_named_files() if named is None else named
     extensions, problems = {}, []
     for path in paths:
         if not series_base.safe_relative(path):
             problems.append(f"{path!r} isn't a safe relative path")
             continue
-        blob = head_blob(src, path)
+        if path in absent:
+            problems.append(f"{path}: the pinned archive records it as absent from the base")
+            continue
+        if path.endswith(STEP3_REWRITES_EVERY) or path in named:
+            problems.append(f"{path}: a step-3 stage rewrites it")
+            continue
+        mentions = helium_mentions(helium_checkouts, path)
+        if mentions:
+            problems.append(f"{path}: step 3 may change it ({', '.join(mentions)} names it)")
+            continue
+        blob = head_blob(src, path, commit)
         if blob is None:
-            problems.append(f"{path}: Chromium's own repository doesn't track it as a regular file at {src}'s HEAD "
+            problems.append(f"{path}: Chromium's own repository doesn't track it as a regular file at {commit} "
                             "(a file of a DEPS checkout, or a new one)")
             continue
         target = os.path.join(src, path)
         if os.path.islink(target) or not os.path.isfile(target):
             problems.append(f"{path}: the tree holds no regular file there")
             continue
-        data = pathlib.Path(target).read_bytes()
-        mode = series_base.normal_mode(os.stat(target).st_mode)
-        if (data, mode) != blob:
-            problems.append(f"{path}: the tree's file isn't Chromium's at HEAD (step 3 or an applied step changed it, "
-                            "or it holds an edit)")
-            continue
-        mentions = helium_mentions(helium_checkouts, path)
-        if mentions:
-            problems.append(f"{path}: step 3 may change it ({', '.join(mentions)} names it)")
+        if (pathlib.Path(target).read_bytes(), series_base.normal_mode(os.stat(target).st_mode)) != blob:
+            problems.append(f"{path}: the tree's file isn't Chromium's at the tag (something changed it, or it holds "
+                            "an edit)")
             continue
         extensions[path] = blob
     if problems:
-        raise series_base.Problem("these files can't be added from the tree, so re-pack the base from a fresh "
+        raise series_base.Problem("these files can't be added from Chromium's tag, so re-pack the base from a fresh "
                                   "step-3 run (docs/engine-build.md, \"The series base archive\"):\n  " +
                                   "\n  ".join(problems))
     return extensions
@@ -316,9 +344,9 @@ def extend_archive(archive, extensions, dest, origin, series_commit):
     with tempfile.TemporaryDirectory(prefix="ac-series-extend-") as scratch:
         manifest = series_base.extract(archive, scratch)
         snapshot = series_base.snapshot_base(scratch)
-    overlap = sorted(set(extensions) & set(snapshot))
+    overlap = sorted(set(extensions) & (set(snapshot) | set(manifest["absent"])))
     if overlap:
-        raise series_base.Problem(f"{archive} already holds {overlap[0]}")
+        raise series_base.Problem(f"{archive} already holds {overlap[0]}, or records it as absent")
     snapshot.update(extensions)
     fields = {key: value for key, value in manifest.items() if key not in ("format", "files", "absent")}
     added = [{"path": path, "sha256": hashlib.sha256(data).hexdigest(), "origin": origin}
@@ -332,17 +360,15 @@ def extend_archive(archive, extensions, dest, origin, series_commit):
 
 
 def pinned_archive(ident, given):
-    if given:
-        return os.path.abspath(given)
     row = series_base.find_row(ident)
     if row is None:
         series_base.die(f"no series-bases.tsv row for {ident['platform']}/{ident['cpu']} at these pins: re-pack instead")
-    cached = pathlib.Path.home() / ".cache/ardia/series-base" / row["asset"]
-    if not cached.is_file():
+    archive = pathlib.Path(given) if given else pathlib.Path.home() / ".cache/ardia/series-base" / row["asset"]
+    if not archive.is_file():
         series_base.die(f"{row['asset']} isn't cached: run scripts/engine/series-zero-fuzz.py once, or pass --archive")
-    if series_base.sha256_file(cached) != row["sha256"]:
-        series_base.die(f"{cached} doesn't have the sha256 series-bases.tsv pins")
-    return str(cached)
+    if series_base.sha256_file(archive) != row["sha256"]:
+        series_base.die(f"{archive} isn't the archive series-bases.tsv pins ({row['asset']}, sha256 {row['sha256']})")
+    return str(archive.resolve())
 
 
 def cmd_extend(args):
@@ -357,9 +383,9 @@ def cmd_extend(args):
             series_base.die(f"{archive} is for {key} {manifest.get(key)}, not {ident[key]}")
     if tree_version(src) != ident["chromium"]:
         series_base.die(f"{src} is Chromium {tree_version(src)}, but the pins say {ident['chromium']}")
-    head_version = head_blob(src, "chrome/VERSION")
-    if head_version is None or version_of(head_version[0].decode(errors="replace")) != ident["chromium"]:
-        series_base.die(f"{src}'s HEAD isn't the pinned Chromium {ident['chromium']}")
+    commit = tag_commit(ident["chromium"])
+    if git_head(src) != commit:
+        series_base.die(f"{src}'s HEAD is {git_head(src)}, not Chromium {ident['chromium']}'s tag commit {commit}")
     helium_root = os.path.dirname(os.path.dirname(os.path.dirname(src)))
     checkouts = [os.path.join(helium_root, "helium"), os.path.join(helium_root, series_base.PLATFORM_HELIUM[args.platform])]
     verify_helium(checkouts[0], ident["helium_chromium"], "helium_chromium")
@@ -371,11 +397,10 @@ def cmd_extend(args):
         series_base.die(f"{os.path.basename(archive)} already holds every file the series changes: nothing to add")
     for path in missing:
         print(f"adding {path} (changed by {required[path]})")
-    head = git_head(src)
-    extensions = pristine_extensions(src, checkouts, missing)
+    extensions = pristine_extensions(src, checkouts, missing, commit, manifest["absent"])
     dest = os.path.abspath(args.dest or tempfile.mkdtemp(prefix="ac-series-base-"))
     os.makedirs(dest, exist_ok=True)
-    extended, out = extend_archive(archive, extensions, dest, f"chromium {head}", source_commit())
+    extended, out = extend_archive(archive, extensions, dest, f"chromium {commit}", source_commit())
     digest = series_base.sha256_file(out)
     pathlib.Path(out + ".sha256").write_text(f"{digest}  {os.path.basename(out)}\n")
     pathlib.Path(out + ".manifest.json").write_text(json.dumps(extended, indent=1, sort_keys=True) + "\n")

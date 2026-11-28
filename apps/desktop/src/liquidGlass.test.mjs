@@ -628,3 +628,45 @@ test("the glass has no flat outline: its edge is a still key light from the top 
   const chrome = readFileSync(new URL("./shims/web/chrome.tsx", import.meta.url), "utf8");
   assert.match(chrome, /if \(!glass\) return <View \{\.\.\.props\} style=\{\[\{ backgroundColor: outline \? undefined : fill/, "only the non-glass selection paints its fill");
 });
+
+test("a glass leaves out of its picture what paints over it: the label and controls after it, never the backdrop before it", async () => {
+  const { paintsOver, raisedLayer } = await import("./shims/web/liquidGlassPlace.ts");
+  const order = [];
+  class Placed extends FakeElement {
+    appendChild(child) {
+      super.appendChild(child);
+      order.length = 0;
+      const visit = (node) => (order.push(node), node.children.forEach(visit));
+      visit(tree);
+      return child;
+    }
+    compareDocumentPosition(other) {
+      return order.indexOf(other) > order.indexOf(this) && !this.contains(other) ? Node.DOCUMENT_POSITION_FOLLOWING : 0;
+    }
+  }
+  const tree = new Placed("div");
+  const backdrop = tree.appendChild(new Placed("div"));
+  const card = tree.appendChild(new Placed("div"));
+  const frame = card.appendChild(new Placed("div"));
+  const row = card.appendChild(new Placed("div"));
+  const title = row.appendChild(new Placed("span"));
+  const after = tree.appendChild(new Placed("div"));
+  assert.equal(raisedLayer(frame), null);
+  assert.equal(paintsOver(title, frame, null), true, "the player's title sits over its glass card");
+  assert.equal(paintsOver(row, frame, null), true);
+  assert.equal(paintsOver(after, frame, null), true);
+  assert.equal(paintsOver(backdrop, frame, null), false, "what comes before the glass is behind it");
+  assert.equal(paintsOver(card, frame, null), false, "an ancestor of the glass is walked into");
+  assert.equal(paintsOver(frame, frame, null), false);
+  const computed = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (element) => (element === card ? { position: "relative", zIndex: "2" } : computed(element));
+  try {
+    assert.equal(raisedLayer(frame), card, "a glass under a positive z-index sits in that layer");
+    assert.equal(paintsOver(title, frame, card), true, "a later box in the same raised layer still paints over the glass");
+    assert.equal(paintsOver(after, frame, card), false, "a later box outside the raised layer may sit under it, so it stays in the picture");
+  } finally {
+    globalThis.getComputedStyle = computed;
+  }
+  const layer = readFileSync(new URL("./shims/web/liquidGlass.tsx", import.meta.url), "utf8");
+  assert.match(layer, /fixedBehind\(el, own\) \|\| paintsOver\(el, own, layer\)/, "the page picture and the rim's mirror skip what paints over the glass");
+});

@@ -33,3 +33,16 @@ export function fixedBehind(el: Element, own: Element) {
   const z = parseInt(style.zIndex, 10);
   return !(z > 0) && (el.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
+
+export function raisedLayer(own: Element): Element | null {
+  for (let el: Element | null = own; el && el !== document.body; el = el.parentElement) {
+    const style = getComputedStyle(el);
+    if (style.position !== "static" && parseInt(style.zIndex, 10) > 0) return el;
+  }
+  return null;
+}
+
+export function paintsOver(el: Element, own: Element, layer: Element | null) {
+  if (el.contains(own) || (layer && !layer.contains(el))) return false;
+  return (own.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { drawAround, drawDom } from "../../../../../third_party/liquid-glass/dom-snapshot";
 import { DESIGN_HEIGHT, MIRROR, clamp, getGlassEngine, onGlassEngineChange, rgbCss, surfaceColorOf, type GlassEngine, type GlassLens, type GlassView, type Rgb } from "../../../../../third_party/liquid-glass/engine";
 import { GLASS_OPTICS, RIM_MIRROR, rgb, tintedGlass, type GlassOptics, type LiquidGlassStyle, type LiquidGlassTheme } from "./liquidGlassOptics";
-import { fixedBehind, ownControl, ownOpacity } from "./liquidGlassPlace";
+import { fixedBehind, ownControl, ownOpacity, paintsOver, raisedLayer } from "./liquidGlassPlace";
 
 const PAD_SIDE = 8;
 const PAD_TOP = 10;
@@ -78,12 +78,13 @@ export function mountGlass(host: HTMLDivElement, canvas: HTMLCanvasElement, ctx:
   let border: Rgb | undefined;
   let borderAlpha = 0;
   let own: Element = host;
+  let layer: Element | null = null;
   let faded = 1;
   let ready = false;
   let drawnAt: DOMRect | null = null;
   let settling = 0;
   const page = { canvas: document.createElement("canvas"), ctx: null as CanvasRenderingContext2D | null, key: "", at: 0, stale: true, fill: "" };
-  const skip = (el: Element) => el === own || el === host || el.hasAttribute("data-glass-skip") || fixedBehind(el, own);
+  const skip = (el: Element) => el === own || el === host || el.hasAttribute("data-glass-skip") || fixedBehind(el, own) || paintsOver(el, own, layer);
   const dirty = () => {
     view.dirty = true;
     engine.wake();
@@ -103,6 +104,7 @@ export function mountGlass(host: HTMLDivElement, canvas: HTMLCanvasElement, ctx:
     const px = rounding.endsWith("%") ? (Math.min(w, h) * parseFloat(rounding)) / 100 : parseFloat(rounding) || 0;
     corner = px >= Math.min(w, h) / 2 - 0.5 ? null : px;
     own = ownControl(host);
+    layer = raisedLayer(own);
     faded = ownOpacity(host, own);
     surface = rgb(engine.resolveColor(surfaceColorOf(own.parentElement ?? host.parentElement)));
     const { optics, tint } = look.current;

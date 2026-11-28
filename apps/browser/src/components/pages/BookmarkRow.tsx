@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { Animated, PanResponder, Pressable, View } from "react-native";
 import { bookmarkAncestors } from "../../state/bookmarks/bookmarks";
 import { useBookmarks } from "../../state/bookmarks/hooks";
-import { openUrl } from "../../state/bookmarks/actions";
+import { openBookmark, type OpenMode } from "../../state/bookmarks/actions";
+import { consentToken } from "../../state/telemetry/client";
 import { plural } from "../../state/browser/model";
 import { Favicon } from "../favicon/Favicon";
 import { Button, ContextMenuArea, MouseArea, radius, space, Symbol, Text, useHover, useTheme } from "../ui";
@@ -85,7 +86,7 @@ export function BookmarkRow({
   );
   if (!node) return null;
 
-  const open = (mode: Parameters<typeof openUrl>[2]) => node.kind === "url" && openUrl(node.url, windowId, mode);
+  const open = (mode: OpenMode) => node.kind === "url" && openBookmark(node.url, windowId, mode, consentToken());
   const menu = () => {
     if (!selected) onSelect({});
     return openBookmarkRowMenu(node, { windowId, profileId, showPath, selection: selected ? menuSelection() : [id], onOpenFolder, onDelete });

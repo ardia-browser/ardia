@@ -2,13 +2,15 @@ import { confirm } from "../../platform/dialogs";
 import { create } from "zustand";
 import { focus, openWindow } from "../browser/actions";
 import { bookmarkRoots, folderLinks, isWithin, ownerOfBookmark } from "./bookmarks";
-import { storeAction, useBrowser } from "../browser/store";
-import { activeTabId, bookmarkProfileId, resolveWindowId, tabTitle, viewTabIds } from "../browser/model";
+import { storeAction, useBrowser, type BrowserState } from "../browser/store";
+import { activeTabId, bookmarkProfileId, inPinnedContainer, resolveWindowId, tabTitle, viewTabIds } from "../browser/model";
+import { noteBookmarkKeptPinnedTab } from "../telemetry/bookmarkletCounts";
+import type { ConsentToken } from "../telemetry/consentPeriod";
 import { originalProfile } from "../windows/small";
 import { isWebPageUrl } from "../../lib/url";
 import { isBookmarklet, runBookmarklet } from "./bookmarklets";
 
-type OpenMode = "current" | "background" | "foreground" | "window" | "incognito" | "split";
+export type OpenMode = "current" | "background" | "foreground" | "window" | "incognito" | "split";
 
 export function openModeFor(e: { metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; middle?: boolean }): OpenMode {
   if (e.metaKey || e.middle) return e.shiftKey ? "foreground" : "background";
@@ -35,6 +37,19 @@ export function openUrl(url: string, windowId: string | null | undefined, mode: 
   }
   if (mode === "current" && tabId) return s.navigate(tabId, url);
   s.newTab(id, { url, background: mode === "background", openerId: mode === "background" ? tabId : undefined });
+}
+
+export function bookmarkOpenMode(s: Pick<BrowserState, "tabs" | "groups">, tabId: string | null | undefined, mode: OpenMode, consent: ConsentToken | null): OpenMode {
+  if (mode !== "current" || !tabId || !inPinnedContainer(s, tabId)) return mode;
+  noteBookmarkKeptPinnedTab(consent);
+  return "foreground";
+}
+
+export function openBookmark(url: string, windowId: string | null | undefined, mode: OpenMode, consent: ConsentToken | null) {
+  if (isBookmarklet(url)) return openUrl(url, windowId, mode);
+  const s = useBrowser.getState();
+  const id = resolveWindowId(s, windowId);
+  openUrl(url, windowId, bookmarkOpenMode(s, id ? activeTabId(s, id) : undefined, mode, consent));
 }
 
 export type OpenAllMode = "tabs" | "window" | "incognito";

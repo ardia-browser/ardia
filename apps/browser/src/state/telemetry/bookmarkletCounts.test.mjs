@@ -20,8 +20,8 @@ test("bookmarklet runs and refusals count apart, and taking them starts again at
   noteBookmarkletRun(true);
   noteBookmarkletRun(true);
   noteBookmarkletRun(false);
-  assert.deepEqual(takeBookmarkletCounts(), { bookmarklet_runs: 2, bookmarklets_refused: 1 });
-  assert.deepEqual(takeBookmarkletCounts(), { bookmarklet_runs: 0, bookmarklets_refused: 0 });
+  assert.deepEqual(takeBookmarkletCounts(), { bookmarklet_runs: 2, bookmarklets_refused: 1, bookmarks_kept_pinned_tab: 0 });
+  assert.deepEqual(takeBookmarkletCounts(), { bookmarklet_runs: 0, bookmarklets_refused: 0, bookmarks_kept_pinned_tab: 0 });
 });
 
 test("an hour with only bookmarklets run still sends usage_counts, and the counts reset after", async () => {

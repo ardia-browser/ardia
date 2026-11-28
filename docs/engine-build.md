@@ -504,6 +504,23 @@ layer copies files from `packages/`), run:
     python3 scripts/engine/series-base-pack.py pack --platform mac --dest <scratch dir>
     scripts/agent/locked chromium --release <you>
 
+**A patch for a file the base lacks doesn't need a re-pack** when that file is pristine. The series never touched it
+before, so the builder's tree still holds what step 3 left there; when that is also Chromium's own file, it is what a
+fresh step 3 would give. On each builder, from a checkout with the new series (the patch not applied to the tree):
+
+    scripts/agent/locked chromium --take <you>
+    python3 scripts/engine/series-base-pack.py extend --platform mac --dest <scratch dir>
+    scripts/agent/locked chromium --release <you>
+
+`extend` starts from the pinned archive (`--archive`, or the copy `series-zero-fuzz.py` cached, checked against
+`series-bases.tsv`) and adds each file the series changes that the archive lacks. It takes a file only when Chromium's
+repository tracks it at the tree's HEAD (whose `chrome/VERSION` is the pinned Chromium), the tree's bytes and mode
+are HEAD's, and no Helium patch, `domain_substitution.list`, `pruning.list` or resource list of the pinned checkouts,
+nor `ardia_resources.txt`, names it. Anything else stops it with the reason; re-pack that from a fresh step 3. The
+new archive keeps the pinned one's provenance and lists what it added under `extensions`, with the commit it came from;
+publish it with `publish` as above. Because a re-pack needs step 3 on a reset tree (on the Mac that costs a 17k to
+80k-step rebuild), use `extend` whenever it accepts the files.
+
 Use `--platform linux` on the Linux builder, and set `AC_CHROMIUM_BUILD` for a tree outside `~/chromium-build`. Pack
 is read-only on the tree. It refuses unless:
 - `chrome/VERSION` is the pinned Chromium;

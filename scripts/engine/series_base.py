@@ -167,8 +167,10 @@ def asset_prefix(ident):
 
 
 def content_revision(manifest):
-    files = json.dumps({"files": manifest["files"], "absent": manifest["absent"],
-                        "provenance": manifest.get("provenance")}, sort_keys=True)
+    content = {"files": manifest["files"], "absent": manifest["absent"], "provenance": manifest.get("provenance")}
+    if "extensions" in manifest:
+        content["extensions"] = manifest["extensions"]
+    files = json.dumps(content, sort_keys=True)
     return hashlib.sha256(files.encode()).hexdigest()[:12]
 
 

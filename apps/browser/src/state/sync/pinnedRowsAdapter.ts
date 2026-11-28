@@ -39,6 +39,7 @@ export function pinnedRowsAdapter(profileId: string): Adapter {
         values,
         ignore: (k) => !known.has(keyOf(k)) && base(`${PIN_TAB}${keyOf(k)}`) === undefined,
         republish: (k) => choiceStillOut(chosen, keyOf(k), stamp(k)) && !queued(k),
+        keepLocal: (k) => choiceStillOut(chosen, keyOf(k), stamp(k)),
         published: (keys) => settleChoices(profileId, Object.fromEntries([...keys].map(keyOf).filter((k) => k in chosen).map((k) => [k, chosen[k]!]))),
       } satisfies Extraction;
     },

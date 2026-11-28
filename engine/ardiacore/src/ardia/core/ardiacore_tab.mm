@@ -52,6 +52,22 @@
 
 using ardiacore::NS;
 
+static BOOL OnlySoftDiscardKeeps(NSArray<NSNumber*>* kept) {
+  using performance_manager::policies::CannotDiscardReason;
+  if (!kept.count) {
+    return NO;
+  }
+  for (NSNumber* code in kept) {
+    const int reason = code.intValue;
+    if (reason != static_cast<int>(CannotDiscardReason::kNotificationsEnabled) &&
+        reason != static_cast<int>(CannotDiscardReason::kPinnedTab) &&
+        reason != static_cast<int>(CannotDiscardReason::kBackgroundActivity)) {
+      return NO;
+    }
+  }
+  return YES;
+}
+
 @interface ArdiaCoreInputSuppression : NSObject
 - (instancetype)initWithContents:(content::WebContents*)contents;
 @end
@@ -232,6 +248,14 @@ using ardiacore::NS;
     return unavailable;
   }
   return @[];
+}
+
+- (NSArray<NSNumber*>*)sleepIfUnusedFor:(NSTimeInterval)seconds {
+  NSArray<NSNumber*>* kept = [self sleepIfHiddenFor:seconds];
+  if (!OnlySoftDiscardKeeps(kept) || ![self discard] || !self.discarded) {
+    return kept;
+  }
+  return @[ @(ardiacore::kSleptPastSoftKeeps) ];
 }
 
 - (BOOL)discarded {

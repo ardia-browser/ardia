@@ -120,6 +120,72 @@ test("WebKit's newer value goes back to Chromium, and an unchanged carry writes 
   assert.equal(webKit.writes.length + page.writes.length, before);
 });
 
+const webKitWrites = { None: undefined, Strict: "Strict", Lax: "Lax", undefined: "Lax" };
+
+function asWebKitHolds({ sameSite, ...cookie }, override) {
+  const held = override === undefined ? webKitWrites[String(sameSite)] : override;
+  return held ? { ...cookie, sameSite: held } : cookie;
+}
+
+test("a value WebKit changed goes back to Chromium with the SameSite WebKit can't tell apart taken from Chromium, and one WebKit set itself as it is", async () => {
+  const { takeSiteDataCounts } = await import("../telemetry/siteDataCounts.ts");
+  const { setSharing, consentToken } = await import("../telemetry/client.ts");
+  const { tabId } = setup();
+  const later = Date.now() / 1000 + 30 * 86400;
+  const cookie = (name, sameSite) => ({ ...signedIn, name, value: "c1", session: false, expires: later, ...(sameSite ? { sameSite } : {}) });
+  const page = chromiumPage({ cookies: [cookie("__Secure-3PSID", "None"), cookie("lax_default"), cookie("explicit_lax", "Lax"), cookie("now_strict", "Lax"), cookie("now_lax", "None"), cookie("now_insecure", "None")], storage: {} });
+  webviews.set(tabId, page);
+  await setSharing(true, "settings");
+  try {
+    await carrySignIn(tabId, `${ORIGIN}/home`, "webkit", null);
+    assert.equal(webKit.cookies.length, 6);
+    const setInWebKit = { now_strict: "Strict", now_lax: "Lax" };
+    webKit.cookies = webKit.cookies.map((c) => ({ ...asWebKitHolds(c, setInWebKit[c.name]), value: "w2", ...(c.name === "now_insecure" ? { secure: false } : {}) }));
+    takeSiteDataCounts();
+    await carrySite("", "app.test", "chromium", { consent: consentToken() });
+    assert.deepEqual(Object.fromEntries(page.jar.cookies.map((c) => [c.name, [c.value, c.sameSite]])), {
+      "__Secure-3PSID": ["w2", "None"],
+      lax_default: ["w2", undefined],
+      explicit_lax: ["w2", "Lax"],
+      now_strict: ["w2", "Strict"],
+      now_lax: ["w2", "Lax"],
+      now_insecure: ["w2", undefined],
+    });
+    const counts = takeSiteDataCounts();
+    assert.equal(counts.site_data_same_site_kept, 2);
+    assert.equal(counts.site_data_chromium_values_replaced, 6);
+    assert.equal(counts.site_data_chromium_writes_no_webkit_record, 6);
+  } finally {
+    await setSharing(false, "settings");
+  }
+});
+
+test("the hourly counts take a carry's same-site and replaced cookies only when Chromium accepted all of them", async () => {
+  const { takeSiteDataCounts } = await import("../telemetry/siteDataCounts.ts");
+  const { setSharing, consentToken } = await import("../telemetry/client.ts");
+  const { tabId } = setup();
+  const page = chromiumPage({ cookies: [{ ...signedIn, value: "c1", sameSite: "None" }], storage: {} });
+  webviews.set(tabId, page);
+  await setSharing(true, "settings");
+  try {
+    await carrySignIn(tabId, `${ORIGIN}/home`, "webkit", null);
+    webKit.cookies = webKit.cookies.map((c) => ({ ...asWebKitHolds(c), value: "w2" }));
+    webKit.cookies.push({ ...signedIn, name: "fresh", value: "new", session: true });
+    const write = page.siteData;
+    for (const accepted of [0, 1]) {
+      page.siteData = async (request) => (request.op === "write" ? { cookiesWritten: accepted, removed: 0, storageWritten: 0 } : write(request));
+      takeSiteDataCounts();
+      await carrySite("", "app.test", "chromium", { consent: consentToken() });
+      const counts = takeSiteDataCounts();
+      assert.equal(counts.site_data_same_site_kept, 0, `${accepted} of 2 accepted`);
+      assert.equal(counts.site_data_chromium_values_replaced, 0, `${accepted} of 2 accepted`);
+      assert.equal(counts.site_data_chromium_writes_no_webkit_record, accepted, `${accepted} of 2 accepted`);
+    }
+  } finally {
+    await setSharing(false, "settings");
+  }
+});
+
 test("data cleared in Chromium is cleared in WebKit too, and never comes back from WebKit", async () => {
   const { tabId } = setup();
   const page = chromiumPage({ cookies: [signedIn], storage: { [ORIGIN]: [["token", "t1"]] } });
@@ -727,11 +793,18 @@ test("a carry is a main-thread job while it writes, not while it waits for its b
   const { tabId } = setup();
   const spanPage = countingPage({ cookies: [signedInOn("span.test")], storage: {} });
   webviews.set(tabId, spanPage);
-  webKit.writeHold = new Promise((resolve) => setTimeout(resolve, 30));
+  let finishWrite;
+  webKit.writing = false;
+  webKit.writeHold = new Promise((resolve) => (finishWrite = resolve));
   const began = Date.now();
   const carry = carrySite("", "span.test", "webkit", { origin: "https://span.test", consent: null });
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(jobs.activityDuring(began, Date.now(), Date.now(), jobs.holdsMainThread), "none", "waiting for the batch holds nothing");
+  for (let i = 0; i < 100 && !webKit.writing; i++) await new Promise((resolve) => setTimeout(resolve, 2));
+  assert.ok(webKit.writing, "the carry reached its write");
+  const heldFrom = Date.now();
+  for (let i = 0; i < 100 && Date.now() < heldFrom + 2; i++) await new Promise((resolve) => setTimeout(resolve, 1));
+  finishWrite();
   await carry;
   assert.equal(jobs.activityDuring(began, Date.now(), Date.now(), jobs.holdsMainThread), "siteDataCarry", "the write into WebKit counts");
 });

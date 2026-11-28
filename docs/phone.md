@@ -14,8 +14,8 @@ apps/phone/                 the app, and the root of its own pnpm workspace with
                             arm64-v8a and x86_64)
   src/                      the Mac's folder rules (docs/conventions.md): components/ui, components/<feature>,
                             state/<domain>, platform, lib
-  ios/                      the iPhone and iPad project, checked in (bundle id com.ardia.browser.ios, the SwiftUI
-                            app's, iOS 27, React Native's prebuilt core)
+  ios/                      the iPhone project, checked in (bundle id com.ardia.browser.ios, the SwiftUI app's,
+                            iOS 27, React Native's prebuilt core); iPhone only, so an iPad runs it as an iPhone app
   scripts/gradle-locked     Gradle under one lock, so one Android build runs at a time
 packages/phone/             @ardia/phone-native, the Expo module package
   src/                      the TypeScript side: PageView and its types
@@ -2028,8 +2028,8 @@ and appears over it. The phone reads the text from the live tab and processes it
     (`PageSummaryOutlineTests.whatIsShownWhileWritingNeverChanges` checks every prefix of several shapes). If the
     writer stops after lines have been shown, they stay visible with an incomplete-summary notice. If no lines have
     been shown, generation retries with half the text before falling back to key lines. Text with no line in it counts as nothing written.
-  - **Colours.** The stage is drawn in the open space's look (`PageSummaryLook`, from `LaunchLook.recalled()`, the look
-    the app last drew; Incognito's on a private page): its `ProfileBackdrop` with its theme, the look's deck blobs and
+  - **Colours.** The stage is drawn in the open space's look (`PageSummaryLook`, from the `summaryLook` the page's
+    `PageSurface` hands its `PageView`: the same look and dark mode the deck draws, never the saved launch look, #4481; Incognito's on a private page): its `ProfileBackdrop` with its theme, the look's deck blobs and
     swatch as two blurred blooms turning once every 5 and 8 seconds while it waits and fading over 2 s once the
     summary is there, the swatch as the rows' discs, and light or dark text by the look's own contrast
     (`ProfileLook.inkIsLight`, or the custom theme's appearance).
@@ -2123,7 +2123,9 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 | `perf_launch` | `launch_ms`, `js_ms` | each launch, once the module gives the process start (`ArdiaPhoneSystem.processStartedAt()`, epoch ms) |
 | `perf_backdrop` | `backdrop_ms` | each launch on iPhone, once the native launch backdrop has shown (`system.launchBackdropShownAt()`, epoch ms on the process start's clock) |
 | `perf_launch_tray` | `tray_ms` | each launch with Auto-Open Keyboard on, once the launch tray is up (process start on `ArdiaPhoneSystem.processStartedAt()`'s clock) |
-| `usage_counts` | `tabs_opened`, `searches`, `pins_to_mac`, `tabs_sent`, `page_processes_gone`, `links_given_up` (a link whose handling passed its 8 s deadline), `pages_reloaded_online` (a failed page reloaded when the phone came back online), `find_opened_system` and `find_opened_bar` (Find on Page opened in WebKit's own panel, or in the app's find bar), `spaces_swiped` (a swipe in Spaces or on the start page that changed the profile), `tray_hidden_rows_opened` (a tray row opened while it peeked or sat under the keyboard), `searches_forgotten` (a past search deleted from the search suggestions with a row's long-press Delete, after its confirmation), `deck_pictures_at_press` (a Tabs tap or bar swipe that had to copy the page at the press), `deck_opens_while_landing`, `tab_writes_stalled`, `page_covers_capped`, `search_opens_cold` (a card tapped while the deck was still landing), `deck_pictures_late` (a deck that took over while the leaving tab's card had a picture that hadn't painted; a tab with no picture isn't counted, and nothing waits for it), `search_tabs_opened` (the deck's Search Tabs field focused, in the redesign), `spaces_picked` (a space picked from the deck's switcher menu, or by a VoiceOver adjustment of the start page's dots, that changed the profile, in the redesign), `tabs_moved_to_space` (a tab moved to another space with the deck card menu's Move to Space, in the redesign), `pages_printed` (a page printed from the page menu's Print, counted when the print sheet opened, in the redesign; on iPhone, where Print lives in the page's Share sheet as in Safari, counted when a print from that sheet finished), `pages_translated` (a page sent to Google Translate from the page menu's Translate, never from an Incognito tab), `pinned_tabs_refound` (a pinned site's tile or row switched to the tab it had opened after that tab had left the pinned address, where it used to open a second copy), `site_permissions_revoked` (a site's camera, microphone or location access revoked from Site Settings, by swipe or by its dialog, on iPhone's Expo UI Settings), `tray_back_swiped` (a search tray closed with Android's predictive back swipe), `card_opens_waited` (a card opened from the deck whose page didn't lay out within 250 ms, so the open was held until that cap), `native_menus_opened` (a menu opened as the system's own: a deck card's long press, the deck's ···, the space switchers, the + menus, Reader's Text Appearance, the page menu's Send to Device, the tabs button's recent tabs, on iPhone), `drawn_menus_opened` (a menu or confirmation card the app draws itself opened: every menu and confirmation card on Android, and on iPhone the few that have no system counterpart, such as a page link's long press; neither menu count is taken on the deck's Incognito side, on an Incognito page or for an Incognito card), `drawn_menu_actions_chosen` (a final choice in a drawn menu on Android, not a submenu step or a dismissal; never counted while browsing privately), `library_opened` (History, Bookmarks or Downloads opened from the page menu), `deck_grid_shown` (Grid picked for the deck in Settings › Appearance › Tabs, on iPhone), `landscape_shown` (a launch in which the phone was turned to landscape at least once, counted once a launch), `duo_layout_shown` (a launch on a Duo in any pose, or that used the wide or split layout at least once, counted once a launch, on iPhone), `list_sheets_late` (an Archive or History sheet whose rows were drawn more than 400 ms after it was asked for, on iPhone), `list_pages_added` (Archive or History adding its next 200 rows as you scroll, on iPhone), `search_reveals_late` (a search panel opened whose content had not laid out within 250 ms, so the stage revealed it on its deadline, on iPhone), `address_field_scrolled` (a long address in the search field scrolled sideways with a swipe, on iPhone), `deck_bar_swipes` (the deck opened by swiping up on the browsing bar, the second way in beside the tabs button), `tabs_swiped_closed` and `tabs_swiped_reopened` (a back swipe on a page with no history that closed its tab, and a forward swipe with no forward history that reopened the last closed tab), `page_menu_tapped_away` (the page menu closed by a tap on the page above it, on iPhone), `new_tab_search_opened` (search opened on a new tab in the iPhone's full-height search panel), `new_tab_pins_opened` (a space's pinned site opened from the tiles above the new-tab search panel, or from a pinned folder's menu there; never counted in Incognito), `deck_incognito_switches` (a tap on the deck bar's Incognito switch that went from the normal tabs to the Incognito tabs, on iPhone), `deck_bar_swipes_returned` (a swipe up on the browsing bar let go before its commit point, so the page grew back), `tabs_bar_swiped` (a sideways swipe on the browsing bar that switched tabs), `tab_swipe_hints_shown` (the one-time hint for that swipe shown, on Android), `deck_pulls_hitched` (a swipe up or a tabs tap during whose shrink into the deck two UI-thread frames were more than 50 ms apart), `browse_for_me_opened` (Browse for Me opened from the tray, voice search or a launch argument), `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts` and `browse_answers_failed` (a Browse for Me answer by who wrote it, or a page that found or read nothing), `browse_chatgpt_fallbacks` (a ChatGPT answer that failed, so Apple Intelligence, Gemini Nano or the excerpts wrote it instead), `talk_to_me_answers_read`, `talk_to_me_ear_listens`, `talk_to_me_voice_downloads`, `talk_to_me_download_failed` and `talk_to_me_failed` (Talk to Me reading a Browse for Me answer aloud once per answer, and of those the ones started by raising the phone to the ear, its voice download finishing or failing, and its models or speech failing, on iPhone), `page_summaries_pinched` and `page_summaries_from_menu` (a page summary opened by pinching in or from the page menu's Summarize Page), `page_summaries_chatgpt`, `page_summaries_on_device`, `page_summaries_excerpts` and `page_summaries_failed` (a page summary by who wrote it, or a page it couldn't read or summarize; ChatGPT on Android only), `page_summaries_chatgpt_fallbacks` (a ChatGPT summary that failed, so Gemini Nano wrote it instead, on Android), `gemini_nano_downloading`, `gemini_nano_not_offered`, `gemini_nano_needs_update` and `gemini_nano_errors`, `gemini_nano_download_failed` and `gemini_nano_write_failed` (a Browse for Me answer or page summary that couldn't use Gemini Nano, by why: still downloading, not offered to apps on this phone, needing an AICore or system update, busy, out of space or failed to start, its download stopped, or it was available but couldn't write, on Android; the settled events carry it as `geminiNanoMissing`), `gemini_nano_download_rewrites` (a search answer rewritten with the Rewrite with Gemini Nano button after its download finished, on Android; the settled event carries `rewroteAfterGeminiNanoDownload`), `paste_and_go_links`, `paste_and_go_texts` and `paste_and_go_unread` (a Paste and Go tap with a link, with text, or that read nothing because the paste prompt was refused or the clipboard emptied; never counted while browsing privately), `search_tile_taps`, `voice_tile_taps` and `incognito_tile_taps` (Ardia opened from its Quick Settings tiles, on Android, counted on the phone and sent with the next day's counts), `start_logo_taps`, `find_closed_bar` (the app's find bar closed, once per find), `material_you_turned_on` and `material_you_turned_off` (the Material You switch in Settings › Appearance flipped, on Android), `custom_theme_chosen` (Custom picked in Settings › Appearance when it wasn't the choice) and `theme_edits` (a change saved on the Theme page, one per release of a slider, the pad or the dial, or one per tap), and, with Material You on: `card_close_tapped` (a deck card closed with its ×), `material_back_swiped` (a back swipe out of a Material sheet, dialog or the library), `archive_bar_opened` (Archive opened from the bottom bar), `site_settings_sheet_opened` and `site_settings_sheet_expanded` (the address bar's page menu opened, and pulled to full screen), `search_sheet_expanded` (the search sheet pulled to full screen), `archive_card_reoffers` (the deck's Archive card offered again on a return from the Incognito tabs), `web_videos_floated` and `web_videos_kept_playing` (Ardia left for the background while a web video was in Picture in Picture or full screen, and of those the ones where WebKit still reported a page playing media 5 seconds later, with Ardia still in the background, on iPhone; neither is counted while any Incognito tab is open, since the video's own tab isn't known); `app_update_checks`, `app_update_offers_shown` and `app_update_offers_opened` (Android release builds checking GitHub for a newer APK, the first time a version puts its dot on the Settings gear, a Download tap in Settings › About, `app_update_handoffs_failed`, a Download nothing on the phone could take, `app_update_installs_started`, `_cancelled`, `_failed` and `_completed`, the install session of a download that matched its checksum and how it ended, and `app_update_checksums_refused`, a download deleted because it didn't) | at most once a day, for the last UTC day the app was used before today, when anything was counted; private tabs are never counted |
+| `perf_search_open` | `open_ms` | the first search panel each launch, from the press to the panel presented (iPhone's staged panel); never in Incognito |
+| `perf_search_suggest` | `local_ms`, `remote_ms` | the first typed search each launch whose engine answered, from its first letter to the local rows and to the engine's rows; never in Incognito |
+| `usage_counts` | `tabs_opened`, `searches`, `pins_to_mac`, `tabs_sent`, `page_processes_gone` (a page's WebKit content process or Android renderer ended), `page_processes_recovered` (of those, a page loaded again cleanly afterwards, whether it reloaded by itself or the person pressed Reload, Back or Forward) and `page_process_recoveries_failed` (one whose process ended again during that reload or within 60 s of it, so This Webpage Stopped Working showed instead of another automatic reload), `links_given_up` (a link whose handling passed its 8 s deadline), `pages_reloaded_online` (a failed page reloaded when the phone came back online), `find_opened_system` and `find_opened_bar` (Find on Page opened in WebKit's own panel, or in the app's find bar), `spaces_swiped` (a swipe in Spaces or on the start page that changed the profile), `tray_hidden_rows_opened` (a tray row opened while it peeked or sat under the keyboard), `searches_forgotten` (a past search deleted from the search suggestions with a row's long-press Delete, after its confirmation), `deck_pictures_at_press` (a Tabs tap or bar swipe that had to copy the page at the press), `deck_opens_while_landing`, `tab_writes_stalled`, `page_covers_capped`, `search_opens_cold` (a card tapped while the deck was still landing), `deck_pictures_late` (a deck that took over while the leaving tab's card had a picture that hadn't painted; a tab with no picture isn't counted, and nothing waits for it), `search_tabs_opened` (the deck's Search Tabs field focused, in the redesign), `spaces_picked` (a space picked from the deck's switcher menu, or by a VoiceOver adjustment of the start page's dots, that changed the profile, in the redesign), `tabs_moved_to_space` (a tab moved to another space with the deck card menu's Move to Space, in the redesign), `pages_printed` (a page printed from the page menu's Print, counted when the print sheet opened, in the redesign; on iPhone, where Print lives in the page's Share sheet as in Safari, counted when a print from that sheet finished), `pages_translated` (a page sent to Google Translate from the page menu's Translate, never from an Incognito tab), `pinned_tabs_refound` (a pinned site's tile or row switched to the tab it had opened after that tab had left the pinned address, where it used to open a second copy), `site_permissions_revoked` (a site's camera, microphone or location access revoked from Site Settings, by swipe or by its dialog, on iPhone's Expo UI Settings), `tray_back_swiped` (a search tray closed with Android's predictive back swipe), `card_opens_waited` (a card opened from the deck whose page didn't lay out within 250 ms, so the open was held until that cap), `native_menus_opened` (a menu opened as the system's own: a deck card's long press, the deck's ···, the space switchers, the + menus, Reader's Text Appearance, the page menu's Send to Device, the tabs button's recent tabs, on iPhone), `drawn_menus_opened` (a menu or confirmation card the app draws itself opened: every menu and confirmation card on Android, and on iPhone the few that have no system counterpart, such as a page link's long press; neither menu count is taken on the deck's Incognito side, on an Incognito page or for an Incognito card), `drawn_menu_actions_chosen` (a final choice in a drawn menu on Android, not a submenu step or a dismissal; never counted while browsing privately), `library_opened` (History, Bookmarks or Downloads opened, from anywhere; the deck menu's share is in the `deck_menu_*_opened` counts), `deck_grid_shown` (Grid picked for the deck in Settings › Appearance › Tabs, on iPhone), `landscape_shown` (a launch in which the phone was turned to landscape at least once, counted once a launch), `duo_layout_shown` (a launch on a Duo in any pose, or that used the wide or split layout at least once, counted once a launch, on iPhone), `list_sheets_late` (an Archive or History sheet whose rows were drawn more than 400 ms after it was asked for, on iPhone), `list_pages_added` (Archive or History adding its next 200 rows as you scroll, on iPhone), `search_reveals_late` (a search panel opened whose content had not laid out within 250 ms, so the stage revealed it on its deadline, on iPhone), `address_field_scrolled` (a long address in the search field scrolled sideways with a swipe, on iPhone), `deck_bar_swipes` (the deck opened by swiping up on the browsing bar, the second way in beside the tabs button), `tabs_swiped_closed` and `tabs_swiped_reopened` (a back swipe on a page with no history that closed its tab, and a forward swipe with no forward history that reopened the last closed tab), `page_menu_tapped_away` (the page menu closed by a tap on the page above it, on iPhone), `new_tab_search_opened` (search opened on a new tab in the iPhone's full-height search panel), `new_tab_pins_opened` (a space's pinned site opened from the tiles above the new-tab search panel, or from a pinned folder's menu there; never counted in Incognito), `deck_incognito_switches` (a tap on the deck bar's Incognito switch that went from the normal tabs to the Incognito tabs, on iPhone), `deck_bar_swipes_returned` (a swipe up on the browsing bar let go before its commit point, so the page grew back), `tabs_bar_swiped` (a sideways swipe on the browsing bar that switched tabs), `tab_swipe_hints_shown` (the one-time hint for that swipe shown, on Android), `deck_pulls_hitched` (a swipe up or a tabs tap during whose shrink into the deck two UI-thread frames were more than 50 ms apart), `browse_for_me_opened` (Browse for Me opened from the tray, voice search or a launch argument), `browse_answers_chatgpt`, `browse_answers_on_device`, `browse_answers_excerpts` and `browse_answers_failed` (a Browse for Me answer by who wrote it, or a page that found or read nothing), `browse_chatgpt_fallbacks` (a ChatGPT answer that failed, so Apple Intelligence, Gemini Nano or the excerpts wrote it instead), `talk_to_me_answers_read`, `talk_to_me_ear_listens`, `talk_to_me_voice_downloads`, `talk_to_me_download_failed` and `talk_to_me_failed` (Talk to Me reading a Browse for Me answer aloud once per answer, and of those the ones started by raising the phone to the ear, its voice download finishing or failing, and its models or speech failing, on iPhone), `page_summaries_pinched` and `page_summaries_from_menu` (a page summary opened by pinching in or from the page menu's Summarize Page), `page_summaries_chatgpt`, `page_summaries_on_device`, `page_summaries_excerpts` and `page_summaries_failed` (a page summary by who wrote it, or a page it couldn't read or summarize; ChatGPT on Android only), `page_summaries_chatgpt_fallbacks` (a ChatGPT summary that failed, so Gemini Nano wrote it instead, on Android), `gemini_nano_downloading`, `gemini_nano_not_offered`, `gemini_nano_needs_update` and `gemini_nano_errors`, `gemini_nano_download_failed` and `gemini_nano_write_failed` (a Browse for Me answer or page summary that couldn't use Gemini Nano, by why: still downloading, not offered to apps on this phone, needing an AICore or system update, busy, out of space or failed to start, its download stopped, or it was available but couldn't write, on Android; the settled events carry it as `geminiNanoMissing`), `gemini_nano_download_rewrites` (a search answer rewritten with the Rewrite with Gemini Nano button after its download finished, on Android; the settled event carries `rewroteAfterGeminiNanoDownload`), `paste_and_go_links`, `paste_and_go_texts` and `paste_and_go_unread` (a Paste and Go tap with a link, with text, or that read nothing because the paste prompt was refused or the clipboard emptied; never counted while browsing privately), `search_tile_taps`, `voice_tile_taps` and `incognito_tile_taps` (Ardia opened from its Quick Settings tiles, on Android, counted on the phone and sent with the next day's counts), `start_logo_taps`, `find_closed_bar` (the app's find bar closed, once per find), `material_you_turned_on` and `material_you_turned_off` (the Material You switch in Settings › Appearance flipped, on Android), `custom_theme_chosen` (Custom picked in Settings › Appearance when it wasn't the choice) and `theme_edits` (a change saved on the Theme page, one per release of a slider, the pad or the dial, or one per tap), and, with Material You on: `card_close_tapped` (a deck card closed with its ×), `material_back_swiped` (a back swipe out of a Material sheet, dialog or the library), `archive_bar_opened` (Archive opened from the bottom bar), `site_settings_sheet_opened` and `site_settings_sheet_expanded` (the address bar's page menu opened, and pulled to full screen), `search_sheet_expanded` (the search sheet pulled to full screen), `archive_card_reoffers` (the deck's Archive card offered again on a return from the Incognito tabs), `web_videos_floated` and `web_videos_kept_playing` (Ardia left for the background while a web video was in Picture in Picture or full screen, and of those the ones where WebKit still reported a page playing media 5 seconds later, with Ardia still in the background, on iPhone; neither is counted while any Incognito tab is open, since the video's own tab isn't known); `app_update_checks`, `app_update_offers_shown` and `app_update_offers_opened` (Android release builds checking GitHub for a newer APK, the first time a version puts its dot on the Settings gear, a Download tap in Settings › About, `app_update_handoffs_failed`, a Download nothing on the phone could take, `app_update_installs_started`, `_cancelled`, `_failed` and `_completed`, the install session of a download that matched its checksum and how it ended, and `app_update_checksums_refused`, a download deleted because it didn't); `page_menu_site_settings_opened` (Site Settings opened from the page menu), `site_settings_zoom_changed`, `site_settings_night_shade_changed` and `site_settings_desktop_site_changed` (that site's Page Zoom, Night Shade or Desktop Site changed there), and `deck_menu_history_opened`, `deck_menu_bookmarks_opened` and `deck_menu_downloads_opened` (opened from the tab deck's ⋯ menu, not while the deck shows Incognito tabs) | at most once a day, for the last UTC day the app was used before today, when anything was counted; private tabs are never counted |
 
 On the dashboard they are kept out of every Mac section by source and lib (`PHONE_APP_SOURCE` in `apps/dashboard/src/server/sql.ts`).
 
@@ -2137,10 +2139,13 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `searches` | c6ebf08a8 | How much of that browsing starts from the tray |
 | `pins_to_mac` | c6ebf08a8 | Whether pinning to the Mac is used enough to keep |
 | `tabs_sent` | c6ebf08a8 | Whether Send to my Mac is used enough to keep |
-| `page_processes_gone` | c6ebf08a8 | How often the page engine dies under people; a rise after a release is a regression |
+| `page_processes_gone` | c6ebf08a8; since #3931 every death, not only the ones that showed the failure page | How often the page engine dies under people; a rise after a release is a regression |
+| `page_processes_recovered`, `page_process_recoveries_failed` | #3931 (iPhone crash on refresh after the app sat in the background) | Read both against `page_processes_gone`. A page whose process ends while it isn't the shown page waits and reloads once it is (or on Reload, Back or Forward). A page gets one automatic reload: if its process ends again during that reload or within 60 s of it, the failure page shows with Try Again, which allows another. The failure page holds through remounts and tab switches until Try Again, Reload, Back, Forward or a new address, and a successful Try Again counts as `recovered`. The 60 s window starts over when the tab commits a page on another host (lowercased, punycode, no trailing dot). On Android the shown page also needs the activity in front, so a renderer that dies as the app leaves waits instead of reloading behind it. The shown page is the one JS reports through `pages.setShownPage`: the selected tab on the browsing surface with the app active and nothing over it (search, menus, Reader, the library, Settings, onboarding, a sheet, the voice overlay or the Duo's sidebar); native also needs its web view in a window on iPhone. A dead page keeps its Back and Forward: Android saves the WebView's state as the renderer goes, and iPhone takes Back or Forward from the saved session straight to the other page without loading the dead one, so most deaths should end in `recovered` and `failed` should stay near zero. A gap between `gone` and `recovered + failed` has several causes: a hidden page closed before it was shown again, a failed recovery (its first death and the recovery's death are two `gone` for one `failed`), and a death and its recovery falling on different UTC days. Watch `app_crashed` with `foreground` `yes` beside them: it should drop on iPhone after this release |
 | `launch_ms`, `js_ms` (`perf_launch`) | c6ebf08a8 | Cold launch time, process start to first screen, and the JavaScript share of it |
 | `backdrop_ms` (`perf_backdrop`) | e9012f25a's native backdrop | Process start to the themed backdrop's first frame on iPhone; it should sit well under `launch_ms` (about 1,100 against 1,450 ms on the simulator), and rising toward it means the backdrop waits for JavaScript again |
 | `tray_ms` (`perf_launch_tray`) | the launch tray at rest from its first frame | Process start to the launch tray being up. It should sit within a frame or two of `launch_ms`; a gap near 450 ms on Android means the launch tray waits for the keyboard again, and a blank start page catches taps behind an unseen tray |
+| `open_ms` (`perf_search_open`) | #3932 | Press to the search panel presented. It sat near 60 to 80 ms on the simulator; a rise means the open does work before it moves again |
+| `local_ms`, `remote_ms` (`perf_search_suggest`) | #3932 | First letter to the local rows (a frame or two) and to the engine's rows (about one network round trip). A `remote_ms` that grows toward a typing pause means the store waits for the field to go quiet again before asking |
 | `legacy_import_failures` (`app_launched`) | 12a33bf03 | Whether the upgrade import fails in the field, and how many tries it takes |
 | `look_mode` (`app_launched`) | 428c9a18d | How many phones the look's budget turns down, and to what; a share that grows after a release means the look got dearer |
 | `links_given_up` | 16509434e | Whether a link's handling still hangs past 8 s; anything above zero is a bug to chase |
@@ -2150,7 +2155,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `tray_hidden_rows_opened` | f5071fd5f | Whether rows past the keyboard are reached; near the line: zero would argue for a scrolling list, otherwise strike it |
 | `native_menus_opened` | the menus sweep | Whether the system's own menus open where the drawn ones did; a drop against `tabs_opened` after a release means a native menu stopped opening |
 | `drawn_menus_opened` | Android's drawn menus (the owner, 2026-11-19) | Whether people open menus on Android, where every menu and confirmation is drawn; split by `platform`. Read it against `tabs_opened`: a drop after a release means a drawn menu stopped opening |
-| `library_opened` | the Library sheet on both phones | Watch History, Bookmarks and Downloads opens from the page menu by platform. A drop to zero can indicate the rows or sheet stopped opening |
+| `library_opened` | the Library sheet on both phones | Watch History, Bookmarks and Downloads opens by platform; since #4529 they open from the tab deck's ⋯ menu (`deck_menu_history_opened`, `deck_menu_bookmarks_opened`, `deck_menu_downloads_opened`). A drop to zero can indicate the rows or sheet stopped opening |
 | `deck_grid_shown` | the deck's grid on iPhone, picked in Settings › Appearance › Tabs since the owner's tabs pass | Whether people use main's grid view now that it lives in Settings; zero across testers after a release means the Tabs rows stopped switching |
 | `deck_bar_swipes` | the owner's tabs pass (the swipe up on the bar, beside the tabs button) | Whether people use the swipe as well as the button; zero across testers after a release means the swipe stopped opening the deck |
 | `deck_bar_swipes_returned` | the swipe that follows the finger (#2607; on Android too since the deck parity of 2026-11-19) | How often a swipe up is let go early. Read it against `deck_bar_swipes`: a share above about a third after a release means the commit point sits too far, or the swipe is caught by people who only meant to touch the bar |
@@ -2203,6 +2208,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `glass_shaders_failed` | Liquid Glass on Android (CodeRabbit on #3759: a lens refused mid-session still reported `lens` at launch) | Counted natively and drained with the pending counts: each time Android refused to build the lens or rim shader, so that glass drew plain frost until the app next came back to the foreground and tried again. `app_launched.glass_render` can't see this, since it's read before any glass draws. Any count on Android 13+ phones means a GPU or driver rejects the AGSL; compare it with the `lens` launches. Since #3950 the iPhone counts its Metal shader failing to compile the same way |
 | `glass_lens_bridged` | Liquid Glass on iPhone, the lens over the page on every frame (#3950) | Counted natively and drained with the pending counts: each time the page bar or host pill faded from its lens to clear glass because its capture of the page ran out (a page scrolled past its picture, a capture that failed), at most once a second per glass; the deck's and other glass's fades aren't counted; over-budget glass is counted in `glass_captures_over_budget` instead. It should stay near zero: a rising count against `glass_render` `lens` launches means the page pictures don't keep up on those phones |
 | `glass_lens_withheld` | One Liquid Glass look on iPhone (#4252) | Counted natively and drained with the pending counts: each time an iPhone glass on screen, on the live path, showed clear glass instead of its lens for over 3 s in a row, once per stretch (a page's first picture takes about 1.25 s, so opening a page doesn't count; over-budget glass is counted in `glass_captures_over_budget` instead). Never counted for Incognito glass, and a stretch starts again when the lens shows, the glass turns private or the sharing consent changes; `glass_lens_bridged` and `glass_captures_over_budget` skip Incognito glass too. It should stay near zero against the `glass_render` `lens` launches: a rising count means some glass draws a weaker look than the launch reports, so look for a surface whose capture never lands |
+| `launch_looks_stale` | The launch look follows the current space (#4486) | Counted natively and drained with the pending counts: once per launch on iPhone, when the first launch look the app saves draws, in the appearance the launch backdrop launched in, a different space, theme (its stops, texture, grain and the rest) or light or dark than the backdrop drew. Only what the backdrop draws in that appearance is compared, from the function that draws it (`ProfileBackdrop.drawn`: for a theme, `ThemeLook.drawn`'s resolved values, the under colour, the gradient's colours and angle, the layer's and grain's opacity and the texture when it shows, so an Intensity change on an opaque theme, or an angle change on a theme of one colour, doesn't count; else the gradient's stops and direction; and light or dark), so a change to the other appearance's colours or theme doesn't count, and only when sharing was on when the backdrop was shown and still is (the consent window is taken at launch). The launch look is saved from the app root (`state/app/launchLook.ts`, `lib/launchLook.ts`) only once the app is ready and, where sync is offered and the look depends on it (the space's colours, with no colour chosen on the phone, or Match My Mac's appearance), sync has read its cached spaces; a colour, theme or appearance chosen on the phone is saved at once, even while sync is stuck (`useSync` `loaded`, which waits for a real view, never the empty placeholder, and for its `cacheRead`: `SyncService.hasReadCache`, true once the running engine's cached snapshot has been read (or found missing; a cache that won't open or decode doesn't count) when it starts, when the folder is granted again or when the phrase is entered again, or once a cycle on that engine has brought the spaces. It is reset with every engine change, a read for an engine that was replaced meanwhile publishes nothing, and every path that waits before touching the engine (start's cache read, Change Folder, entering the phrase again, recovery from an unreadable state) checks after each wait that no engine change and no Stop Syncing happened meanwhile, and otherwise does nothing (`unchanged(since:)` on the engine generation, which Stop Syncing bumps), and it is true while sync is off, including after Stop Syncing, which a return to the foreground can no longer undo; never while sync is on but locked or without folder access, so the saved look stays; the startup fetch never replaces a status or view an event already brought), so a cold boot never saves the fallback colour over a synced space. It is computed from one snapshot (`launchLookOf` in `lib/launchLook.ts`): the space picked or shown, with that space's own colours and appearance, and saved whenever sync, the preferences, the design or readiness change (store subscriptions, never React's render deps). It is saved on a space switch, from the space the user picked (`useSync` `pickedProfileId`, held until sync's view shows it, since native saves the pick before JavaScript gets the view that shows it; the latest tab opened sets it, even in the space on screen), a theme change, an appearance change and each time the app leaves the screen, always from the saved preferences and sync state as they are then (never a theme still being dragged, never the last value React rendered), and never by a backdrop drawing: the Spaces sheet, the Theme page and the start page's neighbouring spaces drew other spaces and used to overwrite it. It saves both system appearances, each with the light or dark the app draws in it. Incognito is never saved (a launch never starts in Incognito). It should stay near zero; the first launch after updating from a build without #4486 can count once. A rising count means something changes the current space before the app is ready, or a path that changes it no longer saves the launch look |
 | `glass_captures_over_budget` | Liquid Glass on iPhone, every glass refracting (#3950) | Counted natively and drained with the pending counts: each time an iPhone glass's capture of what lies under it went over budget (its main-thread work, from the walk to the capture, took longer than one frame once, or more than 12 % of the main thread over two seconds), so that glass showed clear glass for 3 s, doubling up to 30 s while it kept tripping within a minute. A rising count means capturing is too slow on those phones; compare it with the iPhone `lens` launches |
 | `drawn_menu_actions_chosen` | Android menu tap fix (#3463) | Watch Android selections against `drawn_menus_opened`. Steady opens and fewer selections can flag lost taps. Opens also include confirmations, so this is a trend, not a tap success rate |
 | `web_videos_floated`, `web_videos_kept_playing` | iPhone Picture in Picture fix (the app's `audio` background mode; a customer's PiP showed Ardia's squashed UI instead of the video) | Read `kept_playing` against `floated` on iPhone. `kept_playing` needs a live page to report playing media (`requestMediaPlaybackState`) 5 s after Ardia left, so a return within 5 s or a pause from the PiP window counts in `floated` only, and the two never match exactly. Without the `audio` mode the simulator showed the video paused at the home screen; with it the ratio should rise clearly. A ratio that falls back toward zero means web video stops in the background again: check `UIBackgroundModes` and WebKit's presentation window |
@@ -2564,7 +2570,7 @@ Nothing here is done until it has been watched in the screens agent's own simula
 - Start page: the tile press, which dims in place with no scale (main springs a scale with `Motion.press`; the owner's motion rule keeps it plain); the glass of the tiles, bar and capsule; the light-mode veil in the drawn fallback; the bar glyph sizes (estimated from SF sizes 16 and 18).
 - Deck: the `···`, space and Incognito pill menus; the pill appearing and leaving (fade, 0.9 scale spring); the Archive capsule's entrance and exit, its interval picker, and the cards' 26 pt spring down and back, easing to zero as a card opens.
 - Spaces: the deck on a space switch (order reset, scroll to the second-last card, cards fading in, the archive card); the two-step card menu (Move to Space, then the space list); a moved card leaving and the gap closing; the swipe neighbours after a switch; the page changing to the new space's latest tab, or the start page for an empty space; the colour change; Switch to Tab on another space's tab (for a moment it may have no swipe neighbours until the sync event arrives).
-- Appearance: the page's push and pop, the swatch ring; switching Glass and Classic live on open surfaces (the native `Glass` must take a `surface` change at runtime); switching Light and Dark live across windows, sheets, the keyboard, the status bar and pages' `prefers-color-scheme`, and back to System; Match My Mac following a new synced look; Reduce Transparency switched on while open; Night Shade Automatic following the app's scheme.
+- Appearance: the page's push and pop, the swatch ring; switching Glass and Classic live on open surfaces (the native `Glass` must take a `surface` change at runtime); switching Light and Dark live across windows, sheets, the keyboard, the status bar and pages' `prefers-color-scheme`, and back to System; Match My Mac following a new synced look; Reduce Transparency switched on while open; Night Shade Automatic following the pages' scheme; a light custom theme keeping pages on the system's scheme (#3482).
 - Sheets with Remove animations on Android: Settings, Spaces, the archive and the small sheets come up and go at once, as Compose's do (the system scales Compose's durations to zero); with Reduce Motion on iPhone they still move on a 200 ms timing.
 - Page menu: the sheet opening and closing on its white or black fill and its drag; the tiles' in-place press dim (no scale) and glass; row press highlights (instant, where main fades them over 0.2 s); the title feedback crossfade; the print sheet after the menu has gone; the Send to Device menu's place; Site Settings opening as the menu slides away; the accessibility-size layout.
 - Tray field on the way out: from the first frame the tray leaves, its text shows as plain text with no caret (the native field is blurred and dropped), on both phones; check it doesn't jump or change size.
@@ -2581,13 +2587,15 @@ Decided 2026-11-16: main has landscape and the Duo layouts, so the Expo app gets
 `SearchHomeView`, and the tokens in `ArdiaDesign/{BrowseTokens,TabsTokens,TabsDeckGeometry,Tokens}.swift`). Native
 side: the iPhone agent. Screens: the screens agent. Numbers are points.
 
-**Orientations.** On iPhone, portrait, landscape left and landscape right; never upside down. On iPad all four,
-so the app takes part in Split View and Slide Over (`TARGETED_DEVICE_FAMILY = "1,2"` on the app and its three
-extensions, no `UIRequiresFullScreen`). In Expo that is `UISupportedInterfaceOrientations` and
-`UISupportedInterfaceOrientations~ipad` in `apps/phone/ios/Ardia/Info.plist` (by hand: `app.json`'s `"default"` would
-add upside down on iPhone; `supportsTablet` there only records the choice). An iPad window at least 600 pt both ways
-gets the `wide` layout; a narrower one (a Split View third, Slide Over) gets `phone`, from the same probe
-as the Duo, never the device model. A new device joining sync on an iPad is named "iPad" (`SyncMeta.deviceName`).
+**Orientations.** Portrait, landscape left and landscape right; never upside down. The app is iPhone only (the
+owner, 2026-11-26, for the first App Store release): `TARGETED_DEVICE_FAMILY = 1` on the app and its three
+extensions, `supportsTablet: false` in `app.json`, and only `UISupportedInterfaceOrientations` in
+`apps/phone/ios/Ardia/Info.plist` (by hand: `app.json`'s `"default"` would add upside down; there is no `~ipad` key, since
+an iPad runs an iPhone-only app in its iPhone window with the iPhone's orientations). The iPhone Duo is an iPhone, so
+it keeps every layout below. The `wide` layout and the iPad notes that follow stay in the code for a later iPad
+release: they come from the same probe as the Duo, never the device model, so an iPad window at least 600 pt both
+ways would get `wide` and a narrower one `phone`. A new device joining sync on an iPad is named "iPad"
+(`SyncMeta.deviceName`).
 From @mantrakp04's #2263 on the SwiftUI app. In a window (Windowed Apps, Split View, Slide Over) iPadOS draws its
 window controls over the window's top-left corner; `WindowControlsClearance` (SceneDelegate.swift) adds the extra the
 corner-adapted safe area asks for (43 pt on an iPad Pro 11-inch) to the root view controller's top safe area, so
@@ -4193,6 +4201,23 @@ In-app lab lines at the head:
 `PAGELAB menu`, `PAGELAB search` and `PAGELAB find` print these phases in lab builds. `PAGELAB glass` and `PAGELAB stage`
 trace glass visibility and the search stage during a close.
 
+#### Page menu, Site Settings and the deck menu (#4529, 2026-11-27)
+
+Both phones, every look (the iPhone's system sheet and its drawn fallback, Android's default and Material You, the
+docked Material menu, Duo):
+- Site Settings in the page menu opens inside the menu's sheet (`menuPage: "siteSettings"`): on iPhone the SwiftUI
+  sheet swaps to Settings' navigation at the large stop, on Android the drawn sheet cross-fades to the page. Closing
+  either closes both (`siteSettingsInMenu` and the two subscribers in `state/page/actions.ts`). Android's back returns
+  to the menu. Filter Lists and Trusted Sites still open in Settings.
+- Page Zoom, Night Shade and Desktop Site left the page menu for a section of Site Settings titled with the site's host
+  (`ThisSite.tsx`, `ExpoThisSite`), shown only when Site Settings comes from the page menu on a web page.
+- History, Bookmarks and Downloads left the page menu. The deck's ⋯ menu reads Spaces / History, Bookmarks, Downloads /
+  Settings (Duo: Archive, Spaces / History, Bookmarks, Downloads / Settings). New Incognito Tab and Reopen Closed Tab
+  were already in the + button's touch-and-hold menu; Close All Tabs joins them there, under a divider, when there are
+  tabs (`plusMenuItems`; on Duo the sidebar's New Tab row takes the same touch and hold). The Incognito switch's own
+  touch and hold still closes the Incognito tabs.
+- The page menu's library-in-sheet path (`openLibraryInMenu`) is gone with the rows that used it.
+
 #### Android's page menu and Site Settings (2026-11-25)
 
 In Android's default look, the page menu built its rows on the press. The sheet opened at half height, which hid Site
@@ -4207,8 +4232,7 @@ handle 6 dp from its top, and drags up into the full sheet at the safe top. The 
 so opening and dragging add no layout pass. `Sheet`'s `floating` mode carries it, and only this menu uses it.
 Reopening resets the scroll position. Android offers Print as a row and opens Share and Library in separate sheets.
 
-Site Settings starts rising on the next frame while the menu leaves. A new menu, tab selection or overlay cancels the
-pending open. Every menu exit carries its opening token so a delayed exit cannot run a newer menu's follow-up. The
+Site Settings opens inside the menu's own sheet since #4529 (below), so nothing waits for the menu to leave. Every menu exit carries its opening token so a delayed exit cannot run a newer menu's follow-up. The
 drawn menu limits Fabric catch-up callbacks to one per 60 ms of motion and still commits after the motion stops.
 
 On tab return, the deck releases its ownership of the Liquid DOM bar on the UI thread and acknowledges that release on
@@ -4334,6 +4358,12 @@ Whole stack (`SettingsView.swift`):
 - Presentation: main uses a plain `.sheet(item:)` from `RootView`, with no presentation modifiers. On iPhone ours is
   Expo UI's `BottomSheet` with none either (`ExpoSettingsSheet`): system detent, corners, drag to dismiss and
   scaled-back page; Done and a drag both close Settings through `onIsPresentedChange`.
+- Every page a screen links to is drawn whole before the tap, so a push slides in with its title and rows from the
+  first frame (#4066; a title-only placeholder slid in empty for about 380 ms). A page drawn early touches no
+  network and no site data: its mount work (refreshes, `settings_panes_opened`) runs through `useWhenOpened` each
+  time it is on the path, and Site settings mounts its allowed sites, with their favicons, only once opened. Sync,
+  Connect, the recovery phrase, Clear Data, Trusted Sites and My Filters read or show such data as they draw, so
+  they stay title-only until pushed (`HELD_UNTIL_PUSHED` in `ExpoSettingsStack.tsx`).
 - Rule: a toolkit screen is hosted in a container the system positions, never inside a view we animate by
   transform, because SwiftUI records its accessibility frames at layout time and never updates them after our slide.
 - Every toolkit screen's simulator pass reads three elements' frames from the accessibility tree (`snapshot --json`)
@@ -4382,10 +4412,25 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
 - Settings › Appearance has a Custom swatch after the presets on iPhone and in the hand-built Settings Android keeps.
   With Material You on, Android's Material Settings and its Appearance page offer the presets only. Custom themes apply to Glass and Classic. The swatch shows the saved theme's colours, or a hue wheel before there is one. Choosing it sets
   `colorChoice` to `custom`. If no theme is saved yet, it saves one first: the Mac's full theme when Match My Mac was
-  showing one, otherwise the Mac's `startingTheme` seeded from the current look's swatch. Then it opens the Theme
-  page. While Custom is chosen, an "Edit Theme" row under the swatches opens the page again. Choosing a preset keeps
+  showing one, otherwise the Mac's `startingTheme` seeded from the current look's swatch. Choosing a preset keeps
   the saved theme, so Custom brings it back. Turning Match My Mac off while the Mac shows a full theme copies that
   theme into Custom.
+- Picking a theme behaves as the Mac's theme picker does (#4066, `ThemePicker` in `apps/browser/.../ThemeEditor.tsx`):
+  a swatch, Custom included, applies in place and never opens a page. "Edit theme" sits under the swatches for
+  whatever is picked, as the Mac's editor sits under its swatches. Edits belong to the swatch they were made on: a
+  preset's edits are kept per preset (`settings.presetThemes`, each sanitized on read like `customTheme`), its swatch
+  shows them and is read as "Blue, edited", and "Reset to Blue" returns it, as the Mac's `presetThemes` and Reset do.
+  With no colour chosen and sync off, an edit edits the preset Appearance shows (Plum by default). With Match My Mac
+  on, the Theme page shows the Mac's current look locked, under "Following your Mac's theme.", drawn with the app's
+  own resolver in the app's current light or dark, and nothing on it writes; "Stop matching to edit" turns Match My
+  Mac off and opens the editor: on the phone's own Custom when one is saved (never overwritten), else on what was
+  showing, copying the Mac's full theme into Custom only when there is no saved Custom (`stopMatchingToEdit`). Every save and Reset checks the lock when
+  it commits (`themeLockedNow`), so a release still queued when sync turns on saves nothing; a page that has
+  started leaving (a pop, or Settings closing) takes no more changes either. The launch look resolves the chosen
+  colour's own theme with the app's rule (`ownThemeOf`), so a selected preset never launches as the saved Custom. A swatch is selected only
+  when it draws the look in use (`selectedSwatch`, both apps), so a phone-edited Green isn't selected while the Mac
+  shows stock Green, and under Material You it is the seed the palette uses (`materialPresetFor`). A drag the system cancels saves nothing. Material You
+  ignores preset edits. `theme_edits` counts finished edits to Custom and to presets alike.
 - The Theme page (`components/settings/ThemePage.tsx`, `ThemeControls.tsx`, route `theme`) follows the Mac's
   `ThemeEditor.tsx` and the native port on d3fc4c02c. It has a preview of the shown look, the colour pad (hue around,
   saturation outward, 1 to 3 knobs, tap a knob to select it, tap elsewhere to move the selected one), a brightness
@@ -4408,6 +4453,28 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
   Dark wins. A look whose ink isn't readable keeps the other appearance (`readableDark`, the Mac's 3:1 and 2:1), and
   the page then says "Kept dark (light) so text stays readable". Match System keeps the app's choice. The override
   goes to the window through `overrideColorScheme`.
+- Web pages keep the scheme you chose, not the theme's (#3482): Settings › Light, Dark, System or Match My Mac
+  (`preferredScheme`, before `themedScheme`) goes to the page engine through `overridePageScheme`
+  (`pages.setPageScheme`). On iPhone `WebEngine` sets each `WKWebView`'s `overrideUserInterfaceStyle` itself, from
+  `BrowsingPreferences.pageScheme` (kept in the page defaults, so a page restored before JS starts gets it too) or,
+  for System, from the window scene's trait, which a window override doesn't touch; it watches the scene's
+  `UITraitUserInterfaceStyle`, so switching the phone's appearance updates open pages live. A light theme
+  keeps Ardia light while sites with a dark mode still draw dark in system dark mode, as in Safari, and Night
+  Shade's Automatic follows the pages' scheme. On Android, `DevelopmentWebViewEngine` gives every WebView a
+  `PageThemeContext` (the activity's theme with the page's night mode applied as an override configuration) behind
+  its `MutableContextWrapper`, because WebView reads `prefers-color-scheme` from its own context's `isLightTheme`
+  each time it rebuilds the page's preferences, and the app theme's `AppCompat` night mode would otherwise reach it.
+  System reads `Resources.getSystem()`, which app overrides don't touch. `PageNightBinding` keeps the context the
+  open WebViews are bound to apart from the cache: a change (or a new WebView, which applies first) rebinds every
+  wrapper and dispatches the new configuration to live WebViews, so a tab opened between the phone's switch and the
+  posted `onConfigurationChanged` can't leave older pages on the old night. The pref is `pageScheme` in the site
+  preferences. On iPhone the scene watches are dropped on `UIScene.didDisconnectNotification`.
+- Native reports the pages' resolved light or dark: `setPageScheme` returns it and `pages.dark` follows each change.
+  `usePageDark` keeps it, and `usePageTheme` is `useTheme` resolved for it: under Material You its scheme comes
+  from the palette pair for the page's darkness, not the app's, and Incognito's forced dark stays in `useTheme`. What stands in for the page uses it:
+  the loading card (`PageCover`), the destination face, the loading placeholder, the page's own surface and its
+  obscured colours. So under a theme held Light, a dark page arrives on a dark card with no light step.
+  `app_launched` carries `theme_fixed_scheme` (a theme holds the app away from your choice).
 - Drawing: every look view that takes the look's colours (`ProfileBackdrop`, `DeckBackdrop`, `Frost`, `Glass`)
   also gets `themeLook`. This is the look resolved for the view's light or dark (`themeLookFor`): stops as 0 to 1
   floats with their pad places, intensity, grain, texture, translucency and angle. Native draws the Mac's
@@ -4419,16 +4486,23 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
   the editor.
 
 Site Settings (`SiteSettingsPage.swift`):
-- From the page menu's Site Settings it opens as the Settings sheet's first page (`openSettingsPage`, the
-  `openSiteSettingsSheet` action), so it has Settings' sheet, inline title, Done button, 12 pt list top and grouped
-  colours in light and dark; it used to open as a page pushed onto Settings, with a back chevron and no Done
-  (build 13, the owner: the site settings popup should look and behave like Settings). From Settings › General it is
-  still a pushed page. `ExpoSettingsDone` is the one Done toolbar both use. Watch `site_permissions_revoked`.
+- From the page menu's Site Settings it opens inside the page menu's own sheet, which grows to the large stop (#4529,
+  the `openSiteSettingsSheet` action): the sheet's content becomes Settings' navigation with Site Settings as its first
+  page, so it keeps Settings' inline title, Done button, 12 pt list top and grouped colours, and nothing is dismissed
+  first. It used to close the menu and then present the Settings sheet, which showed the page between the two (the
+  owner: Site Settings should come up straight from the menu). Done, a swipe down or Desktop Site closes both. From
+  Settings › Site Settings it is still a pushed page. `ExpoSettingsDone` is the one Done toolbar both use. Watch
+  `site_permissions_revoked`.
+- Opened from the page menu, its first section is the site itself, titled with its host: Night Shade, Page Zoom and
+  Desktop Site, which left the page menu (#4529). Night Shade and Page Zoom were already kept per site (the site
+  preferences' `nightShade` and `pageZoom`, over the global Night Shade default); Desktop Site still applies to the
+  tab, and the section's footer says so. Watch `page_menu_site_settings_opened` and the three `site_settings_*_changed`
+  counts.
 - Toggles "Block Ads" ("hand.raised.fill", #FF5A5F), "Block Trackers" ("eyeglasses", #FFC829), "Block Cookie
   Banners" ("list.bullet.rectangle.portrait.fill", #FF901A); links "Filter Lists" (`LabeledContent` count,
   "line.3.horizontal.decrease", neutral) and "Trusted Sites" (count, "checkmark.shield.fill", #3EA82E).
 - Pickers "Night Shade" ("moon.fill", #5856D6) and "Swipe to Navigate" ("hand.draw.fill", #458AFF); toggle "Collapse
-  Bottom Bar" ("platter.filled.bottom.and.arrow.down.iphone", #30B0C7). Footer: "Change one site from its page menu."
+  Bottom Bar" ("platter.filled.bottom.and.arrow.down.iphone", #30B0C7). Footer: "Change one site from Site Settings in its page menu."
 - "Camera, Microphone and Location": allowed sites, "None" when empty, `.swipeActions` "Revoke" (destructive), and a
   `confirmationDialog` titled with the host listing "Revoke <permission>" per kind. Footer about private tabs.
 
@@ -4506,8 +4580,9 @@ d5fbaabc1). After a hand edit to the project, run `pod install` and commit what 
   ids and the same entitlement files, now in `apps/phone/ios/Config`: the app group `group.com.ardia.browser.ios`, and the default
   browser off (`ARDIA_DEFAULT_BROWSER = NO`).
 - **Version and build number:**
-  - The Apple version is TestFlight's pin, `1.0.1` for now ("TestFlight: the workflow, its certificate and its
-    testers" below). Until 2026-11-19 it was the Mac's release version.
+  - The Apple version is the iPhone's pin, `apps/phone/ios/Config/release-version` (`1.0.1` for now), which TestFlight
+    and the App Store share ("TestFlight: the workflow, its certificate and its testers" below). Until 2026-11-19 it
+    was the Mac's release version.
   - The build number goes above the highest one App Store Connect holds. On 15 Nov that is 0.2.47 (9), uploaded that
     day, internal "in testing", external "waiting for review" (`gh workflow run ios-release.yml -f mode=status`).
   - The first Expo candidate at the time was 0.2.47 (10) or later.
@@ -4554,7 +4629,7 @@ d5fbaabc1). After a hand edit to the project, run `pod install` and commit what 
   3. **The upload, the owner's moment:** `gh workflow run ios-release.yml --ref t3/unify-expo-architecture -f
      mode=upload -f public_testers=false`.
      - The build number is taken above App Store Connect's highest, from 10 on, unless `-f build=` sets it.
-     - The version is TestFlight's pin, `1.0.1`; the run refuses any other.
+     - The version is the pin in `apps/phone/ios/Config/release-version`; the run refuses any other.
   4. **On the owner's phone:** install it from TestFlight over the SwiftUI app. Settings' footer should read "Ardia
      <version> Nightly (<build>)".
 - **Who uploads, and how 0.2.47 (9) went up:**
@@ -4747,9 +4822,13 @@ core has its own). Not applicable: the default-browser status (no entitlement in
 
 This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflow builds only the Expo app.
 - **The owner's rule** (2026-11-19). The owner asks for TestFlight before the dry run and upload.
-  - **Version:** every TestFlight build is `1.0.1` (`CFBundleShortVersionString`) until the owner changes it. It is
-    `TESTFLIGHT_VERSION` in `ios-release.yml`: `mode=dry-run` and `mode=upload` take it with `version` left empty, and
-    stop at their first step on any other version, such as an old `0.2.47`.
+  - **Version:** one committed file, `apps/phone/ios/Config/release-version` (`1.0.1` for now, one line, nothing else),
+    is the iPhone's version (`CFBundleShortVersionString`) for TestFlight and the App Store alike. `mode=dry-run` and `mode=upload`
+    read it with `version` left empty and stop on any other version, such as an old `0.2.47`; `release-ios` refuses
+    to upload anything else; `asc.mjs listing` and `app-store` work on that version and refuse a `--version` that
+    differs. Bumping it is one commit: once `1.0.1` is on the App Store, TestFlight needs `1.0.2` or later, because
+    App Store Connect takes no new builds for a version that is on sale. `app.json`'s `version` (`0.1.0`) is not
+    the release version: the app's telemetry reads it on iPhone and Android alike, so it stays as it is.
   - **Build number:** App Store Connect picks it. Leave `build` empty and the run takes the one after the highest it
     holds.
   - **Steps:** a dry run at the commit to upload, `gh workflow run ios-release.yml -f mode=dry-run`, then the upload,
@@ -4789,8 +4868,8 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   `sha256` in `VoiceDownload` (`packages/phone/ios/TalkToMe.swift`) with what `build-voice` printed. Phones that had
   the old voice download the new one the next time Talk to Me is on.
 - **The workflow** (`.github/workflows/ios-release.yml`). What each mode touches in App Store Connect:
-  - `mode=status` only reads: the app record, App IDs, devices, certificates, profiles, builds, build uploads and
-    tester groups.
+  - `mode=status` only reads: the app record, App IDs, devices, certificates, profiles, builds, App Store versions
+    and review submissions, build uploads and tester groups.
   - `mode=dry-run` reads the next build number, archives and signs with the stored development certificate
     (automatic signing, so Xcode may refresh its own managed profiles, as main's SwiftUI release always did), runs
     the checks and stops. It sends nothing. Until 2026-11-16 it also ran the app-store export, which opened an
@@ -4816,6 +4895,7 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   Review and prints the link, which stays the same for every build. Only one build of a version can wait in review.
   `mode=expire -f build=<number>` ends testing of an older build for good (never the newest), and `mode=add-tester -f
   email=<address>` invites someone to Public Testers.
+- **The App Store.** See "The App Store" below.
 - **The default browser grant.** iOS lists an app as a browser only when it is signed with
   `com.apple.developer.web-browser`, which Apple grants per App ID on request
   (https://developer.apple.com/contact/request/default-browser-entitlement/). It is granted and on by default
@@ -4826,6 +4906,167 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   CryptoKit; everything else is Apple's own (HTTPS, CryptoKit hashes). `ITSAppUsesNonExemptEncryption` is still false,
   which assumed Apple's encryption only: the owner decides whether the Rust core changes that answer before the next
   TestFlight upload.
+
+#### Scroll bounce (#4066)
+
+One rule, set where each scroll view is made. Menus, panels, pagers, sheets of fixed content and Settings' forms
+never bounce (`neverBounces()` on SwiftUI, `bounces={false}` with `overScrollMode="never"` in React Native). Long
+lists of the user's own things bounce only when they are longer than their view, which is UIKit's own rule with
+`alwaysBounceVertical` off (`bouncesWhenLong()`, or `bounces alwaysBounceVertical={false} overScrollMode="auto"`):
+Library (History, Bookmarks, Downloads, folders), Archive, Trusted Sites, Open Source Licenses, the tab grid and the
+Theme page. The web page and anything that pulls to refresh keep their bounce; a list inside a sheet that drags down
+to close keeps none, since the sheet's pull is its top end. `scrollBounce.test.ts` holds both lists, and lab builds
+log each guarded scroll view as `PAGELAB scroll never|whenLong …` (`-ArdiaScrollProbe <seconds>` dumps them all).
+
+#### The App Store
+
+A stable iPhone release goes to App Review from a TestFlight build that has processed, only on the owner's word.
+`mode=status` lists the App Store versions with their state, release type and build, and the newest review
+submissions, beside the TestFlight builds. The first release (the owner, 2026-11-26) is iPhone only and free, and
+App Review gets no ChatGPT account: Browse for Me and Pinch to Summarize answer on the device without one.
+
+In order, each on the owner's word:
+1. **A TestFlight build** of the pinned version (`apps/phone/ios/Config/release-version`): `mode=dry-run`, then
+   `mode=upload` ("TestFlight: the workflow, its certificate and its testers" above). Note its build number.
+2. **The listing from the repo:** `gh workflow run ios-release.yml -f mode=listing`. It makes or takes the App Store
+   version for the pin and writes everything in `apps/phone/store/` (below). Run it again after any change there.
+3. **App Privacy by hand.** The data collection questions (the App Store's privacy "nutrition label") aren't in
+   Apple's App Store Connect API: its OpenAPI description (4.6.1, November 2026) has no resource for them, so answer
+   them in App Store Connect › App Privacy and publish them. `mode=listing` ends with this reminder, beside anything
+   else left to do by hand.
+4. **The submission:** `gh workflow run ios-release.yml -f mode=app-store -f build=<number> -f notes=<file in the repo>`.
+
+**The listing** (`asc.mjs listing`, the App Manager key below). It reads `apps/phone/store/`:
+- `<locale>/description.txt` (at most 4,000 characters), `keywords.txt` (100 bytes of UTF-8, as Apple counts it),
+  and, when present, `promotional-text.txt` (170 characters) and `subtitle.txt` (30 characters; a blank or missing
+  file clears what App Store Connect holds, as does dropping `marketingUrl`);
+  `<primary locale>/review-notes.txt` (4,000 bytes) is App Review's notes. One folder per locale, `en-US` for now.
+- `listing.json`: `supportUrl`, `marketingUrl` and `privacyPolicyUrl` (https strings; the policy is
+  `https://ardia.dev/privacy`), `copyright` (the year and the holder, without the ©, which Apple adds: the holder
+  in `NOTICE` is Mantra Patel, so "2026 Mantra Patel"), `primaryCategory` and, optionally, `secondaryCategory` (App
+  Store category ids such as `UTILITIES`; with no `secondaryCategory` the one App Store Connect holds is left alone,
+  so clearing it is done by hand), `ageRating` (the age rating declaration's answers by Apple's field names, each
+  checked against its type in Apple's OpenAPI description 4.6.1: true or false, or one of Apple's words such as
+  `NONE` or, for `ageRatingOverrideV2`, `EIGHTEEN_PLUS`; never null), `contentRights`
+  (`DOES_NOT_USE_THIRD_PARTY_CONTENT` or `USES_THIRD_PARTY_CONTENT`), `price: "free"`, `availability: "all"` and,
+  optionally, `baseTerritory` (`USA` when left out). Unknown keys are refused, so a typo never goes unnoticed.
+- `screenshots/iphone-medium/NN-<name>.png` (1206×2622 or 1179×2556, `APP_IPHONE_61`) and
+  `screenshots/iphone-large/NN-<name>.png` (1320×2868, 1290×2796 or 1260×2736, `APP_IPHONE_67`), 1 to 10 a set,
+  in file name order, portrait or landscape. Each is decoded: every chunk's checksum, the image data inflated to the
+  size its header gives, every row's filter type one PNG defines (0 to 4), no interlacing, no alpha channel or
+  transparency, nothing after `IEND`.
+
+It checks all of that before any request and lists every problem at once (`asc.mjs listing --check` stops there
+and needs no key; the workflow runs it first). A `version` (`--version`) other than the pin is refused there too.
+Then it writes only what differs from App Store Connect: the version (made with a manual release and the
+copyright, or a lone `PREPARE_FOR_SUBMISSION` draft renamed, as `app-store` does; a version in review is refused)
+and its copyright, each locale's text and URLs, the subtitle and privacy policy, the categories, the age rating
+answers, the content rights, a free price from the base territory, availability in every territory and in new ones,
+and App Review Information: the notes, no demo account and the contact. The contact comes from the
+`ASC_REVIEW_CONTACT_FIRST_NAME`, `_LAST_NAME`, `_PHONE` and `_EMAIL` secrets; with any of them unset it is left alone
+and the run says which, so set them (`gh secret set ASC_REVIEW_CONTACT_EMAIL`, and so on) and run it again. The
+contact is never committed and never printed: when Apple refuses the App Review Information, the run shows only
+the status, Apple's error code and the field it names, since Apple's message can repeat the phone number in a form
+GitHub's secret masking doesn't catch. Screenshots are matched to the repo's files by MD5 (Apple's
+`sourceFileChecksum`): a screenshot that matches and has finished uploading or is processing is kept, and only the
+files that differ are uploaded. New ones go up before the old ones are deleted, as far as a set's limit of 10
+allows, so a failed upload leaves the old screenshots in place. At the limit it deletes one old screenshot per
+upload, and only once the upload before it has finished processing, so a replacement Apple refuses costs at most
+one old screenshot. A finished screenshot Apple gives no checksum for counts as old and is kept until its
+replacements are in; one that never finished or that Apple refused is deleted first. The order is set last, to the file names' order.
+Each new screenshot is reserved, uploaded to the addresses Apple gives (without the App Store Connect token) and
+committed with its checksum, and the run waits up to `--timeout` (600 s) for Apple to finish processing it. A
+free price counts as set only when a free manual price is in effect today, by its start and end dates. A set for any other
+display type is left as it is. A re-run on an unchanged repo writes nothing. Two things the API can't do are
+listed at the end instead: territories missing from an existing availability, and availability in new
+territories once it was turned off.
+
+- **Its own key.** Editing the listing and submitting for App Review need the App Manager role, and the notary key
+  (`NOTARY_*`) stays a Developer key, so `mode=listing` and `mode=app-store` use a second key and stop at once when
+  its secrets are missing. To make it:
+  App Store Connect › Users and Access › Integrations › App Store Connect API › Team Keys › Generate API Key,
+  named "Ardia App Store", access **App Manager**. Download `AuthKey_<id>.p8` (Apple offers it once) and set the
+  secrets, then delete the download:
+
+  ```sh
+  base64 -i AuthKey_<id>.p8 | gh secret set ASC_APP_MANAGER_KEY_P8
+  gh secret set ASC_APP_MANAGER_KEY_ID --body <key id>
+  gh secret set ASC_APP_MANAGER_ISSUER --body <issuer id>
+  ```
+
+  A 403 from Apple during the run means the key lacks that role, and the run says so.
+- **On a Mac**, `node apps/phone/scripts/asc.mjs listing` and `node apps/phone/scripts/asc.mjs app-store --build
+  <number> [--notes <file>]` do the same with that key in `ASC_KEY`, `ASC_KEY_ID` and `ASC_ISSUER`. Each request carries a token minted for
+  15 minutes and made again a minute before it runs out, so a long wait for processing keeps working.
+
+`mode=app-store`, in order:
+- **The build floor.** `apps/phone/ios/Config/first-iphone-only-build` (`22`) is the first build of the iPhone-only
+  project: builds 1 to 21 were uploaded for 1.0.1 while the project targeted iPhone and iPad. App Store Connect's
+  API says nothing about a build's device families (its `builds` and `buildBundles` resources in OpenAPI 4.6.1 carry
+  no such field), so the committed number is the check: `app-store` refuses a lower build before any request, and
+  `release-ios` refuses to upload one. Upload TestFlight builds only from a checkout that has this change; if a
+  build from an older checkout reaches App Store Connect at or above the floor, expire it and raise the floor in a
+  commit. `asc.mjs version` prints the pin, and `version --first-build` the floor; the workflow and `release-ios`
+  read both through it, and each file must be one plain line.
+- **Preflight**, before any request (`asc.mjs preflight` alone needs no key): `ITSAppUsesNonExemptEncryption` in
+  `apps/phone/ios/Ardia/Info.plist`, the privacy manifest `apps/phone/ios/PrivacyInfo.xcprivacy` and, unless
+  `default_browser=false` (`--no-default-browser`), `com.apple.developer.web-browser` in
+  `Config/Ardia-DefaultBrowser.entitlements`, the Release `TARGETED_DEVICE_FAMILY` of `com.ardia.browser.ios` in
+  `Ardia.xcodeproj` (`1`: iPhone only), which decides the screenshots the listing needs, and the pinned version in
+  `Config/release-version` and the floor in `Config/first-iphone-only-build`. Each missing one is named and nothing is sent.
+- **The notes** (`notes`) must resolve, symlinks followed, to a file inside the checkout (`--notes-root`): anything
+  outside is refused before a request.
+- **The wait** for a build still processing never starts a read after `--timeout`: each pause is cut to the time
+  left, a read Apple answers with a server error is asked again only while time is left, and the run stops at the
+  deadline.
+- **The build** is picked by its number and the pinned version, so a build number another version shares never
+  gets in the way. A `version` (`--version`) other than the pin is refused before any request: change the pin in a
+  commit instead. The build must be `VALID`, not expired, and carry an export compliance answer.
+  A build that declares non-exempt encryption is refused unless its encryption declaration is `APPROVED`, which
+  can't happen while Info.plist says false. The workflow waits up to 20 minutes for one still processing (`--timeout`).
+- **Reads before writes.** Before it writes anything, it reads the App Store versions and every open review
+  submission with its items. It writes nothing when this version is already in a submission that is waiting for
+  review or in review with this build, whatever the version's own state says. It reads the attached build again
+  once it finds that review, and with another build it refuses, naming both. It also stops, listing them, when a submission is in
+  review with other items, is being cancelled or completed, or holds anything but this version.
+- **The version.** It refuses while another version is waiting for review, in review or pending release, and when the
+  build's version is already on sale (a new App Store release needs a new version, which is the owner's call). A
+  version already in review with this build is reported and left alone, but only as a success when its release is
+  manual: with any other release type the run exits non-zero and asks for Manual in App Store Connect, touching
+  nothing. A version it makes takes the copyright of the newest version that has one, by full creation time, and
+  keeps whatever copyright App Store Connect returns for it. Otherwise it takes this version's draft,
+  makes it, or renames the one other draft only when it is alone and still `PREPARE_FOR_SUBMISSION`; a rejected
+  draft, or more than one, stops the run with the list. Then it attaches the build (in place of an older one) and
+  sets the release to manual.
+- **What's New** comes from `notes`, at most 4,000 characters; without it the text is "Bug fixes and improvements."
+  and the run says so. The App Store shows no What's New on an app's first version, so the run leaves it out then.
+- **The checks** list everything missing at once and stop before the submission: the primary locale's description,
+  keywords, support URL and, for each device family the app targets, at least one screenshot whose upload has
+  finished (an empty set, or one still uploading or failed, counts as none), and App Review
+  Information's contact name, phone, email and notes, a demo account's name and password when one is required,
+  and the version's copyright, which Apple requires (`mode=listing` sets it). For iPhone that screenshot must be in the "iPhone with Dynamic Island (medium display)" class, which App Review
+  requires (`APP_IPHONE_61`: 1206×2622 or 1179×2556), or in the large class it scales down from (`APP_IPHONE_67`:
+  1320×2868, 1290×2796, 1260×2736); a finished set only in a smaller class (`APP_IPHONE_65`, `_58`, `_55` and older)
+  counts as none, and the gap names it (Apple's Screenshot specifications, checked 2026-11-26; the display type
+  values are `ScreenshotDisplayType` in the App Store Connect API).
+  Notes that don't say how to try Continue with ChatGPT (Browse for Me) only print a warning. Fill the gaps in App
+  Store Connect and run it again; the run never makes contact details up.
+- **The submission** reuses an open review submission that is ready and holds nothing or only this version, or one
+  with unresolved issues that holds only this version; otherwise it opens one. Just before that it reads the
+  version and the submissions again and stops if either changed while it ran. A rejected item for this version,
+  left from the last review, is marked resolved. Then, right before submitting, it reads the version once more (its
+  version string, build and release type must be what the run set) and the submission's items (only this
+  version), and stops without submitting on any change, so a release type switched mid-run or an App Event added
+  meanwhile never goes to App Review. The version's state may move only the way the run's own writes move it:
+  from `PREPARE_FOR_SUBMISSION` to `READY_FOR_REVIEW` (Apple does that when the version joins a submission), and
+  from a rejected state to either of those two; anything else, such as `WAITING_FOR_REVIEW` set elsewhere, stops it.
+  Apple's API can't tie a review submission to a build, so right after submitting the run reads the version's build
+  once more and only reports: when Apple shows another build, or the read fails or leaves the version out, it exits
+  non-zero with the review submission's id, the build it submitted and the build Apple shows, and asks you to cancel
+  the submission in App Store Connect if it's wrong. It never cancels anything itself. The summary prints the release type Apple holds.
+
+Every step reports what is already done, so a re-run after a failure picks up where it stopped. After Apple approves
+it, the owner presses Release in App Store Connect. Google Play is not set up.
 
 #### Launch arguments on iPhone
 

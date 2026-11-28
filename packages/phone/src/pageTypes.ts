@@ -1,4 +1,5 @@
 import type { ColorValue, ViewProps } from "react-native";
+import type { LookColors } from "./look";
 
 export type PageNavigationState = {
   url: string | null;
@@ -46,6 +47,8 @@ export type PageObscuredColors = { top: ColorValue | null; bottom: ColorValue | 
 
 export type PageError = { code: string; message: string };
 
+export type PageSummaryLook = LookColors & { dark: boolean };
+
 export type SwipeNavigation = "anywhere" | "edges" | "off";
 
 export type PageSwipeDirection = "back" | "forward";
@@ -59,6 +62,7 @@ export type PageViewProps = ViewProps & {
   toneInsets?: PageToneInsets;
   bottomInsetTransitionMs?: number;
   summaryBottomInset?: number;
+  summaryLook?: PageSummaryLook;
   obscuredInsets?: PageObscuredInsets;
   obscuredColors?: PageObscuredColors;
   topClearance?: number;
@@ -187,6 +191,8 @@ export type PageEngineCapabilities = {
   snapshotsIncludeVideo: boolean;
 };
 
+export type PageProcessOutcome = "gone" | "recovered" | "failed";
+
 export type PageEngineEvent =
   | { name: "page.state"; pageId: string; state: PageState }
   | { name: "page.find"; pageId: string; result: FindResult | null }
@@ -206,6 +212,7 @@ export type PageEngineEvent =
     }
   | { name: "page.longPress"; pageId: string; target: PressTarget; x: number; y: number }
   | { name: "page.closeRequested"; pageId: string }
+  | { name: "page.processEnded"; pageId: string; outcome: PageProcessOutcome }
   | { name: "page.summaryOpened"; pageId: string; trigger: PageSummaryTrigger; isPrivate: boolean }
   | { name: "page.summarySettled"; pageId: string; trigger: PageSummaryTrigger; outcome: PageSummaryOutcome; chatGPTFellBack?: boolean; geminiNanoMissing?: string | null; isPrivate: boolean }
   | { name: "page.snapshotLanded"; pageId: string; uri: string; generation: number }
@@ -214,6 +221,7 @@ export type PageEngineEvent =
   | { name: "page.externalAppMissing"; pageId: string; url: string }
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" }
+  | { name: "pages.dark"; dark: boolean }
   | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean };
 
 export type PageEventPayload =

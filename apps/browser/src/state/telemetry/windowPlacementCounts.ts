@@ -1,4 +1,5 @@
 import { onAppEvent } from "../../platform/app";
+import type { FullScreenTransition } from "../../platform/media";
 import { isSharing } from "./choice";
 import { counted, type ConsentToken } from "./client";
 import { nativeConsent } from "./nativeConsent";
@@ -13,6 +14,12 @@ let littleOpenedFloating = 0;
 let utilityOpenedFloating = 0;
 let nativeDrags = 0;
 let dragTakeovers = 0;
+let pageFullScreenStarts = 0;
+let pageFullScreenSlowStarts = 0;
+let unclaimedTabsAdopted = 0;
+let unclaimedTabsDropped = 0;
+let pageFullScreensEntered = 0;
+export const SLOW_PAGE_FULL_SCREEN_START_MS = 300;
 const NO_LINUX_COUNTS = {
   linux_windows_app_decorated: 0,
   linux_windows_compositor_decorated: 0,
@@ -43,6 +50,15 @@ onAppEvent((e) => {
   );
 });
 
+export function notePageFullScreenTransition(transition: FullScreenTransition | null) {
+  if (!transition?.entering) return;
+  const slow = transition.waitedMs >= SLOW_PAGE_FULL_SCREEN_START_MS;
+  counted(nativeConsent(transition), () => {
+    pageFullScreenStarts++;
+    if (slow) pageFullScreenSlowStarts++;
+  });
+}
+
 export const noteWindowReopenedMaximized = () => void (isSharing() && reopenedMaximized++);
 export function noteWindowClosePinsKept(n: number, renewed: number) {
   closePinsKept += n;
@@ -57,15 +73,25 @@ export function noteLinuxWindowDecorations(decoratedBy: unknown, answer: unknown
 
 export const noteLinuxPageViewportRejected = (consent: ConsentToken | null) => counted(consent, () => void linuxCounts.linux_page_viewports_rejected++);
 
+export const notePageFullScreenEntered = (consent: ConsentToken | null) => counted(consent, () => void pageFullScreensEntered++);
+
+export const noteUnclaimedTab = (outcome: "adopted" | "dropped", consent: ConsentToken | null) =>
+  counted(consent, () => void (outcome === "adopted" ? unclaimedTabsAdopted++ : unclaimedTabsDropped++));
+
 export function noteWindowOpenedFloating(little: boolean, consent: ConsentToken | null) {
   counted(consent, () => (little ? littleOpenedFloating++ : utilityOpenedFloating++));
 }
 
 export function takeWindowPlacementCounts() {
-  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, ...linuxCounts };
+  const taken = { window_centered_resizes: centeredResizes, windows_reopened_maximized: reopenedMaximized, window_titles_read: titlesRead, window_drag_loops: dragLoops, window_drags_native: nativeDrags, window_drag_takeovers: dragTakeovers, window_close_pins_kept: closePinsKept, window_close_pin_ids_renewed: closePinIdsRenewed, little_ardia_opened_floating: littleOpenedFloating, utility_windows_opened_floating: utilityOpenedFloating, page_full_screen_starts: pageFullScreenStarts, page_full_screen_slow_starts: pageFullScreenSlowStarts, unclaimed_tabs_adopted: unclaimedTabsAdopted, unclaimed_tabs_dropped: unclaimedTabsDropped, page_full_screens_entered: pageFullScreensEntered, ...linuxCounts };
   linuxCounts = { ...NO_LINUX_COUNTS };
   centeredResizes = 0;
   reopenedMaximized = 0;
+  pageFullScreenStarts = 0;
+  pageFullScreenSlowStarts = 0;
+  unclaimedTabsAdopted = 0;
+  unclaimedTabsDropped = 0;
+  pageFullScreensEntered = 0;
   titlesRead = 0;
   dragLoops = 0;
   nativeDrags = 0;

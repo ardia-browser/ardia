@@ -1,12 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
-import { newIncognitoTab, openArchive, openSpaces, reopenLastClosed } from "../../state/browse/store";
+import { openArchive, openSpaces } from "../../state/browse/store";
+import { openLibraryFromDeck } from "../../state/library/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { openSettings } from "../../state/settings/hooks";
 import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
-import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
+import { useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { browseLayout, ChromeSurface, deckChromeLayout, font, iconRoles, menuLook, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
@@ -20,8 +21,6 @@ type Props = {
   safeTop: number;
   safeSide: number;
   sideInset: number;
-  hasTabs: boolean;
-  onCloseAll: () => void;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
   moreOpener?: MenuOpener;
@@ -38,11 +37,19 @@ function joinMenuGroups(groups: readonly MenuItem[][], ruled: boolean = menuGrou
   return groups.filter((group) => group.length > 0).flatMap((group, index): MenuItem[] => (index > 0 && ruled ? ["divider", ...group] : group));
 }
 
-export function deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive = true, material = false, updateDot = false }: { syncEnabled: boolean; canReopen: boolean; hasTabs: boolean; onCloseAll: () => void; archive?: boolean; material?: boolean; updateDot?: boolean }): MenuItem[] {
+export function libraryMenuItems(material = false): MenuItem[] {
+  return [
+    { label: destinationWords.history, icon: "clockArrow", onPress: () => openLibraryFromDeck("history") },
+    { label: destinationWords.bookmarks, icon: material ? "folderFill" : "star", onPress: () => openLibraryFromDeck("bookmarks") },
+    { label: destinationWords.downloads, icon: "arrowDownCircle", onPress: () => openLibraryFromDeck("downloads") },
+  ];
+}
+
+export function deckMoreMenuItems({ syncEnabled, archive = true, material = false, updateDot = false }: { syncEnabled: boolean; archive?: boolean; material?: boolean; updateDot?: boolean }): MenuItem[] {
   return joinMenuGroups(
     [
       [...(archive ? [{ label: destinationWords.archive, icon: "archivebox" as const, onPress: openArchive }] : []), ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : [])],
-      [{ label: actionWords.newIncognitoTab, icon: "eyes", onPress: newIncognitoTab }, ...(canReopen ? [{ label: "Reopen Closed Tab", icon: "arrowUturnBackward" as const, onPress: reopenLastClosed }] : []), ...(hasTabs ? [{ label: "Close All Tabs", icon: "xmark" as const, destructive: true, onPress: onCloseAll }] : [])],
+      libraryMenuItems(material),
       [{ label: destinationWords.settings, icon: "gearshape", dot: updateDot, onPress: () => openSettings() }],
     ],
     material ? true : menuGroupsRuled(),
@@ -66,18 +73,17 @@ export function useDeckSpaces() {
   return { syncEnabled: status.isEnabled, spaces, current, spaceItems };
 }
 
-export function DeckHeader({ safeTop, safeSide, sideInset, hasTabs, onCloseAll, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+export function DeckHeader({ safeTop, safeSide, sideInset, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const theme = useTheme();
   const incognito = useIncognito();
   const updateDot = useUpdateDot();
-  const canReopen = useCanReopen();
   const { syncEnabled, spaces, current, spaceItems } = useDeckSpaces();
   const side = safeSide + sideInset;
   const below = safeTop + deckHeaderBottom() + deckChromeLayout.menuGap;
   const opened = () => onMenu?.(true);
   const closed = () => onMenu?.(false);
   const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
-  const moreItems = deckMoreMenuItems({ syncEnabled, canReopen, hasTabs, onCloseAll, archive: false, updateDot });
+  const moreItems = deckMoreMenuItems({ syncEnabled, archive: false, updateDot });
   const rowTop = safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2;
   return (
     <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: rowTop, paddingHorizontal: side }]}>

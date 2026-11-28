@@ -44,7 +44,7 @@ export function ControlPill({ style, enter = false }: { style?: Animated.WithAni
                 )}
               </View>
               {compact ? null : (
-                <Text numberOfLines={1} size="small" tone="textSecondary" style={SHRINK}>
+                <Text numberOfLines={1} size="small" tone="textSecondary" ardiaCentersCapitals style={SHRINK}>
                   {line.lead}
                   <Text size="small" weight="semibold">
                     {line.name}

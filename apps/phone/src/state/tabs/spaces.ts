@@ -24,10 +24,10 @@ export function tabsInSpace<T extends Pick<BrowserTab, "profileSyncId">>(tabs: r
   return isSplit(spaces) ? tabs.filter((tab) => belongsToSpace(spaces, tab.profileSyncId)) : tabs;
 }
 
-export function spaceToShow(spaces: TabSpaces, tab: Pick<BrowserTab, "profileSyncId" | "isPrivate"> | null | undefined): string | null {
+export function spaceToPick(spaces: TabSpaces, tab: Pick<BrowserTab, "profileSyncId" | "isPrivate"> | null | undefined, pending: string | null): string | null {
   if (!tab || tab.isPrivate || !isSplit(spaces)) return null;
   const space = spaceOf(spaces, tab.profileSyncId);
-  return space !== spaces.current ? space : null;
+  return space !== spaces.current || (pending !== null && pending !== space) ? space : null;
 }
 
 export const sameSpaces = (a: TabSpaces, b: TabSpaces) =>

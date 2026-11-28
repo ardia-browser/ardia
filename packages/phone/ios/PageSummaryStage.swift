@@ -25,26 +25,7 @@ enum PageSummaryMotion {
   static let dismissPull: CGFloat = 100
 }
 
-struct PageSummaryLook {
-  var look: ProfileLook
-  var themeLook: ThemeLook?
-  var dark: Bool
-
-  init(isPrivate: Bool, appDark: Bool, recalled: LaunchLook.Recalled = LaunchLook.recalled()) {
-    guard !isPrivate else {
-      look = .incognito
-      themeLook = nil
-      dark = true
-      return
-    }
-    let drawn = recalled.drawn(appDark: appDark)
-    look = drawn.colors.look
-    themeLook = drawn.colors.themeLook
-    dark = drawn.dark ?? appDark
-  }
-
-  var inkIsLight: Bool { themeLook != nil ? dark : look.inkIsLight(dark: dark, themed: true) }
-
+extension PageSummaryLook {
   var ground: UIColor { UIColor(look.backdropColors(dark: dark, themed: true).first ?? look.surface) }
 
   var bloom: [Color] { look.deckBlobs(dark: dark) + [look.swatchColor] }

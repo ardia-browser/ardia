@@ -146,6 +146,12 @@ Record Performance Issue; Copy Diagnostics stays.
 - Recording: Ardia's windows only, 60 s max, web page areas blacked out in every frame unless included,
   watched before sending.
 - Sent screen: the reference, the GitHub issue link, "You appear to us as <name>", and the watch end date.
+- A failed send says why (`report_failed` `error_class`): `offline` only when the request never reached the server;
+  `unsupported` (status -1, never retried) when the platform has no native uploader for the attached files, which is
+  what every Windows report on the React Native shell hit and was shown as offline (#4419); then `storage`,
+  `server`, `rate_limited`, `expired` and `rejected` from the server's answer.
+- Windows and Linux hosts without the native sender open the repo's bug form with the details filled instead of the
+  sheet (`docs/linux-port.md` › Report a Problem).
 
 ## CLI
 

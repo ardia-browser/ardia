@@ -1,6 +1,6 @@
 import { AccessibilityInfo, Appearance, Platform } from "react-native";
 
-import { useLookBudgetProbe as nativeLookBudgetProbe, type SystemLook } from "@ardia/phone-native";
+import { pages, useLookBudgetProbe as nativeLookBudgetProbe, type SystemLook } from "@ardia/phone-native";
 
 export { lookBudget, nativeGlassRender, systemLookNow, type LookMode, type SystemLook } from "@ardia/phone-native";
 
@@ -19,3 +19,6 @@ export async function systemLook(): Promise<{ reduceMotion: boolean; reduceTrans
 export { useSystemReduceMotion, useSystemReduceTransparency } from "@ardia/phone-native";
 
 export const overrideColorScheme = (scheme: "light" | "dark" | null) => Appearance.setColorScheme(scheme ?? "unspecified");
+
+export { rememberLaunchLook } from "@ardia/phone-native";
+export const overridePageScheme = (scheme: "light" | "dark" | null): Promise<boolean | null> => pages.setPageScheme(scheme).catch(() => null);

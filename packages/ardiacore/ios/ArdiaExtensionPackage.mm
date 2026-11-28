@@ -105,6 +105,22 @@ bool IsHostPattern(NSString *s) { return [s isEqualToString:@"<all_urls>"] || [s
 
 }
 
+NSDictionary<NSString *, NSNumber *> *NewTabOverrideRanks(NSString *preferencesPath) {
+  NSDictionary *prefs = LoadJSON(preferencesPath);
+  NSDictionary *extensions = [prefs[@"extensions"] isKindOfClass:NSDictionary.class] ? prefs[@"extensions"] : nil;
+  NSDictionary *overrides = [extensions[@"chrome_url_overrides"] isKindOfClass:NSDictionary.class] ? extensions[@"chrome_url_overrides"] : nil;
+  NSArray *entries = [overrides[@"newtab"] isKindOfClass:NSArray.class] ? overrides[@"newtab"] : nil;
+  NSMutableDictionary<NSString *, NSNumber *> *ranks = [NSMutableDictionary dictionary];
+  NSUInteger rank = 0;
+  for (NSDictionary *entry in entries) {
+    if (![entry isKindOfClass:NSDictionary.class] || ![entry[@"entry"] isKindOfClass:NSString.class]) continue;
+    NSString *host = [NSURL URLWithString:entry[@"entry"]].host.lowercaseString;
+    if (!IsExtensionId(host) || ranks[host]) continue;
+    ranks[host] = @(rank++);
+  }
+  return ranks;
+}
+
 bool IsExtensionId(NSString *s) {
   if (s.length != 32) return false;
   for (NSUInteger i = 0; i < 32; i++) {
@@ -174,6 +190,8 @@ NSDictionary *ReadManifest(NSString *folder) {
   out[@"optionsPage"] = [options isKindOfClass:NSString.class] ? options : nil;
   NSString *panel = [m[@"side_panel"] isKindOfClass:NSDictionary.class] ? m[@"side_panel"][@"default_path"] : nil;
   out[@"sidePanel"] = [panel isKindOfClass:NSString.class] ? panel : nil;
+  NSString *newTab = [m[@"chrome_url_overrides"] isKindOfClass:NSDictionary.class] ? m[@"chrome_url_overrides"][@"newtab"] : nil;
+  out[@"newTabPage"] = [newTab isKindOfClass:NSString.class] && newTab.length ? newTab : nil;
   out[@"incognitoSplit"] = @([m[@"incognito"] isEqual:@"split"]);
   out[@"incognitoAllowed"] = @(![m[@"incognito"] isEqual:@"not_allowed"]);
   out[@"homepageUrl"] = [m[@"homepage_url"] isKindOfClass:NSString.class] ? m[@"homepage_url"] : nil;

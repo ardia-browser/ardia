@@ -40,6 +40,7 @@ export function pinnedOrderAdapter(profileId: string): Adapter {
         values,
         ignore,
         republish: (k) => choiceStillOut(chosen, choiceOf(k), stamp(k)) && !queued(k),
+        keepLocal: (k) => choiceStillOut(chosen, choiceOf(k), stamp(k)),
         published: (published) => settleChoices(profileId, Object.fromEntries([...published].map(choiceOf).filter((c) => c in chosen).map((c) => [c, chosen[c]!]))),
       } satisfies Extraction;
     },

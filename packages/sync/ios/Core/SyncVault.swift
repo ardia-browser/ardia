@@ -5,24 +5,103 @@ public final class SyncVault {
 
   public let folder: URL
   let keys: SyncKeys
-  let fileManager = FileManager.default
+  let fileManager: FileManager
   public var coordination: SyncCoordination?
 
-  public init(folder: URL, keys: SyncKeys) {
+  public init(folder: URL, keys: SyncKeys, fileManager: FileManager = .default) {
     self.folder = folder
     self.keys = keys
+    self.fileManager = fileManager
   }
 
   public var chainURL: URL { folder.appendingPathComponent(keys.chainTag, isDirectory: true) }
   func scopeURL(_ scope: String) throws -> URL { chainURL.appendingPathComponent(try keys.scopeTag(scope), isDirectory: true) }
 
-  public func chainExists() -> Bool {
-    var isDirectory: ObjCBool = false
-    return fileManager.fileExists(atPath: chainURL.path, isDirectory: &isDirectory) && isDirectory.boolValue
-  }
+  public func chainExists() -> Bool { isDirectory(chainURL) }
 
   public func createChain() throws {
     try fileManager.createDirectory(at: chainURL, withIntermediateDirectories: true)
+  }
+
+  public struct FolderExists: Error {
+    public init() {}
+  }
+
+  var renameExclusive: (_ from: String, _ to: String) -> Int32 = { renamex_np($0, $1, UInt32(RENAME_EXCL)) == 0 ? 0 : errno }
+
+  public func createChainInNewFolder() throws {
+    let parent = folder.deletingLastPathComponent()
+    try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+    if let staging = try? fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: parent, create: true) {
+      defer { try? fileManager.removeItem(at: staging) }
+      let staged = staging.appendingPathComponent(folder.lastPathComponent, isDirectory: true)
+      try fileManager.createDirectory(at: staged, withIntermediateDirectories: false)
+      try fileManager.createDirectory(at: staged.appendingPathComponent(keys.chainTag, isDirectory: true), withIntermediateDirectories: false)
+      switch renameExclusive(staged.path, folder.path) {
+      case 0: return
+      case EEXIST: throw FolderExists()
+      case ENOTSUP, EINVAL, EXDEV: break
+      case let code: throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
+      }
+    }
+    try createChainInPlace()
+  }
+
+  var inPlaceStep: ((_ step: String) throws -> Void)?
+
+  private func createChainInPlace() throws {
+    do {
+      try fileManager.createDirectory(at: folder, withIntermediateDirectories: false)
+    } catch let error as CocoaError where error.code == .fileWriteFileExists {
+      throw FolderExists()
+    }
+    try inPlaceStep?("made")
+    let fd = open(folder.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+    guard fd >= 0 else { throw FolderExists() }
+    defer { close(fd) }
+    guard let made = Identity(fd: fd), Identity(path: folder.path) == made, Self.isEmpty(fd) else { throw FolderExists() }
+    try inPlaceStep?("opened")
+    guard mkdirat(fd, keys.chainTag, 0o777) == 0 else {
+      let code = errno
+      if code == EEXIST { throw FolderExists() }
+      if Identity(path: folder.path) == made, Self.isEmpty(fd) { _ = rmdir(folder.path) }
+      throw POSIXError(POSIXErrorCode(rawValue: code) ?? .EIO)
+    }
+    guard let chain = Identity(fd: fd, name: keys.chainTag), Identity(path: folder.path) == made, Identity(path: chainURL.path) == chain else {
+      throw FolderExists()
+    }
+  }
+
+  struct Identity: Equatable {
+    let device: dev_t
+    let inode: ino_t
+
+    init?(_ read: (inout stat) -> Int32) {
+      var info = stat()
+      guard read(&info) == 0 else { return nil }
+      device = info.st_dev
+      inode = info.st_ino
+    }
+
+    init?(path: String) { self.init { lstat(path, &$0) } }
+    init?(fd: Int32) { self.init { fstat(fd, &$0) } }
+    init?(fd: Int32, name: String) { self.init { fstatat(fd, name, &$0, AT_SYMLINK_NOFOLLOW) } }
+  }
+
+  static func isEmpty(_ fd: Int32) -> Bool {
+    let copy = dup(fd)
+    guard copy >= 0 else { return false }
+    guard let listing = fdopendir(copy) else {
+      close(copy)
+      return false
+    }
+    defer { closedir(listing) }
+    rewinddir(listing)
+    while let entry = readdir(listing) {
+      let name = withUnsafeBytes(of: entry.pointee.d_name) { String(decoding: $0.prefix(Int(entry.pointee.d_namlen)), as: UTF8.self) }
+      if name != "." && name != ".." { return false }
+    }
+    return true
   }
 
   @discardableResult
@@ -32,10 +111,32 @@ public final class SyncVault {
     return id
   }
 
+  public struct ChainMissing: Error {
+    public init() {}
+  }
+
   func write(scope: String, payload: Data, fileId id: String) throws {
     let sealed = try keys.seal(payload, scopeTag: try keys.scopeTag(scope), fileId: id)
     let directory = try scopeURL(scope)
-    try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    guard chainExists() else { throw ChainMissing() }
+    do {
+      try place(sealed, in: directory, id: id)
+    } catch where !(error is SyncCoordination.TimedOut) && !chainExists() {
+      throw ChainMissing()
+    }
+  }
+
+  private func isDirectory(_ url: URL) -> Bool {
+    var isDirectory: ObjCBool = false
+    return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+  }
+
+  private func place(_ sealed: Data, in directory: URL, id: String) throws {
+    if !isDirectory(directory) {
+      do {
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: false)
+      } catch where isDirectory(directory) {}
+    }
     let destination = directory.appendingPathComponent("\(id).\(Self.fileExtension)")
     let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: directory, create: true)
     defer { try? fileManager.removeItem(at: staging) }

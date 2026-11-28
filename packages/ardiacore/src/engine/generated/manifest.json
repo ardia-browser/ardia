@@ -1561,8 +1561,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "b40e6948602c351a077b2b5bbe1bc96f69bc5bb5ac0a3393349f3b28deb0330a",
-        "swift": "d3ec70cbcd71c1eb00de9c26c71338dd1365579070f75a1d3af867a0083d6362"
+        "types": "c83de532deb029699533abd1469495403b5ab609888a03d347f81fff9d42c853",
+        "swift": "eb16f7e75fb5c2e64885210a13694fdc7f783cc7419954863f668d91e51b5077"
       },
       "modules": {
         "ArdiaShell": {
@@ -1998,6 +1998,25 @@
                 "token"
               ],
               "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "fieldBlurCause": {
+              "args": [
+                "fieldTag"
+              ],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "watchFieldBlurs": {
+              "args": [
+                "fieldTag",
+                "watch"
+              ],
+              "async": false,
               "mac": "custom",
               "desktop": "absent",
               "windows": "absent"
@@ -4567,8 +4586,8 @@
       "types": "packages/sync/src/generated/native.ts",
       "swift": "packages/sync/ios/SyncNative.swift",
       "sha256": {
-        "types": "a1e5a4064125ab8f762e1336845b26cc5db346c2a09344004857928ae1066fd1",
-        "swift": "b5196cc68e00ac623efc491d02f3f6ab2c9aa8efeb98935be0e3afce1d240d43"
+        "types": "b20d21546fbf88877d26f66bf8b52285bd5afdb9f468bbb42c26335d496c136d",
+        "swift": "a1ece123db0e2c1d1034df62b3618eb7b312eed10dd94877778f3ec75c168aa8"
       },
       "modules": {
         "ArdiaSync": {
@@ -4672,6 +4691,15 @@
               "async": true,
               "mac": "custom",
               "desktop": "adapted",
+              "windows": "custom"
+            },
+            "createChainInNewFolder": {
+              "args": [
+                "folder"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "custom",
               "windows": "custom"
             },
             "write": {
@@ -4818,7 +4846,7 @@
                 "origin",
                 "username",
                 "sealed",
-                "replacing"
+                "replaced"
               ],
               "async": true,
               "mac": "custom",

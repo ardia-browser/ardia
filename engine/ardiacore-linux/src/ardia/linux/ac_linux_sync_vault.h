@@ -52,6 +52,7 @@ struct Listing {
 struct VaultError {
   bool ok() const { return message.empty(); }
   std::string message;
+  bool chain_missing = false;
 };
 
 class Vault {
@@ -69,6 +70,8 @@ class Vault {
   VaultError DeleteChain() const;
 
  private:
+  VaultError MissingOr(std::string message) const;
+
   std::string folder_;
   const SyncKeys& keys_;
 };

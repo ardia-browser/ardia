@@ -1,4 +1,5 @@
 import ArdiaBrowser
+import ArdiaDesign
 import ExpoModulesCore
 import QuartzCore
 import UIKit
@@ -252,6 +253,10 @@ public final class PageViewModule: Module {
       Self.main(promise) { try await PhonePages.shared.evaluate(pageID, script: script) }
     }.runOnQueue(.main)
 
+    AsyncFunction("setShownPage") { (pageID: String?) in
+      MainActor.assumeIsolated { PhonePages.shared.setShownPage(pageID) }
+    }.runOnQueue(.main)
+
     AsyncFunction("discardBackgroundPages") { (keeping: String?) in
       MainActor.assumeIsolated { PhonePages.shared.discardBackgroundPages(keeping: keeping) }
     }.runOnQueue(.main)
@@ -357,6 +362,18 @@ public final class PageViewModule: Module {
           "siteMode": site.map(PagePayloads.nightShade),
           "mode": PagePayloads.nightShade(preferences.nightShade(for: host, isPrivate: isPrivate == true)),
         ]
+      }
+    }.runOnQueue(.main)
+
+    AsyncFunction("setPageScheme") { (scheme: String?) -> Bool in
+      try MainActor.assumeIsolated {
+        let parsed = try scheme.map { raw in
+          guard let value = PageScheme(rawValue: raw) else { throw PagePayloads.badArgs("Unknown page scheme \(raw)") }
+          return value
+        }
+        let engine = PhonePages.shared.engine
+        if engine.preferences.pageScheme != parsed { engine.preferences.pageScheme = parsed } else { engine.applyPageStyle() }
+        return engine.pageIsDark
       }
     }.runOnQueue(.main)
 
@@ -484,6 +501,11 @@ public final class PageViewModule: Module {
 
       Prop("pullToRefresh") { (view: PageView, pulls: Bool?) in
         view.pullToRefresh = pulls ?? true
+      }
+
+      Prop("summaryLook") { (view: PageView, look: [String: Any]?) in
+        view.summaryColors = LookColors(color: look?["color"] as? String, themeColors: look?["themeColors"] as? [String], darkThemeColors: look?["darkThemeColors"] as? [String], themeLook: ThemeLook(sanitizing: look?["themeLook"]))
+        view.summaryDark = look?["dark"] as? Bool
       }
 
       OnViewDidUpdateProps { (view: PageView) in

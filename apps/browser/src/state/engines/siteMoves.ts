@@ -7,6 +7,7 @@ import { declineSite, modeStillHolds, openPageIn, pageUrl, refusedVideoSiteOf, s
 import { noteProtectedVideoRefusal } from "../telemetry/protectedVideoCounts";
 import { openedByPage, openerState } from "./openedPages";
 import { noteSiteMove } from "../telemetry/engineSwitchCounts";
+import { heldByCli } from "../tabs/cliHolds";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 
 const store = () => useBrowser.getState();
@@ -17,18 +18,28 @@ type TabMoves = { lastMovedAt: number; moving: boolean; pending: Move | null; co
 
 const tabMoves = new Map<string, TabMoves>();
 const probingVideo = new Set<string>();
+const keptForCli = new Set<string>();
 let unwatch: (() => void) | null = null;
 
-function movesOf(tabId: string): TabMoves {
+function forgetClosedTabs() {
   unwatch ??= useBrowser.subscribeTo(["tabs"], (s) => {
     for (const [id, moves] of tabMoves) {
       if (s.tabs[id]) continue;
+      keptForCli.delete(id);
       if (moves.cooling) clearTimeout(moves.cooling);
       tabMoves.delete(id);
     }
+    if (tabMoves.size || !unwatch) return;
+    unwatch();
+    unwatch = null;
   });
+}
+
+function movesOf(tabId: string): TabMoves {
   let moves = tabMoves.get(tabId);
-  if (!moves) tabMoves.set(tabId, (moves = { lastMovedAt: 0, moving: false, pending: null, cooling: null, visit: 0 }));
+  if (moves) return moves;
+  tabMoves.set(tabId, (moves = { lastMovedAt: 0, moving: false, pending: null, cooling: null, visit: 0 }));
+  forgetClosedTabs();
   return moves;
 }
 
@@ -72,9 +83,23 @@ function siteEngine(tabId: string, url: string): PageEngine | undefined {
 
 export const routedTo = (tabId: string, engine: PageEngine) => (url: string) => siteEngine(tabId, url) === engine && reachable(url, engine);
 
+function keepForCli(tabId: string, move: Move) {
+  keptForCli.add(tabId);
+  noteKeptForCli(tabId, move);
+}
+
+const noteKeptForCli = (tabId: string, move: Move) => noteSiteMove("keptForCli", openedByPage(tabId), move.consent);
+
+function owedAfterCli(tabId: string, deferred: boolean): boolean {
+  if (!keptForCli.has(tabId) || heldByCli(tabId) || deferred) return false;
+  keptForCli.delete(tabId);
+  return true;
+}
+
 function startMove(tabId: string, move: Move) {
   const moves = movesOf(tabId);
   if (declinedVideo(move)) return;
+  if (heldByCli(tabId)) return keepForCli(tabId, move);
   if (moves.moving || moves.cooling) return queue(moves, move);
   const wait = SITE_MOVE_SPACING_MS - (Date.now() - moves.lastMovedAt);
   if (!move.forVideo && wait > 0) {
@@ -93,15 +118,23 @@ async function runMove(tabId: string, moves: TabMoves, move: Move) {
   const holds = modeStillHolds();
   const opened = openedByPage(tabId);
   const video = move.forVideo;
+  let stoppedForCli = false;
+  const routedHere = (url: string) => {
+    if (!stoppedForCli && heldByCli(tabId)) {
+      stoppedForCli = true;
+      keptForCli.add(tabId);
+    }
+    return !stoppedForCli && routedTo(tabId, move.to)(url);
+  };
   const options = video
     ? {
-        routedHere: routedTo(tabId, move.to),
+        routedHere,
         onStayed: () => {
           declineSite(video.site);
           dropVideoMovesFor(tabId, video.site);
         },
       }
-    : { checkWork: !!move.delayed, routedHere: routedTo(tabId, move.to) };
+    : { checkWork: !!move.delayed, routedHere };
   let moved = false;
   try {
     moved = await openPageIn(tabId, move.to, options);
@@ -110,7 +143,8 @@ async function runMove(tabId: string, moves: TabMoves, move: Move) {
   } finally {
     moves.moving = false;
   }
-  if (!video && (moved || !moves.pending)) noteSiteMove(moved ? "moved" : "dropped", opened, move.consent);
+  if (!moved && stoppedForCli) noteKeptForCli(tabId, move);
+  else if (!video && (moved || !moves.pending)) noteSiteMove(moved ? "moved" : "dropped", opened, move.consent);
   if (moved) {
     moves.lastMovedAt = Date.now();
     if (holds() && (canSwitchEngine(move.previousUrl) || needsChromium(move.previousUrl))) patchPage(tabId, { engineBack: { engine: move.from, url: move.previousUrl } });
@@ -151,16 +185,19 @@ export function followSiteChoice(tabId: string, engine: PageEngine, url: string,
   if (!t) return;
   const consent = consentToken();
   dropMovesLeftBehind(tabId);
-  if (siteOf(url) !== siteOf(previousUrl)) movesOf(tabId).visit++;
+  const moves = tabMoves.get(tabId);
+  if (moves && siteOf(url) !== siteOf(previousUrl)) moves.visit++;
   const navigation = navigationNow(tabId);
   if (singleEngine(s)) {
+    const owed = owedAfterCli(tabId, googleSignIn(url) || !(canSwitchEngine(url) || needsChromium(url)));
     const forced = modeEngineFor(s, t, url);
-    const followsMode = forced === "chromium" || chromiumOnly(previousUrl) || (leftForChromium(previousUrl) && !googleSignIn(url));
+    const followsMode = owed || forced === "chromium" || chromiumOnly(previousUrl) || (leftForChromium(previousUrl) && !googleSignIn(url));
     if (forced && forced !== engine && followsMode && (canSwitchEngine(url) || needsChromium(url))) startMove(tabId, { from: engine, to: forced, url, navigation, previousUrl, consent });
     return;
   }
   const site = siteOf(url);
-  if (!site || site === siteOf(previousUrl)) return;
+  const owed = owedAfterCli(tabId, !site);
+  if (!site || (site === siteOf(previousUrl) && !owed)) return;
   const chosen = chosenEngine(s, url);
   if (!chosen || chosen === engine) return;
   const move = { from: engine, to: chosen, url, navigation, previousUrl, consent };

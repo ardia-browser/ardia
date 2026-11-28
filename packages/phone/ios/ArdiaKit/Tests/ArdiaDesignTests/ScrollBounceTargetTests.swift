@@ -23,4 +23,9 @@ struct ScrollBounceTargetTests {
     #expect(!ScrollBounceTarget.matches(className: "UICollectionView", frame: .zero, mine: form))
     #expect(!ScrollBounceTarget.matches(className: "UICollectionView", frame: form, mine: .zero))
   }
+
+  @Test func `only a long list bounces, and only vertically`() {
+    #expect(!ScrollBounceMode.never.bouncesVertically)
+    #expect(ScrollBounceMode.whenLong.bouncesVertically)
+  }
 }

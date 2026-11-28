@@ -16,6 +16,14 @@ class PhoneSitePreferences(
     private val privateNightShade = HashMap<String, NightShadeMode?>()
     private val privateZoom = HashMap<String, Double?>()
 
+    var pageScheme: String?
+        get() = store.getString(KEY_PAGE_SCHEME, null)?.takeIf { it == PAGE_LIGHT || it == PAGE_DARK }
+        set(value) {
+            store.edit().apply { if (value == null) remove(KEY_PAGE_SCHEME) else putString(KEY_PAGE_SCHEME, value) }.apply()
+        }
+
+    val pageNight: Boolean? get() = pageScheme?.let { it == PAGE_DARK }
+
     var defaultNightShade: NightShadeMode
         get() = mode(store.getString(KEY_NIGHT_SHADE, null)) ?: NightShadeMode.Disabled
         set(value) {
@@ -118,6 +126,9 @@ class PhoneSitePreferences(
     }
 
     companion object {
+        const val PAGE_LIGHT = "light"
+        const val PAGE_DARK = "dark"
+        private const val KEY_PAGE_SCHEME = "pageScheme"
         private const val KEY_NIGHT_SHADE = "nightShade.default"
         private const val KEY_NIGHT_SHADE_SITES = "nightShade.sites"
         private const val KEY_ZOOM_SITES = "pageZoom.sites"

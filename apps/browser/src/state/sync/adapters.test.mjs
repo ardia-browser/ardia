@@ -5,7 +5,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { bookmarkRoots } = await import("../bookmarks/bookmarks.ts");
 const { historyOf } = await import("../history/history.ts");
 const model = await import("../browser/model.ts");
-const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { Clock, emptyScope, startRebase, syncScope } = await import("@ardia/sync");
 const adapters = { ...(await import("./adapters.ts")), ...(await import("./historyAdapter.ts")) };
 const { useEditClock } = await import("./editClock.ts");
 const { settingsAdapter, settleSettingsFromSavedSync } = await import("./settingsAdapter.ts");
@@ -28,10 +28,15 @@ const sealedLogins = (read = stub.readLogins) => ({
       const origin = l.origin.replace(/\/$/, "");
       return /^https?:\/\/[^/\s]+$/.test(origin) ? [{ origin, username: l.username, created: l.created, sealed: fakeSeal(origin, l.username, l.password) }] : [];
     }),
-  save: async (profile, origin, username, sealed, replacing) => {
+  save: async (profile, origin, username, sealed, replaced) => {
     const [o, u, password] = JSON.parse(Buffer.from(sealed, "base64").toString());
     if (o !== origin || u !== username) return false;
-    if (replacing && !(await passwords.deletePassword(profile, origin, username))) return false;
+    if (replaced) {
+      const [ro, ru, expected] = JSON.parse(Buffer.from(replaced, "base64").toString());
+      const current = (await stub.readLogins()).find((l) => l.origin.replace(/\/$/, "") === origin && l.username === username);
+      if (ro !== origin || ru !== username || current?.password !== expected) return false;
+      if (!(await passwords.deletePassword(profile, origin, username))) return false;
+    }
     return passwords.savePassword(profile, origin, username, asSecret("password", password));
   },
 });
@@ -59,8 +64,9 @@ class Folder {
 }
 
 class Device {
-  constructor(id, folder, { legacy = false, settings } = {}) {
+  constructor(id, folder, { legacy = false, settings, sessionBacked = false } = {}) {
     this.id = id;
+    this.sessionBacked = sessionBacked;
     this.folder = folder;
     this.legacy = legacy;
     this.settings = settings;
@@ -104,8 +110,7 @@ class Device {
       const p = await run(
         profileId === "default" ? "p" : `p:${profileId}`,
         [
-          ...(this.legacy ? [] : [pinnedRowsAdapter(profileId), pinnedOrderAdapter(profileId)]),
-          pinnedArea.pinnedAdapter(profileId),
+          ...[...(this.legacy ? [] : [pinnedRowsAdapter(profileId), pinnedOrderAdapter(profileId)]), pinnedArea.pinnedAdapter(profileId)].map((adapter) => (this.sessionBacked ? { ...adapter, sessionBacked: true } : adapter)),
           adapters.bookmarksAdapter(profileId),
           adapters.historyAdapter(profileId),
           adapters.deviceTabsAdapter(profileId, this.id, () => `${this.id}'s MacBook Pro`),
@@ -1195,6 +1200,29 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   assert.deepEqual(list(a), ["https://bank.example alice=correct horse", "https://shop.example bob=sh0p"]);
   assert.equal((await a.sync()).published, 0);
   for (const d of [a, b]) assert.ok(!JSON.stringify(d.scopes.p).includes("correct horse"), "the sync state holds only sealed passwords");
+});
+
+test("passwords: a synced change names the saved password it replaces, and a new login names none", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", asSecret("password", "one")));
+  await syncAll([a, b]);
+  await a.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: asSecret("password", "two") }));
+  await a.with(() => passwords.savePassword("", "https://new.example", "alice", asSecret("password", "fresh")));
+  await a.sync();
+  const logins = sealedLogins();
+  const saves = [];
+  b.passwords = adapters.passwordsAdapter("default", { ...logins, save: async (...args) => (saves.push([args[1], args[4]]), logins.save(...args)) })(true);
+  await b.sync();
+  assert.deepEqual(saves.sort(), [
+    ["https://bank.example", fakeSeal("https://bank.example", "alice", "one")],
+    ["https://new.example", ""],
+  ]);
+  assert.deepEqual([...stub.passwordStores.get("devB").values()].map((l) => `${l.url} ${l.password}`).sort(), [
+    "https://bank.example two",
+    "https://new.example fresh",
+  ]);
 });
 
 test("passwords: a login whose read is still out when quitting begins isn't saved, and waits to be applied", async () => {
@@ -2452,4 +2480,26 @@ test("an 8,000-deep pinned group chain is applied with work in line with its dep
   assert.equal(chain.length, depth);
   assert.ok(chain.every((x) => x.tabIds.length === 1), "every group in the chain holds the leaf");
   assert.ok(steps < 100 * depth, `${steps} set and list insertions`);
+});
+
+test("a rebase keeps a pinned group moved here and not sent yet, since its order choice is newer than the synced one", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder, { sessionBacked: true });
+  const b = new Device("devB", folder, { sessionBacked: true });
+  a.with(() => {
+    const w = S().createWindow({ url: "https://home.example/" });
+    const row = S().newTab(w, { url: "https://row.example/", background: true });
+    S().pinTabs([row], true, true);
+    const member = S().newTab(w, { url: "https://member.example/", background: true });
+    S().groupTabs([member], { pinned: true, name: "Group" });
+  });
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  assert.deepEqual(pinnedAreaOf(b), ["row:row", "Group:member"]);
+  moveGroupAbove(b, "https://row.example/");
+  assert.deepEqual(pinnedAreaOf(b), ["Group:member", "row:row"]);
+  startRebase(b.scopes.p);
+  await syncAll([b, a]);
+  assert.deepEqual(pinnedAreaOf(b), ["Group:member", "row:row"], "the rebase keeps the move made here");
+  assert.deepEqual(pinnedAreaOf(a), ["Group:member", "row:row"], "and it reaches the other Mac");
 });

@@ -208,6 +208,8 @@ protocol FocusNative {
   static func saveKeyResponder(_ windowId: String) -> Int
   static func restoreKeyResponder(_ token: Int) -> Bool
   static func discardKeyResponder(_ token: Int)
+  static func fieldBlurCause(_ fieldTag: Int) -> String
+  static func watchFieldBlurs(_ fieldTag: Int, _ watch: Bool)
   func setSwitcherCapture(_ active: Bool)
   func setDragEscapeCapture(_ active: Bool)
   static func takeHoverCounts() -> [String: [String: Int]]
@@ -255,6 +257,14 @@ extension FocusNative {
 
   static var discardKeyResponderFunction: AnyDefinition {
     AsyncFunction("discardKeyResponder") { (token: Int) in Self.discardKeyResponder(token) }.runOnQueue(.main)
+  }
+
+  static var fieldBlurCauseFunction: AnyDefinition {
+    Function("fieldBlurCause") { (fieldTag: Int) -> String in Self.fieldBlurCause(fieldTag) }
+  }
+
+  static var watchFieldBlursFunction: AnyDefinition {
+    Function("watchFieldBlurs") { (fieldTag: Int, watch: Bool) in Self.watchFieldBlurs(fieldTag, watch) }
   }
 
   static var takeHoverCountsFunction: AnyDefinition {

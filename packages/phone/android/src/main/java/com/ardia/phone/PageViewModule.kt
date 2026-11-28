@@ -90,6 +90,10 @@ class PageViewModule : Module() {
             main.post { PhonePages.permissionAsks.pump() }
         }
 
+        OnActivityEntersBackground {
+            PhonePages.leftForeground()
+        }
+
         OnActivityDestroys {
             PhonePages.permissionAsks.lost()
             appContext.currentActivity?.let(PhonePages::detach)
@@ -260,6 +264,8 @@ class PageViewModule : Module() {
 
         AsyncFunction("livePageIds") { -> PhonePages.livePageIds() }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("setShownPage") { pageId: String? -> PhonePages.setShownPage(pageId) }.runOnQueue(Queues.MAIN)
+
         AsyncFunction("saveState") { pageId: String -> PhonePages.saveState(pageId) }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("answerRequest") { pageId: String, requestId: String, answer: RequestAnswerRecord, promise: Promise ->
@@ -324,6 +330,14 @@ class PageViewModule : Module() {
                 "siteMode" to host?.let { preferences.siteNightShade(it, isPrivate == true)?.raw },
                 "mode" to preferences.nightShade(host?.let(PhoneSitePreferences::siteKey), isPrivate == true).raw,
             )
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("setPageScheme") { scheme: String? ->
+            if (scheme != null && scheme != PhoneSitePreferences.PAGE_LIGHT && scheme != PhoneSitePreferences.PAGE_DARK) throw PagePayloads.badArgs("Unknown page scheme $scheme")
+            val engine = PhonePages.engine(context)
+            PhonePages.sitePreferences.pageScheme = scheme
+            engine.pageNight = PhonePages.sitePreferences.pageNight
+            engine.pageIsNight
         }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("setNightShade") { mode: String?, host: String?, isPrivate: Boolean? ->

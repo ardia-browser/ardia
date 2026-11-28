@@ -19,6 +19,8 @@ test("a crash report's termination, exception code and crashed thread are sent a
       crash_fault_near_null: null,
       crash_thread: "thread_pool",
       crash_queue: "main",
+      crash_fatal_at: null,
+      crash_posted_from: null,
     },
   );
   assert.deepEqual(nativeCrashDetails({}), {
@@ -28,6 +30,8 @@ test("a crash report's termination, exception code and crashed thread are sent a
     crash_fault_near_null: null,
     crash_thread: null,
     crash_queue: null,
+    crash_fatal_at: null,
+    crash_posted_from: null,
   });
   for (const [thread, kind] of [
     ["CrRendererMain", "chrome_main"],
@@ -70,6 +74,8 @@ test("names a person or a site could have chosen never leave as text", () => {
     exceptionCodes: "0x1, me@example.com",
     crashedThread: "Alice Example",
     crashedQueue: "internal-project",
+    fatalAt: "Alice Example:1",
+    postedFrom: "me@example.com:2",
   });
   assert.deepEqual(hostile, {
     crash_termination_indicator: "other",
@@ -78,6 +84,8 @@ test("names a person or a site could have chosen never leave as text", () => {
     crash_fault_near_null: null,
     crash_thread: "other",
     crash_queue: "other",
+    crash_fatal_at: null,
+    crash_posted_from: null,
   });
   for (const inherited of ["constructor", "__proto__", "toString", "hasOwnProperty"]) {
     assert.equal(nativeCrashDetails({ terminationIndicator: inherited }).crash_termination_indicator, "other", inherited);
@@ -86,4 +94,14 @@ test("names a person or a site could have chosen never leave as text", () => {
   assert.equal(nativeCrashDetails({ terminationCode: 1.5 }).crash_termination_code, null);
   assert.equal(nativeCrashDetails({ exceptionCodes: "0x1, 0x2, 0x3, 0x4, 0x5" }).crash_exception_code, null);
   assert.equal(nativeCrashDetails({ exceptionCodes: "0xffffffffffffffff" }).crash_exception_code, null);
+});
+
+test("an engine fatal's source place and the place its task was posted from are sent only as a file and line", () => {
+  const details = nativeCrashDetails({ fatalAt: "partition_alloc_support.cc:843", postedFrom: "login_handler.cc:430" });
+  assert.equal(details.crash_fatal_at, "partition_alloc_support.cc:843");
+  assert.equal(details.crash_posted_from, "login_handler.cc:430");
+  for (const bad of ["https://example.com/a.cc:1", "/Users/someone/src/a.cc:12", "a.cc", "a b.cc:1", "a.cc:1234567", "x".repeat(71) + ".cc:1", "internal.example.rs:8443"]) {
+    assert.equal(nativeCrashDetails({ fatalAt: bad, postedFrom: bad }).crash_fatal_at, null, bad);
+    assert.equal(nativeCrashDetails({ fatalAt: bad, postedFrom: bad }).crash_posted_from, null, bad);
+  }
 });

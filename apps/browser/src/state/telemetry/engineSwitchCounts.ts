@@ -22,6 +22,7 @@ const none = () => ({
   siteMovesOpenedTabs: 0,
   siteMovesDropped: 0,
   siteMovesKeptForOpener: 0,
+  siteMovesKeptForCli: 0,
   webKitAutofillFills: 0,
   webKitAutofillSaveOffers: 0,
   webKitAutofillSaves: 0,
@@ -49,6 +50,7 @@ const none = () => ({
   webKitLinkSplits: 0,
   webKitLittleArdiaLinks: 0,
   webKitScrollZooms: 0,
+  webKitMouseNavigations: 0,
   webKitSampledTints: 0,
   webKitAuthPrompts: 0,
   webKitAuthPromptsBlocked: 0,
@@ -72,10 +74,14 @@ const none = () => ({
   webKitPageMuteFallbacks: 0,
   webKitFullscreens: 0,
   webKitFullscreenFramesKept: 0,
+  webKitAutoPictureInPictureFullscreenHolds: 0,
   webKitDiscards: 0,
   webKitDiscardWakes: 0,
   webKitBackdropsHidden: 0,
   webKitHistoryRestores: 0,
+  webKitFullscreenPagesKeptShown: 0,
+  webKitFullscreenPagesMovedWithTab: 0,
+  webKitFullscreenPagesReclaimed: 0,
   webKitUnresponsive: 0,
   webKitUnresponsiveEnded: 0,
   webKitDownloadsSkipped: 0,
@@ -111,12 +117,13 @@ function addSwap(to: "chromium" | "webkit", swap: EngineSwap) {
   tally.switchMsMax = Math.max(tally.switchMsMax, ms);
 }
 
-export type SiteMoveOutcome = "moved" | "dropped" | "keptForOpener";
+export type SiteMoveOutcome = "moved" | "dropped" | "keptForOpener" | "keptForCli";
 
 export function noteSiteMove(outcome: SiteMoveOutcome, openedByPage: boolean, consent: ConsentToken | null) {
   counted(consent, () => {
     if (outcome === "dropped") return void tally.siteMovesDropped++;
     if (outcome === "keptForOpener") return void tally.siteMovesKeptForOpener++;
+    if (outcome === "keptForCli") return void tally.siteMovesKeptForCli++;
     tally.siteMoves++;
     if (openedByPage) tally.siteMovesOpenedTabs++;
   });
@@ -174,6 +181,7 @@ export function takeEngineSwitchCounts() {
     engine_site_moves_opened_tabs: taken.siteMovesOpenedTabs,
     engine_site_moves_dropped: taken.siteMovesDropped,
     engine_site_moves_kept_for_opener: taken.siteMovesKeptForOpener,
+    engine_site_moves_kept_for_cli: taken.siteMovesKeptForCli,
     webkit_autofill_fills: taken.webKitAutofillFills,
     webkit_autofill_save_offers: taken.webKitAutofillSaveOffers,
     webkit_autofill_saves: taken.webKitAutofillSaves,
@@ -201,6 +209,7 @@ export function takeEngineSwitchCounts() {
     webkit_link_splits: taken.webKitLinkSplits,
     webkit_little_ardia_links: taken.webKitLittleArdiaLinks,
     webkit_scroll_zooms: taken.webKitScrollZooms,
+    webkit_mouse_navigations: taken.webKitMouseNavigations,
     webkit_sampled_tints: taken.webKitSampledTints,
     webkit_auth_prompts: taken.webKitAuthPrompts,
     webkit_auth_prompts_blocked: taken.webKitAuthPromptsBlocked,
@@ -224,10 +233,14 @@ export function takeEngineSwitchCounts() {
     webkit_page_mute_fallbacks: taken.webKitPageMuteFallbacks,
     webkit_fullscreens: taken.webKitFullscreens,
     webkit_fullscreen_frames_kept: taken.webKitFullscreenFramesKept,
+    webkit_auto_pip_fullscreen_holds: taken.webKitAutoPictureInPictureFullscreenHolds,
     webkit_discards: taken.webKitDiscards,
     webkit_discard_wakes: taken.webKitDiscardWakes,
     webkit_backdrops_hidden: taken.webKitBackdropsHidden,
     webkit_history_restores: taken.webKitHistoryRestores,
+    webkit_fullscreen_pages_kept_shown: taken.webKitFullscreenPagesKeptShown,
+    webkit_fullscreen_pages_moved_with_tab: taken.webKitFullscreenPagesMovedWithTab,
+    webkit_fullscreen_pages_reclaimed: taken.webKitFullscreenPagesReclaimed,
     webkit_unresponsive: taken.webKitUnresponsive,
     webkit_unresponsive_ended: taken.webKitUnresponsiveEnded,
     webkit_downloads_skipped: taken.webKitDownloadsSkipped,

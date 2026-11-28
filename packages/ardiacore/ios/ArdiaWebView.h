@@ -63,6 +63,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
 - (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
+- (NSArray<NSNumber *> *)sleepIfUnusedFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfUnused(for:));
+- (BOOL)wakeIfSleeping;
 @end
 
 @interface ArdiaWebView (Reveals)

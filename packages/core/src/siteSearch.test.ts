@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { BUILT_IN_ENGINES } from "./engines.ts";
-import { asksForBackspace, keywordBySpace, offeredSiteSearch, siteSearchKey, type SearchScope, type SiteSearchKeyState } from "./siteSearch.ts";
+import { asksForBackspace, findScope, keywordBySpace, offeredSiteSearch, scopedSearchUrl, siteSearchKey, type SearchScope, type SiteSearchKeyState } from "./siteSearch.ts";
 
 const sources = { engines: BUILT_IN_ENGINES };
 
@@ -110,4 +110,21 @@ test("Ctrl+Tab is left to the tab switcher", () => {
 test("no site search is offered for text with spaces", () => {
   assert.equal(offeredSiteSearch("google maps", "", sources), null);
   assert.equal(offeredSiteSearch("  ", ".com", sources), null);
+});
+
+test("Tab-to-search on claude.ai opens a prompt on Claude instead of falling back to site: search", () => {
+  const withHistory = { engines: BUILT_IN_ENGINES, hosts: ["claude.ai"] };
+  const scope = findScope("claude.ai", withHistory);
+  assert.deepEqual(scope, {
+    kind: "engine",
+    name: "Claude",
+    host: "claude.ai",
+    url: "https://claude.ai/new?q=%s",
+    engineId: "claude",
+  });
+  assert.equal(scopedSearchUrl(scope!, "hello world", BUILT_IN_ENGINES[0]!), "https://claude.ai/new?q=hello%20world");
+
+  const action = siteSearchKey("Tab", {}, bar("cla", "ude.ai"));
+  assert.deepEqual(action?.kind === "enter" && [action.scope.kind, action.scope.name, action.from], ["engine", "Claude", "claude.ai"]);
+  assert.equal(findScope("claude", sources)?.engineId, "claude");
 });

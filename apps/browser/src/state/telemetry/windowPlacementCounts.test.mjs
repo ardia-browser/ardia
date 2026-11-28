@@ -132,7 +132,7 @@ test("Little Ardia and utility windows opened floating are counted apart, sent w
   placement.noteWindowOpenedFloating(true, consent());
   client.setSharing(true, "settings");
   placement.noteWindowOpenedFloating(true, before);
-  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 0, window_drags_native: 0, window_drag_takeovers: 0, window_close_pins_kept: 0, window_close_pin_ids_renewed: 0, little_ardia_opened_floating: 0, utility_windows_opened_floating: 0, linux_windows_app_decorated: 0, linux_windows_compositor_decorated: 0, linux_decoration_answers_none: 0, linux_decoration_answers_client: 0, linux_decoration_answers_server: 0, linux_page_viewports_rejected: 0 });
+  assert.deepEqual(placement.takeWindowPlacementCounts(), { window_centered_resizes: 0, windows_reopened_maximized: 0, window_titles_read: 0, window_drag_loops: 0, window_drags_native: 0, window_drag_takeovers: 0, window_close_pins_kept: 0, window_close_pin_ids_renewed: 0, little_ardia_opened_floating: 0, utility_windows_opened_floating: 0, page_full_screen_starts: 0, page_full_screen_slow_starts: 0, unclaimed_tabs_adopted: 0, unclaimed_tabs_dropped: 0, page_full_screens_entered: 0, linux_windows_app_decorated: 0, linux_windows_compositor_decorated: 0, linux_decoration_answers_none: 0, linux_decoration_answers_client: 0, linux_decoration_answers_server: 0, linux_page_viewports_rejected: 0 });
 });
 
 test("floating windows counted in one consent period are dropped when the period changes, not reported in the next", async () => {
@@ -184,5 +184,40 @@ test("on Linux a page viewport the engine refused is counted with the consent of
   client.setSharing(true, "settings");
   placement.noteLinuxPageViewportRejected(off);
   assert.equal(placement.takeWindowPlacementCounts().linux_page_viewports_rejected, 0);
+  client.setSharing(false, "settings");
+});
+
+test("tabs the engine opened by itself are counted as shown or left hidden, with the consent of their offer", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.noteUnclaimedTab("adopted", client.consentToken());
+  placement.noteUnclaimedTab("adopted", client.consentToken());
+  placement.noteUnclaimedTab("dropped", client.consentToken());
+  usage.sessionEnding();
+  await client.saveQueueNow();
+  const saved = JSON.parse(stub.docs.get("telemetry-queue.json") ?? '{"events":[]}');
+  const sent = saved.events.filter((e) => e.event === "usage_counts").at(-1).properties;
+  assert.deepEqual([sent.unclaimed_tabs_adopted, sent.unclaimed_tabs_dropped], [2, 1]);
+  client.setSharing(false, "settings");
+  const off = client.consentToken();
+  placement.noteUnclaimedTab("dropped", off);
+  client.setSharing(true, "settings");
+  placement.noteUnclaimedTab("adopted", off);
+  const taken = placement.takeWindowPlacementCounts();
+  assert.deepEqual([taken.unclaimed_tabs_adopted, taken.unclaimed_tabs_dropped], [0, 0]);
+  client.setSharing(false, "settings");
+});
+
+test("page full-screen entries are counted with the consent of their event", async () => {
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.notePageFullScreenEntered(client.consentToken());
+  placement.notePageFullScreenEntered(client.consentToken());
+  assert.equal(placement.takeWindowPlacementCounts().page_full_screens_entered, 2);
+  client.setSharing(false, "settings");
+  const off = client.consentToken();
+  client.setSharing(true, "settings");
+  placement.notePageFullScreenEntered(off);
+  assert.equal(placement.takeWindowPlacementCounts().page_full_screens_entered, 0);
   client.setSharing(false, "settings");
 });

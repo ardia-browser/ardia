@@ -42,7 +42,7 @@ import type {
   WebViewProps,
   ZoomState,
 } from "./pageTypes";
-import type { AutoPictureInPictureMiss } from "./pageTypes";
+import type { AutoPictureInPictureMiss, FullScreenTransition } from "./pageTypes";
 
 type NativeEvents = {
   onNavigationChange: NavigationState;
@@ -55,6 +55,7 @@ type NativeEvents = {
   onPopupBlocked: BlockedPopup;
   onFindResult: FindResult;
   onFullscreen: { fullscreen: boolean };
+  onFullScreenTransition: unknown;
   onStatus: { text: string; fromBottom?: number };
   onCrashed: CrashInfo;
   onUnresponsive: object;
@@ -118,6 +119,7 @@ const PAGE_EVENTS = {
   onPopupBlocked: "popupBlocked",
   onFindResult: "find",
   onFullscreen: "fullscreen",
+  onFullScreenTransition: "fullScreenTransition",
   onStatus: "status",
   onCrashed: "crashed",
   onUnresponsive: "unresponsive",
@@ -178,6 +180,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onPopupBlocked: (e) => [{ ...e, url: toAppUrl(e.url) }],
   onFindResult: (e) => [e],
   onFullscreen: (e) => [e.fullscreen],
+  onFullScreenTransition: (e) => [fullScreenTransitionOf(e)],
   onStatus: (e) => [e.text, typeof e.fromBottom === "number" ? e.fromBottom : null],
   onCrashed: (e) => [e],
   onUnresponsive: () => [],
@@ -190,7 +193,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onNotification: (e) => [e],
   onNotificationClose: (e) => [e.id],
   onPictureInPicture: (e) => [e],
-  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" ? "nothingPlaying" : typeof e.reason === "string" && /^(missed[A-Z]|leftOnSpaceSwitch)/.test(e.reason) ? (e.reason as AutoPictureInPictureMiss) : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
+  onAutoPictureInPictureKept: (e) => [e.reason === "nothingPlaying" || e.reason === "closedWhileAway" ? e.reason : typeof e.reason === "string" && /^(missed[A-Z]|leftOnSpaceSwitch)/.test(e.reason) ? (e.reason as AutoPictureInPictureMiss) : e.appSwitch ? "appSwitch" : "onScreen", typeof e.epoch === "string" ? e.epoch : ""],
   onPictureInPictureDragged: (e) => [{ offCursor: !!e.offCursor, slowMove: !!e.slowMove, epoch: e.epoch }],
   onPictureInPictureResized: (e) => [{ inside: !!e.inside, cursorShown: !!e.cursorShown, epoch: e.epoch }],
   onPictureInPictureSkip: (e) => [{ seconds: e.seconds, epoch: e.epoch }],
@@ -230,6 +233,13 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
   onApplePasswordsConnect: () => [],
 };
+
+export function fullScreenTransitionOf(e: unknown): FullScreenTransition | null {
+  if (!e || typeof e !== "object") return null;
+  const { entering, waitedMs, epoch } = e as Record<string, unknown>;
+  if (typeof entering !== "boolean" || typeof waitedMs !== "number" || !Number.isFinite(waitedMs) || waitedMs < 0 || typeof epoch !== "string") return null;
+  return { entering, waitedMs, epoch };
+}
 
 export const isPageEventProp = (key: string): key is Handlers => key in unwrap;
 

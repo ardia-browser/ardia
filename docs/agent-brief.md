@@ -14,7 +14,7 @@ variables) is in `docs/conventions.md`, enforced by `apps/browser/src/convention
   inline styles.
 - Native code lives in Expo modules under `packages/*/ios` (Swift / Objective-C++):
   - `packages/ardiacore`: the web engine, **ArdiaCore**: Chrome's own framework (`Chromium Framework.framework`,
-    Chromium 158.0.8127.36 + Helium 0.22.2 + our patch series, `docs/engine-build.md`) with our layer linked
+    Chromium 158.0.8127.88 + Helium 0.22.4 + our patch series, `docs/engine-build.md`) with our layer linked
     in, and the Expo modules and JS API the app uses (`docs/ardiacore-spike.md`, `docs/ardiacore-parity.md`).
     - **Chromium runs the process.** `main.swift` calls `ArdiaHost.run`: `ChromeMain` starts with our
       `ACMainDelegate`, `NSApp` is Chrome's `BrowserCrApplication`, and the React Native host (`AppDelegate`) starts
@@ -206,7 +206,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   - In a linked worktree, never `pnpm install`: its `.pnpmfile.cjs` refuses, and the read-only tree stops a bypass.
     `pnpm run` and `pnpm exec` print the refusal and still run, but calling tools directly is quieter:
     `node_modules/.bin/tsrs -p .`, `node --import ./src/test-loader.mjs --test …` in `apps/browser`, or
-    `node node_modules/react-native/cli.js start --port <n>` there for Metro. `metro.config.js` reads the link
+    `node ../../node_modules/react-native/cli.js start --port <n>` there for Metro (react-native sits in the root
+    `node_modules`; launch with `ac launch … --js localhost:<n>`). `metro.config.js` reads the link
     marker, so Metro, `js-bench.mjs bundle` and the Xcode bundle phase resolve through the links with no wrapper.
   - Changing dependencies (a lockfile, a patch, `pnpm patch`) needs a real install: `--undo` first, then
     `pnpm install` under `scripts/agent/locked pod`; to link again afterwards, run the setup with `--replace`, which

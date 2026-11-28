@@ -166,6 +166,7 @@ test("a Top Apps tile: unpin, Move to Pinned or a folder, pinned URL edits under
     "  ---",
     "  Replace Pinned URL with Current [pin] (off)",
     "  Edit Pinned URL… [link]",
+    "  Reopen at Pinned URL [arrow.uturn.backward] ✓",
     "  ---",
     "  Open in WebKit [globe]",
   ]);

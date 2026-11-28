@@ -84,6 +84,9 @@ export type CrashReport = {
   exceptionName?: string;
   exceptionSubtype?: string;
   exceptionFrames?: NativeFrame[];
+  fatalAt?: string;
+  postedFrom?: string;
+  postedFrames?: NativeFrame[];
   images?: { name: string; uuid: string }[];
 };
 

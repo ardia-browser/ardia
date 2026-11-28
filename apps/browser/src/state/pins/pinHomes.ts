@@ -3,8 +3,19 @@ import { changedIds, linkEdits } from "../browser/changes";
 import { pinnedGroupMembers } from "../browser/structure";
 import type { Tab } from "../browser/types";
 import { pinHomeOf } from "../browser/model";
+import { sameAddress } from "../../lib/url";
 
 type HomeSource = Pick<BrowserState, "tabs" | "groups" | "windows">;
+
+export type ReopenChoice = { pinnedTabsReopenAtPinnedUrl?: boolean };
+
+export const reopensAtPinnedUrl = (settings: ReopenChoice | undefined, t: Pick<Tab, "reopenAtPinnedUrl">): boolean =>
+  t.reopenAtPinnedUrl ?? settings?.pinnedTabsReopenAtPinnedUrl ?? true;
+
+export const awayFromHome = (t: Pick<Tab, "url" | "pinnedUrl">): boolean => !!t.pinnedUrl && !!t.url && !sameAddress(t.url, t.pinnedUrl);
+
+export const keepsLastPage = (settings: ReopenChoice | undefined, t: Pick<Tab, "url" | "pinnedUrl" | "reopenAtPinnedUrl">): boolean =>
+  awayFromHome(t) && !reopensAtPinnedUrl(settings, t);
 
 export const pinHome = (t: Pick<Tab, "url" | "pinnedUrl">, housed: boolean): string | null => (housed ? pinHomeOf(t) || null : null);
 

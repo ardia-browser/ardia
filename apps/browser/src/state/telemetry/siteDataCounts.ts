@@ -28,6 +28,9 @@ const none = () => ({
   site_data_cookie_jar_reads: 0,
   site_data_cookie_jar_ms_total: 0,
   site_data_cookie_jar_ms_max: 0,
+  site_data_same_site_kept: 0,
+  site_data_chromium_values_replaced: 0,
+  site_data_chromium_writes_no_webkit_record: 0,
 });
 
 let tally = none();
@@ -47,6 +50,17 @@ function addCarry(to: PageEngine, carry: SiteDataCarry) {
   tally[to === "webkit" ? "site_data_storage_to_webkit" : "site_data_storage_to_chromium"] += carry.storage;
   tally.site_data_cookies_removed += carry.removed;
   tally.site_data_conflicts += carry.conflicts;
+}
+
+export type SiteDataChromiumWrites = { sameSiteKept: number; replaced: number; noWebKitRecord: number };
+
+export function noteSiteDataChromiumWrites(writes: SiteDataChromiumWrites, consent: ConsentToken | null) {
+  if (writes.sameSiteKept + writes.replaced + writes.noWebKitRecord === 0) return;
+  counted(consent, () => {
+    tally.site_data_same_site_kept += writes.sameSiteKept;
+    tally.site_data_chromium_values_replaced += writes.replaced;
+    tally.site_data_chromium_writes_no_webkit_record += writes.noWebKitRecord;
+  });
 }
 
 export function noteSiteDataGate(ms: number, gate: { held: boolean; timedOut: boolean }, consent: ConsentToken | null) {

@@ -31,6 +31,8 @@ final class PageView: ExpoView {
   var closesOnSwipeBack = false
   var reopensOnSwipeForward = false
   var pullToRefresh = true
+  var summaryColors = LookColors()
+  var summaryDark: Bool?
   private(set) var page: WebTab?
 
   weak var hostedWebView: WKWebView?
@@ -237,6 +239,7 @@ final class PageView: ExpoView {
     webView.autoresizingMask = []
     addSubview(webView)
     hostedAt = CACurrentMediaTime()
+    Task { @MainActor [weak page] in page?.pageShown() }
     showLastFrame(of: webView)
     if PhoneTestBuild.isOn { NSLog("PAGELAB time page hosted %.0f", Date().timeIntervalSince1970 * 1000) }
     applyObscuredInsets()

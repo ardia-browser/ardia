@@ -30,6 +30,14 @@ namespace content {
 class WebContents;
 }
 
+namespace ui {
+class Accelerator;
+}
+
+namespace views {
+class FocusManager;
+}
+
 namespace ardia_win::webui {
 
 class ShellHostView;
@@ -75,6 +83,8 @@ class WindowRegistry : public BrowserCollectionObserver {
   bool PresentCompanion(const BrowserWindowInterface* browser, bool activate);
   int WindowTabCount(const BrowserWindowInterface* browser) const;
   bool ShellPassesPoint(gfx::NativeView child, const gfx::Point& location) const;
+  bool DispatchReservedShortcut(const views::FocusManager* focus,
+                                const ui::Accelerator& accelerator) const;
 
   bool PreTranslate(const MSG& msg);
   void Relaunched(base::ListValue urls);

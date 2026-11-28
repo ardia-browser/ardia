@@ -8,6 +8,7 @@ import { useBrowser } from "../browser/store";
 import type { Settings } from "./settings";
 import { startInterfaceScale } from "./interfaceScaleSync";
 import { setPressMotion } from "../../lib/pressMotion";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 
 type Mirror = { key: keyof Settings; send: (settings: Settings) => unknown };
 
@@ -15,9 +16,10 @@ const mirror = <K extends keyof Settings>(key: K, send: (value: Settings[K]) => 
 
 const NATIVE_SETTINGS: Mirror[] = [
   mirror("appearance", setAppearance),
+  mirror("pageScrollBars", (bars) => setThinScrollBars(bars === "thin")),
   mirror("autoPictureInPicture", setAutoPictureInPicture),
   mirror("videoUpscaling", setVideoUpscaling),
-  mirror("webKitFraudWarnings", setWebKitFraudWarnings),
+  ...(PLATFORM_FEATURES.webKit ? [mirror("webKitFraudWarnings", setWebKitFraudWarnings)] : []),
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),
   mirror("blockAutoplayEverywhere", setBlockAutoplayEverywhere),
   mirror("pressMotion", setPressMotion),
@@ -26,7 +28,6 @@ const NATIVE_SETTINGS: Mirror[] = [
 
 export function startNativeSettings() {
   startInterfaceScale();
-  void setThinScrollBars(false);
   const sent = new Map<keyof Settings, unknown>();
   const sync = (settings: Settings) => {
     for (const { key, send } of NATIVE_SETTINGS) {

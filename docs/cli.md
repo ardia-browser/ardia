@@ -39,8 +39,12 @@ Plugins, "On your PATH. It can control Ardia.", or why it isn't on PATH, with Tr
 `~/Library/Application Support/Ardia/Programs/cli/`, makes a new copy when the app brings a new version (checked against
 the signed digest), and runs its after-update actions once per version (`ardia skills install --auto`,
 `ardia skills refresh`, `ardia computer refresh`). **Installed means control is on**: installing turns `cliControl` on
-(the sheet says so), and each launch turns it back on while Command Line is installed. The control pill's Stop turns
-it off until the next launch; its close button hides the pill without stopping control, and Settings › Advanced › Command line and automation › Show the control pill turns the pill off persistently. An install you approved moves to the version this Ardia pins by itself when the new version asks
+(the sheet says so), unless you turned control off yourself. An Off you chose, with the control pill's Stop or the switch
+in Settings, stays off across launches; the pill's close button hides the pill without stopping control, and Settings › Advanced › Command line and automation › Show the control pill turns the pill off persistently. When the engine's control server stops itself (it couldn't
+start or listen, or its folder or file check failed), the setting turns off with it and Settings › Advanced shows why, but
+that Off isn't your choice: it is saved as the app's own (`setControlByApp`, an inferred setting), and once an approved plugin that asks for control is active the app asks for control again by itself (one try per launch, so a start that keeps failing doesn't loop), as does enabling or approving Command Line again. The socket is back unless the engine's start fails again. Every write of `cliControl` says whose it is: `setControlByUser` for the Settings switch and the pill's Stop, `setControlByApp` for anything the app decides by itself (a self-stop, the launch retry, Linux's first install), and `controlWriters.test.mjs` fails on any other writer. Counted, never the message:
+`usage_counts.cli_control_self_stop_<cause>` (`policy`, `listen`, `deadline`, `stopped`, `other`), `cli_control_restore_tries_<launch|approval>`, and `cli_control_restored` when the engine then reports the server on.
+An install you approved moves to the version this Ardia pins by itself when the new version asks
 for nothing you hadn't approved (`docs/plugins.md` › Official plugins, #3868), and Command Line's page in Settings ›
 Plugins then says "Updated by itself" and lists what's new. Python 0.4.0 to Bun 0.6.0 is such a move, and so is any later
 pin with the same surface: the same control and `ardia` with the same after-update steps, plus a sandboxed, offline

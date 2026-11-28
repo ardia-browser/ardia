@@ -1122,10 +1122,24 @@ class Extend(unittest.TestCase):
         _, archive = self.base_archive()
         dest = os.path.join(self.dir, "extended")
         os.makedirs(dest)
-        with mock.patch.object(series_base, "MAX_MEMBER_BYTES", 8):
+        real = series_base.extract
+        calls = []
+
+        def extract(tarball, where):
+            calls.append(tarball)
+            if len(calls) == 2:
+                raise series_base.Problem("refused")
+            return real(tarball, where)
+
+        with mock.patch.object(series_base, "extract", side_effect=extract):
             with self.assertRaises(series_base.Problem):
                 packer.extend_archive(archive, {"components/store/new.cc": (b"x" * 64, 0o644)}, dest, "c", "d")
+        self.assertEqual(len(calls), 2)
         self.assertEqual(os.listdir(dest), [])
+
+    def test_the_default_cache_is_the_one_the_checker_downloads_into(self):
+        with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": "/tmp/xdg"}):
+            self.assertEqual(series_base.default_cache(), "/tmp/xdg/ardia/series-base")
 
     def test_a_git_replacement_ref_cant_change_the_blob_read_for_the_commit(self):
         git = ["git", "-C", self.src, "-c", "user.email=t@t", "-c", "user.name=t"]

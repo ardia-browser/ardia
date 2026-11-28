@@ -104,6 +104,10 @@ def default_base(platform, cpu):
     return os.path.join(chromium_build(), name)
 
 
+def default_cache():
+    return os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "ardia", "series-base")
+
+
 def default_src():
     return os.environ.get("CHROMIUM_SRC", os.path.join(chromium_build(), "chromium_git/chromium/src"))
 

@@ -2,7 +2,7 @@
 """Packs a builder's series base into the archive series-zero-fuzz.py checks the series against, and publishes it.
 
   series-base-pack.py pack --platform linux|mac [--cpu CPU] [--base DIR] [--src DIR] [--dest DIR] [--no-verify]
-  series-base-pack.py extend --platform linux|mac [--cpu CPU] [--archive ARCHIVE] [--src DIR] [--dest DIR]
+  series-base-pack.py extend --platform linux|mac [--cpu CPU] [--archive ARCHIVE | --cache DIR] [--src DIR] [--dest DIR]
   series-base-pack.py publish ARCHIVE [--repo OWNER/NAME]
 
 pack runs on the builder, read-only on its tree. It takes from the series base (AC_SERIES_BASE, default
@@ -29,7 +29,8 @@ base from a tree step 3 just left.
 
 extend runs on the builder, read-only on its tree, when a series change starts reading files the pinned archive
 lacks (a patch for a file no earlier step touched). It packs a new archive: the pinned one (its sha256 checked against
-series-bases.tsv on a private copy, from --archive or the one series-zero-fuzz.py cached under ~/.cache/ardia/series-base) plus each
+series-bases.tsv on a private copy, from --archive or the one series-zero-fuzz.py cached in --cache, default
+$XDG_CACHE_HOME/ardia/series-base) plus each
 missing file as step 3 leaves it, which for these files is Chromium's own at the pinned tag. It takes a file only when
 step 3 can't have changed it:
 - no stage selects it: its name doesn't end in grd, grdp or xtb, in any case (the name substitution, translation and
@@ -375,11 +376,11 @@ def extend_archive(archive, extensions, dest, origin, series_commit):
     return extended, out
 
 
-def pinned_archive(ident, given, private):
+def pinned_archive(ident, given, private, cache=None):
     row = series_base.find_row(ident)
     if row is None:
         series_base.die(f"no series-bases.tsv row for {ident['platform']}/{ident['cpu']} at these pins: re-pack instead")
-    source = pathlib.Path(given) if given else pathlib.Path.home() / ".cache/ardia/series-base" / row["asset"]
+    source = pathlib.Path(given) if given else pathlib.Path(cache or series_base.default_cache()) / row["asset"]
     if not source.is_file():
         series_base.die(f"{row['asset']} isn't cached: run scripts/engine/series-zero-fuzz.py once, or pass --archive")
     copy = pathlib.Path(private, row["asset"])
@@ -395,7 +396,7 @@ def cmd_extend(args):
     src = os.path.abspath(args.src or default_src())
     private = tempfile.mkdtemp(prefix="ac-series-pinned-")
     try:
-        archive = pinned_archive(ident, args.archive, private)
+        archive = pinned_archive(ident, args.archive, private, args.cache)
         manifest = series_base.read_manifest(archive)
         series_base.require_provenance(manifest, archive)
         for key in series_base.IDENTITY:
@@ -518,6 +519,7 @@ def main():
     extend.add_argument("--platform", choices=("linux", "mac"), required=True)
     extend.add_argument("--cpu", choices=("arm64", "x64"))
     extend.add_argument("--archive")
+    extend.add_argument("--cache")
     extend.add_argument("--src")
     extend.add_argument("--dest")
     publish = sub.add_parser("publish")

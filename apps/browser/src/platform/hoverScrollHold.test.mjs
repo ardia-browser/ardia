@@ -39,6 +39,7 @@ function holdRule() {
 
 const SETTLE = Number(added.match(/static const CFTimeInterval ArdiaHoverScrollSettle = ([0-9.]+);/)?.[1]);
 const STEP = 0.016;
+const GRACE_MS = 20;
 
 function run(steps) {
   const dir = mkdtempSync(join(tmpdir(), "hover-hold-"));
@@ -356,6 +357,7 @@ int main(void) {
     replayWindow = (NSWindow *)[ReplayWindow new];
     [ArdiaHoverViews addObject:card];
     __block CFTimeInterval entered = 0;
+    __block int enteredByDeadline = -1;
     card.onMouseEnter = ^(NSDictionary *i) { entered = CACurrentMediaTime(); };
     card.onMouseLeave = ^(NSDictionary *i) {};
     [card updateTrackingAreas];
@@ -367,10 +369,13 @@ int main(void) {
     CFTimeInterval lastA = CACurrentMediaTime();
     card.inside = YES;
     [RCTView ardia_scrolled:listA];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((ArdiaHoverScrollSettle + ${GRACE_MS / 1000}) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ dispatch_async(dispatch_get_main_queue(), ^{ enteredByDeadline = entered != 0; }); });
     CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.040, false);
     [RCTView ardia_scrolled:listB];
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.2, false);
-    printf("twolistwake %.1f\n", entered == 0 ? -1.0 : (entered - lastA) * 1000);
+    for (int turn = 0; turn < 100 && (entered == 0 || enteredByDeadline < 0); turn++) {
+      CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
+    }
+    printf("twolistwake %.1f %d\n", entered == 0 ? -1.0 : (entered - lastA) * 1000, enteredByDeadline);
   }
   return 0;
 }
@@ -552,23 +557,28 @@ int main(void) {
     replayWindow = (NSWindow *)[ReplayWindow new];
     [ArdiaHoverViews addObject:card];
     __block CFTimeInterval entered = 0;
-    card.onMouseEnter = ^(NSDictionary *i) { entered = CACurrentMediaTime(); };
+    __block int enteredByDeadline = -1;
+    __block CFTimeInterval last = 0;
+    __block CFTimeInterval quiet = -1;
+    card.onMouseEnter = ^(NSDictionary *i) { entered = CACurrentMediaTime(); quiet = entered - last; };
     card.onMouseLeave = ^(NSDictionary *i) {};
     [card updateTrackingAreas];
     pointer = NSMakePoint(100, 100);
     [RCTView ardia_checkHover];
-    CFTimeInterval last = 0;
-    int early = 0;
     for (int i = 1; i <= 40; i++) {
       card.inside = i >= 2;
       list.boundsOrigin = NSMakePoint(i, 0);
       last = CACurrentMediaTime();
       [RCTView ardia_scrolled:list];
+      if (i == 40) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((ArdiaHoverScrollSettle + ${GRACE_MS / 1000}) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ dispatch_async(dispatch_get_main_queue(), ^{ enteredByDeadline = entered != 0; }); });
+      }
       CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.016, false);
-      if (entered != 0) early++;
     }
-    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.3, false);
-    printf("settled %d %.1f\n", early, entered == 0 ? -1.0 : (entered - last) * 1000);
+    for (int turn = 0; turn < 100 && (entered == 0 || enteredByDeadline < 0); turn++) {
+      CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, false);
+    }
+    printf("settled %.1f %d\n", quiet * 1000, enteredByDeadline);
   }
   return 0;
 }
@@ -674,9 +684,9 @@ test("a hold is timed only while a hover change waits, and nothing is counted wh
 test("with the real clock and the queued wake-up, a card under a still pointer is entered within the settle time plus 20 ms after the list stops, never while it moves", (t) => {
   const r = replayRun(t, true);
   if (!r) return;
-  const [early, ms] = r.settled;
-  assert.equal(early, 0);
-  assert.ok(ms >= SETTLE * 1000 && ms <= SETTLE * 1000 + 20, `entered ${ms} ms after the last step`);
+  const [quiet, enteredByDeadline] = r.settled;
+  assert.ok(quiet >= SETTLE * 1000, `entered ${quiet} ms after the latest step, while the list still moved`);
+  assert.equal(enteredByDeadline, 1, `not entered by the time a plain timer due ${GRACE_MS} ms after the settle time ran, ${quiet} ms after the latest step`);
 });
 
 test("a still pointer waits from the very first scroll step, but a real move already on its way before that step still enters at once", (t) => {
@@ -707,6 +717,17 @@ test("the mouse-move watch goes when its last waiting view is released before th
 test("with the real clock, a step in list B never delays list A's card past A's own settle time plus 20 ms", (t) => {
   const r = replayRun(t, true, TWO_LISTS);
   if (!r) return;
-  const [ms] = r.twolistwake;
-  assert.ok(ms >= SETTLE * 1000 && ms <= SETTLE * 1000 + 20, `entered ${ms} ms after list A stopped`);
+  const [ms, enteredByDeadline] = r.twolistwake;
+  assert.ok(ms >= SETTLE * 1000, `entered ${ms} ms after list A's last step, before its settle time`);
+  assert.equal(enteredByDeadline, 1, `not entered by the time a plain timer due ${GRACE_MS} ms after list A's settle time ran, ${ms} ms after its last step`);
+});
+
+test("the real-clock replays judge the wake by queue order against a plain timer due after it, and the card against the latest step, so a stalled process can't fail them", () => {
+  const deadline = `dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((ArdiaHoverScrollSettle + ${GRACE_MS / 1000}) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ dispatch_async(dispatch_get_main_queue(), ^{ enteredByDeadline = entered != 0; }); });`;
+  for (const [name, source] of [["two lists", TWO_LISTS], ["timed", TIMED]]) {
+    assert.ok(source.includes(deadline), `the ${name} replay has no plain timer due ${GRACE_MS} ms after the settle time that looks, one queue turn later, whether the card was entered`);
+    assert.doesNotMatch(source, /entered - reference/, `the ${name} replay still times the card against a timer that can run long before the wake, so a stall that starts in between counts as a late enter`);
+    assert.match(source, /for \(int turn = 0; turn < \d+ && \(entered == 0 \|\| enteredByDeadline < 0\); turn\+\+\)/, `the ${name} replay stops after a fixed time instead of running until the card is entered and the timer has looked`);
+  }
+  assert.match(TIMED, /onMouseEnter = \^\(NSDictionary \*i\) \{ entered = CACurrentMediaTime\(\); quiet = entered - last; \};/, "the timed replay judges an enter by how long the list had been still when it happened, not by which scroll step it came during");
 });

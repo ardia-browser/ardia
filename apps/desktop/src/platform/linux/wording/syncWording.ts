@@ -18,6 +18,12 @@ export const SYNC_WORDING: readonly Wording[] = [
           >
 `,
       ],
+      [
+        `          ) : offline && cloudDriveOff && PLATFORM_TERMS.cloudDriveSettingsUrl ? (
+            <Button title="Open iCloud Settings" kind="primary" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} />
+`,
+        "",
+      ],
       ["title: `Show Sync Folder in ${PLATFORM_TERMS.fileManager}`", `title: "Open Sync Folder"`],
     ],
   },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ScrollView, StyleSheet, useWindowDimensions, View, type ViewInstance } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import type { Point } from "../../lib/menuPlace";
@@ -13,6 +13,7 @@ import { shownProfile } from "../../state/sync/syncRules";
 import { useIncognito } from "../../state/tabs/hooks";
 import { useTabs } from "../../state/tabs/store";
 import { countUsage } from "../../state/telemetry/telemetry";
+import { countRender } from "../../state/app/interactionPerf";
 import { FloatingMenu, space, tabsLayout, trayMotion, type MenuItem } from "../ui";
 import { useFocusReturn } from "../ui/focusReturn";
 import { pinnedFolderMenu, pinnedLinkMenu, Tiles, tilesHeight, type PinOpener } from "../sync/SpacesParts";
@@ -70,8 +71,10 @@ export function useNewTabPins(): NewTabPinsShown | null {
   const fieldEmpty = useSearch((state) => state.text.trim() === "");
   const incognito = useIncognito();
   const profile = useSelectedProfile();
-  if (!profile || incognito || editsPage || !fieldEmpty || profile.pinned.tiles.length === 0) return null;
-  return { profileId: profile.syncId, tiles: profile.pinned.tiles };
+  const profileId = profile?.syncId ?? null;
+  const tiles = profile?.pinned.tiles ?? null;
+  const offered = profileId !== null && tiles !== null && tiles.length > 0 && !incognito && !editsPage && fieldEmpty;
+  return useMemo(() => (offered ? { profileId: profileId!, tiles: tiles! } : null), [offered, profileId, tiles]);
 }
 
 const PANEL_PINS_TOP = searchPanel.fieldInset - space.xs;
@@ -99,10 +102,14 @@ export function usePanelPins({ closing, room }: { closing: boolean; room: number
     },
     [sizeKey],
   );
-  return { pins: shown ? pins : null, height: shown ? Math.min(natural, room) : 0, scrolls: shown && natural > room, onMeasured };
+  const shownPins = shown ? pins : null;
+  const height = shown ? Math.min(natural, room) : 0;
+  const scrolls = shown && natural > room;
+  return useMemo(() => ({ pins: shownPins, height, scrolls, onMeasured }), [shownPins, height, scrolls, onMeasured]);
 }
 
 function PinTiles({ pins, closing, anchorShift, onLeave }: { pins: NewTabPinsShown; closing: boolean; anchorShift: number; onLeave: () => void }) {
+  countRender("PinTiles");
   const session = useSearchSession();
   const window = useWindowDimensions();
   const keyboardTop = useKeyboardTopFromBottom();
@@ -110,7 +117,7 @@ function PinTiles({ pins, closing, anchorShift, onLeave }: { pins: NewTabPinsSho
   const stopReturn = useRef<() => void>(() => undefined);
   useEffect(() => () => stopReturn.current(), []);
   const [menu, setMenu] = useState<PinsMenu | null>(null);
-  const opener = opensOfferedPin(session, pins.profileId, onLeave);
+  const opener = useMemo(() => opensOfferedPin(session, pins.profileId, onLeave), [session, pins.profileId, onLeave]);
   const items = !closing && menu && menu.session === session && menu.profileId === pins.profileId ? menuItems(menu, pins.tiles, opener) : [];
   const menuShown = menu !== null && items.length > 0;
   const menuStale = menu !== null && !menuShown;
@@ -178,7 +185,7 @@ export function NewTabPins({ onLeave = leavesNothing }: { onLeave?: () => void }
   );
 }
 
-export function PanelPins({ block, closing, anchorShift = 0, onLeave = leavesNothing }: { block: PanelPinsBlock; closing: boolean; anchorShift?: number; onLeave?: () => void }) {
+export const PanelPins = memo(function PanelPins({ block, closing, anchorShift = 0, onLeave = leavesNothing }: { block: PanelPinsBlock; closing: boolean; anchorShift?: number; onLeave?: () => void }) {
   if (!block.pins) return null;
   return (
     <Animated.View testID="newTabPins" entering={FadeIn.duration(trayMotion.resultsIn)} style={[styles.panel, { height: block.height }]} pointerEvents="box-none">
@@ -198,7 +205,7 @@ export function PanelPins({ block, closing, anchorShift = 0, onLeave = leavesNot
       </ScrollView>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   panel: { overflow: "hidden" },

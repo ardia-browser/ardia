@@ -14,6 +14,7 @@ namespace ardia::linux_credentials {
 inline constexpr size_t kMaxOriginBytes = 2048;
 inline constexpr size_t kMaxUsernameBytes = 1024;
 inline constexpr size_t kMaxSecretBytes = 4096;
+inline constexpr size_t kMaxSavedSecretBytes = 65536;
 inline constexpr size_t kMaxFieldBytes = 1024;
 inline constexpr size_t kMaxIdBytes = 128;
 inline constexpr size_t kMaxPathBytes = 4096;
@@ -154,7 +155,7 @@ Plan PlanWindowInvoke(bool private_window, std::string_view method, const std::v
 Plan PlanExport(std::string_view path, char separator = '/');
 
 Plan PlanSyncedLogin(std::string_view profile, std::string_view origin, std::string_view username,
-                     std::string_view password, bool replacing);
+                     std::string_view password, std::optional<std::string_view> expected);
 bool PasswordsSyncUsable(bool skip_undecryptable, bool service, StoreError error);
 
 std::optional<std::string> NormalizeOrigin(std::string_view origin);

@@ -1,15 +1,10 @@
 import { useMemo } from "react";
 import { StyleSheet, View } from "react-native";
-import { launchArguments } from "../../state/app/launchFlags";
-import { watchPageLoad } from "../../state/browse/hooks";
-import { LoadingLine, type LoadWatch } from "../ui";
+import { LoadingLine } from "../ui";
+import { pageLoadWatch } from "./barLoadWash";
 
 export function PageProgressLine({ tabId, top }: { tabId: string; top: number }) {
-  const watch = useMemo<LoadWatch>(() => {
-    const loadFreeze = launchArguments().loadFreeze;
-    if (loadFreeze !== null) return (show) => (show(loadFreeze, true), () => undefined);
-    return (show) => watchPageLoad(tabId, show);
-  }, [tabId]);
+  const watch = useMemo(() => pageLoadWatch(tabId), [tabId]);
   return (
     <View testID="pageProgressLine" style={[styles.place, { top }]} pointerEvents="none">
       <LoadingLine watch={watch} />

@@ -8,6 +8,70 @@ pub const SYNC_FOLDER: &str = "Sync";
 pub const SECRETS_FOLDER: &str = "Secrets";
 pub const PLACEMENT_NAME: &str = "window-placement.txt";
 pub const CHROMIUM_USER_DATA: &str = "User Data";
+pub const CHROMIUM_FOLDER: &str = "Chromium";
+pub const CHROMIUM_MARKER_NAME: &str = "rnw-chromium-migration.json";
+pub const CHROMIUM_ATTEMPT_NAME: &str = "rnw-chromium-migration-attempt.json";
+pub const CHROMIUM_PROGRESS_NAME: &str = "rnw-chromium-migration-progress.json";
+pub const CHROMIUM_STAGING_FOLDER: &str = "rnw-chromium-staging";
+pub const LOCAL_STATE: &str = "Local State";
+pub const CHROMIUM_LOCK_FILE: &str = "lockfile";
+pub const RNW_DEFAULT_PROFILE: &str = "Default";
+pub const WEBUI_DEFAULT_PROFILE: &str = "Ardia default";
+pub const PROFILE_PREFIX: &str = "Ardia ";
+const PROFILE_FOLDER_LIMIT: usize = 200;
+
+const PROFILE_CACHE_FOLDERS: [&str; 11] = [
+    "Cache",
+    "Code Cache",
+    "GPUCache",
+    "DawnGraphiteCache",
+    "DawnWebGPUCache",
+    "GrShaderCache",
+    "GraphiteDawnCache",
+    "ShaderCache",
+    "Sessions",
+    "Sessions_Encrypted",
+    "Crashpad",
+];
+
+const PROFILE_CACHE_SUBFOLDERS: [(&str, &str); 1] = [("Service Worker", "CacheStorage")];
+
+pub fn profile_transient(parents: &[String], name: &str) -> bool {
+    let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
+    let in_extension_package = parents.first().is_some_and(|top| same(top, "Extensions"));
+    if same(name, "LOCK") && !in_extension_package {
+        return true;
+    }
+    if parents.is_empty() && (same(name, CHROMIUM_LOCK_FILE) || name.to_ascii_lowercase().starts_with("singleton")) {
+        return true;
+    }
+    match parents {
+        [] => PROFILE_CACHE_FOLDERS.iter().any(|folder| same(folder, name)),
+        [parent] => PROFILE_CACHE_SUBFOLDERS
+            .iter()
+            .any(|(above, folder)| same(above, parent) && same(folder, name)),
+        _ => false,
+    }
+}
+
+pub fn webui_profile_folder(rnw_folder: &str) -> Option<String> {
+    if rnw_folder == RNW_DEFAULT_PROFILE {
+        return Some(WEBUI_DEFAULT_PROFILE.to_string());
+    }
+    let rest = rnw_folder.strip_prefix(PROFILE_PREFIX)?;
+    let made = !rest.is_empty()
+        && rnw_folder.len() <= PROFILE_FOLDER_LIMIT
+        && rest
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+    made.then(|| rnw_folder.to_string())
+}
+
+pub fn webui_profile_name(folder: &str) -> bool {
+    folder
+        .strip_prefix(PROFILE_PREFIX)
+        .is_some_and(|rest| !rest.is_empty() && folder.len() <= PROFILE_FOLDER_LIMIT && !rest.contains(' '))
+}
 pub const PARTIAL_SUFFIX: &str = ".rnw-migration.partial";
 
 const DOCUMENT_NAME_LIMIT: usize = 200;
@@ -24,7 +88,8 @@ const RNW_SCRATCH_FILES: [&str; 7] = [
     "launch-starts.txt",
 ];
 
-const RNW_FOLDERS: [&str; 11] = [
+const RNW_FOLDERS: [&str; 12] = [
+    CHROMIUM_STAGING_FOLDER,
     SECRETS_FOLDER,
     KEPT_FOLDER,
     CHROMIUM_USER_DATA,
@@ -38,7 +103,14 @@ const RNW_FOLDERS: [&str; 11] = [
     "drop-fixtures",
 ];
 
-const OWN_FILES: [&str; 3] = [MARKER_NAME, ATTEMPT_NAME, LOCK_NAME];
+const OWN_FILES: [&str; 6] = [
+    MARKER_NAME,
+    ATTEMPT_NAME,
+    LOCK_NAME,
+    CHROMIUM_MARKER_NAME,
+    CHROMIUM_ATTEMPT_NAME,
+    CHROMIUM_PROGRESS_NAME,
+];
 
 pub const CONFIG_FILES: [&str; 2] = ["config.json", "hooks.json"];
 

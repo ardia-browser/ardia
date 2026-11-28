@@ -1,6 +1,6 @@
 --- a/chrome/browser/ui/views/frame/browser_view.cc
 +++ b/chrome/browser/ui/views/frame/browser_view.cc
-@@ -6,6 +6,12 @@
+@@ -6,6 +6,18 @@
  
  #include <stdint.h>
  
@@ -8,12 +8,18 @@
 +
 +#if BUILDFLAG(IS_WIN)
 +#include "ardia/win/hooks.h"  // nogncheck
++
++bool (*g_ardia_win_dispatch_reserved_shortcut)(
++    const views::FocusManager* focus,
++    const ui::Accelerator& accelerator) = nullptr;
++
++bool g_ardia_win_priority_shortcut_pass = false;
 +#endif
 +
  #include <algorithm>
  #include <memory>
  #include <optional>
-@@ -1674,6 +1680,18 @@
+@@ -1674,6 +1686,18 @@
        return true;
      }
    }
@@ -32,7 +38,37 @@
    return false;
  }
  
-@@ -6442,6 +6460,14 @@
+@@ -4008,6 +4032,29 @@
+   }
+ 
+   int id;
++#if BUILDFLAG(IS_WIN)
++  if (g_ardia_win_hosts_normal_windows && GetIsNormalType()) {
++    const bool key_down =
++        event.GetType() == blink::WebInputEvent::Type::kRawKeyDown &&
++        event.windows_key_code != ui::VKEY_PROCESSKEY;
++    if (key_down && g_ardia_win_dispatch_reserved_shortcut &&
++        g_ardia_win_dispatch_reserved_shortcut(focus_manager, accelerator)) {
++      return content::KeyboardEventProcessingResult::HANDLED;
++    }
++    const bool page_first =
++        key_down && focus_manager->IsAcceleratorRegistered(accelerator);
++    if (focus_manager->HasPriorityHandler(accelerator)) {
++      base::AutoReset<bool> priority_pass(&g_ardia_win_priority_shortcut_pass,
++                                          true);
++      if (focus_manager->ProcessAccelerator(accelerator)) {
++        return content::KeyboardEventProcessingResult::HANDLED;
++      }
++    }
++    return page_first
++               ? content::KeyboardEventProcessingResult::NOT_HANDLED_IS_SHORTCUT
++               : content::KeyboardEventProcessingResult::NOT_HANDLED;
++  }
++#endif
+   if (!FindCommandIdForAccelerator(accelerator, &id)) {
+     // |accelerator| is not a browser command, it may be handled by ash (e.g.
+     // F4-F10). Report if we handled it.
+@@ -6489,6 +6536,14 @@
    views::FocusManager* focus_manager = GetFocusManager();
    CHECK(focus_manager, base::NotFatalUntil::M162);
  

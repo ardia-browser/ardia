@@ -42,6 +42,7 @@ enum PendingCounts {
   static let glassCapturesOverBudget = "glass_captures_over_budget"
   static let glassLensBridged = "glass_lens_bridged"
   static let glassLensWithheld = "glass_lens_withheld"
+  static let launchLooksStale = "launch_looks_stale"
   private static let suite = "ardia-pending-counts"
   private static let defaults = UserDefaults(suiteName: suite) ?? .standard
 

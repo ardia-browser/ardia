@@ -178,6 +178,7 @@ fn the_rnw_data_and_credentials_are_never_changed() {
             &populated.vault,
             &Faults {
                 fail_at_commit: fail_at,
+                ..Faults::default()
             },
         );
     }
@@ -216,6 +217,7 @@ fn a_crash_before_any_rename_resumes_to_the_same_result() {
             &populated.vault,
             &Faults {
                 fail_at_commit: Some(fail_at),
+                ..Faults::default()
             },
         );
         if crashed.outcome != Outcome::Failed {
@@ -295,6 +297,7 @@ fn webui_data_already_there_is_kept_aside_once() {
         &populated.vault,
         &Faults {
             fail_at_commit: Some(4),
+            ..Faults::default()
         },
     );
     assert_eq!(crashed.outcome, Outcome::Failed);
@@ -735,6 +738,7 @@ fn a_stop_between_the_report_and_the_marker_resumes_with_both() {
         let populated = populate(&scratch.0, &sealer);
         let faults = Faults {
             fail_at_commit: Some(fail_at),
+            ..Faults::default()
         };
         if migrate(&populated.layout, &sealer, &populated.vault, &faults).outcome != Outcome::Failed {
             total = fail_at - 1;
@@ -752,6 +756,7 @@ fn a_stop_between_the_report_and_the_marker_resumes_with_both() {
         &early.vault,
         &Faults {
             fail_at_commit: Some(total - 1),
+            ..Faults::default()
         },
     );
     assert_eq!(report.failed_stage, Some(Stage::Report));
@@ -765,6 +770,7 @@ fn a_stop_between_the_report_and_the_marker_resumes_with_both() {
         &stopped.vault,
         &Faults {
             fail_at_commit: Some(total),
+            ..Faults::default()
         },
     );
     assert_eq!(report.outcome, Outcome::Failed);
@@ -909,6 +915,7 @@ fn a_newer_pilot_copy_is_kept_beside_the_older_one() {
         &populated.vault,
         &Faults {
             fail_at_commit: Some(3),
+            ..Faults::default()
         },
     );
     assert_eq!(first.outcome, Outcome::Failed);
@@ -975,6 +982,7 @@ fn a_255_character_secret_conflicting_twice_is_kept_twice() {
         &vault,
         &Faults {
             fail_at_commit: Some(2),
+            ..Faults::default()
         },
     );
     assert_eq!(first.outcome, Outcome::Failed, "{first:?}");
@@ -1084,6 +1092,7 @@ fn an_unchanged_pilot_copy_reuses_its_backup_and_a_changed_one_gets_its_own() {
             &populated.vault,
             &Faults {
                 fail_at_commit: Some(at),
+                ..Faults::default()
             },
         )
     };

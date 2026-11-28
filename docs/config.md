@@ -84,9 +84,11 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
 - `theme` is a theme name (`^[a-z0-9][a-z0-9_-]*$`, the file `themes/<name>.json`) or `null`. A bad value, or a
   `config.json` that doesn't parse, keeps the theme that is showing.
 - `sidebarMediaControls` (the sidebar's media card and a pinned tab's media controls) and `adaptTextToColor`
-  (an edited theme colour's text follows its colours), both `true` by default, and `bookmarksImportDismissed`
-  have no row in Settings. They keep a choice made in 0.2.46, whose Settings had them (the last as
-  `hideBookmarksBarImport`); this file is the way to change them now.
+  (an edited theme colour's text follows its colours), both `true` by default, `pageScrollBars` (`"system"`
+  by default, following the OS, or `"thin"` for slim overlay scroll bars even with a mouse plugged in, except
+  when macOS is set to show scroll bars Always)
+  and `bookmarksImportDismissed` have no row in Settings. They keep a choice made in 0.2.46, whose Settings had
+  them (the last as `hideBookmarksBarImport`); this file is the way to change them now.
 - Unknown keys inside `settings` are reported and ignored. Other top-level keys are ignored.
 
 ### Address bar providers

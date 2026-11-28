@@ -30,7 +30,7 @@ class PhoneBlocking(context: Context) {
 
     val settings = BlockingSettings(store)
     val lists = FilterLists(File(File(app.cacheDir, FOLDER), "Filters"), store, HttpFilterListDownloader())
-    val blocker = ContentBlocker(settings, lists)
+    val blocker = ContentBlocker(settings, lists, onEngineInstalled = PendingCounts.blockerEnginesInstalled(app))
     val isEnabled: StateFlow<Boolean> = mutableEnabled.asStateFlow()
 
     val changes = combine(isEnabled, settings.state, lists.state, blocker.state) { _, _, _, _ -> Unit }

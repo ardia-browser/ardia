@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Platform, StyleSheet, Text } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
-import { Favicon, motionAliases, smoothCorners, useTheme } from "../ui";
+import { Favicon, motionAliases, smoothCorners, usePageTheme } from "../ui";
 import { siteHost } from "./FloatingBar";
 import { loadingPlaceholderLayout as layout } from "./pageStateTokens";
 import { pageWords } from "../../lib/sharedWords";
@@ -30,7 +30,7 @@ export function distinctTitle(title: string, host: string | null): string | null
 }
 
 export function PageLoadingPlaceholder({ tab, revealed = false }: { tab: PlaceholderTab; revealed?: boolean }) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   const page = pageTheme(tab.themeColorHex);
   const host = siteHost(tab.url);
   const title = distinctTitle(tab.title, host);

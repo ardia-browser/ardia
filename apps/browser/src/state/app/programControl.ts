@@ -7,12 +7,12 @@ import { isTabReady, pageOf, usePages } from "../tabs/pageState";
 import { isInternalTab } from "../pages/urls";
 import { errorText } from "../../lib/errors";
 import { focusedWindowOf } from "../windows/ui";
-import { noteCliPillDismissed, noteCliPillShown } from "../telemetry/cliCounts";
+import { noteCliPillDismissed, noteCliPillShown, noteControlRestored, noteControlSelfStop } from "../telemetry/cliCounts";
 import { noteDragsEnded } from "../telemetry/stuckDrags";
 import { consentToken, type ConsentToken } from "../telemetry/client";
 import type { ControlCaller } from "./controlCaller";
 import { noteCliConnections } from "../automation/offscreen";
-import { compactControlPill, programControlOn, setProgramControl, showControlPill } from "./programControlSetting";
+import { compactControlPill, programControlOn, setControlByApp, setControlByUser, showControlPill, takeControlRestore } from "./programControlSetting";
 import { startCommandInstall } from "./linuxCommandInstall";
 
 const INDICATOR_HOLD_MS = 3000;
@@ -150,7 +150,7 @@ export function noteTabReady(tabId: string) {
   pushActiveTab();
 }
 
-export const stopProgramControl = () => setProgramControl(false);
+export const stopProgramControl = () => setControlByUser(false);
 
 let started = false;
 
@@ -160,14 +160,26 @@ export function startProgramControl() {
   let latest = 0;
   let inFlight = 0;
   let newest = 0;
-  const apply = (server: ControlStatus, mayReconcile: boolean, consent?: ConsentToken | null) => {
+  let restoring: { request: number; consent: ConsentToken | null; generation: number | null } | null = null;
+  const settleRestore = (server: ControlStatus, generation: number, request: number | null) => {
+    if (!restoring || restoring.request !== latest) return;
+    if (request === restoring.request) restoring.generation = generation;
+    else if (restoring.generation === null || generation < restoring.generation) return;
+    if (server.state === "on") noteControlRestored(restoring.consent);
+    if (server.state === "on" || server.state === "off") restoring = null;
+  };
+  const apply = (server: ControlStatus, mayReconcile: boolean, consent?: ConsentToken | null, request: number | null = null) => {
     noteDragsEnded(server.dragsEnded, consent);
     const generation = server.state === "external" ? newest : server.generation;
     if (generation < newest) return;
     newest = generation;
     useControlServer.setState({ server });
-    const stoppedItself = server.state === "off" && !!server.reason;
-    if (mayReconcile && stoppedItself && programControlOn(useBrowser.getState())) setProgramControl(false);
+    const stoppedItself = server.state === "off" ? server.reason : undefined;
+    settleRestore(server, generation, request);
+    if (mayReconcile && stoppedItself && programControlOn(useBrowser.getState())) {
+      setControlByApp(false);
+      noteControlSelfStop(stoppedItself, consent);
+    }
   };
   onControlChanged((server) => apply(server, inFlight === 0));
   let applied: boolean | null = null;
@@ -178,10 +190,12 @@ export function startProgramControl() {
     applied = on;
     const request = ++latest;
     const consent = consentToken();
+    const restore = takeControlRestore();
+    restoring = on && restore ? { request, consent: restore.consent, generation: null } : null;
     inFlight++;
     const settle = (server: ControlStatus) => {
       inFlight--;
-      if (request === latest) apply(server, true, consent);
+      if (request === latest) apply(server, true, consent, request);
     };
     const call = first && !on ? controlStatus() : setControl(on);
     void call.then(settle, (e: unknown) => settle({ state: "off", connections: 0, generation: newest, file: "", reason: errorText(e) }));

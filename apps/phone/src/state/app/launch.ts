@@ -6,7 +6,7 @@ import { sendDeckCommand } from "../browse/deckCommands";
 import { captureSnapshot, newTab, openArchive, openPage, openSpaces, openTab, showDeck, swipeOrder, switchToNeighbour, useBrowse } from "../browse/store";
 import { openLibrary } from "../library/store";
 import { openPageMenu, showReader } from "../page/actions";
-import { presentSearch } from "../search/store";
+import { dismissSearch, presentSearch } from "../search/store";
 import { startBrowseForMe } from "../browseForMe/store";
 import { presentHeardVoiceSearch } from "../voice/store";
 import { trustSite } from "../settings/actions";
@@ -21,7 +21,7 @@ import { launchArguments } from "./launchFlags";
 import { isLabBuild } from "../../platform/lab";
 import { markTiming } from "./interactionPerf";
 import { runDeckPullScript } from "../browse/deckPullScript";
-import { DEMO_PRIVATE_URLS, manyTabTitle, sampleToast } from "./launchRules";
+import { DEMO_PRIVATE_URLS, launchSheetClosesSearch, manyTabTitle, sampleToast } from "./launchRules";
 
 
 const DEMO_WARM_BATCH = 3;
@@ -103,6 +103,7 @@ async function runLaunchHooks(args: LaunchArguments) {
   await wait(LAUNCH_TIMING.sheetMs);
   if (args.browseResearch !== null) startBrowseForMe(args.browseResearch);
   if (args.voiceHeard !== null) presentHeardVoiceSearch(args.voiceHeard);
+  if (launchSheetClosesSearch(args)) dismissSearch();
   if (args.opensSettings || args.openSheet === "settings") openSettings();
   const page = args.settingsPage === null ? null : settingsRouteFromKey(args.settingsPage);
   if (page) openSettings(page);

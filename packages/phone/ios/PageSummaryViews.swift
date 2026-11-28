@@ -159,58 +159,65 @@ private extension PageSummaryText {
   func session<Value>(_ path: KeyPath<PageSummarySession, Value>) -> Value? { model.session?[keyPath: path] }
 }
 
+private struct SummaryBarPress: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.opacity(configuration.isPressed ? 0.35 : 1)
+  }
+}
+
 struct PageSummaryFooter: View {
   let model: PageSummaryStageModel
   let onClose: @MainActor () -> Void
-  @Environment(\.displayScale) private var displayScale
-  @Environment(\.colorScheme) private var colorScheme
+  let onShare: @MainActor () -> Void
 
-  private var veil: Color {
-    let ink = LiquidGlassRules.materialVeil(dark: colorScheme == .dark)
-    return Color(.sRGB, red: ink.red, green: ink.green, blue: ink.blue, opacity: ink.alpha)
+  private var control: CGFloat { PageSummaryMotion.barControl }
+
+  private func circle(_ symbol: String, size: CGFloat, label: LocalizedStringKey, enabled: Bool = true, action: @escaping @MainActor () -> Void) -> some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: size, weight: .medium))
+        .foregroundStyle(.primary)
+        .opacity(enabled ? 0.9 : 0.3)
+        .frame(width: control, height: control)
+        .contentShape(.circle)
+    }
+    .buttonStyle(SummaryBarPress())
+    .disabled(!enabled)
+    .glassEffect(.regular, in: .circle)
+    .accessibilityLabel(Text(label))
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      Rectangle()
-        .fill(.primary.opacity(0.1))
-        .frame(height: 1 / max(displayScale, 1))
-        .opacity(model.showsText ? 1 : 0)
-      HStack(spacing: 12) {
-        Text("Summary")
-          .font(.footnote.weight(.medium))
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-          .opacity(model.showsText ? 1 : 0)
-          .accessibilityHidden(true)
-        Spacer(minLength: 0)
-        Button {
-          onClose()
-        } label: {
-          Image(systemName: "xmark")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.primary.opacity(0.8))
-            .frame(width: 36, height: 36)
-            .background(.primary.opacity(0.14), in: .circle)
-            .frame(width: 44, height: 44)
-            .contentShape(.rect)
+    let session = model.session
+    let host = session?.host
+    GlassEffectContainer(spacing: PageSummaryMotion.barGap) {
+      HStack(spacing: PageSummaryMotion.barGap) {
+        circle("square.and.arrow.up", size: 18, label: "Share Summary", enabled: session?.isShareable == true, action: onShare)
+        Button(action: onClose) {
+          HStack(spacing: 6) {
+            Image(systemName: "sparkle")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(model.look.look.swatchColor)
+            Text(host ?? String(localized: "Summary"))
+              .font(.system(size: 15, weight: .medium))
+              .foregroundStyle(.primary.opacity(0.9))
+              .lineLimit(1)
+              .truncationMode(.middle)
+          }
+          .padding(.horizontal, 16)
+          .frame(maxWidth: .infinity)
+          .frame(height: control)
+          .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("Close Summary"))
+        .buttonStyle(SummaryBarPress())
+        .glassEffect(.regular, in: .capsule)
+        .accessibilityLabel(host.map { Text("Back to \($0)") } ?? Text("Back to Page"))
+        circle("xmark", size: 17, label: "Close Summary", action: onClose)
       }
-      .padding(.leading, 24)
-      .padding(.trailing, 20)
-      .frame(height: PageSummaryMotion.footerHeight)
-      Spacer(minLength: 0)
     }
-    .background {
-      ZStack {
-        Rectangle().fill(.regularMaterial)
-        Rectangle().fill(veil)
-      }
-      .opacity(model.showsText ? 1 : 0)
-      .ignoresSafeArea()
-    }
-    .animation(.easeOut(duration: 0.35), value: model.showsText)
+    .padding(.horizontal, PageSummaryMotion.barSideInset)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    .padding(.bottom, PageSummaryMotion.barBottomGap)
+    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
   }
 }

@@ -107,6 +107,7 @@ class StoredLogin {
   std::string username;
   std::string password;
   double created_ms = 0;
+  double modified_ms = 0;
 };
 
 struct LoginRead {
@@ -119,8 +120,13 @@ struct PasswordSave {
   std::string origin;
   std::string username;
   std::string sealed;
-  bool replacing = false;
+  std::optional<std::string> replaced;
   bool holdable = true;
+};
+
+struct SyncedLogin {
+  StoredLogin login;
+  std::optional<StoredLogin> replaced;
 };
 
 std::optional<std::string> LoginOrigin(std::string_view realm);
@@ -175,7 +181,7 @@ class SyncCore {
   Outcome Dispatch(std::string_view method, const std::vector<JsonValue>& args, int64_t now_seconds);
   Outcome SaveKit(const std::string& path, std::string_view created);
   Outcome SealLogins(LoginRead read);
-  std::optional<StoredLogin> OpenLogin(const PasswordSave& save);
+  std::optional<SyncedLogin> OpenLogin(const PasswordSave& save);
 
   bool unlocked() const { return keys_ != nullptr; }
   bool unreadable() const { return unreadable_; }

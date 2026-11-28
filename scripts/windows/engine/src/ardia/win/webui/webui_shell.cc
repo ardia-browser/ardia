@@ -240,6 +240,11 @@ bool ShellPassesPoint(gfx::NativeView child, const gfx::Point& location) {
   return WindowRegistry::Get().ShellPassesPoint(child, location);
 }
 
+bool DispatchReservedShortcut(const views::FocusManager* focus,
+                              const ui::Accelerator& accelerator) {
+  return WindowRegistry::Get().DispatchReservedShortcut(focus, accelerator);
+}
+
 bool OffTheRecordNavigation(content::WebContents* source, const GURL& url) {
   return WindowRegistry::Get().OffTheRecordNavigation(source, url);
 }
@@ -254,6 +259,7 @@ void RegisterWebUIShell() {
 void InstallWebUIShellHooks() {
   g_ardia_win_hosts_normal_windows = true;
   g_ardia_win_shell_frame = true;
+  g_ardia_win_dispatch_reserved_shortcut = &DispatchReservedShortcut;
   g_ardia_win_frame_view = &webui::CreateShellFrameView;
   g_ardia_keeps_window_without_tabs = &KeepsWindowWithoutTabs;
   g_ardia_linux_companion_owner = &CompanionOwner;

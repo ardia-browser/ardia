@@ -5,6 +5,17 @@ ac_linux_document_service.cc
 ac_linux_document_service.h
 ac_linux_documents.cc
 ac_linux_documents.h
+ac_linux_extension_service.h
+ac_linux_extension_views.cc
+ac_linux_extension_views.h
+ac_linux_extensions.cc
+ac_linux_extensions.h
+ac_linux_find.cc
+ac_linux_find.h
+ac_linux_page_evaluation.cc
+ac_linux_page_evaluation.h
+ac_linux_page_operations.h
+ac_linux_popup_geometry.h
 ac_linux_session.cc
 ac_linux_session.h
 bootstrap.js

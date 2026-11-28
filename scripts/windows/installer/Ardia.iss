@@ -95,6 +95,7 @@ Name: "{autoprograms}\Ardia"; Filename: "{app}\Ardia.exe"; Parameters: "{#Launch
 Name: "{autodesktop}\Ardia"; Filename: "{app}\Ardia.exe"; Parameters: "{#LaunchSwitch}"; IconFilename: "{app}\Ardia.ico"; AppUserModelID: "Ardia.Browser"; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\ardia-webui-migrate.exe"; Parameters: "--from-rnw --chromium-profiles"; StatusMsg: "Bringing over your history, logins and extensions..."; Flags: runhidden waituntilterminated runasoriginaluser; Check: MigratorBundled
 Filename: "{app}\Ardia.exe"; Parameters: "{#LaunchSwitch}"; Description: "Open Ardia"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\Ardia.exe"; Parameters: "{#LaunchSwitch}"; Flags: nowait skipifnotsilent; Check: RelaunchAsked
 
@@ -103,6 +104,11 @@ function CreateFile(Name: String; Access, Share, Security, Disposition, Flags, T
   external 'CreateFileW@kernel32.dll stdcall';
 function CloseHandle(Handle: Cardinal): Boolean;
   external 'CloseHandle@kernel32.dll stdcall';
+
+function MigratorBundled: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\ardia-webui-migrate.exe'));
+end;
 
 function RelaunchAsked: Boolean;
 begin

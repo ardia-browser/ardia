@@ -212,12 +212,26 @@ final class FakePage: DiscardablePage {
       roster.activate(id)
       return page
     }
-    roster.discardAll(except: ids[1])
+    roster.discardAll(keeping: [ids[1]])
     #expect(roster.liveIDs == [ids[1]])
     #expect(pages.map(\.isLive) == [false, true, false, false])
     roster.remove(ids[1])
     #expect(roster.liveIDs.isEmpty)
     #expect(roster.page(ids[1]) == nil)
+  }
+
+  @Test func memoryWarningKeepsEveryPageOnScreenWithTheSelectedOne() {
+    let roster = LivePageRoster<FakePage>(limit: 6)
+    let ids = (0..<4).map { _ in UUID() }
+    let pages = ids.map { id in
+      let page = FakePage()
+      roster.register(page, for: id)
+      roster.activate(id)
+      return page
+    }
+    roster.discardAll(keeping: [ids[3], ids[1]])
+    #expect(roster.liveIDs == [ids[1], ids[3]])
+    #expect(pages.map(\.isLive) == [false, true, false, true])
   }
 }
 

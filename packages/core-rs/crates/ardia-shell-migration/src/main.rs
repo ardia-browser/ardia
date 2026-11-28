@@ -17,11 +17,18 @@ fn test_faults() -> ardia_shell_migration::Faults {
         .ok()
         .and_then(|exe| exe.parent().map(|folder| folder.join("Ardia.test-build")))
         .is_some_and(|marker| marker.is_file());
-    let stop_at = std::env::var("ARDIA_TEST_MIGRATION_STOP_AT_COMMIT")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok());
+    let number = |name: &str| {
+        std::env::var(name)
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .filter(|_| marked)
+    };
     ardia_shell_migration::Faults {
-        fail_at_commit: if marked { stop_at } else { None },
+        fail_at_commit: number("ARDIA_TEST_MIGRATION_STOP_AT_COMMIT"),
+        fail_at_file: number("ARDIA_TEST_MIGRATION_STOP_AT_FILE"),
+        free_space: number("ARDIA_TEST_MIGRATION_FREE_SPACE").map(|free| free as u64),
+        crash_at_commit: None,
+        crash_in_rollback_at: None,
     }
 }
 
@@ -33,10 +40,23 @@ fn run(layout: &ardia_shell_migration::Layout) -> ExitCode {
     ExitCode::from(report.exit_code())
 }
 
+#[cfg(windows)]
+fn run_chromium(layout: &ardia_shell_migration::Layout) -> ExitCode {
+    use ardia_shell_migration::windows::Dpapi;
+    let report = ardia_shell_migration::migrate_chromium(layout, &Dpapi, &test_faults());
+    println!("{}", report.to_json());
+    ExitCode::from(report.exit_code())
+}
+
 #[cfg(not(windows))]
 fn run(_layout: &ardia_shell_migration::Layout) -> ExitCode {
     eprintln!("ardia-webui-migrate reads DPAPI and Credential Manager, so it runs on Windows only");
     ExitCode::from(64)
+}
+
+#[cfg(not(windows))]
+fn run_chromium(layout: &ardia_shell_migration::Layout) -> ExitCode {
+    run(layout)
 }
 
 fn main() -> ExitCode {
@@ -47,6 +67,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(Command::Migrate(layout)) => run(&layout),
+        Ok(Command::MigrateChromium(layout)) => run_chromium(&layout),
         Err(message) => {
             eprintln!("{message}\n{}", cli::USAGE);
             ExitCode::from(64)

@@ -98,13 +98,22 @@ phones a build that isn't a release says Dev.
   app's defaults, so a Debug build ignores the picked app icon variant and keeps its own in the Dock
   (`IconStyle.shown`); Settings still previews the variants. Release builds, which every release is, keep
   `AppIcon.icon`. A Debug build still shows the committed version in About and Settings, nightly or not.
-- **iPhone.** TestFlight uses version `1.0.1` until the owner asks to change it. App Store Connect supplies the next
-  build number. Upload only when the owner asks for TestFlight. When it is part of a desktop release,
+- **iPhone.** TestFlight and the App Store use the version pinned in `apps/phone/ios/Config/release-version` (`1.0.1`
+  now; after it reaches the App Store, TestFlight needs `1.0.2` or later), changed in a commit on the owner's word.
+  App Store Connect supplies the next build number. Upload only when the owner asks for TestFlight. When it is part of a desktop release,
   `iphone=true` opts in to the same TestFlight version. The dry run signs the iPhone archive and the real run uploads
   to Internal after the desktop release publishes. The Public Testers submission is a separate `public-link` run.
   If the iPhone job fails after the desktop release publishes, rerun the failed job or dispatch iOS Release on the
   same commit. For a direct install on the owner's iPhone, use a local Xcode development build or the `device` IPA
   over USB or Xcode's paired wireless connection. See [iPhone release and direct installs](phone.md#testflight-the-workflow-its-certificate-and-its-testers).
+  The App Store is separate runs on the owner's word, once a TestFlight build has processed: `mode=listing` pushes
+  the listing from `apps/phone/store/` (the version's copyright, which Apple requires, is `copyright` in its
+  `listing.json`, the holder in `NOTICE`), App Privacy is answered by hand in App Store Connect, then
+  `gh workflow run ios-release.yml -f mode=app-store -f build=<number> -f notes=<file in the repo>`, with its own App
+  Manager key (`ASC_APP_MANAGER_*`; the notary key stays Developer). It finds or
+  makes the App Store version for the build's version, attaches the build, sets What's New, checks the listing and
+  the App Review contact and notes, and submits for App Review. The release stays manual: the owner presses Release
+  in App Store Connect once Apple approves it ([The App Store](phone.md#the-app-store)).
 - **Android.** The Expo app's release version is its versionName, and its versionCode is major × 100,000,000 + minor ×
   1,000,000 + patch × 1,000 plus the nightly number, or 999 for a stable (0.2.47-nightly.2 is 2047002, 0.2.47 is
   2047999; `apps/phone/scripts/android-version.ts`). A build without one is Dev. It ships as an APK on GitHub Releases
@@ -452,6 +461,7 @@ Secrets (repository secrets, these names):
 | `MACOS_PROVISIONING_PROFILE` | base64 of the Developer ID provisioning profile for `com.ardia.browser` (the keychain groups need it) |
 | `NOTARY_KEY_P8` | base64 of the App Store Connect API key `AuthKey_<id>.p8` |
 | `NOTARY_KEY_ID`, `NOTARY_ISSUER` | that key's id and issuer id |
+| `ASC_APP_MANAGER_KEY_P8`, `ASC_APP_MANAGER_KEY_ID`, `ASC_APP_MANAGER_ISSUER` | iOS Release's `app-store` mode only: base64 of a second App Store Connect API key with the App Manager role, its id and issuer id (`docs/phone.md` › The App Store) |
 | `SPARKLE_ED_PRIVATE_KEY` | the file `generate_keys -x` writes (as is) |
 | `HOMEBREW_TAP_TOKEN` (optional) | a token that can push to `ardia-browser/homebrew-tap` |
 

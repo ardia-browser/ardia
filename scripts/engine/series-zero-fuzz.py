@@ -377,8 +377,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--platform", choices=("linux", "mac", "all"), default="all")
     parser.add_argument("--cpu", choices=("arm64", "x64"))
-    parser.add_argument("--cache", default=os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
-                                                        "ardia", "series-base"))
+    parser.add_argument("--cache", default=series_base.default_cache())
     parser.add_argument("--repo", default=DEFAULT_REPO, help="GitHub repo holding the release (default %(default)s)")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--tarball", action="append", default=[], help="a local series base archive, one per platform")

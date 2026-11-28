@@ -34,7 +34,7 @@ const app = (design: Design, onCommit: () => void) =>
   );
 
 for (const design of DESIGNS) {
-  test(`in the ${design} design, after Go React commits nothing while the tray leaves and the new page loads, so no commit holds back the UI thread's departure (the page's loading line runs there too)`, () => {
+  test(`in the ${design} design, after Go React commits nothing while the tray leaves and the new page loads, so no commit holds back the UI thread's departure (the page's load progress runs there too)`, () => {
     useBrowse.setState({ surface: "start", sheet: null });
     act(() => presentSearch("home", "otters"));
     let commits = 0;
@@ -44,7 +44,7 @@ for (const design of DESIGNS) {
     act(() => (input.props.onSubmitEditing ? input.props.onSubmitEditing({ nativeEvent: { text: "otters" } }) : input.props.onSubmit("otters")));
     expect(useSearch.getState().open).toBe(false);
     expect(useBrowse.getState().surface).toBe("browsing");
-    expect(root.root.findAll((node) => node.props.testID === "loadingLine" && typeof node.type === "string")).toHaveLength(1);
+    expect(root.root.findAll((node) => node.props.testID === (design === "original" ? "loadingLine" : "floatingBarLoadWash") && typeof node.type === "string")).toHaveLength(1);
     commits = 0;
     for (let frame = 0; frame < 30; frame++) act(() => jest.advanceTimersByTime(16));
     expect(commits).toBe(0);

@@ -27,11 +27,14 @@ inline void Cleanse(std::u16string& text) {
 }
 class Secret {
  public:
-  explicit Secret(std::string value) : value_(std::move(value)) {}
+  Secret() = default;
+  explicit Secret(std::string value) : value_(std::move(value)), present_(true) {}
+  bool present() const { return present_; }
   const std::string& value() const { return value_; }
 
  private:
   std::string value_;
+  bool present_ = false;
 };
 struct Sensitive {
   size_t max_bytes;
@@ -70,14 +73,21 @@ class Reply {
 class Call {
  public:
   Call(Profile* profile, std::map<std::string, std::string> strings, std::optional<std::string> password,
-       Outcome* outcome)
-      : profile_(profile), strings_(std::move(strings)), password_(std::move(password)), reply_(outcome) {}
+       Outcome* outcome, std::optional<std::string> expected = std::nullopt)
+      : profile_(profile),
+        strings_(std::move(strings)),
+        password_(std::move(password)),
+        expected_(std::move(expected)),
+        reply_(outcome) {}
   Profile* profile() const { return profile_; }
   std::string String(std::string_view key) const {
     auto found = strings_.find(std::string(key));
     return found == strings_.end() ? std::string() : found->second;
   }
   std::optional<Secret> SecretAt(std::string_view key) const {
+    if (key == "expected") {
+      return expected_ ? Secret(*expected_) : Secret();
+    }
     return key == "password" && password_ ? std::optional<Secret>(Secret(*password_)) : std::nullopt;
   }
   Reply TakeReply() { return std::move(reply_); }
@@ -86,6 +96,7 @@ class Call {
   Profile* profile_;
   std::map<std::string, std::string> strings_;
   std::optional<std::string> password_;
+  std::optional<std::string> expected_;
   Reply reply_;
 };
 class ProfileState : public ProfileStateBase {

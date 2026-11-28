@@ -1,4 +1,4 @@
-import { readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
+import { documentSaved, readDocument, removeDocument, saveDocument, writeDocument } from "../../platform/documents";
 import { Clock, emptyScope, restoreJournal, SyncNative, trackTouchedKeys, writtenSeq, type ApplyBatch, type LogFile, type ScopeState, type SyncRecord } from "../../platform/sync";
 import { parseSaved, unchanged, versionedJson, type Migrations, type SavedObject } from "../../lib/savedDocument";
 import { profileScope } from "./records";
@@ -343,6 +343,11 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     void serial(saveState);
   }
 
+  async function saveDocNow() {
+    saveDoc();
+    await documentSaved(DOC);
+  }
+
   function startOver() {
     saveDoc();
     void serial(async () => {
@@ -360,5 +365,5 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     });
   }
 
-  return { read, loadState, persistJournal, persistApplying, watchScope, save, startOver, checkpoint };
+  return { read, loadState, persistJournal, persistApplying, watchScope, save, saveDocNow, startOver, checkpoint };
 }

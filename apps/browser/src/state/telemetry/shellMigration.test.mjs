@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { shellMigrationReport, pendingShellMigration, reportShellMigration, SHELL_MIGRATION_ATTEMPT_DOC, SHELL_MIGRATION_REPORTED_DOC } = await import("./shellMigration.ts");
+const {
+  shellMigrationReport,
+  pendingShellMigration,
+  reportShellMigration,
+  reportShellMigrations,
+  SHELL_MIGRATION_ATTEMPT_DOC,
+  SHELL_MIGRATION_REPORTED_DOC,
+  SHELL_MIGRATION_DOCUMENTS,
+  CHROMIUM_MIGRATION_ATTEMPT_DOC,
+  CHROMIUM_MIGRATION_REPORTED_DOC,
+  CHROMIUM_STEP,
+} = await import("./shellMigration.ts");
 const { HOST_SHELL } = await import("./hostShell.ts");
 const { HOST_SHELL: WEBUI } = await import("./hostShell.win.ts");
 
@@ -30,7 +41,7 @@ test("host_shell is webui on the Windows WebUI build and absent elsewhere", () =
 test("the migration's attempt report becomes enums and counts only", () => {
   const { run, properties } = shellMigrationReport(attempt({ failed_stage: "credentials", outcome: "failed", path: "C:\\Users\\me", counts: { documents: 2, secret: 9, credentials: -1, sync_keys: 1.5, kept_aside: 9e15 } }));
   assert.equal(run, RUN);
-  assert.deepEqual(Object.keys(properties).sort(), ["attempt", "config_files", "credential_chunks_orphaned", "credentials", "credentials_incomplete", "documents", "duration_ms", "failed_stage", "kept_aside", "outcome", "partials_swept", "placement", "skipped_case_clash", "skipped_invalid", "skipped_links", "skipped_too_large", "sync_keys", "sync_keys_unreadable", "unchanged"]);
+  assert.deepEqual(Object.keys(properties).sort(), ["attempt", "config_files", "credential_chunks_orphaned", "credentials", "credentials_incomplete", "documents", "duration_ms", "failed_stage", "kept_aside", "outcome", "partials_swept", "placement", "skipped_case_clash", "skipped_invalid", "skipped_links", "skipped_too_large", "step", "sync_keys", "sync_keys_unreadable", "unchanged"]);
   assert.equal(properties.outcome, "failed");
   assert.equal(properties.failed_stage, "credentials");
   assert.equal(properties.documents, 2);
@@ -196,4 +207,53 @@ test("after the lead hands over, the report runs once with the consent the launc
   noteLaunchConsent(null);
   assert.equal(await reportShellMigrationAfterLead(), "none", "off the WebUI shell the noted launch sends nothing");
   assert.equal(await reportShellMigrationAfterLead(), "none", "a noted launch is used once");
+});
+
+const chromiumAttempt = (overrides = {}) =>
+  JSON.stringify({
+    version: 1,
+    step: "chromium",
+    run: "f".repeat(32),
+    outcome: "migrated",
+    attempt: 1,
+    duration_ms: 6400,
+    counts: { profiles: 2, profiles_replaced: 1, files: 10005, megabytes: 212, key_carried: 1, local_state_kept: 1 },
+    ...overrides,
+  });
+
+test("the Chromium profile step reports its own enums and counts, and never as the documents step", () => {
+  const { run, properties } = shellMigrationReport(chromiumAttempt({ outcome: "busy", failed_stage: "in_use", path: "C:\\Users\\me" }), CHROMIUM_STEP);
+  assert.equal(run, "f".repeat(32));
+  assert.equal(properties.step, "chromium");
+  assert.equal(properties.outcome, "busy");
+  assert.equal(properties.failed_stage, "in_use");
+  assert.equal(properties.megabytes, 212);
+  assert.equal(properties.key_carried, 1);
+  assert.deepEqual(Object.keys(properties).sort(), ["attempt", "duration_ms", "failed_stage", "outcome", "step", ...CHROMIUM_STEP.counts].sort());
+  assert.equal(shellMigrationReport(chromiumAttempt()), null, "a Chromium report is not read as a documents one");
+  assert.equal(shellMigrationReport(attempt(), CHROMIUM_STEP), null, "a documents report is not read as a Chromium one");
+  assert.equal(shellMigrationReport(chromiumAttempt({ failed_stage: "credentials" }), CHROMIUM_STEP).properties.failed_stage, undefined);
+  assert.equal(shellMigrationReport(attempt()).properties.step, "documents");
+});
+
+test("both steps report once each, with their own reported marks", async () => {
+  assert.deepEqual(SHELL_MIGRATION_DOCUMENTS, [SHELL_MIGRATION_ATTEMPT_DOC, SHELL_MIGRATION_REPORTED_DOC, CHROMIUM_MIGRATION_ATTEMPT_DOC, CHROMIUM_MIGRATION_REPORTED_DOC]);
+  const store = documents({ [SHELL_MIGRATION_ATTEMPT_DOC]: attempt(), [CHROMIUM_MIGRATION_ATTEMPT_DOC]: chromiumAttempt() });
+  const sent = [];
+  assert.equal(await reportShellMigrations(reporting(store, true, sent)), "reported");
+  assert.deepEqual(sent.map((properties) => properties.step), ["documents", "chromium"]);
+  assert.deepEqual(JSON.parse(store.docs.get(CHROMIUM_MIGRATION_REPORTED_DOC)), { run: "f".repeat(32) });
+  assert.equal(await reportShellMigrations(reporting(store, true, sent)), "none");
+  assert.equal(sent.length, 2);
+  store.docs.set(CHROMIUM_MIGRATION_ATTEMPT_DOC, chromiumAttempt({ run: "e".repeat(32), outcome: "failed", failed_stage: "space" }));
+  assert.equal(await reportShellMigrations(reporting(store, true, sent)), "reported");
+  assert.equal(sent.at(-1).failed_stage, "space");
+  const failing = documents({ [SHELL_MIGRATION_ATTEMPT_DOC]: attempt(), [CHROMIUM_MIGRATION_ATTEMPT_DOC]: chromiumAttempt() });
+  const save = failing.save;
+  failing.save = async (name, contents) => (name === SHELL_MIGRATION_REPORTED_DOC ? Promise.reject(new Error("disk full")) : save(name, contents));
+  await assert.rejects(reportShellMigrations({ ...reporting(failing, true), save: failing.save }), /disk full/);
+  assert.deepEqual(JSON.parse(failing.docs.get(CHROMIUM_MIGRATION_REPORTED_DOC)), { run: "f".repeat(32) }, "a failed documents mark doesn't stop the Chromium report");
+  const held = documents({ [CHROMIUM_MIGRATION_ATTEMPT_DOC]: chromiumAttempt() });
+  assert.equal(await reportShellMigrations(reporting(held, false)), "held");
+  assert.equal(held.docs.has(CHROMIUM_MIGRATION_REPORTED_DOC), false);
 });

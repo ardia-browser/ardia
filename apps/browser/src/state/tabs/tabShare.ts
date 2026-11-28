@@ -83,6 +83,20 @@ export function swapPlaces(s: BrowserState, a: string, b: string): BrowserState 
   return { ...s, tabs, windows, groups: swapAll(s.groups), splits };
 }
 
+export function withOwnKeys(s: BrowserState, ids: Iterable<string>): BrowserState {
+  let tabs: Record<string, Tab> | null = null;
+  for (const id of ids) {
+    const t = (tabs ?? s.tabs)[id];
+    if (!t) continue;
+    const was = pinKeyOf(t);
+    const key = newId("tab");
+    tabs ??= { ...s.tabs };
+    tabs[id] = { ...t, pinKey: key };
+    for (const f of Object.values(tabs)) if (f.id !== id && holderOfPage(f) === id && pinKeyOf(f) === was) tabs[f.id] = { ...f, pinKey: key };
+  }
+  return tabs ? { ...s, tabs } : s;
+}
+
 export function pagesIntoSplits(s: BrowserState, prev: BrowserState): BrowserState | null {
   if (!sharesTabs(s) || s.splits === prev.splits) return null;
   const inSplit = (st: BrowserState, id: string) => Object.values(st.splits).some((v) => splitTabIds(v).includes(id));
@@ -97,6 +111,16 @@ export function pagesIntoSplits(s: BrowserState, prev: BrowserState): BrowserSta
       if (!holder || holder.pin || !hasPage(holder) || holder.windowId === t.windowId || holder.profileId !== t.profileId || pinKeyOf(holder) !== pinKeyOf(t) || inSplit(next, holder.id)) continue;
       next = swapPlaces(next, holder.id, t.id);
       next = removeTabs(keepShownProfile(next, holder.windowId, [t.id]), [t.id], false);
+    }
+  }
+  for (const v of Object.values(next.splits)) {
+    for (const id of splitTabIds(v)) {
+      const pane = next.tabs[id];
+      if (!pane || !(hasPage(pane) || wakeOf(pane)) || !sharedListTab(next, pane)) continue;
+      const copies = Object.values(next.tabs).filter((t) => t.id !== id && t.profileId === pane.profileId && pinKeyOf(t) === pinKeyOf(pane) && sharedListTab(next, t) && !inSplit(next, t.id));
+      const showsPane = (t: Tab) => !hasPage(t) && !wakeOf(t) && t.url === pane.url && (holderOfPage(t) ?? id) === id;
+      next = withOwnKeys(next, copies.filter((t) => !showsPane(t) && !copies.some((c) => c.id === holderOfPage(t))).map((t) => t.id));
+      for (const t of copies.filter(showsPane)) next = removeTabs(keepShownProfile(next, t.windowId, [t.id]), [t.id], false);
     }
   }
   return next === s ? null : next;

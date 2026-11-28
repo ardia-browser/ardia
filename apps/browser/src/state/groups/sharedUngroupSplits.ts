@@ -4,7 +4,7 @@ import { inPinnedContainer, newId, pinKeyOf } from "../browser/model";
 import { adoptOf, hasPage, holderOfPage, wakeOf } from "../tabs/pageSession";
 import { splitTabIds } from "../splits/splits";
 import { isRegularWindow } from "../windows/small";
-import { keepShownProfile, swapPlaces } from "../tabs/tabShare";
+import { keepShownProfile, swapPlaces, withOwnKeys } from "../tabs/tabShare";
 import { removeTabs } from "../tabs/tabs";
 import { nestGroups, orderSections, syncGroupOrder, withParent } from "./groups";
 import { movingGroupHere } from "../pins/tabGrouping";
@@ -92,20 +92,6 @@ const rankFor = (homeId: string) => (t: Tab) => (hasPage(t) ? 4 : 0) + (wakeOf(t
 const sharedRow = (s: BrowserState, t: Tab, paired: Set<string>) => !t.pin && !paired.has(t.id) && !inPinnedContainer(s, t.id) && isRegularWindow(s.windows[t.windowId]);
 
 const pairedIds = (s: BrowserState) => new Set(Object.values(s.splits ?? {}).flatMap((v) => splitTabIds(v)));
-
-function withOwnKeys(s: BrowserState, ids: Iterable<string>): BrowserState {
-  let tabs: Record<string, Tab> | null = null;
-  for (const id of ids) {
-    const t = (tabs ?? s.tabs)[id];
-    if (!t) continue;
-    const was = pinKeyOf(t);
-    const key = newId("tab");
-    tabs ??= { ...s.tabs };
-    tabs[id] = { ...t, pinKey: key };
-    for (const f of Object.values(tabs)) if (f.id !== id && holderOfPage(f) === id && pinKeyOf(f) === was) tabs[f.id] = { ...f, pinKey: key };
-  }
-  return tabs ? { ...s, tabs } : s;
-}
 
 function keepOwnAddresses(s: BrowserState, homeId: string, members: Set<string>): BrowserState {
   const paired = pairedIds(s);

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { menuState } = await import("./menuState.ts");
+const { runCommand } = await import("./commands.ts");
+const { gestureTab } = await import("./gestureTab.ts");
 const { settingsSnapshot } = await import("../telemetry/settingsSnapshot.ts");
 const { noteMouseGestureRun, takeMouseGestureCounts } = await import("../telemetry/mouseGestureCounts.ts");
 const { isConfigSettingKey } = await import("../settings/configAllowlist.ts");
@@ -46,4 +48,35 @@ test("gesture runs are counted by action only, with consent, and anything else i
   assert.equal(Object.values(counts).reduce((a, b) => a + b, 0), 3);
   assert.equal(Object.keys(counts).length, 8);
   assert.deepEqual(Object.values(takeMouseGestureCounts()), [0, 0, 0, 0, 0, 0, 0, 0]);
+});
+
+test("Close Tab drawn on a page closes that tab only, even with a sidebar multi-selection", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.com/" });
+  S().setFocusedWindow(w);
+  const [a] = S().windows[w].tabIds;
+  const b = S().newTab(w, { url: "https://b.com/" });
+  const c = S().newTab(w, { url: "https://c.com/" });
+  S().activate(b);
+  S().setSelection(w, [b, c]);
+  const event = { command: "closeTab", arg: null, windowId: w, mouseGesture: "close_tab", gestureTabId: b };
+  runCommand(event, { tabId: gestureTab(S(), event) });
+  assert.equal(S().tabs[b], undefined);
+  assert.equal(S().tabs[a]?.url, "https://a.com/");
+  assert.equal(S().tabs[c]?.url, "https://c.com/");
+});
+
+test("a gesture names its tab only for a page that is still in that regular window", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://a.com/" });
+  const [a] = S().windows[w].tabIds;
+  const small = S().createWindow({ kind: "small", url: "https://little.example/" });
+  const [little] = S().windows[small].tabIds;
+  const gesture = (windowId, gestureTabId, mouseGesture = "back") => gestureTab(S(), { windowId, gestureTabId, mouseGesture });
+  assert.equal(gesture(w, a), a);
+  assert.equal(gesture(w, a, undefined), null, "only gestures carry a page tab");
+  assert.equal(gesture(small, little), null, "Little Ardia keeps its own command routing");
+  assert.equal(gesture(small, a), null, "a tab from another window is never targeted");
+  assert.equal(gesture(w, "tab-gone"), null);
+  assert.equal(gesture(w, ""), null);
 });

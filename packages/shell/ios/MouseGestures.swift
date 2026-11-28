@@ -9,6 +9,7 @@ final class MouseGestures {
   private var resigning: NSObjectProtocol?
   private var closing: NSObjectProtocol?
   private var press: NSEvent?
+  private weak var page: NSView?
   private var pageTab: String?
   private weak var window: NSWindow?
   private var strokes = MouseGestureStrokes(start: .zero)
@@ -78,13 +79,14 @@ final class MouseGestures {
     guard enabled, !ShortcutRecorder.shared.isRecording,
       event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(Self.ignoredModifiers).isEmpty,
       let window = event.window, MouseShortcuts.browserWindowId(of: window) != nil, !Self.overPeek(event, in: window),
-      let tab = ArdiaWebView.pageTabId(at: event.locationInWindow, in: window)
+      let page = ArdiaWebView.pageView(at: event.locationInWindow, in: window)
     else {
       lastOutcome = "passed"
       return event
     }
     press = event
-    pageTab = tab
+    self.page = page
+    pageTab = ArdiaWebView.tabId(ofPageView: page)
     self.window = window
     strokes = MouseGestureStrokes(start: window.convertPoint(toScreen: event.locationInWindow))
     closing = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
@@ -113,13 +115,15 @@ final class MouseGestures {
 
   private func ended(_ event: NSEvent) -> NSEvent? {
     strokes.add(screenPoint(event))
-    let press = self.press, window = self.window, pageTab = self.pageTab, strokes = self.strokes, cancelled = self.cancelled
+    let press = self.press, window = self.window, page = self.page, pageTab = self.pageTab, strokes = self.strokes, cancelled = self.cancelled
     finish()
     if cancelled {
       lastOutcome = "cancelled"
       return nil
     }
-    guard let press, let window, let pageTab, window.isVisible, ArdiaWebView.pageTabId(at: press.locationInWindow, in: window) == pageTab else {
+    guard let press, let window, let page, let pageTab, window.isVisible, ArdiaWebView.pageView(at: press.locationInWindow, in: window) === page,
+      ArdiaWebView.tabId(ofPageView: page) == pageTab
+    else {
       lastOutcome = "pageGone"
       return nil
     }
@@ -136,17 +140,19 @@ final class MouseGestures {
       lastOutcome = "unrecognized"
       return nil
     }
-    guard !pageTab.isEmpty || window !== NSApp.keyWindow || MenuTarget.shared.validateMenuItem(item) else {
+    let targetsPage = !pageTab.isEmpty && WindowManager.shared.kind(of: window) == .browser
+    guard targetsPage || window !== NSApp.keyWindow || MenuTarget.shared.validateMenuItem(item) else {
       lastOutcome = "unavailable:\(action.command)"
       return nil
     }
     lastOutcome = action.command
-    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: pageTab.isEmpty ? nil : pageTab)
+    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: targetsPage ? pageTab : nil)
     return nil
   }
 
   private func finish() {
     press = nil
+    page = nil
     pageTab = nil
     cancelled = false
     trail?.close()

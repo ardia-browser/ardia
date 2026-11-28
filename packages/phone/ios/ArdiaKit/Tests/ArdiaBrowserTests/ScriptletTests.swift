@@ -113,7 +113,7 @@ let adShieldBody = ["trusted-replace-argument", "Element.prototype.setAttribute"
     good.example##+js(trusted-replace-argument, a.b, 0, 'json:{"x":[1,2]}')
     broken.example##+js(trusted-replace-argument, a.b, 0, 'json:{"x":')
     object.example##+js(trusted-replace-argument, a.b, 0, '{"value":"y"}')
-    badobject.example##+js(trusted-replace-argument, a.b, 0, '{"value":')
+    badobject.example##+js(trusted-replace-argument, a.b, 0, '{"value":}')
     """
     let list = FilterListConverter.parse(text, id: "ublock-filters")
     #expect(list.skippedLines == 2)

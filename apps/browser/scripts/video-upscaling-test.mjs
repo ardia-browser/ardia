@@ -138,7 +138,7 @@ function serve() {
   const types = { ".mp4": "video/mp4", ".webm": "video/webm", ".html": "text/html" };
   const server = createServer((req, res) => {
     const path = join(media, decodeURIComponent(new URL(req.url, "http://x").pathname));
-    if (!path.startsWith(media) || !existsSync(path)) return res.writeHead(404).end();
+    if (!path.startsWith(media) || !existsSync(path) || !statSync(path).isFile()) return res.writeHead(404).end();
     const size = statSync(path).size;
     const range = /bytes=(\d+)-(\d*)/.exec(req.headers.range ?? "");
     const headers = { "Content-Type": types[extname(path)] ?? "application/octet-stream", "Accept-Ranges": "bytes" };

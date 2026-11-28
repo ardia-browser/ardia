@@ -180,7 +180,7 @@ function KeyboardSection() {
           {PLATFORM_FEATURES.mouseShortcuts ? "To use a mouse button, click a shortcut, then press the middle button or a side button." : "Mouse buttons as shortcuts work on Mac only for now."}
         </Text>
       </Box>
-      {items !== null && (combo ? !found : menuItems.length === 0) && (
+      {items !== null && !found && (
         <View style={NO_MATCH}>
           <EmptyState symbol={combo ? "keyboard" : "magnifyingglass"} title={combo ? `No command uses ${formatShortcut(combo)}` : "No matching commands"} />
         </View>

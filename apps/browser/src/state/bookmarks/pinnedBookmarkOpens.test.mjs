@@ -65,10 +65,28 @@ test("a ⌘-click on a bookmark from a Top App still opens it behind, without co
 test("a bookmark picked from the Bookmarks menu while a Top App is shown opens a new tab too", () => {
   const { w, tile } = onTopApp();
   const id = S().addBookmark({ profileId: S().windows[w].profileId, url: CLAUDE, title: "Claude" });
-  runCommand({ command: "openBookmark", arg: id, windowId: w }, { tabId: tile, user: { consent: consentToken() } });
+  runCommand({ command: "openBookmark", arg: id, windowId: w }, { user: { consent: consentToken() } });
   assert.equal(S().tabs[tile].url, YOUTUBE);
   const opened = activeTabId(S(), w);
   assert.notEqual(opened, tile);
   assert.equal(S().tabs[opened].url, CLAUDE);
   assert.equal(keptPinnedTab(), 1);
+});
+
+test("a bookmark that opens outside a tab doesn't count as keeping the Top App", () => {
+  const { w, tile } = onTopApp();
+  const before = Object.keys(S().tabs).length;
+  openBookmark("ardia://settings", w, openModeFor({}), consentToken());
+  assert.equal(S().tabs[tile].url, YOUTUBE);
+  assert.equal(Object.keys(S().tabs).length, before);
+  assert.equal(keptPinnedTab(), 0);
+});
+
+test("a bookmarklet clicked on a Top App still runs in that tab and opens no new one", () => {
+  const { w, tile } = onTopApp();
+  const before = S().windows[w].tabIds.length;
+  openBookmark("javascript:void(document.title='ran')", w, openModeFor({}), consentToken());
+  assert.equal(S().windows[w].tabIds.length, before);
+  assert.equal(activeTabId(S(), w), tile);
+  assert.equal(keptPinnedTab(), 0);
 });

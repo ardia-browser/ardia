@@ -39,17 +39,18 @@ export function openUrl(url: string, windowId: string | null | undefined, mode: 
   s.newTab(id, { url, background: mode === "background", openerId: mode === "background" ? tabId : undefined });
 }
 
-export function bookmarkOpenMode(s: Pick<BrowserState, "tabs" | "groups">, tabId: string | null | undefined, mode: OpenMode, consent: ConsentToken | null): OpenMode {
-  if (mode !== "current" || !tabId || !inPinnedContainer(s, tabId)) return mode;
-  noteBookmarkKeptPinnedTab(consent);
-  return "foreground";
+export const keepsPinnedPage = (s: Pick<BrowserState, "tabs" | "groups">, tabId: string | null | undefined, mode: OpenMode): boolean =>
+  mode === "current" && !!tabId && inPinnedContainer(s, tabId);
+
+export function openBesidePinnedTab(windowId: string, url: string, consent: ConsentToken | null) {
+  if (useBrowser.getState().newTab(windowId, { url })) noteBookmarkKeptPinnedTab(consent);
 }
 
 export function openBookmark(url: string, windowId: string | null | undefined, mode: OpenMode, consent: ConsentToken | null) {
-  if (isBookmarklet(url)) return openUrl(url, windowId, mode);
   const s = useBrowser.getState();
   const id = resolveWindowId(s, windowId);
-  openUrl(url, windowId, bookmarkOpenMode(s, id ? activeTabId(s, id) : undefined, mode, consent));
+  if (isBookmarklet(url) || !id || !keepsPinnedPage(s, activeTabId(s, id), mode)) return openUrl(url, windowId, mode);
+  openBesidePinnedTab(id, url, consent);
 }
 
 export type OpenAllMode = "tabs" | "window" | "incognito";

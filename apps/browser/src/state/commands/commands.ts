@@ -20,7 +20,7 @@ import {
   toggleMute,
   toggleSiteMute,
 } from "../browser/actions";
-import { bookmarkAllTabs, bookmarkOpenMode, bookmarkTab } from "../bookmarks/actions";
+import { bookmarkAllTabs, bookmarkTab, keepsPinnedPage, openBesidePinnedTab } from "../bookmarks/actions";
 import { isBookmarklet, runBookmarklet } from "../bookmarks/bookmarklets";
 import { exportBookmarksFromWindow, toggleDownloadsPanel } from "./platformCommands";
 import { requestClearData } from "../profiles/clearDataRequest";
@@ -321,7 +321,7 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       const node = arg ? s.bookmarks.nodes[arg] : undefined;
       if (node?.kind === "url" && isBookmarklet(node.url)) return void runBookmarklet(node.url, windowId, tabId);
       if (node?.kind !== "url" || !tab) return undefined;
-      return bookmarkOpenMode(s, tab.id, "current", user?.consent ?? null) === "current" ? s.navigate(tab.id, node.url) : void s.newTab(windowId, { url: node.url });
+      return keepsPinnedPage(s, tab.id, "current") ? openBesidePinnedTab(windowId, node.url, user?.consent ?? null) : s.navigate(tab.id, node.url);
     }
     case "togglePageEngine":
       return void (tabId && togglePageEngine(tabId, mayWrite));

@@ -3973,13 +3973,19 @@ titles and phrases that post links instead.
   a frame that fell out of the 16 known frames, catches up the first time it speaks. Checked through real back-forward
   cache restores in a hidden macOS `WKWebView`, both ways, and on the simulator.
   Which element a page reports: the newest of its last 8 heard elements that is playing and long enough (an endless
-  stream, more than 5 s, or of unknown length while the site runs a media session), else the last one reported. A
+  stream, more than 5 s, or of unknown length while the site runs a media session), else the last one reported. Past
+  8, only an element that isn't playing and eligible is dropped, so short sounds never push out a stream still playing. A
   one-second notification sound over a stream no longer replaces the stream, and when a newer long sound pauses while an
   older one still plays, the page reports the one still playing and stays held. Brave and Orion keep background play the
   same way.
-- **Keep playing off** (#4751 round 3b). Leaving Ardia (Home, the app switcher, locking) pauses everything playing,
-  audio included, through the page's own `pause()` (`PageMediaDeparture.pauses`), except a video going into Picture in
-  Picture: one already floating, a full-screen one AVKit floats, or the one Automatic Picture in Picture picked. Without
+- **Keep playing off** (#4751 rounds 3b and 4). Leaving Ardia (Home, the app switcher, locking) pauses everything
+  playing, audio included: `WebMedia` sends every frame it knows (reporting or announced) the script's `depart`
+  command, which pauses every element it has seen play plus every `audio` and `video` in the document, reported or
+  not (a second stream, a short looping sound), and answers how many it paused; `media_paused_on_leaving` counts a
+  page only when that answer is above zero. Spared: a video already floating, a full-screen one AVKit floats, and the
+  Automatic Picture in Picture pick, but only once its request answered yes; refused or thrown, it is paused with the
+  rest, and if it still isn't floating at the 1.5 s check while Ardia is away, it is paused then
+  (`PageMediaDeparture.orders`, `afterFloatCheck`). The mini player's pause stays a one-element command. Without
   it a plain `<audio>` played on, since WebKit pauses only video with sound and the app keeps the `audio` background
   mode. Switching tabs with the setting off has no visibility hold, and the page decides for itself.
 - **Automatic Picture in Picture.** With the setting on, iPhone able to float video and the playing video's tab on
@@ -4015,7 +4021,10 @@ titles and phrases that post links instead.
   thread; play/pause flips at once and the page's report confirms it. Under Reduce Motion it fades in place with the
   same timings (`ReduceMotion.Never` on the opacity: Reanimated otherwise jumps to the end, which made it pop), and
   its glass fades with it (`fadesWithReduceMotion` on the glass: `GlassView` otherwise skips its own fade under Reduce
-  Motion, which dropped the plate in the first frame while the text was still fading out, #4751 round 3). The card
+  Motion, which dropped the plate in the first frame while the text was still fading out, #4751 round 3). Only the
+  8 pt travel is on the card; the content fades inside the plate on the glass's own curves (ease-out in, ease-in out),
+  so the glass is never under a fading ancestor: the glass draws nothing while an ancestor is at or below 0.01
+  opacity, and with the whole card fading the plate came in about 65 ms after the text (#4751 round 4). The card
   stays mounted while its side has media, hidden at opacity 0, so coming back doesn't build its glass mid-fade; the
   glass is hidden with the bar's `shown` flag while the card is. Measured on the final #4751 head over a moving page at
   60 fps: out 8 frames (133 ms), in 9 frames (to 0.97 at 117 ms, at rest by about 150 ms), both monotonic with no

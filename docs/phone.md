@@ -67,7 +67,7 @@ content rules (`FilterListConverter`); their `##+js()` scriptlets run from `Scri
 document start, in every frame, as uBO's do. Only scriptlets Ardia implements itself run (`ScriptletTable.supported`,
 written in `BlockingScripts.scriptlets`; nothing of uBO's GPL code ships in the app), and `trusted-*` ones are taken
 only from uBO's own lists (`ublock-*`), never from added lists or My Filters, as uBO decides trust; a filter the
-runtime can't carry out exactly (a `this` position, a `repl:` value) is skipped, not guessed at. A list's scriptlets
+runtime can't carry out exactly (a `this` position, a `repl:`, `add:` or JSON value) is skipped, not guessed at. A list's scriptlets
 follow its category's switch; `#@#+js()` exceptions, `~site` exclusions and `@@||site^$document` exceptions apply
 across lists; a trusted site runs none (`ContentBlocker.apply`). uBO's `!#if` blocks are honoured for every rule, as
 a Safari-like uBlock (`ext_ublock`, `env_safari`, `env_mobile`, `cap_user_stylesheet`), so a Chromium-only hook like

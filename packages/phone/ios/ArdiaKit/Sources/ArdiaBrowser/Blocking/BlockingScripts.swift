@@ -204,7 +204,6 @@ enum BlockingScripts {
     const reflectApply = Reflect.apply;
     const arrayFrom = Array.from;
     const ProxyType = Proxy;
-    const parseJSON = JSON.parse;
     const matches = (pattern, text) => reflectApply(regexpTest, pattern, [text]);
     const wholeNumber = /^-?\d+$/;
     const suffixes = [];
@@ -243,13 +242,7 @@ enum BlockingScripts {
         case "falseFunc": return { value: function () { return false; } };
       }
       if (matches(wholeNumber, raw)) return { value: parseInt(raw, 10) };
-      if (raw.startsWith("json:")) {
-        try { return { value: parseJSON(raw.slice(5)) }; } catch (e) { return null; }
-      }
-      if (raw.startsWith("{") && raw.endsWith("}")) {
-        try { return { value: parseJSON(raw).value }; } catch (e) { return null; }
-      }
-      if (raw.startsWith("repl:") || raw.startsWith("add:")) return null;
+      if (raw.startsWith("json:") || raw.startsWith("repl:") || raw.startsWith("add:") || (raw.startsWith("{") && raw.endsWith("}"))) return null;
       return { value: raw };
     };
     const owner = (chain) => {

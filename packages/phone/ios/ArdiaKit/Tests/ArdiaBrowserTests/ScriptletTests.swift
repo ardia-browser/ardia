@@ -116,11 +116,12 @@ let adShieldBody = ["trusted-replace-argument", "Element.prototype.setAttribute"
     badobject.example##+js(trusted-replace-argument, a.b, 0, '{"value":}')
     """
     let list = FilterListConverter.parse(text, id: "ublock-filters")
-    #expect(list.skippedLines == 2)
-    #expect(!list.scriptlets.bodies(forHost: "good.example").isEmpty)
-    #expect(!list.scriptlets.bodies(forHost: "object.example").isEmpty)
-    #expect(list.scriptlets.bodies(forHost: "broken.example").isEmpty)
-    #expect(list.scriptlets.bodies(forHost: "badobject.example").isEmpty)
+    #expect(list.skippedLines == 4)
+    for host in ["good.example", "broken.example", "object.example", "badobject.example"] {
+      #expect(list.scriptlets.bodies(forHost: host).isEmpty, "\(host): JSON values aren't run, since Foundation and JavaScriptCore disagree on what parses")
+    }
+    let plain = FilterListConverter.parse("plain.example##+js(trusted-replace-argument, a.b, 0, '{\"value\":')", id: "ublock-filters")
+    #expect(plain.scriptlets.bodies(forHost: "plain.example") == [["trusted-replace-argument", "a.b", "0", "{\"value\":"]])
   }
 
   @Test func aTableWithAMissingBodyIsNotWellFormed() {

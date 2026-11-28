@@ -32,6 +32,7 @@ on:
       - "packages/shell/plugin-*/**"
       - "packages/shell/Package.swift"
       - "packages/shell/tests/CrashThreadTests.swift"
+      - "packages/shell/tests/MouseGestureStrokesTests.swift"
       - "packages/import/tests/**"
       - "packages/import/fixtures/**"
       - "packages/import/Package.swift"

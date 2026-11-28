@@ -10,7 +10,7 @@ import { display } from "../search/omnibox";
 import { prepareSearch, presentSearch, searchState } from "../search/store";
 import { setPreference } from "../settings/store";
 import { Platform } from "react-native";
-import { listenToPages, openPageInBackground, pageHandle, pageIsFullscreen, pageRequest, settled, storeFind, storeFullscreen, storeRequest, usePages } from "../pages/store";
+import { listenToPages, openPageNow, pageHandle, pageIsFullscreen, pageRequest, settled, storeFind, storeFullscreen, storeRequest, usePages } from "../pages/store";
 import { closeTabById, currentTabs, openNewTab, useTabs } from "../tabs/store";
 import { isSyncableUrl, type BrowserTab } from "../tabs/tabModels";
 import { findTab } from "../tabs/tabsState";
@@ -696,7 +696,7 @@ export function pressAction(press: Press, action: PressAction) {
   switch (plan.kind) {
     case "open": {
       const tab = openNewTab({ url: plan.url, origin: "link", after: plan.after, selecting: false, isPrivate: plan.isPrivate });
-      if (plan.background) void openPageInBackground(tab.id, plan.url, plan.isPrivate);
+      if (plan.background) void openPageNow(tab.id, plan.url, plan.isPrivate);
       else openTab(tab.id);
       return;
     }

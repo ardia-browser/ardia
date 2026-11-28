@@ -91,6 +91,7 @@ export const EVENT_FIELDS = {
   perf_launch_tray: { tray_ms: { kind: "ms" } },
   perf_search_open: { open_ms: { kind: "ms" } },
   perf_search_suggest: { local_ms: { kind: "ms" }, remote_ms: { kind: "ms" } },
+  perf_page_open: { drawn_ms: { kind: "ms" } },
   usage_counts: USAGE_FIELDS,
   app_crashed: {
     kind: { kind: "enum", values: CRASH_KINDS },
@@ -312,6 +313,11 @@ export function launchTrayProps(processStart: number | null, trayUpAt: number): 
 export function searchOpenProps(openMs: number): EventProps<"perf_search_open"> | null {
   const open = Math.round(openMs);
   return open >= 0 && open <= MAX_MS ? { open_ms: open } : null;
+}
+
+export function pageOpenProps(drawnMs: number): EventProps<"perf_page_open"> | null {
+  const drawn = Math.round(drawnMs);
+  return drawn >= 0 && drawn <= MAX_MS ? { drawn_ms: drawn } : null;
 }
 
 export function searchSuggestProps(localMs: number, remoteMs: number): EventProps<"perf_search_suggest"> | null {

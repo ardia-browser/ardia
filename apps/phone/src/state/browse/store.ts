@@ -8,6 +8,7 @@ import {
   isRefusedSnapshot,
   livePageIds,
   listenToPages,
+  openPageNow,
   pageNavigation,
   settled,
   snapshotIsCurrent,
@@ -54,6 +55,7 @@ import {
   useTabs,
 } from "../tabs/store";
 import { labTrace, traceSlice } from "../../platform/lab";
+import { markPageDrawn, markPageOpened } from "./pageOpenTiming";
 import { pictureCaptured, pictureLanded } from "../tabs/pictures";
 import { noteViewMoved, noteWarmPicture } from "../tabs/warmPictures";
 import { deckOrder, findTab, isPrivateOnScreen, isPrivateTab, selectedTab, tabBefore } from "../tabs/tabsState";
@@ -123,6 +125,8 @@ export const appIsActive = () => appActive;
 
 const SCROLL_REST_IS_REPORTED = Platform.OS === "ios";
 
+const LOADS_AT_GO = Platform.OS === "ios";
+
 function frontPageId() {
   if (!appActive || useBrowse.getState().surface !== "browsing" || pageCovered()) return null;
   return currentTabs().selectedId;
@@ -178,6 +182,8 @@ export function openPage(url: string, origin: TabOrigin) {
   takeLeavingPicture(null);
   dismissSearch("submitted");
   const tab = openNewTab({ url, origin });
+  if (LOADS_AT_GO) void openPageNow(tab.id, tab.url, tab.isPrivate);
+  markPageOpened(tab.id, tab.isPrivate);
   if (origin === "search" && !tab.isPrivate) countUsage("searches");
   useBrowse.setState({ surface: "browsing", sheet: null, frozenOrder: null });
 }
@@ -300,6 +306,7 @@ export function whenPageDrawn(id: string, capMs: number, then: (drawn: boolean) 
 
 export function pageDrawn(id: string, document?: number) {
   drawnPages.set(id, document ?? null);
+  markPageDrawn(id);
   drawnWaiters.get(id)?.();
   for (const listener of [...(drawnListeners.get(id) ?? [])]) listener();
 }

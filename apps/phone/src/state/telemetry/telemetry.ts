@@ -5,7 +5,7 @@ import { AppState, Platform } from "react-native";
 import { lookBudget, nativeGlassRender, systemLook, systemLookNow } from "../../platform/look";
 import { create } from "zustand";
 import { createGate, DAILY_KEY, type SharingSource } from "../../lib/telemetryGate";
-import { backdropProps, COUNTED, launchProps, launchTrayProps, legacyImportOutcome, parseDaily, pendingUsage, searchOpenProps, searchSuggestProps, type Counted } from "../../lib/telemetrySchema";
+import { backdropProps, COUNTED, launchProps, launchTrayProps, legacyImportOutcome, pageOpenProps, parseDaily, pendingUsage, searchOpenProps, searchSuggestProps, type Counted } from "../../lib/telemetrySchema";
 import { canPostTelemetry, deviceFacts, JS_STARTED_AT, launchBackdropShownAt, newTelemetryId, postTelemetry, processStartedAt, setUsageConsent, takeExits, takePendingCounts } from "../../platform/telemetry";
 import { collectCrashes, jsErrorReason, MOST_CRASHES_PER_LAUNCH, PENDING_CRASH_KEY, pendingJsCrash, previousSession, SESSION_KEY, sessionMark, type PreviousSession } from "../../lib/crashReports";
 import { appearanceTelemetry, chromeStyle, colorChoiceTelemetry, glassRenderTelemetry, macLookOf, offeredInterfaceStyle, offeredScheme } from "../../lib/appearance";
@@ -164,6 +164,16 @@ export function reportSearchOpen(openMs: number) {
   if (!props) return;
   searchOpenReported = true;
   gate.capture("perf_search_open", props);
+}
+
+let pageOpenReported = false;
+
+export function reportPageOpen(drawnMs: number) {
+  if (pageOpenReported || isDemoSession() || !gate.isSharing()) return;
+  const props = pageOpenProps(drawnMs);
+  if (!props) return;
+  pageOpenReported = true;
+  gate.capture("perf_page_open", props);
 }
 
 let searchSuggestReported = false;

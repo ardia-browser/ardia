@@ -180,7 +180,7 @@ export const savePageState = (id: string): Promise<string | null> => settled(() 
 
 export const pageScrollPosition = (id: string): Promise<PageScrollPosition | null> => settled(() => pages.scrollPosition(id), null);
 
-export const openPageInBackground = (id: string, url: string, isPrivate: boolean) => settled(() => pages.open(id, { url, isPrivate }), undefined);
+export const openPageNow = (id: string, url: string, isPrivate: boolean) => settled(() => pages.open(id, { url, isPrivate }), undefined);
 
 export const livePageIds = (): Promise<string[]> => settled(() => pages.ids(), []);
 

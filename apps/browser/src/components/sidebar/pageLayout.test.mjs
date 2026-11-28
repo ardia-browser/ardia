@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-const { clearlyOverflows, DOCK_SLACK, dockedAfter, pageLayout, rowPitch } = await import("./pageLayout.ts");
+const { clearlyOverflows, DOCK_SLACK, dockedAfter, listOverflows, pageLayout, rowPitch } = await import("./pageLayout.ts");
 
 const ROW = 41;
 const gridHeight = (count) => Math.ceil(count / 3) * ROW;
@@ -14,6 +14,13 @@ test("tiles that fit 40 % of the sidebar stay fixed above the list; a taller doc
   assert.equal(at({ tiles: 24, dockRoom: 287 }).dockFixed, false);
   assert.equal(at({ tiles: 0, dockRoom: -10 }).dockFixed, true);
   assert.equal(at({ tiles: 3, dockRoom: Infinity }).dockFixed, true);
+});
+
+test("the list rubber-bands only when its rows run past the sidebar", () => {
+  assert.equal(listOverflows(800, 800), false);
+  assert.equal(listOverflows(800.4, 800), false);
+  assert.equal(listOverflows(840, 800), true);
+  assert.equal(listOverflows(840, 0), false);
 });
 
 test("the fixed or scrolling choice is frozen for a drag", () => {

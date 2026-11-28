@@ -103,12 +103,12 @@ const LINK_DEADLINE_MS = 8_000;
 
 const inOrder = serialQueue(LINK_DEADLINE_MS, () => countUsage("links_given_up"));
 
-let timesLeftScreen = 0;
+let handOffEpoch = 0;
 
-const leftScreenWhenReceived = new WeakMap<IncomingLink, number>();
+const epochWhenReceived = new WeakMap<IncomingLink, number>();
 
-const take = (link: IncomingLink, leftBefore = timesLeftScreen) => {
-  void inOrder((expired) => run(timesLeftScreen === leftBefore ? link : replayed(link), expired));
+const take = (link: IncomingLink, receivedIn = handOffEpoch) => {
+  void inOrder((expired) => run(handOffEpoch === receivedIn ? link : replayed(link), expired));
 };
 
 let waiting: IncomingLink[] | null = null;
@@ -139,19 +139,20 @@ export function listenForLinks() {
   if (listening) return;
   listening = true;
   AppState.addEventListener("change", (next) => {
-    if (next !== "active") timesLeftScreen += 1;
+    if (next !== "active") handOffEpoch += 1;
   });
   waiting = [];
   quietlyOnDatabase(() => {
     waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]).map(replayed), ...(waiting ?? [])];
   });
   addLinkListener((link: SystemLink) => {
+    handOffEpoch += 1;
     forgetTabFromAnotherApp();
     if (!waiting) {
       take(link);
       return;
     }
-    leftScreenWhenReceived.set(link, timesLeftScreen);
+    epochWhenReceived.set(link, handOffEpoch);
     waiting.push(link);
     keepWaitingLinks();
   });
@@ -167,7 +168,7 @@ export function startLinks() {
     const queued = waiting ?? [];
     waiting = null;
     if (queued.length) quietlyOnDatabase(() => writePreference(browserDatabase(), KEPT_KEY, null));
-    for (const later of queued) take(waitedThroughFailure(later), leftScreenWhenReceived.get(later));
+    for (const later of queued) take(waitedThroughFailure(later), epochWhenReceived.get(later));
   });
   useOnboarding.subscribe((state) => {
     if (state.showing || !heldLinks().length) return;

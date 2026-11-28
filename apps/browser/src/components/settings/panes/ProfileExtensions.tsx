@@ -10,6 +10,7 @@ import {
   setEnabled,
   setPinned,
 } from "../../../state/extensions/actions";
+import { copyExtensionsToProfiles, hasOtherProfiles } from "../../../state/extensions/copy";
 import { useExtensionList, type InstalledExtension } from "../../../state/extensions/store";
 import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
@@ -54,8 +55,10 @@ async function openMoreMenu(profile: string) {
   const choice = await showMenu([
     { id: "link", title: "Add from a Link…", symbol: "link" },
     { id: "unpacked", title: "Load Unpacked Extension…", symbol: "folder" },
+    ...(hasOtherProfiles(profile) ? [{ separator: true as const }, { id: "copy", title: "Copy All to Other Profiles…", symbol: "doc.on.doc" }] : []),
   ]);
   if (choice === "link") void addFromLink(profile);
+  else if (choice === "copy") void copyExtensionsToProfiles(profile);
   else if (choice === "unpacked") void loadUnpacked(SETTINGS_WINDOW_ID, profile).then((chosen) => chosen && showInstall());
 }
 
@@ -163,6 +166,11 @@ function ExtensionDetails({ ext, profile }: { ext: InstalledExtension; profile: 
             description="Lets it run unreviewed code, like userscripts. Only for code you trust."
           >
             <Toggle value={!!ext.userScripts} onChange={(userScripts) => void configure(profile, ext.id, { userScripts })} />
+          </Row>
+        ) : null}
+        {ext.fromWebStore && hasOtherProfiles(profile) ? (
+          <Row title="Copy to Other Profiles" description="Installs it there with the same on, pin and Incognito settings.">
+            <Button title="Copy To…" onPress={() => void copyExtensionsToProfiles(profile, ext.id)} />
           </Row>
         ) : null}
         {ext.optionsUrl ? (

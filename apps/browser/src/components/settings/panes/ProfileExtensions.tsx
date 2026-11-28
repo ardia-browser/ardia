@@ -16,7 +16,7 @@ import { Image, View } from "react-native";
 import { currentEngineProfile } from "../../../state/browser/current";
 import { InstallDialogHost } from "../../extensions/ExtensionOverlays";
 import { Box, Button, DialogActions, DialogTitle, PopUp, proseLineHeight, Sheet, space, Text, TextField, Toggle } from "../../ui";
-import { FormField, Group, Row, SectionHeader } from "../Form";
+import { FormField, Group, GroupRows, Row, SectionHeader } from "../Form";
 import { addExtensionSite, extensionSiteLabel, noteExtensionSitePickerCancelled, removeExtensionSite } from "../../../state/extensions/siteAccess";
 import { PasswordAppPairingRow } from "./PasswordAppPairingRow";
 import { extensionList } from "../../../state/settings/paneData";
@@ -207,7 +207,7 @@ function SiteAccessDetails({ ext, profile }: { ext: InstalledExtension; profile:
     if (message) setProblem({ site, message });
   };
   return (
-    <>
+    <GroupRows>
       <Row title="Site access" description="Which sites the extension can read and change.">
         <PopUp value={access} options={SITE_ACCESS} onChange={choose} />
       </Row>
@@ -223,7 +223,7 @@ function SiteAccessDetails({ ext, profile }: { ext: InstalledExtension; profile:
           <Button title="Add Site…" onPress={addSite} />
         </Row>
       ) : null}
-    </>
+    </GroupRows>
   );
 }
 

@@ -3,10 +3,11 @@ import { usePlugins } from "../../../state/plugins/store";
 import { choicePlugin, keepsOfferToSave, type ManagerPlugin, type PasswordManagerChoice } from "../../../state/site/passwordManagerChoice";
 import { choosePasswordManager, useManagerPlugins, useProfilePasswordManager, useProfilesSharingChoice, useStoredPasswordManager } from "../../../state/site/passwordManager";
 import { useEffect } from "react";
-import { applePasswordsConnected, loadApplePasswords, useApplePasswordsOffered } from "../../../state/site/applePasswords";
+import { applePasswordsConnected, loadApplePasswords, useApplePasswords, useApplePasswordsOffered } from "../../../state/site/applePasswords";
+import { useICloudExtensionNote } from "../../../state/site/iCloudPasswordsExtension";
 import { ApplePasswordsStatusRow, connectApplePasswords, ICloudExtensionNoteRow } from "./ApplePasswordsPairing";
 import { type Option, PopUp } from "../../ui";
-import { Row } from "../Form";
+import { GroupRows, Row } from "../Form";
 
 type StoredPlugin = { title: string; installed: boolean } | null;
 
@@ -64,14 +65,16 @@ function PasswordManagerChoiceRow({ profileId }: { profileId: string }) {
   const popUp = managerPopUp(plugins, stored, effective, storedPlugin, appleOffered);
   const description = [unavailable, sharedChoiceNote(sharing)].filter(Boolean).join(" ") || undefined;
   const isApple = effective === "apple";
+  const appleState = useApplePasswords((s) => s.state);
+  const iCloudNote = useICloudExtensionNote(profileId);
   return (
-    <>
+    <GroupRows>
       <Row anchor="profiles.passwordManager" description={description}>
         <PopUp value={popUp.value} options={popUp.options} onChange={(manager) => pickPasswordManager(profileId, manager)} minWidth={210} />
       </Row>
-      {isApple ? <ApplePasswordsStatusRow /> : null}
-      {isApple ? <ICloudExtensionNoteRow profileId={profileId} /> : null}
-    </>
+      {isApple && appleState ? <ApplePasswordsStatusRow /> : null}
+      {isApple && iCloudNote ? <ICloudExtensionNoteRow profileId={profileId} /> : null}
+    </GroupRows>
   );
 }
 

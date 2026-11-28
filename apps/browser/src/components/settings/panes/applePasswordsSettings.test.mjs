@@ -10,7 +10,7 @@ globalThis.require = (id) => (/\.png$/.test(id) ? { uri: id } : nodeRequire(id))
 const native = await import("../../../test-native/ardiacore.ts");
 const { PLATFORM_FEATURES } = await import("../../../lib/platformFeatures.ts");
 const { useBrowser } = await import("../../../state/browser/store.ts");
-const { loadApplePasswords } = await import("../../../state/site/applePasswords.ts");
+const { loadApplePasswords, useApplePasswords } = await import("../../../state/site/applePasswords.ts");
 const ui = await import("../../ui/index.ts");
 const form = await import("../Form.tsx");
 const { useSettingsSheet } = await import("../../../state/settings/sheet.ts");
@@ -261,4 +261,33 @@ test("story 9: Ardia's saved-password list says its passwords aren't used while 
   S().updateProfile(profileId, { passwordManager: "apple" });
   await flush();
   assert.ok(texts().some((t) => /aren't used while Apple Passwords is this profile's password manager/.test(t)), texts().join(" | "));
+});
+
+function slotsOf(profileId) {
+  const choice = mount(() => PasswordManagerRow({ profileId })).value;
+  const root = mount(() => choice.type(choice.props)).value;
+  assert.equal(root.type, form.GroupRows, "the manager's rows go into the Passwords group one by one");
+  const plain = mount(() => form.GroupRows(root.props)).value;
+  const slots = [mount(() => plain.type(plain.props)).value.props.children].flat();
+  return slots.map((slot) => {
+    const [divider, row] = [slot.props.children].flat();
+    const shown = render(row);
+    return { divider: !!divider && divider.type === ui.Divider, row: shown?.props.title ?? shown?.props.anchor ?? null };
+  });
+}
+
+test("the Apple Passwords status row under the Password manager row has the divider every other row in the group has, and a row that isn't there leaves none", async () => {
+  const profileId = await settingsOn("connected");
+  S().updateProfile(profileId, { passwordManager: "apple" });
+  await flush();
+  assert.deepEqual(slotsOf(profileId), [
+    { divider: false, row: "profiles.passwordManager" },
+    { divider: true, row: "Apple Passwords" },
+  ]);
+  useApplePasswords.setState({ state: null });
+  assert.deepEqual(slotsOf(profileId), [{ divider: false, row: "profiles.passwordManager" }], "no status yet, no divider under the menu");
+  S().updateProfile(profileId, { passwordManager: "ardia" });
+  await loadApplePasswords();
+  await flush();
+  assert.deepEqual(slotsOf(profileId), [{ divider: false, row: "profiles.passwordManager" }]);
 });

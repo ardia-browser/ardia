@@ -170,12 +170,17 @@ class UpgradeGateTest {
 
         UpgradeGate.install(app)
         val heard = ArrayList<String?>()
+        val sources = ArrayList<String?>()
         PhoneSystemLinks.activityStarted(Intent(Intent.ACTION_MAIN), restored = false)
-        PhoneSystemLinks.listen { heard += it["url"] as String? }
+        PhoneSystemLinks.listen {
+            heard += it["url"] as String?
+            sources += it["source"] as String?
+        }
         assertTrue("still held while the import waits", heard.isEmpty())
         UpgradeGate.writeMarker(app, receipt)
         UpgradeGate.open(app)
         assertEquals(listOf("https://example.com/held"), heard)
+        assertEquals("released as held, not as a fresh link from another app", listOf("held"), sources)
         assertFalse(UpgradeGate.heldLinksFile(app).exists())
         processDies()
 
@@ -183,6 +188,18 @@ class UpgradeGateTest {
         val later = ArrayList<String?>()
         PhoneSystemLinks.listen { later += it["url"] as String? }
         assertTrue("delivered once, never again", later.isEmpty())
+    }
+
+    @Test
+    fun aLinkAnEarlierVersionHeldIsReleasedAsHeldNotAsAFreshLink() {
+        composeDatabase()
+        HeldLinks.write(UpgradeGate.heldLinksFile(app), listOf(mapOf("kind" to "open", "url" to "https://example.com/older", "source" to "web")))
+        UpgradeGate.install(app)
+        val sources = ArrayList<String?>()
+        PhoneSystemLinks.listen { sources += it["source"] as String? }
+        UpgradeGate.writeMarker(app, receipt)
+        UpgradeGate.open(app)
+        assertEquals(listOf("held"), sources)
     }
 
     @Test

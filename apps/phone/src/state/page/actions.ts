@@ -5,7 +5,7 @@ import { pages, type PageEngineEvent, type PageRequestAnswer } from "../../platf
 export type { ReadableContent } from "../../platform/pages";
 import { cleanLinkTitle, cleanUrl } from "@ardia/core/src/cleanUrl.ts";
 import { copyLink, openExternal, preferredLanguage, pressHaptic, shareLink, sharePageWithPrint, successHaptic } from "../../platform/system";
-import { cancelSearch, closeArchive, deckPullCommitted, openTab, showDeck, takeSheetFromSettings, useBrowse } from "../browse/store";
+import { cancelSearch, closeArchive, closeTabBackToOpeningApp, deckPullCommitted, openTab, showDeck, takeSheetFromSettings, useBrowse } from "../browse/store";
 import { display } from "../search/omnibox";
 import { prepareSearch, presentSearch, searchState } from "../search/store";
 import { setPreference } from "../settings/store";
@@ -883,6 +883,7 @@ export function handleSystemBack(): boolean {
       void pageHandle(id)?.goBack();
       return true;
     case "deck":
+      if (id && closeTabBackToOpeningApp(id)) return false;
       void showDeck();
       return true;
     default:

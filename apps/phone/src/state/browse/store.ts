@@ -160,6 +160,7 @@ export function appBecameActive() {
 
 export function appWillResignActive() {
   appActive = false;
+  tabFromAnotherApp = null;
   if (archiveTimer) clearInterval(archiveTimer);
   archiveTimer = null;
   const selected = currentTabs().selectedId;
@@ -180,6 +181,30 @@ export function openPage(url: string, origin: TabOrigin) {
   const tab = openNewTab({ url, origin });
   if (origin === "search" && !tab.isPrivate) countUsage("searches");
   useBrowse.setState({ surface: "browsing", sheet: null, frozenOrder: null });
+  return tab;
+}
+
+let tabFromAnotherApp: string | null = null;
+
+export function openPageFromAnotherApp(url: string, origin: TabOrigin) {
+  tabFromAnotherApp = openPage(url, origin).id;
+}
+
+export function forgetTabFromAnotherApp() {
+  tabFromAnotherApp = null;
+}
+
+useTabs.subscribe((tabs) => {
+  if (tabFromAnotherApp !== null && tabs.selectedId !== tabFromAnotherApp) tabFromAnotherApp = null;
+});
+
+export function closeTabBackToOpeningApp(id: string): boolean {
+  if (tabFromAnotherApp !== id) return false;
+  tabFromAnotherApp = null;
+  const closing = findTab(currentTabs(), id);
+  closeTabGoingBack(id);
+  if (closing && !closing.isPrivate) countUsage("tabs_returned_to_app");
+  return true;
 }
 
 export function submitSearch(text: string): boolean {
@@ -928,10 +953,14 @@ export function swipedPastHistory(id: string, direction: "back" | "forward") {
     return;
   }
   const closing = findTab(currentTabs(), id);
+  closeTabGoingBack(id);
+  if (closing && !closing.isPrivate) countUsage("tabs_swiped_closed");
+}
+
+function closeTabGoingBack(id: string) {
   const previous = tabBefore(currentTabs(), id);
   if (previous) selectTabById(previous.id);
   closeTabById(id);
-  if (closing && !closing.isPrivate) countUsage("tabs_swiped_closed");
   if (previous) openTab(previous.id);
   else show("start");
 }

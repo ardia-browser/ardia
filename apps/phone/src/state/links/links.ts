@@ -1,6 +1,6 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { addLinkListener, initialLink, type SystemLink } from "../../platform/links";
-import { openPage, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
+import { forgetTabFromAnotherApp, openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { useOnboarding } from "../onboarding/store";
@@ -17,7 +17,7 @@ import { serialQueue } from "../../lib/serialQueue";
 import { countUsage } from "../telemetry/telemetry";
 import { heldLinks, holdLink, takeHeldLinks } from "./heldLinks";
 import { useBoot } from "../app/bootState";
-import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, restoredLinks, type Cover, type IncomingLink } from "./linkRules";
+import { ALL_COVERS, coversToClose, heldAfterOnboarding, keptLinks, linkAction, restoredLinks, replayed, type Cover, type IncomingLink } from "./linkRules";
 
 let started = false;
 
@@ -54,7 +54,8 @@ async function run(link: IncomingLink, expired: () => boolean = () => false) {
       return;
     case "openUrl":
       setIncognito(false);
-      openPage(action.url, action.origin);
+      if (action.fromAnotherApp) openPageFromAnotherApp(action.url, action.origin);
+      else openPage(action.url, action.origin);
       return;
     case "searchNow":
       searchFor(action.query);
@@ -102,7 +103,13 @@ const LINK_DEADLINE_MS = 8_000;
 
 const inOrder = serialQueue(LINK_DEADLINE_MS, () => countUsage("links_given_up"));
 
-const take = (link: IncomingLink) => void inOrder((expired) => run(link, expired));
+let handOffEpoch = 0;
+
+const epochWhenReceived = new WeakMap<IncomingLink, number>();
+
+const take = (link: IncomingLink, receivedIn = handOffEpoch) => {
+  void inOrder((expired) => run(handOffEpoch === receivedIn ? link : replayed(link), expired));
+};
 
 let waiting: IncomingLink[] | null = null;
 
@@ -131,15 +138,21 @@ let listening = false;
 export function listenForLinks() {
   if (listening) return;
   listening = true;
+  AppState.addEventListener("change", (next) => {
+    if (next !== "active") handOffEpoch += 1;
+  });
   waiting = [];
   quietlyOnDatabase(() => {
-    waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]), ...(waiting ?? [])];
+    waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]).map(replayed), ...(waiting ?? [])];
   });
   addLinkListener((link: SystemLink) => {
+    handOffEpoch += 1;
+    forgetTabFromAnotherApp();
     if (!waiting) {
       take(link);
       return;
     }
+    epochWhenReceived.set(link, handOffEpoch);
     waiting.push(link);
     keepWaitingLinks();
   });
@@ -150,14 +163,15 @@ export function startLinks() {
   started = true;
   listenForLinks();
   void settled(() => initialLink(), null).then((link) => {
-    if (link) take(link);
+    const waitedThroughFailure = useBoot.getState().failures > 0 ? replayed : (waited: IncomingLink) => waited;
+    if (link) take(waitedThroughFailure(link), 0);
     const queued = waiting ?? [];
     waiting = null;
     if (queued.length) quietlyOnDatabase(() => writePreference(browserDatabase(), KEPT_KEY, null));
-    for (const later of queued) take(later);
+    for (const later of queued) take(waitedThroughFailure(later), epochWhenReceived.get(later));
   });
   useOnboarding.subscribe((state) => {
     if (state.showing || !heldLinks().length) return;
-    for (const link of heldAfterOnboarding(takeHeldLinks())) void inOrder((expired) => run(link, expired));
+    for (const link of heldAfterOnboarding(takeHeldLinks()).map(replayed)) void inOrder((expired) => run(link, expired));
   });
 }

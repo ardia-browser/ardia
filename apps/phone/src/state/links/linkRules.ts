@@ -1,11 +1,14 @@
-export type IncomingLink =
+export type IncomingLink = (
   | { kind: "open"; url: string; source?: string }
   | { kind: "search"; query: string | null }
   | { kind: "voiceSearch" }
   | { kind: "incognito" }
   | { kind: "tab"; id: string }
   | { kind: "macTabs" }
-  | { kind: "inbox" };
+  | { kind: "inbox" }
+) & { replayed?: boolean };
+
+export const replayed = (link: IncomingLink): IncomingLink => ({ ...link, replayed: true });
 
 export type TabKind = "open" | "private" | "archived";
 
@@ -13,7 +16,7 @@ export type LinkState = { onboarding: boolean; syncEnabled: boolean; canSearchBy
 
 export type LinkAction =
   | { kind: "hold" }
-  | { kind: "openUrl"; url: string; origin: "link" | "share" }
+  | { kind: "openUrl"; url: string; origin: "link" | "share"; fromAnotherApp: boolean }
   | { kind: "searchNow"; query: string }
   | { kind: "tray"; query: string; incognito: boolean }
   | { kind: "voice" }
@@ -26,12 +29,19 @@ export type LinkAction =
 
 const WEB = /^https?:\/\//i;
 
+const FROM_ANOTHER_APP = new Set(["web", "share", "intent"]);
+
 export function linkAction(link: IncomingLink, state: LinkState): LinkAction {
   if (state.onboarding && link.kind !== "inbox") return { kind: "hold" };
   switch (link.kind) {
     case "open":
       if (!WEB.test(link.url.trim())) return { kind: "none" };
-      return { kind: "openUrl", url: link.url.trim(), origin: state.sharesAsShare && link.source === "share" ? "share" : "link" };
+      return {
+        kind: "openUrl",
+        url: link.url.trim(),
+        origin: state.sharesAsShare && link.source === "share" ? "share" : "link",
+        fromAnotherApp: !link.replayed && link.source !== undefined && FROM_ANOTHER_APP.has(link.source),
+      };
     case "search": {
       const query = link.query?.trim() ?? "";
       return query ? { kind: "searchNow", query } : { kind: "tray", query: "", incognito: false };

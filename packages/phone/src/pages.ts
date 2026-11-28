@@ -90,6 +90,7 @@ type PagesNative = {
   evaluate(pageId: string, script: string): Promise<string | null>;
   discardBackgroundPages(keeping: string | null): Promise<void>;
   livePageIds(): Promise<string[]>;
+  setShownPage(pageId: string | null): Promise<void>;
   deleteSnapshots(pageId: string): Promise<void>;
   deleteSnapshotsFor?(pageIds: string[]): Promise<void>;
   snapshotIsCurrent?(pageId: string): boolean | null;
@@ -103,6 +104,7 @@ type PagesNative = {
   nightShade(host?: string | null, isPrivate?: boolean): Promise<NightShade>;
   setNightShade(mode: NightShadeMode | null, host?: string | null, isPrivate?: boolean): Promise<void>;
   forgetNightShadeVerdicts?(since: number | null): Promise<void>;
+  setPageScheme?(scheme: "light" | "dark" | null): Promise<boolean>;
   opensLinksInApps(host: string): Promise<boolean>;
   setOpensLinksInApps(host: string, opens: boolean | null): Promise<void>;
   siteOpensLinksInApps?(host: string): Promise<boolean | null>;
@@ -201,6 +203,7 @@ export const pages = {
   evaluate: (pageId: string, script: string) => native().evaluate(pageId, script),
   discardBackgroundPages: (keeping?: string | null) => native().discardBackgroundPages(keeping ?? null),
   livePageIds: () => native().livePageIds(),
+  setShownPage: (pageId: string | null) => native().setShownPage(pageId),
   deleteSnapshots: (pageId: string) => native().deleteSnapshots(pageId),
   deletesSnapshotsTogether: (): boolean => typeof native().deleteSnapshotsFor === "function",
   deleteSnapshotsFor: (pageIds: string[]) => native().deleteSnapshotsFor!(pageIds),
@@ -217,6 +220,7 @@ export const pages = {
   forgetNightShadeVerdicts: async (since: number | null): Promise<void> => {
     await native().forgetNightShadeVerdicts?.(since);
   },
+  setPageScheme: async (scheme: "light" | "dark" | null): Promise<boolean | null> => (await native().setPageScheme?.(scheme)) ?? null,
   opensLinksInApps: (host: string) => native().opensLinksInApps(host),
   setOpensLinksInApps: (host: string, opens: boolean | null) => native().setOpensLinksInApps(host, opens),
   siteOpensLinksInApps: async (host: string): Promise<boolean | null> => (await native().siteOpensLinksInApps?.(host)) ?? null,

@@ -7,6 +7,9 @@ export type SwipeNavigationMode = "anywhere" | "screenEdges" | "disabled";
 export type AppLinkPreference = "ardia" | "app";
 export type PresetColor = "plum" | "blue" | "purple" | "pink" | "red" | "orange" | "yellow" | "green" | "neutral";
 export type ColorChoice = PresetColor | "custom";
+export type PresetThemes = Partial<Record<PresetColor, ProfileTheme>>;
+
+export const PRESET_COLORS: readonly PresetColor[] = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"];
 
 export type Preferences = {
   autoArchiveInterval: AutoArchiveInterval;
@@ -22,6 +25,7 @@ export type Preferences = {
   tabSwipeHintShown: boolean;
   colorChoice: ColorChoice | null;
   customTheme: ProfileTheme | null;
+  presetThemes: PresetThemes;
   dynamicColors: boolean | null;
   materialYou: boolean;
   interfaceStyle: InterfaceStyleChoice;
@@ -30,7 +34,13 @@ export type Preferences = {
   keyboardHeights: string;
   readerSerif: boolean;
   readerTheme: "light" | "sepia" | "dark" | null;
+  pageBorder: boolean;
+  pageCornerRadius: number;
 };
+
+export const PAGE_CORNER_RADIUS = Object.freeze({ min: 0, max: 24, standard: 16 });
+
+export const clampPageCornerRadius = (radius: number) => (Number.isFinite(radius) ? Math.min(PAGE_CORNER_RADIUS.max, Math.max(PAGE_CORNER_RADIUS.min, Math.round(radius))) : PAGE_CORNER_RADIUS.standard);
 
 export const DEFAULT_PREFERENCES: Preferences = {
   autoArchiveInterval: STANDARD_AUTO_ARCHIVE,
@@ -46,6 +56,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   tabSwipeHintShown: false,
   colorChoice: null,
   customTheme: null,
+  presetThemes: {},
   dynamicColors: null,
   materialYou: false,
   interfaceStyle: "matchMac",
@@ -54,6 +65,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   keyboardHeights: "",
   readerSerif: true,
   readerTheme: null,
+  pageBorder: true,
+  pageCornerRadius: PAGE_CORNER_RADIUS.standard,
 };
 
 export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
@@ -70,6 +83,7 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   tabSwipeHintShown: "tabs.swipeHintShown",
   colorChoice: "settings.color",
   customTheme: "settings.customTheme",
+  presetThemes: "settings.presetThemes",
   dynamicColors: "settings.dynamicColors",
   materialYou: "settings.materialYou",
   interfaceStyle: "settings.interfaceStyle",
@@ -78,6 +92,8 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   keyboardHeights: "search.keyboardHeights",
   readerSerif: "reader.serif",
   readerTheme: "reader.theme",
+  pageBorder: "browsing.pageBorder",
+  pageCornerRadius: "browsing.pageCornerRadius",
 };
 
 const oneOf =
@@ -88,6 +104,21 @@ const oneOf =
 function storedTheme(raw: string): ProfileTheme | undefined {
   try {
     return sanitizeTheme(JSON.parse(raw)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function storedPresetThemes(raw: string): PresetThemes | undefined {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const kept: PresetThemes = {};
+    for (const color of PRESET_COLORS) {
+      const theme = sanitizeTheme((parsed as Record<string, unknown>)[color]);
+      if (theme) kept[color] = theme;
+    }
+    return kept;
   } catch {
     return undefined;
   }
@@ -107,8 +138,9 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   hasFinishedOnboarding: flag,
   archiveCardShown: flag,
   tabSwipeHintShown: flag,
-  colorChoice: oneOf<ColorChoice>(["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral", "custom"]),
+  colorChoice: oneOf<ColorChoice>([...PRESET_COLORS, "custom"]),
   customTheme: storedTheme,
+  presetThemes: storedPresetThemes,
   dynamicColors: flag,
   materialYou: flag,
   interfaceStyle: oneOf<InterfaceStyleChoice>(["matchMac", "glass", "classic"]),
@@ -117,6 +149,8 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   keyboardHeights: (raw) => (/^(\d{1,4}x\d{1,4}=\d{1,4})?(;\d{1,4}x\d{1,4}=\d{1,4}){0,3}$/.test(raw) ? raw : undefined),
   readerSerif: flag,
   readerTheme: oneOf<"light" | "sepia" | "dark">(["light", "sepia", "dark"]),
+  pageBorder: flag,
+  pageCornerRadius: (raw) => (/^-?\d{1,4}(\.\d+)?$/.test(raw) ? clampPageCornerRadius(Number(raw)) : undefined),
 };
 
 export const acceptsPreference = (name: keyof Preferences, raw: string) => PARSERS[name](raw) !== undefined;

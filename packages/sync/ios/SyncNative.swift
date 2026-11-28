@@ -14,6 +14,7 @@ protocol SyncNative {
   func forget(_ account: String)
   func chainStatus(_ folder: String) throws -> String
   func createChain(_ folder: String) throws
+  func createChainInNewFolder(_ folder: String) throws
   func write(_ folder: String, _ scope: String, _ payload: String) throws -> String
   func read(_ folder: String, _ scope: String, _ known: [String]) throws -> [String: Any]
   func remove(_ folder: String, _ scope: String, _ ids: [String]) throws
@@ -29,7 +30,7 @@ protocol SyncNative {
   func copyRecoveryPhrase(_ promise: Promise)
   static func revealFolder(_ path: String)
   func readPasswords(_ engineProfile: String, _ promise: Promise)
-  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replacing: Bool, _ promise: Promise)
+  func savePassword(_ engineProfile: String, _ origin: String, _ username: String, _ sealed: String, _ replaced: String, _ promise: Promise)
 }
 
 extension SyncNative {
@@ -89,6 +90,10 @@ extension SyncNative where Self: Module {
     AsyncFunction("createChain") { (folder: String) throws in try self.createChain(folder) }.runOnQueue(Self.queue)
   }
 
+  var createChainInNewFolderFunction: AnyDefinition {
+    AsyncFunction("createChainInNewFolder") { (folder: String) throws in try self.createChainInNewFolder(folder) }.runOnQueue(Self.queue)
+  }
+
   var writeFunction: AnyDefinition {
     AsyncFunction("write") { (folder: String, scope: String, payload: String) throws -> String in try self.write(folder, scope, payload) }.runOnQueue(Self.queue)
   }
@@ -146,7 +151,7 @@ extension SyncNative where Self: Module {
   }
 
   var savePasswordFunction: AnyDefinition {
-    AsyncFunction("savePassword") { (engineProfile: String, origin: String, username: String, sealed: String, replacing: Bool, promise: Promise) in self.savePassword(engineProfile, origin, username, sealed, replacing, promise) }.runOnQueue(Self.queue)
+    AsyncFunction("savePassword") { (engineProfile: String, origin: String, username: String, sealed: String, replaced: String, promise: Promise) in self.savePassword(engineProfile, origin, username, sealed, replaced, promise) }.runOnQueue(Self.queue)
   }
 }
 

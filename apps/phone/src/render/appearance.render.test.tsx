@@ -6,6 +6,7 @@ import type { Design } from "../lib/design";
 import { setAppearanceDesign } from "../state/settings/appearance";
 import { openSettings, pushSettings } from "../state/settings/nav";
 import { usePreferences } from "../state/settings/store";
+import { PHONE_LAYOUT, useScreenLayout } from "../state/app/screenLayout";
 import { OFF_STATUS, useSync } from "../state/sync/store";
 import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
 
@@ -219,4 +220,15 @@ test("in the original design neither choice applies and the window is never over
   expect(seenDark).toBe(false);
   expect(overrides).toEqual([]);
   unmount(root);
+});
+
+onAndroid("Android's Appearance never offers Page Border or Corner Radius, even if a wide layout were reported", () => {
+  act(() => useScreenLayout.setState({ layout: { name: "wide" } }));
+  openSettings({ page: "appearance" });
+  const root = settings("redesigned");
+  const text = textOf(root);
+  expect(text).not.toContain("Page Border");
+  expect(text).not.toContain("Corner Radius");
+  unmount(root);
+  act(() => useScreenLayout.setState({ layout: PHONE_LAYOUT }));
 });

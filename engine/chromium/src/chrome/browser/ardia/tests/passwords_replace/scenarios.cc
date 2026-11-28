@@ -159,9 +159,11 @@ struct World {
 };
 
 ardia::Outcome Replace(World& world, const std::string& origin, const std::string& username,
-                       std::optional<std::string> password, bool run = true) {
+                       std::optional<std::string> password, std::optional<std::string> expected = std::nullopt,
+                       bool run = true) {
   ardia::Outcome outcome;
-  ardia::Call call(&world.profile, {{"origin", origin}, {"username", username}}, std::move(password), &outcome);
+  ardia::Call call(&world.profile, {{"origin", origin}, {"username", username}}, std::move(password), &outcome,
+                   std::move(expected));
   ac_passwords_replace(call);
   if (run) Runner().RunAll();
   return outcome;
@@ -202,14 +204,14 @@ void Failed(const ardia::Outcome& outcome, const std::string& error) {
 void GroupedRealmsKeepTheirOwnPasswords() {
   World world;
   world.profile_store->Seed({{"https://a.example.com/", u"me", u"shared"}, {"https://b.example.com/", u"me", u"shared"}});
-  Ok(Replace(world, "https://a.example.com", "me", "fresh-a"));
+  Ok(Replace(world, "https://a.example.com", "me", "fresh-a", "shared"));
   assert(world.profile_store->rows.size() == 2);
   assert(PasswordOf(*world.profile_store, "https://a.example.com/", u"me") == u"fresh-a");
   assert(PasswordOf(*world.profile_store, "https://b.example.com/", u"me") == u"shared");
   const StoredCredential* a = Find(*world.profile_store, "https://a.example.com/", u"me");
   assert(a->password_issues.empty() && !a->date_password_modified.is_null());
   assert(!Find(*world.profile_store, "https://b.example.com/", u"me")->password_issues.empty());
-  Ok(Replace(world, "https://b.example.com", "me", "fresh-b"));
+  Ok(Replace(world, "https://b.example.com", "me", "fresh-b", "shared"));
   assert(world.profile_store->rows.size() == 2);
   assert(world.profile_store->adds == 0);
   assert(PasswordOf(*world.profile_store, "https://a.example.com/", u"me") == u"fresh-a");
@@ -221,7 +223,7 @@ void EveryFormOfTheLoginChanges() {
   world.profile_store->Seed({{"https://a.test/", u"me", u"old", false, false, u"", "https://a.test/login"},
                              {"https://a.test/", u"me", u"old", false, false, u"email", "https://a.test/signin"},
                              {"https://a.test/", u"you", u"other"}});
-  Ok(Replace(world, "https://a.test", "me", "new"));
+  Ok(Replace(world, "https://a.test", "me", "new", "old"));
   assert(world.profile_store->rows.size() == 3);
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"new");
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"me", u"email") == u"new");
@@ -246,7 +248,7 @@ void MissingLoginIsAddedToTheProfileStore() {
 void NonAsciiLoginsKeepTheirText() {
   World world;
   world.profile_store->Seed({{"https://a.test/", u"jöse", u"old"}});
-  Ok(Replace(world, "https://a.test", "jöse", "pässwörd 日本 🔑"));
+  Ok(Replace(world, "https://a.test", "jöse", "pässwörd 日本 🔑", "old"));
   assert(world.profile_store->rows.size() == 1);
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"jöse") == u"pässwörd 日本 🔑");
 }
@@ -262,7 +264,7 @@ void NonCanonicalOriginsAreRefused() {
 void SamePasswordWritesNothing() {
   World world;
   world.profile_store->Seed({{"https://a.test/", u"me", u"same"}});
-  Ok(Replace(world, "https://a.test", "me", "same"));
+  Ok(Replace(world, "https://a.test", "me", "same", "same"));
   assert(world.profile_store->adds == 0 && world.profile_store->updates == 0);
   assert(!Find(*world.profile_store, "https://a.test/", u"me")->password_issues.empty());
 }
@@ -291,27 +293,116 @@ void BlockedEntryWithAnotherKeyDoesNotStopTheAdd() {
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"") == u"pw");
 }
 
-void AccountStoreNeverMasksTheProfileStore() {
+void AccountOnlyLoginChangesWhereItLives() {
   World world;
   world.account_store->Seed({{"https://a.test/", u"me", u"account"}});
-  Ok(Replace(world, "https://a.test", "me", "synced"));
-  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"synced");
-  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"account");
-  world.profile_store->rows.clear();
+  Ok(Replace(world, "https://a.test", "me", "synced", "account"));
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"synced");
+  assert(world.account_store->rows.size() == 1 && world.account_store->updates == 1);
+  assert(!Find(*world.profile_store, "https://a.test/", u"me"));
+  assert(world.profile_store->adds == 0 && world.profile_store->updates == 0);
+}
+
+void SameLoginInBothStoresChangesInBoth() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"shared"}});
+  world.account_store->Seed({{"https://a.test/", u"me", u"shared"},
+                             {"https://a.test/", u"me", u"shared", false, false, u"email", "https://a.test/in"}});
+  Ok(Replace(world, "https://a.test", "me", "again", "shared"));
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"again");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"again");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me", u"email") == u"again");
+  assert(world.profile_store->adds == 0 && world.account_store->adds == 0);
+  assert(world.profile_store->updates == 1 && world.account_store->updates == 1);
+}
+
+void DivergentPasswordsKeepTheOneThatWasNotSynced() {
+  World world;
   world.profile_store->Seed({{"https://a.test/", u"me", u"profile"}});
+  world.account_store->Seed({{"https://a.test/", u"me", u"account"},
+                             {"https://a.test/", u"me", u"profile", false, false, u"email", "https://a.test/in"}});
+  Ok(Replace(world, "https://a.test", "me", "synced", "profile"));
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"synced");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me", u"email") == u"synced");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"account");
+  assert(world.account_store->rows.size() == 2 && world.account_store->adds == 0);
+}
+
+void LoginThatNoLongerHoldsTheExpectedPasswordIsLeftAlone() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"edited"}});
+  world.account_store->Seed({{"https://a.test/", u"me", u"account"}});
+  Failed(Replace(world, "https://a.test", "me", "synced", "profile"), "The login changed while it was being saved");
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"edited");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"account");
+  assert(world.profile_store->updates == 0 && world.account_store->updates == 0);
+  assert(world.profile_store->adds == 0 && world.account_store->adds == 0);
+}
+
+void CallersWithoutAnExpectedPasswordReplaceEveryCopy() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"profile"}});
+  world.account_store->Seed({{"https://a.test/", u"me", u"account"}});
   Ok(Replace(world, "https://a.test", "me", "again"));
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"again");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"again");
+  assert(world.profile_store->adds == 0 && world.account_store->adds == 0);
+}
+
+void LoginDeletedBeforeTheReplaceIsNotAddedBack() {
+  World world;
+  world.profile_store->Seed({{"https://b.test/", u"me", u"kept"}});
+  Failed(Replace(world, "https://a.test", "me", "synced", "old"), "The login changed while it was being saved");
+  assert(world.profile_store->adds == 0 && world.profile_store->rows.size() == 1);
+  assert(!Find(*world.profile_store, "https://a.test/", u"me"));
+}
+
+void ProfileLoginLeavesTheAccountStoreAlone() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"profile"}});
+  world.account_store->Seed({{"https://a.test/", u"you", u"theirs"}});
+  Ok(Replace(world, "https://a.test", "me", "fresh", "profile"));
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"fresh");
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"you") == u"theirs");
+  assert(world.account_store->adds == 0 && world.account_store->updates == 0);
+}
+
+void AccountStoreThatDropsTheChangeFails() {
+  World world;
+  world.account_store->Seed({{"https://a.test/", u"me", u"account"}});
+  world.account_store->drops_writes = true;
+  Failed(Replace(world, "https://a.test", "me", "new", "account"), "The login changed while it was being saved");
+  assert(!Find(*world.profile_store, "https://a.test/", u"me"));
   assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"account");
-  assert(world.account_store->reads == 0 && world.account_store->adds == 0 && world.account_store->updates == 0);
+}
+
+void MissingAccountStoreUsesTheProfileStore() {
+  World world;
+  world.profile.account_store = nullptr;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
+  Ok(Replace(world, "https://a.test", "me", "new", "old"));
+  assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"new");
+  Ok(Replace(world, "https://b.test", "me", "added"));
+  assert(PasswordOf(*world.profile_store, "https://b.test/", u"me") == u"added");
 }
 
 void LoginDeletedDuringTheWriteStaysDeleted() {
   World world;
   world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
   world.profile_store->before_write = [](FakeStore& store) { store.rows.clear(); };
-  Failed(Replace(world, "https://a.test", "me", "new"), "The login changed while it was being saved");
+  Failed(Replace(world, "https://a.test", "me", "new", "old"), "The login changed while it was being saved");
   assert(world.profile_store->updates == 1 && world.profile_store->adds == 0);
   assert(world.profile_store->rows.empty());
+}
+
+void CopyInTheOtherStoreDoesNotStandInForTheOneWritten() {
+  World world;
+  world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
+  world.account_store->Seed({{"https://a.test/", u"me", u"remote"}});
+  world.profile_store->before_write = [](FakeStore& store) { store.rows.clear(); };
+  Failed(Replace(world, "https://a.test", "me", "remote", "old"), "The login changed while it was being saved");
+  assert(world.profile_store->rows.empty() && world.profile_store->adds == 0);
+  assert(PasswordOf(*world.account_store, "https://a.test/", u"me") == u"remote");
 }
 
 void ConcurrentChangeIsKept() {
@@ -321,7 +412,7 @@ void ConcurrentChangeIsKept() {
     store.rows.clear();
     store.Seed({{"https://a.test/", u"me", u"racing", false, false, u"", "https://a.test/other"}});
   };
-  Failed(Replace(world, "https://a.test", "me", "new"), "The login changed while it was being saved");
+  Failed(Replace(world, "https://a.test", "me", "new", "old"), "The login changed while it was being saved");
   assert(world.profile_store->rows.size() == 1);
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"racing");
 }
@@ -331,7 +422,7 @@ void StoreThatNeverTakesTheChangeFails() {
   world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
   world.profile_store->drops_writes = true;
   const int delayed = Runner().delayed();
-  Failed(Replace(world, "https://a.test", "me", "new"), "The login changed while it was being saved");
+  Failed(Replace(world, "https://a.test", "me", "new", "old"), "The login changed while it was being saved");
   assert(Runner().delayed() == delayed);
   assert(PasswordOf(*world.profile_store, "https://a.test/", u"me") == u"old");
 }
@@ -341,6 +432,13 @@ void UnreadableAndSilentStoresFail() {
     World world;
     world.profile_store->fails = true;
     Failed(Replace(world, "https://a.test", "me", "new"), "unreadable");
+  }
+  {
+    World world;
+    world.account_store->fails = true;
+    world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
+    Failed(Replace(world, "https://a.test", "me", "new", "old"), "unreadable");
+    assert(world.profile_store->updates == 0);
   }
   {
     World world;
@@ -357,7 +455,7 @@ void UnreadableAndSilentStoresFail() {
 void ProfileTeardownAnswersOnce() {
   World world;
   world.profile_store->Seed({{"https://a.test/", u"me", u"old"}});
-  ardia::Outcome outcome = Replace(world, "https://a.test", "me", "new", false);
+  ardia::Outcome outcome = Replace(world, "https://a.test", "me", "new", "old", false);
   assert(outcome.replies == 0);
   for (auto& [key, state] : world.profile.states) state->WillBeDestroyed();
   Failed(outcome, "closed");
@@ -371,6 +469,7 @@ void BadRequestsAreRefused() {
   World world;
   Failed(Replace(world, "https://a.test", "me", std::nullopt), "bad arguments");
   Failed(Replace(world, "https://a.test", "me", ""), "origin and password required");
+  Failed(Replace(world, "https://a.test", "me", "pw", ""), "origin and password required");
   Failed(Replace(world, "", "me", "pw"), "origin and password required");
   Failed(Replace(world, "https://a.test/", "me", "pw"), "origin and password required");
   Failed(Replace(world, "https://a.test/path", "me", "pw"), "origin and password required");
@@ -386,7 +485,7 @@ void BadRequestsAreRefused() {
 }
 
 int main() {
-  assert(ac_passwords_replace_sensitive.max_bytes == 64 * 1024);
+  assert(ac_passwords_replace_sensitive.max_bytes >= 2 * (4096 + 65536) + 2 * 2048 + 2 * 1024 + 256);
   GroupedRealmsKeepTheirOwnPasswords();
   EveryFormOfTheLoginChanges();
   MissingLoginIsAddedToTheProfileStore();
@@ -395,8 +494,17 @@ int main() {
   SamePasswordWritesNothing();
   BlockedAndFederatedEntriesAreLeftAlone();
   BlockedEntryWithAnotherKeyDoesNotStopTheAdd();
-  AccountStoreNeverMasksTheProfileStore();
+  AccountOnlyLoginChangesWhereItLives();
+  SameLoginInBothStoresChangesInBoth();
+  DivergentPasswordsKeepTheOneThatWasNotSynced();
+  LoginThatNoLongerHoldsTheExpectedPasswordIsLeftAlone();
+  CallersWithoutAnExpectedPasswordReplaceEveryCopy();
+  LoginDeletedBeforeTheReplaceIsNotAddedBack();
+  ProfileLoginLeavesTheAccountStoreAlone();
+  AccountStoreThatDropsTheChangeFails();
+  MissingAccountStoreUsesTheProfileStore();
   LoginDeletedDuringTheWriteStaysDeleted();
+  CopyInTheOtherStoreDoesNotStandInForTheOneWritten();
   ConcurrentChangeIsKept();
   StoreThatNeverTakesTheChangeFails();
   UnreadableAndSilentStoresFail();

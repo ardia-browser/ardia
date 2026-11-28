@@ -26,8 +26,8 @@ function engineLogins() {
   };
   const saved = [];
   const read = async () => [...store.values()].map((l) => ({ origin: l.origin, username: l.username, sealed: sealed.get(`${l.origin}\n${l.username}`), created: l.created }));
-  const save = async (profile, origin, username, seal, replacing) => {
-    saved.push([profile, origin, username, seal, replacing]);
+  const save = async (profile, origin, username, seal, replaced) => {
+    saved.push([profile, origin, username, seal, replaced]);
     put(origin, username, seal, 9);
     return true;
   };
@@ -54,9 +54,9 @@ test("with only sealed logins, as the Mac always sends, the adapter offers, igno
   const applied = await adapter.apply(visible, new Set([ADA, BO, DEE]), base, { held: () => false, landed: () => {} });
   assert.equal(applied, true, "every write succeeded");
   assert.deepEqual(engine.saved, [
-    ["", originOf("a"), "ada", "sealed-ada-new", true],
-    ["", originOf("d"), "dee", "sealed-dee", false],
-  ], "a changed password replaces, a new one is added");
+    ["", originOf("a"), "ada", "sealed-ada-new", "sealed-ada"],
+    ["", originOf("d"), "dee", "sealed-dee", ""],
+  ], "a changed password names the sealed password it replaces, a new one names none");
   assert.ok(!engine.store.has(`${originOf("b")}\nbo`), "a login deleted elsewhere is deleted here");
   assert.ok(engine.store.has(`${originOf("c")}\ncy`), "an unchanged login stays");
 });

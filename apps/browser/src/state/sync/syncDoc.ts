@@ -44,6 +44,8 @@ export type ProfileLink = {
   tabsRetire?: true;
 };
 
+export type ChainOutage = { folder: string; seen: string | null; counted: boolean };
+
 export type SyncDoc = {
   v: 1;
   enabled: boolean;
@@ -57,6 +59,9 @@ export type SyncDoc = {
   setupAt: number | null;
   joining: boolean;
   seqs?: Record<string, number>;
+  reseedScopes?: string[];
+  reseedCycleOwed?: true;
+  chainOutage?: ChainOutage;
   sends?: Record<string, SendLedger>;
   tabCloses?: Record<string, string[]>;
   removing?: string[] | Record<string, ProfileRemoval>;
@@ -103,6 +108,8 @@ export type SyncUi = {
   status: SyncStatus;
   enabled: boolean;
   joining: boolean;
+  reseeding: boolean;
+  dataMissing: boolean;
   folder: string | null;
   types: Record<DataType, boolean>;
   profiles: Record<string, ProfileLink>;
@@ -119,6 +126,8 @@ export const emptyUi = (status: SyncStatus): SyncUi => ({
   status,
   enabled: false,
   joining: false,
+  reseeding: false,
+  dataMissing: false,
   folder: null,
   types: defaultTypes(),
   profiles: {},

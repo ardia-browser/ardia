@@ -6,9 +6,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace ardia_win::webui_window {
 
@@ -188,6 +190,30 @@ constexpr bool CanReclaim(std::string_view current_claim,
                           std::string_view previous_claim) {
   return current_claim.empty() || current_claim == previous_claim;
 }
+
+template <class Helper>
+class ClaimBound {
+ public:
+  const std::string& value() const { return claim_; }
+  bool empty() const { return claim_.empty(); }
+  uint64_t epoch() const { return epoch_; }
+
+  void Assign(std::string claim) {
+    helper_.reset();
+    claim_ = std::move(claim);
+    ++epoch_;
+  }
+  void Clear() { Assign(std::string()); }
+
+  Helper* helper() const { return helper_.get(); }
+  void Hold(std::unique_ptr<Helper> helper) { helper_ = std::move(helper); }
+  void DropHelper() { helper_.reset(); }
+
+ private:
+  std::string claim_;
+  uint64_t epoch_ = 0;
+  std::unique_ptr<Helper> helper_;
+};
 
 enum class UnclaimedStep { kWait, kPark, kDrop, kReport };
 
@@ -515,6 +541,38 @@ inline constexpr size_t kPickerPromptLimit = 200;
 inline constexpr size_t kDocumentEngineRequestLimit = 8 * 1024 * 1024;
 inline constexpr char kAppProfileName[] = "default";
 
+constexpr bool IsAppProfileName(std::string_view profile) {
+  return profile.empty() || profile == kAppProfileName;
+}
+
+constexpr std::string_view RegularProfileName(std::string_view requested) {
+  return requested.empty() ? std::string_view(kAppProfileName) : requested;
+}
+
+constexpr bool SameRegularProfile(std::string_view a, std::string_view b) {
+  return a == b || (IsAppProfileName(a) && IsAppProfileName(b));
+}
+
+constexpr std::string_view TabProfileName(bool supplied,
+                                          std::string_view requested,
+                                          std::string_view window_profile) {
+  return supplied ? RegularProfileName(requested) : window_profile;
+}
+
+constexpr std::string_view ShellProfileName(std::string_view engine_name) {
+  return engine_name == kAppProfileName ? std::string_view() : engine_name;
+}
+
+constexpr bool ReportsWindowFullScreen(bool widget_full_screen,
+                                       bool page_holds_full_screen) {
+  return widget_full_screen && !page_holds_full_screen;
+}
+
+constexpr bool ReleasesPageFullScreen(bool window_full_screen,
+                                      bool tab_full_screen_or_pending) {
+  return !window_full_screen && tab_full_screen_or_pending;
+}
+
 constexpr size_t Utf8SequenceLength(unsigned char lead) {
   if (lead < 0x80) {
     return 1;
@@ -673,6 +731,18 @@ constexpr bool HidesUntilHandedOver(bool started,
 
 constexpr bool KeepsWindowWithoutTabs(bool hosted, bool companion, bool closing) {
   return (hosted || companion) && !closing;
+}
+
+constexpr bool ShortcutReservedFromPages(std::string_view command) {
+  return command == "newTab" || command == "newWindow" ||
+         command == "newIncognitoWindow" || command == "reopenClosedTab" ||
+         command == "closeTab" || command == "closeWindow" ||
+         command == "nextTab" || command == "previousTab" ||
+         command == "tabSwitcher" || command == "quit";
+}
+
+constexpr bool ShortcutRegisters(bool suppressed) {
+  return !suppressed;
 }
 
 }

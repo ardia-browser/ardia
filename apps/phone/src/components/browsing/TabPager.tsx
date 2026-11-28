@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { Image, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, runOnJS, runOnUI, useAnimatedProps, useAnimatedReaction, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
-import { incomingPose, landedNear, outgoingPose, PAGER, resolvedOffset, snapTarget } from "../../lib/pagerPhysics";
+import { incomingPose, landedNear, outgoingPose, PAGER, pagerCommitDistance, resolvedOffset, snapTarget } from "../../lib/pagerPhysics";
 import { screenCornerRadius } from "../../state/app/displayCorner";
 import { haptics } from "../../state/app/haptics";
 import { usePageTone } from "../../state/browse/hooks";
@@ -15,7 +15,7 @@ import { findTab } from "../../state/tabs/tabsState";
 import { labTrace, traceSlice } from "../../platform/lab";
 import { carryHeldBarAction, commitBarAction, dropBarAction, takeBarAction, type BarAction } from "../../state/browse/store";
 import { useWarmPicture } from "../../state/tabs/warmPictures";
-import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, useTheme, useReduceMotion, smoothCorners } from "../ui";
+import { TabFace, tabsCurve, tabsLayout, tabsMotion, trayMotion, usePageTheme, useReduceMotion, smoothCorners } from "../ui";
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 
 export type TabPager = {
@@ -83,10 +83,10 @@ export function besideIn(order: readonly string[], id: string, delta: -1 | 1): s
   return order[at + delta] ?? "";
 }
 
-export function swipeRefusal(candidate: string, projected: number, span: number): SwipeRefusal {
+export function swipeRefusal(candidate: string, projected: number, span: number, commitAt?: number): SwipeRefusal {
   "worklet";
   if (candidate === "") return "edge";
-  if (Math.abs(projected) <= span * PAGER.commitFraction) return "short";
+  if (Math.abs(projected) <= (commitAt ?? pagerCommitDistance(span))) return "short";
   return "opposed";
 }
 
@@ -95,14 +95,14 @@ export function adjacentIn(order: readonly string[], from: string, to: string): 
   return at >= 0 && to !== "" && (order[at - 1] === to || order[at + 1] === to);
 }
 
-type Options = { width: number; selectedId: string | null; left: string | null; right: string | null; order?: readonly string[]; landsEarly?: boolean; onCommit: (id: string, onScreen: boolean) => void; onHeld?: (id: string, action: BarAction) => void; onSequence?: (active: boolean) => void; onGrab: () => void };
+type Options = { width: number; dragSpan?: number; selectedId: string | null; left: string | null; right: string | null; order?: readonly string[]; landsEarly?: boolean; onCommit: (id: string, onScreen: boolean) => void; onHeld?: (id: string, action: BarAction) => void; onSequence?: (active: boolean) => void; onGrab: () => void };
 
 export function isOpenTab(id: string): boolean {
   const tabs = currentTabs();
   return id !== "" && (tabs.open.some((tab) => tab.id === id) || tabs.privates.some((tab) => tab.id === id));
 }
 
-export function useTabPager({ width, selectedId, left, right, order, landsEarly = false, onCommit, onHeld, onSequence, onGrab }: Options): TabPager {
+export function useTabPager({ width, dragSpan = width, selectedId, left, right, order, landsEarly = false, onCommit, onHeld, onSequence, onGrab }: Options): TabPager {
   const reduceMotion = useReduceMotion();
   const cuts = tabSwitchCuts();
   const shownId = selectedId ?? "";
@@ -116,6 +116,10 @@ export function useTabPager({ width, selectedId, left, right, order, landsEarly 
   const hasLeft = useSharedValue(left !== null);
   const hasRight = useSharedValue(right !== null);
   const span = useSharedValue(width);
+  const commitAt = useSharedValue(pagerCommitDistance(dragSpan));
+  useLayoutEffect(() => {
+    commitAt.value = pagerCommitDistance(dragSpan);
+  }, [dragSpan]);
   const landing = useSharedValue(0);
   const landingTurn = useSharedValue(0);
   const fromId = useSharedValue(shownId);
@@ -464,10 +468,10 @@ export function useTabPager({ width, selectedId, left, right, order, landsEarly 
       const towardLeft = latchedLeft.value !== "";
       const towardRight = latchedRight.value !== "";
       const at = caught ? offset.value : resolvedOffset(travel.value, towardLeft, towardRight, span.value);
-      const target = caught ? snapTarget(at, velocity, span.value, hasLeft.value, hasRight.value) : snapTarget(at, velocity, span.value, towardLeft, towardRight);
+      const target = caught ? snapTarget(at, velocity, span.value, hasLeft.value, hasRight.value, commitAt.value) : snapTarget(at, velocity, span.value, towardLeft, towardRight, commitAt.value);
       const projected = at + velocity * PAGER.projectionTime;
       const candidate = projected > 0 ? latchedLeft.value : projected < 0 ? latchedRight.value : "";
-      if (target === 0) runOnJS(logSwipe)("refused", lift, from, candidate, projected, swipeRefusal(candidate, projected, span.value));
+      if (target === 0) runOnJS(logSwipe)("refused", lift, from, candidate, projected, swipeRefusal(candidate, projected, span.value, commitAt.value));
       else runOnJS(logSwipe)("accepted", lift, from, target > 0 ? latchedLeft.value : latchedRight.value, projected, "accepted");
       if (caught) settleCaught(target, velocity, lift);
       else settleFromCursor(target, velocity, lift);
@@ -491,7 +495,7 @@ export function useTabPager({ width, selectedId, left, right, order, landsEarly 
 type NeighbourProps = { pager: TabPager; tab: BrowserTab; side: -1 | 0 | 1; width: number; statusHeight: number; statusOver?: boolean; hasLeft: boolean; hasRight: boolean; coverId?: string };
 
 export function PagerNeighbour({ pager, tab, side, width, statusHeight, statusOver = false, hasLeft, hasRight, coverId }: NeighbourProps) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   const tone = usePageTone(tab.id);
   const { offset, from, cursor, rendered, renderedLeft, renderedRight } = pager;
   const reduceMotion = useReduceMotion();
@@ -548,7 +552,7 @@ export function aheadPose(side: -1 | 1, id: string, inner: string, cursor: strin
 type AheadProps = { pager: TabPager; tab: BrowserTab; side: -1 | 1; inner: string; width: number; statusHeight: number; statusOver?: boolean };
 
 export function PagerAhead({ pager, tab, side, inner, width, statusHeight, statusOver = false }: AheadProps) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   const tone = usePageTone(tab.id);
   const { cursor, panning, travel } = pager;
   const style = useAnimatedStyle(() => {
@@ -582,7 +586,7 @@ export function zeroArmedTurn(turn: number, refused: number, panning: number): n
 }
 
 export function PagerBackdrop({ pager }: { pager?: TabPager }) {
-  const theme = useTheme();
+  const theme = usePageTheme();
   return (
     <View testID="pagerBackdrop" style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]}>
       {pager && tabSwitchCuts() ? <PagerMarks pager={pager} /> : null}

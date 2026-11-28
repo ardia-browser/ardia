@@ -37,9 +37,14 @@ export type GlassProps = FrostProps & { shape?: GlassShape; tint?: string; inter
 
 export type NativeGlassRender = "lens" | "frost" | "clear" | "solid";
 
+export type LaunchLookSlot = { look?: ThemeLook; dark: boolean };
+
+export type SavedLaunchLook = { color?: string; themeColors: string[]; darkThemeColors?: string[]; themeLooks: { light: LaunchLookSlot; dark: LaunchLookSlot } };
+
 type LookNative = {
   hasGlass?: () => boolean;
   glassRender?: () => string;
+  rememberLaunchLook?: (saved: SavedLaunchLook) => boolean;
   setPageFrost?: (mode: "live" | "solid") => string;
   probeFrosts?: () => void;
   setLookOff?: (off: boolean) => boolean;
@@ -118,6 +123,8 @@ function look<P extends ViewProps>(name: string) {
 }
 
 export const lookIsNative = () => hasNativeLook;
+
+export const rememberLaunchLook = (saved: SavedLaunchLook): boolean => lookNative?.rememberLaunchLook?.(saved) ?? false;
 
 const hasNativeGlass = hasNativeLook && lookNative?.hasGlass?.() === true;
 

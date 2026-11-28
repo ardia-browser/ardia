@@ -12,7 +12,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.ardia.browser.ios",
-      "supportsTablet": true
+      "supportsTablet": false
     },
     "experiments": {
       "tsconfigPaths": false

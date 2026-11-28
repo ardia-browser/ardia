@@ -16,7 +16,11 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   time, interleaved with their control, because sharing the CPU skews them.
 - **Orchestrate.** The main session plans, hands implementation to Opus subagents, and verifies what they
   return (build, run, capture). Give each agent its own files, its own derived-data dir and its own
-  `ARDIA_DATA_DIR`.
+  `ARDIA_DATA_DIR`. When several agents edit one checkout, none of them waits for another's edit to settle: it
+  builds and tests in a scratch copy (`rsync -a --no-times --checksum`; plain `rsync -a` keeps old mtimes, and
+  cargo then builds a stale file), with others' half-done files swapped for the last good version,
+  then keeps its real edits in the shared tree. Agents left waiting were killed mid-run. Keep total build jobs
+  under about 2× the cores, and send the overflow to an idle Mac.
 - **Watch the agents.** Every ~30 minutes the main session checks any agent it hasn't heard from (last
   transcript activity, a pending tool call, `/tmp/ac-*.holder`, its processes). A stuck agent means a root
   cause to fix (a lock, a wait, a hang), not just a restart. Send new feedback to the agent that owns
@@ -24,15 +28,50 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Say when an instruction caused it.** When the owner asks for a change to something you did and it came out
   that way because you followed an instruction (this file, a doc, a skill), say so at once and name the
   instruction, so it can be fixed where it is written.
-- **Ask Codex for a second opinion** on risky logic (races, lifetimes, security, migrations, sync) and reviews,
-  before and after the change. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
-  `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high", serviceTier: "priority"}}`,
+- **Ask Codex for a second opinion** only on risky logic (races, lifetimes, crashes, security, migrations, sync,
+  engine), before and after the change. UI, copy, theme, layout and screenshot PRs get CI and a capture, not Codex. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
+  `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high"}}` (the model rejects `serviceTier`; a `400 Bad Request` is usually a
+  flaky service or an oversized request, so keep the reviewer's command outputs small and retry with a new id),
   `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Codex may run any command it needs
   (builds, tests, scripts, hidden instances, captures) in its own target and data dirs, but never writes, edits,
   formats or stages code. Give it the full brief each round (it doesn't share your context), including what you
   changed since the last round, how you verified it and which earlier findings you fixed or rejected and why.
-  Reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
-  or only nits remain; if blockers stay open after round 5, stop and escalate to the owner).
+  Round 1 asks for every finding at once, nits included, ranked by severity, so later rounds only check fixes.
+  Reproduce each finding before fixing it. Cap review loops at 2 rounds per PR, plus a third only for a
+  high-severity finding still open (stop earlier once approved or only nits remain). Blockers still open after
+  that go to the owner with the finding and its repro; nits go in a follow-up issue, not another round.
+- **The system improves and heals itself.** "The system" is everything agents work with: this file, the docs,
+  skills and briefs, the scripts and tools, the build and test machinery, the review loop and how agents are
+  orchestrated. When anything goes wrong, fix the cause in the system so the next agent can't hit it, then carry
+  on. Anything going wrong includes:
+  - a bug that shipped or nearly shipped;
+  - an agent stuck, killed or working from a wrong instruction;
+  - a tool that misled you, or a build that collided with another;
+  - a reviewer catching something the process should have;
+  - the owner correcting you.
+  - **Fix it where it's written.** A wrong instruction gets fixed in this file, the skill or the brief that gave it.
+    A missing guard becomes a script check or a hook. A slow or fragile step becomes a tool. A kind of bug that keeps
+    coming back becomes an invariant every future change is checked against, whether that's a harness, a generator,
+    a lint or a review prompt.
+  - **Do it in the same session, unasked.** Small, safe fixes land on their own. When the fix changes how the owner
+    works or costs a lot, propose it in one line.
+  - **Fix the kind, not the case.** When the same thing goes wrong twice, the second fix covers the whole kind.
+  - **Remove what keeps slowing shipping.** When the same blocker keeps costing time, improve that part, for
+    example:
+    - a wait;
+    - a manual step;
+    - a lock or queue;
+    - a slow build or check;
+    - a flaky service;
+    - an approval you keep needing.
+
+    Then tell the owner what changed and what it saves. Decide for yourself whether to just do it, or to bring it
+    to the owner first. Bring it first only when it needs their decision, their access or their money, or changes
+    how they work. Bringing it to the owner is never a substitute for doing it: when it's yours to do, do it and
+    report it, and when it isn't, bring a concrete proposal and keep working on what you can.
+  - **Never paper over it.** Don't retry, skip, silence or work around a failure without fixing why it happened.
+    Something that only looks fixed (a test that fakes the path it covers, a check skipped to get green, a flake
+    retried until it passes) counts as broken.
 - **Worktrees are fine.** Use a git worktree or a scratch clone for isolated feature, PR and full-send work, so
   you can switch branches, reset and stash without touching anyone else. `scripts/agent/guard-git` only blocks
   `checkout`, `switch`, `restore`, `stash`, `reset --hard` and `clean` in the shared root checkout (the primary
@@ -120,6 +159,10 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   `open -g -n --env ARDIA_BACKGROUND=1 --env ARDIA_DATA_DIR=<throwaway dir> --env ARDIA_REMOTE_DEBUGGING_PORT=<port> <app>`.
   Never use plain `open`. Background mode logs context menus and file panels instead of showing them.
   Keep test data in a scratch dir, not in `~/Documents`.
+  A test copy that LaunchServices can start (Finder's Open With, a URL or file handler) never gets `--env`, so it
+  runs on the default profile. Give every test copy its own bundle id, a distinct `CFBundleName`, and
+  `LSEnvironment` with its scratch `ARDIA_DATA_DIR`. Re-sign it and run `lsregister -f` before it can be
+  launched that way.
   You can make exceptions to this rule at your own discretion but dont misuse it. If you can find another way, prefer that and save that strategy for u to reuse later, maintain a skill file for this repo.
 - **Use Dia as reference.** You may take screenshots, read its app bundle and interact with it.
 - **The owner's real browser data is fair game for debugging.** Read the owner's Ardia, Dia and other browser
@@ -178,12 +221,27 @@ cross-builds. Don't spin up Boat VMs.
   remembers (positions, sizes), its animations and their timing in frames, and what keeps running.
   Obvious UX holds everywhere: dismissing something never pauses playback or drags you to another tab;
   going back to the source ends a temporary view (the mini player); nothing reopens right after you close it.
+  Never close an interaction bug as "works" or "the reference does the same" from reading code or from synthetic
+  input alone. Drive the same gesture with real input in both apps (the `cua-driver` skill on an unlocked Mac) and
+  compare what each one does. A pin-drag bug the owner reported was once dismissed that way, and it was real.
 - **Motion follows how often a thing is used.** What people touch all day (tab rows, pinned tiles, folders and
   groups, toolbar buttons, menus, the command bar, switching tabs) is tactile, fast and snappy: it answers on the
   press, with no bounce, squish, overshoot or other flourish, and nothing that delays or moves the thing being
   aimed at. Rare, larger moves (the sidebar opening and closing, onboarding, a sheet arriving) may feel premium:
   a longer curve, a soft spring, glass. When unsure, treat it as high-frequency and keep it plain. This is the
   owner's rule and it beats matching Dia: a Dia effect that bounces on something used all day is not copied.
+- **Design and motion skills.** For UI polish, motion, gestures and stress-testing UI, use Emil Kowalski's skills
+  (installed in `~/.claude/skills` from github.com/emilkowalski/skills). `ask-emil` picks the right one. The rest:
+  - motion: `animate`, `review-animations`, `improve-animations`, `remove-animations`, `choreograph`,
+    `animation-performance`;
+  - interaction and design: `gestures`, `apple-design`, `emil-design-eng`;
+  - stress tests: `break-ui`;
+  - capturing your corrections as rules: `learn-taste`.
+
+  Where a skill and this file disagree, this file wins: the motion-frequency rule above and Dia parity come first.
+  These skills are written for the web and React. Apply the principles, and take values from our own tokens.
+  `ask-emil`, `review-animations`, `learn-taste`, `pick-ui-library` and `prototype` are slash-command only. When
+  you need one of them, read its `~/.claude/skills/<name>/SKILL.md` and follow it.
 - **Owner recordings and screenshots.** Copy a recording out of its temp folder at once (it vanishes, and
   the name has a narrow no-break space: use a glob). Extract 30 fps frames with ffmpeg, find events by
   frame difference, and measure positions and timings from the pixels. A position or size in the owner's
@@ -228,6 +286,9 @@ cross-builds. Don't spin up Boat VMs.
     and Codex are for engine, native lifetime, focus, quit or security changes, and run once at the end.
   - After a fix, test that fix and move on. Don't re-run the full suite, the whole release sequence or
     checks that already passed; run only what covers the fix (the failed row, the smoke checks for its area).
+- **Build the whole app before you push native code.** A Swift, Kotlin or Objective-C change is built in the full
+  app target (the iPhone app for `packages/phone/ios`, the Android app for `packages/phone/android`), not only the
+  test target, before the push: a file the tests don't compile still breaks CI.
 - **Build safely.** Build the app with `scripts/agent/build-app --as <you>`: quiet, in parallel with other agents'
   builds, and it refuses JS-only changes. Run `pod install`/`pnpm install` and Chromium builds through
   `scripts/agent/locked <pod|chromium> -- <command>` (usage in the script); its lock dies with its holder.
@@ -235,7 +296,9 @@ cross-builds. Don't spin up Boat VMs.
   fast when the thing it waits on dies: `scripts/agent/await --pid <pid> -- <test>` instead of
   `until …; do sleep; done`. Run builds with `run_in_background` and act on the notification. Wrap
   screen captures in `timeout 20` (they hang while the screen is locked). Never wait for another agent's
-  edit to appear; report the dependency instead.
+  edit to appear; report the dependency instead. A delegated agent isn't woken when its background job finishes
+  after its turn ends, so it waits on the job in the same turn (or runs it in the foreground). It never ends with
+  "I'll check when it's done".
 
 ## Shipping
 - **Two channels: nightly and stable.** One app; Settings › General picks the channel, and nightly users get

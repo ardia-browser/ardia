@@ -17,7 +17,7 @@ import { archiveInMemory, clearArchivedTabs, loadArchiveUnlessPrepared, searchAr
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveSymbol, autoArchiveTitle, type AutoArchiveInterval, type BrowserTab } from "../../state/tabs/tabModels";
 import { LinkMenuItems, ListLoading, ListNoResults, ListRow, listSheetWords, opensPage } from "../library/listSheet";
 import { listSheetInsets } from "../library/listSheetTokens";
-import { iconRoles, modifierList, neverBounces, settingsChrome, sfName } from "../ui";
+import { bouncesWhenLong, iconRoles, modifierList, settingsChrome, sfName } from "../ui";
 
 const INTERVALS = Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[];
 
@@ -81,7 +81,7 @@ function ArchiveNavigation({ requestedAt }: { requestedAt: MutableRefObject<numb
     if (onScreen) loadArchiveUnlessPrepared();
   }, [onScreen]);
   const now = Date.now();
-  const page = modifierList(navigationTitle(destinationWords.archive), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), searchable(searchText, { placement: "navigationBarDrawer", prompt: SEARCH_PROMPT, onChange: setQuery }));
+  const page = modifierList(navigationTitle(destinationWords.archive), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), bouncesWhenLong(), searchable(searchText, { placement: "navigationBarDrawer", prompt: SEARCH_PROMPT, onChange: setQuery }));
   const content = !loaded ? (
     <ListLoading modifiers={page} />
   ) : !hasArchive ? (

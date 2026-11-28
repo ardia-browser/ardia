@@ -28,6 +28,7 @@ import { ExpoExperimentalPane, ExpoGeneralPane, ExpoSearchPane, ExpoTabsPane } f
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { SettingsHostedContext } from "./SettingsKit";
 import { SettingsPageFor } from "./SettingsView";
+import { SettingsPageOpenedContext } from "./settingsOpened";
 
 const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: SettingsRoute }) => React.JSX.Element>> = {
   general: ExpoGeneralPane,
@@ -133,6 +134,7 @@ export function SettingsNavigation() {
   const shown = open ? stack : kept.current.stack;
   const shownGeneration = open ? generation : kept.current.generation;
   const path = settingsPath(shown);
+  const onPath = new Set(path);
   const seen = useRef<{ open: boolean; keys: Set<string> }>({ open, keys: new Set() });
   if (open && !seen.current.open) seen.current = { open, keys: new Set() };
   else seen.current.open = open;
@@ -143,7 +145,7 @@ export function SettingsNavigation() {
       <StackRoot route={shown[0]} />
       {destinations.map((key) => (
         <NavigationDestination key={key} value={key}>
-          <Destination routeKey={key} pushed={seen.current.keys.has(key)} />
+          <Destination routeKey={key} pushed={seen.current.keys.has(key)} opened={onPath.has(key)} showing={open && onPath.has(key)} />
         </NavigationDestination>
       ))}
     </NavigationStack>
@@ -167,18 +169,30 @@ export const HERO_TITLED = new Set<SettingsRoute["page"]>(["sync", "syncConnect"
 
 export const placeholderTitle = (page: SettingsRoute["page"]) => (HERO_TITLED.has(page) ? "" : TITLES[page]);
 
-function Destination({ routeKey, pushed }: { routeKey: string; pushed: boolean }) {
+const HELD_UNTIL_PUSHED = new Set<SettingsRoute["page"]>(["sync", "syncConnect", "syncWords", "clearData", "trustedSites", "myFilters"]);
+
+export const drawnBeforePush = (page: SettingsRoute["page"]) => CONVERTED[page] !== undefined && !HELD_UNTIL_PUSHED.has(page);
+
+function Destination({ routeKey, pushed, opened, showing }: { routeKey: string; pushed: boolean; opened: boolean; showing: boolean }) {
   const route = settingsRouteFromKey(routeKey);
   if (!route) return null;
-  if (!pushed) return <VStack modifiers={modifierList(navigationTitle(placeholderTitle(route.page)), navigationBarTitleDisplayMode("inline"), settingsChrome(), accessibilityHidden(true))}>{null}</VStack>;
   const Converted = CONVERTED[route.page];
-  if (Converted) return <Converted route={route} />;
+  if (Converted && (pushed || drawnBeforePush(route.page))) {
+    return (
+      <SettingsPageOpenedContext.Provider value={opened}>
+        <Converted route={route} />
+      </SettingsPageOpenedContext.Provider>
+    );
+  }
+  if (!pushed) return <VStack modifiers={modifierList(navigationTitle(placeholderTitle(route.page)), navigationBarTitleDisplayMode("inline"), settingsChrome(), accessibilityHidden(true))}>{null}</VStack>;
   return (
     <VStack modifiers={modifierList(navigationTitle(TITLES[route.page]), navigationBarTitleDisplayMode("inline"), ignoreSafeArea({ edges: "bottom" }), settingsChrome())}>
       <RNHostView>
         <View style={styles.fill}>
           <SettingsHostedContext.Provider value>
-            <SettingsPageFor route={route} />
+            <SettingsPageOpenedContext.Provider value={showing}>
+              <SettingsPageFor route={route} />
+            </SettingsPageOpenedContext.Provider>
           </SettingsHostedContext.Provider>
         </View>
       </RNHostView>

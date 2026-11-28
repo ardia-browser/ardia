@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { PlatformColor } from "react-native";
 import { Button, Form, LabeledContent, NavigationLink, Picker, Section, Text, Toggle } from "@expo/ui/swift-ui";
 import { navigationBarTitleDisplayMode, navigationTitle, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
@@ -23,6 +23,7 @@ import { countUsage } from "../../state/telemetry/telemetry";
 import { neverBounces, contentMargins, modifierList, settingsChrome, settingsLayout, settingsSwitchStyle } from "../ui";
 import { ExpoRowText } from "./ExpoRowLabel";
 import { ExpoChoiceRow } from "./ExpoSettingsParts";
+import { useWhenOpened } from "./settingsOpened";
 
 const INTERVALS = (Object.keys(AUTO_ARCHIVE_INTERVALS) as AutoArchiveInterval[]).map((id) => ({ id, title: autoArchiveTitle(id) }));
 const APP_LINKS = [
@@ -33,7 +34,7 @@ const APP_LINKS = [
 const link = (route: SettingsRoute) => settingsRouteKey(route);
 
 function PaneForm({ title, children }: { title: string; children: ReactNode }) {
-  useEffect(() => countUsage("settings_panes_opened"), []);
+  useWhenOpened(() => countUsage("settings_panes_opened"));
   return (
     <Form modifiers={modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       {children}
@@ -45,9 +46,9 @@ export function ExpoGeneralPane() {
   const appLinks = useEngines((s) => s.appLinks);
   const sharing = useUsageSharing((s) => s.sharing);
   const offersDefault = offersDefaultBrowser(useDefaultBrowser((s) => s.status));
-  useEffect(() => {
+  useWhenOpened(() => {
     void refreshDefaultBrowser();
-  }, []);
+  });
   return (
     <PaneForm title="General">
       {offersDefault ? (
@@ -160,10 +161,10 @@ export function ExpoExperimentalPane() {
   const chatGPT = useChatGPTConnected();
   const summaries = usePageSummariesEnabled();
   const switchesSummaries = pageSummariesSwitchable();
-  useEffect(() => {
+  useWhenOpened(() => {
     void refreshChatGPTConnected();
     void refreshPageSummariesEnabled();
-  }, []);
+  });
   return (
     <PaneForm title="Experimental">
       {browseForMeOffered() ? (

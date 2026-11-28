@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Linking, View } from "react-native";
-import { showMenu } from "../../../state/app/system";
+import { confirm, showMenu } from "../../../state/app/system";
 import { Button, Dot, lineHeight, space, Symbol, Text } from "../../ui";
 import { perLook } from "../../ui/tokens";
 import { useTheme } from "../../ui/theme";
@@ -8,9 +8,10 @@ import { copyRecoveryPhrase, revealSyncFolder, type FolderInfo } from "../../../
 import { syncFolder } from "../../../state/settings/paneData";
 import { useResource } from "../../../state/settings/resources";
 import { useProfiles } from "../../../state/browser/hooks";
-import { chooseSyncFolder, folderInfo, moveSyncFolder, setOpenTabsSynced, setSyncFolder, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
+import { chooseSyncFolder, folderInfo, moveSyncFolder, recreateSyncFolder, setOpenTabsSynced, setSyncFolder, setTypeSynced, syncNow, turnOnSync, useSync } from "../../../state/sync/engine";
 import { folderMoveMessage, pickSyncFolder, type TurnOnFolder } from "../../../state/sync/folderMove";
-import { DATA_TYPES, type SyncStatus } from "../../../state/sync/syncDoc";
+import { folderRecreateMessage, syncStatusLine } from "../../../state/sync/folderRecovery";
+import { DATA_TYPES } from "../../../state/sync/syncDoc";
 import { deviceDetail } from "../../../state/sync/devices";
 import { Group, Row, SectionHeader } from "../Form";
 import { addAllRemoteProfiles, confirmRemoveDevice, folderLabel, lookingForProfiles, RemoteProfileRow, showConnectDevice, showPhraseEntry, showRecoveryKit, showStopSync } from "./SyncSheets";
@@ -18,27 +19,6 @@ import { ago } from "../../../lib/time";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { Checklist } from "./Checklist";
-
-function statusLine(status: SyncStatus, lastSyncedAt: number | null, pending: number, firstSync = false): string {
-  const since = lastSyncedAt ? ago(lastSyncedAt) : null;
-  const line = (() => {
-    if (firstSync && (status === "starting" || status === "updating" || status === "updated")) return "First sync in progress";
-    switch (status) {
-      case "starting":
-        return "Starting up";
-      case "updating":
-        return "Updating";
-      case "offline":
-        return "Offline";
-      case "stalled":
-      case "locked":
-        return since ? `Not syncing · last synced ${since}` : "Not syncing";
-      default:
-        return since && since !== "just now" ? `Updated ${since}` : "Updated just now";
-    }
-  })();
-  return pending ? `${line} · waiting for ${pending === 1 ? "1 file" : `${pending} files`} to download` : line;
-}
 
 export function SyncSection() {
   const enabled = useSync((s) => s.enabled);
@@ -60,7 +40,7 @@ export function SyncSection() {
       </>
     );
   }
-  return enabled ? <SyncOn info={info} /> : <SyncOff info={info} />;
+  return enabled ? <SyncOn info={info} onReload={reload} /> : <SyncOff info={info} />;
 }
 
 function SyncIcon({ on }: { on: boolean }) {
@@ -165,7 +145,7 @@ function SyncOff({ info }: { info: FolderInfo | null }) {
   );
 }
 
-function SyncOn({ info }: { info: FolderInfo | null }) {
+function SyncOn({ info, onReload }: { info: FolderInfo | null; onReload: () => Promise<unknown> }) {
   const theme = useTheme();
   const status = useSync((s) => s.status);
   const lastSyncedAt = useSync((s) => s.lastSyncedAt);
@@ -180,12 +160,23 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
   const profiles = useProfiles();
   const [, tick] = useState(0);
   const [moved, setMoved] = useState<{ text: string; failed: boolean } | null>(null);
+  const [recreating, setRecreating] = useState(false);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 30_000);
     return () => clearInterval(t);
   }, []);
 
+  const reloadRef = useRef(onReload);
+  reloadRef.current = onReload;
   const locked = status === "locked";
+  const offline = status === "offline";
+  const reseeding = useSync((s) => s.reseeding);
+  const dataMissing = useSync((s) => s.dataMissing);
+  const cloudDriveOff = !!info && info.inICloud && !info.iCloudAvailable;
+  const folderMissing = offline && !!info && !info.exists && !cloudDriveOff;
+  useEffect(() => {
+    if (offline) void reloadRef.current();
+  }, [offline]);
   const move = async () => {
     if (!info) return;
     setMoved(null);
@@ -194,6 +185,26 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     const result = await moveSyncFolder(target);
     const label = folderLabel({ path: target, inICloud: false });
     setMoved({ text: folderMoveMessage(result, label, folderLabel(info)), failed: "error" in result });
+  };
+  const recreate = async () => {
+    if (!info || recreating) return;
+    const label = folderLabel(info);
+    const { confirmed } = await confirm({
+      title: "Recreate Sync Folder?",
+      message: `Ardia will create a new sync folder at ${label} and upload your synced data from this ${PLATFORM_TERMS.computer}. If the folder is on a disconnected drive or still downloading from another device, reconnect it or wait instead.`,
+      confirmTitle: "Recreate Folder",
+    });
+    if (!confirmed) return;
+    setRecreating(true);
+    setMoved(null);
+    try {
+      const result = await recreateSyncFolder();
+      const message = folderRecreateMessage(result, label);
+      if (message) setMoved({ text: message, failed: "error" in result });
+      await onReload();
+    } finally {
+      setRecreating(false);
+    }
   };
   const advanced = async () => {
     const choice = await showMenu([
@@ -207,8 +218,10 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     ]);
     if (choice === "kit") showRecoveryKit();
     else if (choice === "copy") await copyRecoveryPhrase();
-    else if (choice === "now") await syncNow();
-    else if (choice === "reveal" && info) await revealSyncFolder(info.path);
+    else if (choice === "now") {
+      await syncNow();
+      await onReload();
+    } else if (choice === "reveal" && info) await revealSyncFolder(info.path);
     else if (choice === "stop") showStopSync();
   };
 
@@ -220,16 +233,20 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
     <>
       <SectionHeader title="Sync" />
       <Group>
-        <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={statusLine(status, lastSyncedAt, pending, firstSync)}>
+        <Row icon={<SyncIcon on={!locked} />} anchor="general.sync" description={syncStatusLine(status, lastSyncedAt, pending, ago, firstSync)}>
           {locked ? (
             <Button title="Enter Recovery Phrase…" kind="primary" onPress={() => showPhraseEntry(info)} />
+          ) : offline && cloudDriveOff && PLATFORM_TERMS.cloudDriveSettingsUrl ? (
+            <Button title="Open iCloud Settings" kind="primary" onPress={() => void Linking.openURL(PLATFORM_TERMS.cloudDriveSettingsUrl)} />
+          ) : folderMissing ? (
+            <Button title={recreating ? "Recreating…" : "Recreate Folder…"} kind="primary" disabled={recreating} onPress={() => void recreate()} />
           ) : (
-            <Button title="Connect Another Device…" onPress={showConnectDevice} />
+            <Button title="Connect Another Device…" disabled={offline || reseeding || dataMissing} onPress={showConnectDevice} />
           )}
           <Button title="Advanced…" onPress={() => void advanced()} />
         </Row>
         <Row anchor="general.syncFolder" description={info ? folderLabel(info) : " "}>
-          {PLATFORM_FEATURES.movesSyncFolder ? <Button title="Move…" disabled={locked || !info} onPress={() => void move()} /> : null}
+          {PLATFORM_FEATURES.movesSyncFolder ? <Button title="Move…" disabled={locked || recreating || !info} onPress={() => void move()} /> : null}
         </Row>
         <Checklist
           anchor="general.whatSyncs"
@@ -248,7 +265,7 @@ function SyncOn({ info }: { info: FolderInfo | null }) {
         />
         <Row anchor="general.syncDevices" description={devices.length ? undefined : `Just this ${PLATFORM_TERMS.computer} so far. Other devices show here once they sync.`} />
         {devices.map((d) => (
-          <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? statusLine(status, lastSyncedAt, 0, firstSync) : deviceDetail(d, ago)}>
+          <Row key={d.id} title={d.current ? `${d.name} (This ${PLATFORM_TERMS.computerTitle})` : d.name} description={d.current ? syncStatusLine(status, lastSyncedAt, 0, ago, firstSync) : deviceDetail(d, ago)}>
             {d.current ? null : <Button title="Remove…" onPress={() => void confirmRemoveDevice(d)} />}
           </Row>
         ))}

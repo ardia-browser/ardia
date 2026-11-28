@@ -54,5 +54,7 @@ sealed interface PageEvent {
 
     data object CloseRequested : PageEvent
 
+    data class ProcessEnded(val outcome: PageProcessOutcome) : PageEvent
+
     data class ExternalAppMissing(val url: String) : PageEvent
 }

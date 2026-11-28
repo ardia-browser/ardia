@@ -165,6 +165,13 @@ NSString *StoreFolder(NSString *profile, NSString *extensionId, id version) {
       completion:^(NSDictionary *result) { Answer(result, reply); }];
 }
 
++ (void)replacePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username password:(NSString *)password
+               expected:(NSString *)expected reply:(ArdiaServiceReply)reply {
+  [self call:@"ac_passwords_replace" profile:profile args:Login(origin, username)
+      secrets:@{@"password" : password ?: @"", @"expected" : expected ?: @""}
+      completion:^(NSDictionary *result) { Answer(result, reply); }];
+}
+
 + (void)updatePassword:(NSString *)profile origin:(NSString *)origin username:(NSString *)username
            newUsername:(NSString *)newUsername newPassword:(NSString *)newPassword reply:(ArdiaServiceReply)reply {
   NSMutableDictionary *args = [Login(origin, username) mutableCopy];

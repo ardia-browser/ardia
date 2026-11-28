@@ -18,6 +18,7 @@ export { barCenterFromBottom, barHeight, deckCenterFromBottom } from "./barGeome
 export { CodeCamera } from "./CodeCamera";
 export { Favicon } from "./Favicon";
 export { LoadingLine, type LoadWatch } from "./LoadingLine";
+export { LoadWash, materialWashTint, useWashTint, type LoadWashValues, type WashTint } from "./LoadWash";
 export { barReturnMotion, deckChromeMotion, departBezier, duration, easeOutBezier, menuMotion, motionAliases, snapSpring, iPhoneOr, moveTo, pageMenuMotion, scanMotion, trayLandingDelayMs, settingsMotion, spring, stageMotion, startMotion, tabsCurve, tabsMotion, toastMotion, trayMotion } from "./motion";
 export { ConfirmDialog, Dialog, showActionSheet, type Confirmation, type DialogButton } from "./Dialog";
 export { FloatingMenu, Menu, menuExitMs, MenuFloorProvider, MenuFrostProvider, pointPlacer, type MenuPlacer, onDrawnMenuActionChosen, onDrawnMenuOpened, type MenuAction, type MenuItem, type MenuSubmenu } from "./Menu";
@@ -36,7 +37,7 @@ export { IncognitoSpecs } from "./IncognitoSpecs";
 export { SystemGlyph, systemGlyphsAvailable, type SystemGlyphWeight } from "./SystemGlyph";
 export { placeholderTint, TabFace, tabFill } from "./TabFace";
 export { isSymbolName, type SymbolName } from "./symbolPaths";
-export { DEFAULT_PROFILE_COLOR, PROFILE_PRESETS, ProfileLookContext, rolesFor, spaceAccentFor, useProfileLook, useTheme, type SpaceAccent, type StartBackdrop, type Theme } from "./theme";
+export { DEFAULT_PROFILE_COLOR, PROFILE_PRESETS, ProfileLookContext, rolesFor, spaceAccentFor, useProfileLook, usePageTheme, useTheme, type SpaceAccent, type StartBackdrop, type Theme } from "./theme";
 export { accentGlowCss, actionLayout, barGlyphLayout, controlSize, elevation, emptyStateLayout, faviconLayout, glyphSlot, nativeShadowRadius, overlayInk, press, shadowCss, stroke, type ActionSize, type ElevationLevel, appIconLayout, browseLayout, capsule, controlRadius, shape, smoothCorners, font, ink, radius, space, dialogLayout, actionSheetLook, menuLayout, menuLook, floatingSheetLayout, pageInk, pageMenuInk, pageMenuLayout, readerInk, readerLayout, settingsLayout, settingsTint, themeEditorInk, themeEditorLayout, PROFILE_COLORS, scanInk, scanLayout, shadowRadius, spacesLayout, expoSpacesLayout, syncInk, tabsInk, voiceInk, voiceLayout, failureLayout, archiveCardLayout, onboardingArt, syncSketch, chromeInk, chromeLayout, floatingBarLayout, floatingPanelLayout, deckChromeInk, deckChromeLayout, startInk, startLayout, tabsLayout, toastLayout, trayShadow, type ColorRoles, type ProfileColor } from "./tokens";
 export { focusForScreenReader, useCoverFocus } from "./coverFocus";
 export { useFocusReturn } from "./focusReturn";
@@ -48,4 +49,4 @@ export { ChromeSurface, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBa
 export { appDesign, currentDesign, DesignProvider, designWith, followDesign, materialYouOffered, useDesign, usePageUnderBars } from "./design";
 export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";
-export { AppIconPreview, neverBounces, BrowseForMeSettings, CheckmarkLabel, chromeSurface, ColorSwatch, contentMargins, FilterTextEditor, FullScreenCover, GlassCircleButton, legibleInk, minListRowHeight, modifierList, navigationBarBackButtonHidden, PinnedTiles, pressableStyle, profileLook, settingsChrome, SettingsHeroContent, SettingsIconTile, settingsPage, SettingsRowLabel, SettingsShortcuts, settingsSwitchStyle, settingsUIAvailable, SetupStepRow, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, type ProfilePresetName, type SettingsTintName, type SetupProgress } from "./settingsPieces";
+export { AppIconPreview, bouncesWhenLong, neverBounces, BrowseForMeSettings, CheckmarkLabel, chromeSurface, ColorSwatch, contentMargins, FilterTextEditor, FullScreenCover, GlassCircleButton, legibleInk, minListRowHeight, modifierList, navigationBarBackButtonHidden, PinnedTiles, pressableStyle, profileLook, settingsChrome, SettingsHeroContent, SettingsIconTile, settingsPage, SettingsRowLabel, SettingsShortcuts, settingsSwitchStyle, settingsUIAvailable, SetupStepRow, spaceBackdrop, spaceColor, spaceMenuSymbol, SpacePageDots, spaceSymbol, SpaceTitle, type ProfilePresetName, type SettingsTintName, type SetupProgress } from "./settingsPieces";

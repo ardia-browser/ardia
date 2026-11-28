@@ -7,7 +7,7 @@ import { applyTabSpaces, setTabProfile } from "../tabs/store";
 import { tabSpacesFor } from "../tabs/spaces";
 import type { Design } from "../../lib/design";
 import { pinKey, pinsStillOnTheirWay } from "./spaces";
-import { shownProfile } from "./syncRules";
+import { pickAfterView, shownProfile, startupPatch, syncViewLoaded } from "./syncRules";
 
 export const notePinSent = (profileSyncId: string | null, url: string) =>
   useSync.setState((state) => ({ pinsOnTheirWay: [...state.pinsOnTheirWay, pinKey(profileSyncId, url)] }));
@@ -31,15 +31,33 @@ export const OFF_STATUS: SyncStatus = {
 
 export const EMPTY_VIEW: SyncedView = { devices: [], profiles: [], search: null, syncedAt: null, selectedProfileId: null, receivers: [] };
 
-type SyncData = { available: boolean; status: SyncStatus; view: SyncedView; revision: number; pinsOnTheirWay: string[] };
+type SyncData = {
+  available: boolean;
+  loaded: boolean;
+  status: SyncStatus;
+  view: SyncedView;
+  revision: number;
+  pinsOnTheirWay: string[];
+  pickedProfileId: string | null;
+};
 
-export const useSync = create<SyncData>()(() => ({ available: false, status: OFF_STATUS, view: EMPTY_VIEW, revision: 0, pinsOnTheirWay: [] }));
+export const useSync = create<SyncData>()(() => ({
+  available: false,
+  loaded: false,
+  status: OFF_STATUS,
+  view: EMPTY_VIEW,
+  revision: 0,
+  pinsOnTheirWay: [],
+  pickedProfileId: null,
+}));
 
 export const syncData = () => useSync.getState();
 
 const LOCAL_CHANGE_DELAY_MS = 1000;
 
 let started = false;
+let fetched = false;
+const seen = { status: false, view: false };
 let localTimer: ReturnType<typeof setTimeout> | null = null;
 const inboxListeners = new Set<() => void>();
 
@@ -68,8 +86,11 @@ export function setSpacesDesign(design: Design) {
   followSpaces();
 }
 
-export function showSpace(profileSyncId: string) {
-  void settled(() => sync.selectProfile(profileSyncId), undefined);
+export function pickSpace(profileSyncId: string) {
+  useSync.setState({ pickedProfileId: profileSyncId });
+  void settled(() => sync.selectProfile(profileSyncId).then(() => true), false).then((done) => {
+    if (!done && syncData().pickedProfileId === profileSyncId) useSync.setState({ pickedProfileId: null });
+  });
 }
 
 function publish(patch: Partial<SyncData>) {
@@ -77,8 +98,18 @@ function publish(patch: Partial<SyncData>) {
 }
 
 function onEvent(event: SyncEvent) {
-  if (event.name === "sync.status") publish({ status: event.status });
-  else if (event.name === "sync.view") publish({ view: event.view, pinsOnTheirWay: pinsStillOnTheirWay(syncData().pinsOnTheirWay, event.view) });
+  if (event.name === "sync.status") {
+    seen.status = true;
+    publish({ status: event.status });
+  } else if (event.name === "sync.view") {
+    seen.view = true;
+    publish({
+      view: event.view,
+      pinsOnTheirWay: pinsStillOnTheirWay(syncData().pinsOnTheirWay, event.view),
+      pickedProfileId: pickAfterView(syncData().pickedProfileId, event.view),
+      loaded: fetched && syncViewLoaded(event.view, true),
+    });
+  }
   else if (event.name === "sync.inbox" && event.count > 0) for (const listener of inboxListeners) listener();
 }
 
@@ -89,11 +120,14 @@ export function startSyncSources(onInbox: () => void) {
   try {
     sync.addListener(onEvent);
   } catch {
+    useSync.setState({ loaded: true });
     return;
   }
   useSync.setState({ available: true });
   void Promise.all([settled(() => sync.status(), null), settled(() => sync.view(), null)]).then(([status, view]) => {
-    publish({ ...(status ? { status } : {}), ...(view ? { view } : {}) });
+    fetched = true;
+    const patch = startupPatch(status, view, seen);
+    publish({ ...patch, loaded: syncViewLoaded(patch.view ?? syncData().view, seen.view || view !== null) });
     onInbox();
   });
 }

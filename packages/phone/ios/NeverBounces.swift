@@ -5,21 +5,34 @@ import UIKit
 
 struct NeverBouncesModifier: ViewModifier, Record {
   func body(content: Content) -> some View {
-    content.scrollBounceBehavior(.basedOnSize).background(ScrollBounceOff())
+    content.scrollBounceBehavior(.basedOnSize).background(ScrollBounceGuard(mode: .never))
   }
 }
 
-struct ScrollBounceOff: UIViewRepresentable {
-  func makeUIView(context: Context) -> ScrollBounceOffView { ScrollBounceOffView() }
-  func updateUIView(_ view: ScrollBounceOffView, context: Context) { view.apply() }
+struct BouncesWhenLongModifier: ViewModifier, Record {
+  func body(content: Content) -> some View {
+    content.scrollBounceBehavior(.basedOnSize).background(ScrollBounceGuard(mode: .whenLong))
+  }
 }
 
-final class ScrollBounceOffView: UIView {
+struct ScrollBounceGuard: UIViewRepresentable {
+  let mode: ScrollBounceMode
+
+  func makeUIView(context: Context) -> ScrollBounceGuardView { ScrollBounceGuardView(mode: mode) }
+  func updateUIView(_ view: ScrollBounceGuardView, context: Context) {
+    view.mode = mode
+    view.apply()
+  }
+}
+
+final class ScrollBounceGuardView: UIView {
   private weak var target: UIScrollView?
   private var watch: NSKeyValueObservation?
+  var mode: ScrollBounceMode
 
-  override init(frame: CGRect) {
-    super.init(frame: frame)
+  init(mode: ScrollBounceMode) {
+    self.mode = mode
+    super.init(frame: .zero)
     isUserInteractionEnabled = false
     isAccessibilityElement = false
   }
@@ -46,16 +59,17 @@ final class ScrollBounceOffView: UIView {
     }
     if target == nil, let found = findTarget() {
       target = found
-      if PhoneTestBuild.isOn { NSLog("PAGELAB scroll off %@ after %d checks", NSStringFromClass(type(of: found)), checks) }
+      if PhoneTestBuild.isOn { NSLog("PAGELAB scroll %@ %@ after %d checks", mode.rawValue, NSStringFromClass(type(of: found)), checks) }
+      let held = self.mode
       watch = found.observe(\.contentSize, options: []) { scroll, _ in
-        MainActor.assumeIsolated { ScrollBounceOffView.turnOff(scroll) }
+        MainActor.assumeIsolated { ScrollBounceGuardView.hold(scroll, to: held) }
       }
     }
-    if let target { Self.turnOff(target) }
+    if let target { Self.hold(target, to: mode) }
     guard checks < ScrollBounceTarget.retries else {
       if target == nil, PhoneTestBuild.isOn {
         let mine = convert(bounds, to: window)
-        NSLog("PAGELAB scroll off found no scroll view behind its form at %.0f,%.0f,%.0fx%.0f", mine.minX, mine.minY, mine.width, mine.height)
+        NSLog("PAGELAB scroll %@ found no scroll view behind its form at %.0f,%.0f,%.0fx%.0f", mode.rawValue, mine.minX, mine.minY, mine.width, mine.height)
       }
       return
     }
@@ -63,8 +77,9 @@ final class ScrollBounceOffView: UIView {
     DispatchQueue.main.asyncAfter(deadline: .now() + ScrollBounceTarget.retryGap) { [weak self] in self?.apply() }
   }
 
-  static func turnOff(_ scroll: UIScrollView) {
-    if scroll.bouncesVertically { scroll.bouncesVertically = false }
+  static func hold(_ scroll: UIScrollView, to mode: ScrollBounceMode) {
+    let vertical = mode.bouncesVertically
+    if scroll.bouncesVertically != vertical { scroll.bouncesVertically = vertical }
     if scroll.bouncesHorizontally { scroll.bouncesHorizontally = false }
     if scroll.alwaysBounceVertical { scroll.alwaysBounceVertical = false }
     if scroll.alwaysBounceHorizontal { scroll.alwaysBounceHorizontal = false }

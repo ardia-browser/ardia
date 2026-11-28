@@ -485,6 +485,8 @@ public enum PageMediaScript {
       }
     };
     window.addEventListener("visibilitychange", onVisibility, true);
+    window.addEventListener("pagehide", () => { held = false; leaving = null; lastSent = ""; send({ type: "media", token, state: "none", plays }); }, true);
+    window.addEventListener("pageshow", (event) => { if (event.persisted) schedule(); }, true);
     window.addEventListener("webkitvisibilitychange", (event) => { if (held) event.stopImmediatePropagation(); }, true);
 
     const command = (from, name, seconds) => {

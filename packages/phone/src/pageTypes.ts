@@ -223,7 +223,37 @@ export type PageEngineEvent =
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" }
   | { name: "pages.dark"; dark: boolean }
-  | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean };
+  | { name: "pages.webVideo"; outcome: WebVideoOutcome; isPrivate: boolean }
+  | PageMediaEvent
+  | { name: "pages.mediaReturn"; pageId: string };
+
+export type WebVideoOutcome = "floated" | "keptPlaying" | "playingInBackground" | "resumeRefused" | "pictureInPictureStarted" | "pictureInPictureRefused" | "returnedToTab";
+
+export type PageMediaState = "playing" | "paused" | "none";
+
+export type PageMediaEvent = {
+  name: "pages.media";
+  pageId: string;
+  state: PageMediaState;
+  isPrivate: boolean;
+  hasVideo?: boolean;
+  title?: string;
+  artist?: string;
+  artworkUrl?: string | null;
+  duration?: number | null;
+  position?: number;
+  rate?: number;
+  at?: number;
+  startedAt?: number;
+  canPrevious?: boolean;
+  canNext?: boolean;
+  canPictureInPicture?: boolean;
+  inPictureInPicture?: boolean;
+};
+
+export type PageMediaCommand = "play" | "pause" | "skip" | "previous" | "next" | "pictureInPicture" | "leavePictureInPicture";
+
+export type PageMediaSettings = { automaticPictureInPicture: boolean; keepsPlaying: boolean; skipSeconds: number };
 
 export type PageEventPayload =
   | ({ name: "state" } & Partial<Omit<PageState, "url" | "title" | "progress" | "isLoading" | "canGoBack" | "canGoForward">> &

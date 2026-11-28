@@ -26,6 +26,12 @@ struct RequestAnswerRecord: Record {
   @Field var password: String? = nil
 }
 
+struct MediaSettingsRecord: Record {
+  @Field var automaticPictureInPicture: Bool = true
+  @Field var keepsPlaying: Bool = true
+  @Field var skipSeconds: Int = PageMediaCommand.standardSkip
+}
+
 public final class PageViewModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ArdiaPhonePageView")
@@ -251,6 +257,20 @@ public final class PageViewModule: Module {
 
     AsyncFunction("evaluate") { (pageID: String, script: String, promise: Promise) in
       Self.main(promise) { try await PhonePages.shared.evaluate(pageID, script: script) }
+    }.runOnQueue(.main)
+
+    Function("pictureInPictureSupported") { () -> Bool in
+      WebMedia.pictureInPictureSupported
+    }
+
+    AsyncFunction("mediaCommand") { (pageID: String, command: String, seconds: Double?) -> Bool in
+      MainActor.assumeIsolated { PhonePages.shared.media?.command(pageID, command, seconds: seconds) ?? false }
+    }.runOnQueue(.main)
+
+    AsyncFunction("setMediaSettings") { (settings: MediaSettingsRecord) in
+      MainActor.assumeIsolated {
+        PhonePages.shared.media?.apply(PageMediaSettings(automaticPictureInPicture: settings.automaticPictureInPicture, keepsPlaying: settings.keepsPlaying, skipSeconds: settings.skipSeconds))
+      }
     }.runOnQueue(.main)
 
     AsyncFunction("setShownPage") { (pageID: String?) in

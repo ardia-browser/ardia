@@ -122,6 +122,10 @@ export type {
   NightShadeMode,
   PageEngineCapabilities,
   PageEngineEvent,
+  PageMediaCommand,
+  PageMediaEvent,
+  PageMediaSettings,
+  PageMediaState,
   PageProcessOutcome,
   PageError,
   PageLoadFailure,
@@ -151,6 +155,7 @@ export type {
   Subscription,
   VisitKind,
   WebsiteDataKind,
+  WebVideoOutcome,
 } from "./pageTypes";
 export { MATERIAL_ROLES, materialColors, type MaterialRole, type MaterialSchemeChange, type NativeMaterialScheme, type NativeMaterialSchemes } from "./material";
 export { MaterialSearchBar, materialSearchBarIsNative, type MaterialSearchAppearance, type MaterialSearchBarHandle, type MaterialSearchBarProps } from "./materialSearchBar";

@@ -29,7 +29,7 @@ final class PhonePages {
   private var finds: [String: PageFind] = [:]
   private var blockingGeneration = 0
   var shareGeneration = 0
-  private var videoFloat: WebVideoFloat?
+  private(set) var media: WebMedia?
   private var shownPageID: String?
 
   private struct PendingPopup {
@@ -74,12 +74,14 @@ final class PhonePages {
     }
     engine.onPageProcess = { [weak self] tabID, outcome, _ in
       guard let self, let pageID = self.pageIDs[tabID] else { return }
+      self.media?.pageEnded(pageID)
       self.send(pageID, "page.processEnded", ["outcome": outcome.rawValue])
     }
     engine.onPopup = { [weak self] opener, popup in self?.popupOpened(from: opener, popup: popup) }
     engine.onOpenLink = { [weak self] url, opener, inBackground in self?.linkOpened(url, from: opener, inBackground: inBackground) }
     engine.onPrivateBrowsingEnded = { [weak self] in self?.privateBrowsingEnded() }
-    videoFloat = WebVideoFloat(liveWebViews: { [weak self] in self?.liveWebViews() ?? [] }) { [weak self] outcome in self?.webVideoLeftForeground(outcome) }
+    engine.onPageScriptController = { [weak self] controller in self?.media?.attach(to: controller) }
+    media = makeMedia()
     engine.downloads.onStart = { [weak self] start, webView in self?.downloadStarted(start, in: webView) }
     engine.downloads.onProgress = { [weak self] list in
       self?.downloadSink?(["name": "downloads.progress", "downloads": list.map(PagePayloads.download)])
@@ -220,6 +222,7 @@ final class PhonePages {
   }
 
   private func forget(_ pageID: String) {
+    media?.forget(pageID)
     watchers.removeValue(forKey: pageID)?.stop()
     visuals.forget(pageID)
     finds[pageID] = nil

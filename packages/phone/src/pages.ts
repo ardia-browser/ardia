@@ -6,6 +6,8 @@ import type {
   NightShadeMode,
   PageEngineCapabilities,
   PageEngineEvent,
+  PageMediaCommand,
+  PageMediaSettings,
   PageRequestAnswer,
   PageSetup,
   PageSnapshot,
@@ -113,6 +115,9 @@ type PagesNative = {
   clearWebsiteData(kinds: WebsiteDataKind[]): Promise<void>;
   clearWebsiteDataSince?(kinds: WebsiteDataKind[], since: number): Promise<void>;
   setInspectable(inspectable: boolean): Promise<void>;
+  pictureInPictureSupported?(): boolean;
+  mediaCommand?(pageId: string, command: PageMediaCommand, seconds: number | null): Promise<boolean>;
+  setMediaSettings?(settings: PageMediaSettings): Promise<void>;
 };
 
 let loaded: PagesNative | undefined;
@@ -234,6 +239,24 @@ export const pages = {
   },
   clearsWebsiteDataSince: (): boolean => typeof native().clearWebsiteDataSince === "function",
   setInspectable: (inspectable: boolean) => native().setInspectable(inspectable),
+  reportsMedia: (): boolean => {
+    try {
+      return typeof native().mediaCommand === "function";
+    } catch {
+      return false;
+    }
+  },
+  pictureInPictureSupported: (): boolean => {
+    try {
+      return native().pictureInPictureSupported?.() === true;
+    } catch {
+      return false;
+    }
+  },
+  mediaCommand: async (pageId: string, command: PageMediaCommand, seconds?: number): Promise<boolean> => (await native().mediaCommand?.(pageId, command, seconds ?? null)) === true,
+  setMediaSettings: async (settings: PageMediaSettings): Promise<void> => {
+    await native().setMediaSettings?.(settings);
+  },
   addListener: (listener: (event: PageEngineEvent) => void): Subscription =>
     native().addListener("onPageEngineEvent", (event) =>
       listener(event.name === "page.state" ? { ...event, state: normalizeState(event.state, false) } : event),

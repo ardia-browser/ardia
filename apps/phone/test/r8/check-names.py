@@ -15,11 +15,19 @@ def has_no_argument_constructor(section):
     return re.search(r"name\s*:\s*'<init>'\s*\n\s*type\s*:\s*'\(\)V'", section) is not None
 
 
+def missing_resources(expected, dump_text):
+    found = set(re.findall(r'resource 0x[0-9a-f]+ ([a-z]+/[A-Za-z0-9_.$]+)', dump_text))
+    return sorted(item for item in expected if item not in found)
+
+
 if len(sys.argv) > 1 and sys.argv[1] == '--self-test':
     wrong = "    #0 : (in LX;)\n      name          : '<init>'\n      type          : '(Landroid/content/Context;)V'\n    #1 : (in LX;)\n      name          : 'clear'\n      type          : '()V'\n"
     right = "    #0 : (in LX;)\n      name          : '<init>'\n      type          : '()V'\n"
     assert not has_no_argument_constructor(wrong), 'a constructor with arguments and an unrelated ()V method must not pass'
     assert has_no_argument_constructor(right)
+    sample_dump = "    resource 0x7f150001 string/ardia_build_commit\n      () \"abc\"\n    resource 0x7f070082 drawable/ardia_logo\n      () (file) res/JK1.xml type=XML\n"
+    assert missing_resources({'string/ardia_build_commit', 'drawable/ardia_logo'}, sample_dump) == []
+    assert missing_resources({'string/ardia_release_version', 'drawable/ardia_logo'}, sample_dump) == ['string/ardia_release_version']
     print('self-test passed')
     sys.exit(0)
 
@@ -148,4 +156,35 @@ print(f'{room}: {"present with its no-argument constructor" if constructor else 
 lost = lost + ([] if constructor else [room])
 generated = 'expo.modules.ExpoModulesPackageList'
 print(f'{generated}: {"present" if generated in classes else "MISSING"}')
-sys.exit(1 if missing or absent or unnamed or lost or generated not in classes else 0)
+
+expected_resources = {
+    'string/ardia_build_commit',
+    'string/ardia_build_dirty',
+    'string/ardia_build_source',
+    'string/ardia_build_native',
+    'string/ardia_release_version',
+    'bool/ardia_sync_offered',
+}
+for root_dir in (repo / 'apps/phone/android/app/src/main', repo / 'packages/phone/android/src/main'):
+    for source in list(root_dir.rglob('*.kt')) + list(root_dir.rglob('*.java')):
+        for res_name, res_type in re.findall(r'getIdentifier\(\s*"([^"]+)"\s*,\s*"([^"]+)"', source.read_text()):
+            expected_resources.add(f'{res_type}/{res_name}')
+    for res_dir in root_dir.glob('res*'):
+        if not res_dir.is_dir():
+            continue
+        for folder in res_dir.iterdir():
+            if not folder.is_dir():
+                continue
+            base_type = folder.name.split('-', 1)[0]
+            if base_type not in ('drawable', 'mipmap', 'layout', 'xml'):
+                continue
+            for res_file in folder.iterdir():
+                if res_file.is_file():
+                    expected_resources.add(f'{base_type}/{res_file.name.split(".", 1)[0]}')
+
+lost_resources = missing_resources(expected_resources, values)
+print(f'runtime & app resources: {len(expected_resources)}, {len(lost_resources)} missing')
+for item in lost_resources:
+    print(f'  MISSING resource {item}')
+
+sys.exit(1 if missing or absent or unnamed or lost or lost_resources or generated not in classes else 0)

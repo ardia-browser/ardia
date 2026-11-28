@@ -98,8 +98,8 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["tray_incognito_switches", "incognito_unavailable"],
       },
       {
-        text: "In the same daily counts, on iPhone: how often you summarized a page by pinching in or from the page menu, how many summaries Apple Intelligence wrote on the phone or were the page’s own lines, and how many it couldn’t write. Counts only, never which page or what the summary said",
-        fields: ["page_summaries_pinched", "page_summaries_from_menu", "page_summaries_on_device", "page_summaries_excerpts", "page_summaries_failed"],
+        text: "In the same daily counts, on iPhone: how often you summarized a page by pinching in or from the page menu, how many summaries Apple Intelligence wrote on the phone or were the page’s own lines, how many it couldn’t write, and how often you shared a summary. Counts only, never which page or what the summary said",
+        fields: ["page_summaries_pinched", "page_summaries_from_menu", "page_summaries_on_device", "page_summaries_excerpts", "page_summaries_failed", "page_summaries_shared"],
       },
       {
         text: "In the same daily counts, on Android: when a search answer or a page summary couldn’t use Gemini Nano, why: it was still downloading, its download stopped, Google doesn’t offer it to apps on this phone, it needed a Google AICore or system update, it didn’t start, or it started but couldn’t write; and how often you rewrote a search answer with Gemini Nano once its download finished. Counts only, never what you searched for or which page",

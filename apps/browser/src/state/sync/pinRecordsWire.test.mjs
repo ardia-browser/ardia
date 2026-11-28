@@ -4,6 +4,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const folders = await import("../pins/tileFolders.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { useEditClock } = await import("./editClock.ts");
 const pinnedArea = await import("./pinned.ts");
 
 const GOLDEN = new URL("./fixtures/pin-records.json", import.meta.url);
@@ -38,6 +39,7 @@ class Device {
     this.clock = new Clock(id);
   }
   with(fn) {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       return fn();
@@ -46,6 +48,7 @@ class Device {
     }
   }
   async sync() {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       return await syncScope({ scope: "p", state: this.scope, transport: this.folder.transport(), adapters: pinnedArea.pinnedAreaAdapters("default"), clock: this.clock, device: this.id });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { Clock, compact, emptyScope, syncScope } = await import("@ardia/sync");
+const { useEditClock } = await import("./editClock.ts");
 const pinnedArea = await import("./pinned.ts");
 const previous = await import("./fixtures/pinned-v0.2.40.ts");
 const openTabs = await import("./openTabs.ts");
@@ -66,6 +67,7 @@ class Device {
     return S().profiles[P]?.syncTabs ? "on" : this.retire ? "retire" : "off";
   }
   with(fn) {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       const before = S();
@@ -77,6 +79,7 @@ class Device {
     }
   }
   async sync() {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       const before = S();
@@ -330,6 +333,7 @@ test("the option itself syncs between Macs", async () => {
     const d = new Device(id, folder);
     d.with(() => S().updateProfile(P, { syncTabs: undefined }));
     d.sync = async function () {
+      useEditClock(this.clock);
       useBrowser.setState(this.browser, true);
       try {
         return await syncScope({ scope: "app", state: this.scope, transport: folder.transport(), adapters: [profileOpenTabsAdapter(() => ({ [P]: { syncId: "s1" } }))], clock: this.clock, device: this.id });

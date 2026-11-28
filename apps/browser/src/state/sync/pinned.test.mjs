@@ -3,6 +3,7 @@ import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const folders = await import("../pins/tileFolders.ts");
 const { Clock, emptyScope, startRebase, syncScope } = await import("@ardia/sync");
+const { useEditClock } = await import("./editClock.ts");
 const pinnedArea = await import("./pinned.ts");
 const previous = await import("./fixtures/pinned-v0.2.40.ts");
 
@@ -29,16 +30,17 @@ class Folder {
 }
 
 class Device {
-  constructor(id, folder, adapters = () => pinnedArea.pinnedAreaAdapters("default")) {
+  constructor(id, folder, adapters = () => pinnedArea.pinnedAreaAdapters("default"), now = Date.now) {
     this.id = id;
     this.folder = folder;
     this.adapters = adapters;
     S().hydrate({});
     this.browser = S();
     this.scope = emptyScope();
-    this.clock = new Clock(id);
+    this.clock = new Clock(id, null, now);
   }
   with(fn) {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       return fn();
@@ -47,6 +49,7 @@ class Device {
     }
   }
   async sync() {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       const adapters = this.adapters();
@@ -530,6 +533,27 @@ test("a rebase keeps a tile turned into a row here and not sent yet, since its c
   assert.ok(area(b).includes("mail:tile"));
   b.with(() => S().placeTabs([tabOf("mail")], { pinned: true, row: true }));
   assert.ok(area(b).includes("mail:row"));
+  startRebase(b.scope);
+  await syncAll([b, a]);
+  assert.ok(area(b).includes("mail:row"), "the rebase keeps the row chosen here");
+  assert.ok(area(a).includes("mail:row"), "and it reaches the other Mac");
+});
+
+test("a tile turned into a row here in the same millisecond the synced tile was stamped still wins the rebase", async () => {
+  const folder = new Folder();
+  const sameMs = () => 4_000_000_000_000;
+  const sessionBacked = () => pinnedArea.pinnedAreaAdapters("default").map((adapter) => ({ ...adapter, sessionBacked: true }));
+  const a = new Device("devA", folder, sessionBacked, sameMs);
+  const b = new Device("devB", folder, sessionBacked, sameMs);
+  seed(a);
+  b.with(() => S().createWindow({ url: "https://b-home.example/" }));
+  await syncAll([a, b]);
+  const mailKey = b.with(() => { const t = S().tabs[tabOf("mail")]; return t.pinKey ?? t.id; });
+  const synced = b.scope.records[`pinrow:${mailKey}`];
+  assert.ok(synced, "the tile arrived as a synced record");
+  b.with(() => S().placeTabs([tabOf("mail")], { pinned: true, row: true }));
+  const chosen = b.with(() => S().pinChoices.default[mailKey]);
+  assert.ok(chosen > synced.h, "the choice made here sorts after every record this Mac has seen");
   startRebase(b.scope);
   await syncAll([b, a]);
   assert.ok(area(b).includes("mail:row"), "the rebase keeps the row chosen here");

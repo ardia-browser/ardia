@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,7 +16,7 @@ function executable(path, body) {
   chmodSync(path, 0o755);
 }
 
-function launch(t, args, { command = "data", env = {}, folder = null, installed = "script", status = 0, flatpak = false, namespaces = true } = {}) {
+function launch(t, args, { command = "data", env = {}, folder = null, installed = "script", status = 0, flatpak = false, namespaces = true, chrome = 'printf "browser %s\\n" "$@"', appimage = false, run = null } = {}) {
   const root = mkdtempSync(join(tmpdir(), "ardia-launch-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const runtime = join(root, "lib/ardia");
@@ -29,7 +29,8 @@ function launch(t, args, { command = "data", env = {}, folder = null, installed 
   if (flatpak) writeFileSync(join(root, ".flatpak-info"), "[Application]\nname=dev.ardia.Ardia\n");
   executable(join(root, "bin/cobalt"), 'printf "cobalt %s\\n" "$@"');
   chmodSync(join(runtime, "ardia-launch"), 0o755);
-  executable(join(runtime, "chrome"), 'printf "browser %s\\n" "$@"');
+  executable(join(runtime, "chrome"), chrome);
+  copyFileSync(execFileSync("bash", ["-c", "command -v sleep"], { encoding: "utf8" }).trim(), join(runtime, "chrome_crashpad_handler"));
   const homes = { data: join(root, "data/ardia/cli"), own: join(root, "own"), home: join(root, "home/.local/share/ardia/cli") };
   if (command) {
     const installedCommand = join(homes[command], "9.9.9/bin/ardia");
@@ -42,6 +43,8 @@ function launch(t, args, { command = "data", env = {}, folder = null, installed 
   if (folder) mkdirSync(join(root, folder));
   const variables = { PATH: `${join(root, "bin")}:${process.env.PATH}`, XDG_DATA_HOME: join(root, "data"), HOME: join(root, "home"), ...env };
   if (variables.ARDIA_CLI_HOME) variables.ARDIA_CLI_HOME = join(root, variables.ARDIA_CLI_HOME);
+  if (appimage) Object.assign(variables, { APPDIR: root, APPIMAGE: join(root, "Ardia.AppImage") });
+  if (run) return run(join(runtime, "ardia-launch"), { cwd: root, env: variables });
   const result = spawnSync(join(runtime, "ardia-launch"), args, { cwd: root, env: variables, encoding: "utf8" });
   assert.equal(result.status, status, result.stderr);
   return result.stdout.trimEnd().split("\n");
@@ -108,4 +111,58 @@ test("outside a Flatpak cobalt is never used, and without a sandbox the launch i
 
 test("inside another app's Flatpak the launcher starts the browser itself, not through cobalt", (t) => {
   assert.deepEqual(launch(t, ["--version"], { flatpak: true, env: { FLATPAK_ID: "org.gnome.Builder" }, command: null }), ["browser --version"]);
+});
+
+const HANDLER = 'trap "" HUP; "$(dirname "$0")/chrome_crashpad_handler" 2 </dev/null >/dev/null 2>&1 3>&- & printf "%s" "$!" > "$(dirname "$0")/../../handler.pid"';
+
+function alive(pid) {
+  const stat = existsSync(`/proc/${pid}/stat`) ? readFileSync(`/proc/${pid}/stat`, "utf8") : "";
+  return stat !== "" && !/^\d+ \(.*\) Z /.test(stat);
+}
+
+function launchHoldingKeepalive(t, { then = "exit 0", ...options }) {
+  return launch(t, [], {
+    ...options,
+    chrome: `${HANDLER}\n${then}`,
+    run: (launcher, spawnOptions) =>
+      new Promise((resolve, reject) => {
+        const child = spawn(launcher, [], { ...spawnOptions, detached: true, stdio: ["ignore", "pipe", "inherit", "pipe"] });
+        let pid;
+        const handler = () => (pid ??= Number(readFileSync(join(spawnOptions.cwd, "handler.pid"), "utf8")));
+        const seen = {};
+        const deadline = setTimeout(() => reject(new Error("the keepalive pipe stayed open for 15 s")), 15_000);
+        t.after(() => {
+          clearTimeout(deadline);
+          if (pid && alive(pid)) process.kill(pid, "SIGKILL");
+        });
+        child.on("error", reject);
+        child.stdout.resume();
+        child.stdout.on("close", () => (seen.stdoutClosed = { handlerAlive: alive(handler()) }));
+        child.stdio[3].resume();
+        child.stdio[3].on("close", () => {
+          clearTimeout(deadline);
+          resolve({ ...seen, keepaliveClosed: { handlerAlive: alive(handler()) } });
+        });
+      }),
+  });
+}
+
+test("in an AppImage the runtime's keepalive pipe stays open until the crashpad handlers the browser left behind are gone", async (t) => {
+  const { keepaliveClosed } = await launchHoldingKeepalive(t, { appimage: true });
+  assert.equal(keepaliveClosed.handlerAlive, false);
+});
+
+test("in an AppImage the keepalive pipe outlives a hangup of the terminal the browser was started from", async (t) => {
+  const { keepaliveClosed } = await launchHoldingKeepalive(t, { appimage: true, then: "kill -HUP 0\nexit 0" });
+  assert.equal(keepaliveClosed.handlerAlive, false);
+});
+
+test("in an AppImage the launcher's output closes when the browser exits, without waiting for the handlers", async (t) => {
+  const { stdoutClosed } = await launchHoldingKeepalive(t, { appimage: true });
+  assert.equal(stdoutClosed.handlerAlive, true);
+});
+
+test("outside an AppImage nothing holds the keepalive pipe after the browser exits", async (t) => {
+  const { keepaliveClosed } = await launchHoldingKeepalive(t, {});
+  assert.equal(keepaliveClosed.handlerAlive, true);
 });

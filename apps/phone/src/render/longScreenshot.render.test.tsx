@@ -282,6 +282,19 @@ onAndroid("Back on the preview cancels it, forgets the capture and counts the ca
   unmount(root);
 });
 
+onAndroid("a pinch-zoomed page is refused with a message that says to zoom out", async () => {
+  taken.mockRejectedValueOnce(Object.assign(new Error("Zoom out to take a long screenshot"), { code: "ERR_LONG_SCREENSHOT_ZOOMED" }));
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Long Screenshot");
+  await settle();
+  await settle();
+  expect(useLongScreenshot.getState().stage.kind).toBe("idle");
+  expect(useToasts.getState().toast?.message).toBe("Zoom Out to Take a Long Screenshot");
+  expect(counted).toHaveBeenCalledWith("long_screenshot_failed");
+  unmount(root);
+  act(() => usePageUi.setState({ menuOpen: false }));
+});
+
 onAndroid("a capture the module refuses or returns malformed shows a short message and counts a failure", async () => {
   taken.mockRejectedValueOnce(new Error("ERR_LONG_SCREENSHOT")).mockResolvedValueOnce({ ...SHOT, tiles: [] });
   for (let attempt = 0; attempt < 2; attempt += 1) {

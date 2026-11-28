@@ -2129,8 +2129,8 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   on a taller page is a failure with its toast. A page longer than 20 screens is captured to the cap and reported
   partial too (`LongScreenshotPlan.capped`, sent as `capped: true`), so the preview says "First 20 screens" rather
   than pass the cap off as the whole page; a stitch that stops just short of the cap still says "Stopped after 20
-  screens". A pinch-zoomed page (`visualViewport.scale` above 1.01) is refused before it is marked, with "Zoom out to
-  take a long screenshot": the scripts move the layout viewport, which at 2× leaves the bottom of the page and the
+  screens". A pinch-zoomed page (`visualViewport.scale` above 1.01) is refused before it is marked, with the toast "Zoom Out to
+  Take a Long Screenshot" (`ERR_LONG_SCREENSHOT_ZOOMED`): the scripts move the layout viewport, which at 2× leaves the bottom of the page and the
   restored position off by the visual viewport's offset. Before
   the first step a quick pass scrolls to the bottom and back, so lazily loaded images and
   Wikipedia's Related Articles are in place before anything is drawn; without it they appeared between two steps and

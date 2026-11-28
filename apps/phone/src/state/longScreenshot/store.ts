@@ -13,6 +13,8 @@ export type LongScreenshotStage =
   | { kind: "saved"; tabId: string; shot: Shot; saved: SavedShot; sharing: boolean };
 
 export const CAPTURE_FAILED = "Couldn’t Take a Long Screenshot";
+export const ZOOMED_IN = "Zoom Out to Take a Long Screenshot";
+const ZOOMED_CODE = "ERR_LONG_SCREENSHOT_ZOOMED";
 export const SAVE_FAILED = "Couldn’t Save the Screenshot";
 export const SHARE_FAILED = "Couldn’t Share the Screenshot";
 
@@ -70,7 +72,11 @@ export async function takeLongScreenshot(tabId: string, isPrivate: boolean) {
   watchCapture(tabId);
   await new Promise((done) => setTimeout(done, COVERED_MS));
   if (mine !== run) return;
-  const raw = await pages.takeLongScreenshot(tabId).catch(() => null);
+  let refusal = CAPTURE_FAILED;
+  const raw = await pages.takeLongScreenshot(tabId).catch((error: unknown) => {
+    if ((error as { code?: unknown } | null)?.code === ZOOMED_CODE) refusal = ZOOMED_IN;
+    return null;
+  });
   const shot = shotOf(raw);
   if (mine !== run || currentTabs().selectedId !== tabId) {
     if (shot) forget(shot);
@@ -83,7 +89,7 @@ export async function takeLongScreenshot(tabId: string, isPrivate: boolean) {
   stopWatching();
   if (!shot) {
     enter({ kind: "idle" });
-    failed(CAPTURE_FAILED);
+    failed(refusal);
     return;
   }
   enter({ kind: "preview", tabId, shot, saving: false });

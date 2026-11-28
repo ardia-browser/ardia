@@ -113,7 +113,7 @@ internal object LongScreenshots {
         try {
             when (evaluateNumber(web, script(MARK, held))) {
                 1 -> Unit
-                2 -> throw failure("Zoom out to take a long screenshot")
+                2 -> throw CodedException(ZOOMED_CODE, "Zoom out to take a long screenshot", null)
                 else -> throw failure("The page didn't answer")
             }
             val stitched = try {
@@ -530,6 +530,8 @@ internal object LongScreenshots {
         val manager = context.getSystemService(ActivityManager::class.java) ?: return LongScreenshotPlan.MIN_BUDGET_BYTES * 8
         return ActivityManager.MemoryInfo().also(manager::getMemoryInfo).availMem
     }
+
+    private const val ZOOMED_CODE = "ERR_LONG_SCREENSHOT_ZOOMED"
 
     private fun failure(reason: String) = CodedException("ERR_LONG_SCREENSHOT", reason, null)
 

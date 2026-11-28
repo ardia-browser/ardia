@@ -60,7 +60,7 @@ interface Page : AutoCloseable {
 
     fun setDesktopSite(enabled: Boolean)
 
-    fun download(url: String)
+    fun download(url: String, fileName: String? = null)
 
     suspend fun readableContent(): ReadableContent
 

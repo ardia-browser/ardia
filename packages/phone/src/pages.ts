@@ -70,7 +70,7 @@ type PagesNative = {
   zoomIn(pageId: string): Promise<number>;
   zoomOut(pageId: string): Promise<number>;
   setDesktopSite(pageId: string, enabled: boolean): Promise<void>;
-  download(pageId: string, url: string): Promise<void>;
+  download(pageId: string, url: string, fileName: string | null): Promise<void>;
   readableContent(pageId: string): Promise<ReadableContent | null>;
   print?(pageId: string): Promise<boolean>;
   sharePage?(pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null>;
@@ -165,7 +165,7 @@ export const pages = {
   zoomIn: (pageId: string) => native().zoomIn(pageId),
   zoomOut: (pageId: string) => native().zoomOut(pageId),
   setDesktopSite: (pageId: string, enabled: boolean) => native().setDesktopSite(pageId, enabled),
-  download: (pageId: string, url: string) => native().download(pageId, url),
+  download: (pageId: string, url: string, fileName: string | null = null) => native().download(pageId, url, fileName),
   readableContent: (pageId: string) => native().readableContent(pageId),
   listsSitePermissions: (): boolean => typeof native().sitePermissions === "function",
   remembersSitePermissions: (): boolean => native().remembersSitePermissions === true,

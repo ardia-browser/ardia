@@ -326,8 +326,8 @@ internal class WebViewPage(
         web.loadUrl(current)
     }
 
-    override fun download(url: String) {
-        emitDownload(url, webView?.settings?.userAgentString, null, null, -1)
+    override fun download(url: String, fileName: String?) {
+        emitDownload(url, webView?.settings?.userAgentString, null, null, -1, fileName)
     }
 
     override suspend fun readableContent(): ReadableContent {
@@ -974,9 +974,9 @@ internal class WebViewPage(
         }
     }
 
-    private fun emitDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long) {
+    private fun emitDownload(url: String, userAgent: String?, contentDisposition: String?, mimeType: String?, contentLength: Long, knownName: String? = null) {
         val linkName = if (mimeType == null && contentDisposition == null) DownloadRules.linkName(url, null, null) { null } else null
-        val fileName = (linkName ?: URLUtil.guessFileName(url, contentDisposition, mimeType))
+        val fileName = (knownName?.takeIf { it.isNotBlank() } ?: linkName ?: URLUtil.guessFileName(url, contentDisposition, mimeType))
             .replace('/', '-')
             .replace(':', '-')
             .trim()

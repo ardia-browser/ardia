@@ -122,7 +122,7 @@ test("cancelling a download stops it, takes it off the ring, counts it, and its 
   expect(counts()).toEqual(["downloads_cancelled"]);
 });
 
-test("a failure leads with the headline, gives the reason on the second line, and offers Retry that downloads the same link again", async () => {
+test("a failure leads with the headline, gives the reason on the second line, and offers Retry that downloads the same link again under the same name", async () => {
   const root = renderSurface(<ToastHost />);
   page({});
   wait(DOWNLOAD_INDICATOR_DELAY_MS);
@@ -131,7 +131,7 @@ test("a failure leads with the headline, gives the reason on the second line, an
   expect(toast()!.action!.label).toBe("Retry");
   act(() => tapToast());
   await settle();
-  expect(retried).toHaveBeenCalledWith("t0", "https://files.example/otter.pdf");
+  expect(retried).toHaveBeenCalledWith("t0", "https://files.example/otter.pdf", "otter.pdf");
   expect(counts()).toEqual(["downloads_retried"]);
   unmount(root);
 });
@@ -234,7 +234,7 @@ test("Retry in a failed download's notification runs the card's own retry, once,
   act(() => dismissToast());
   notice("downloads.retryRequested", "17");
   await settle();
-  expect(retried).toHaveBeenCalledWith("t0", "https://files.example/otter.pdf");
+  expect(retried).toHaveBeenCalledWith("t0", "https://files.example/otter.pdf", "otter.pdf");
   notice("downloads.retryRequested", "17");
   await settle();
   expect(retried).toHaveBeenCalledTimes(1);

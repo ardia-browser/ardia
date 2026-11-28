@@ -148,7 +148,7 @@ function retryAction(download: Tracked | null, failure: Finished["failure"]): To
     run: () => {
       countUsage("downloads_retried");
       retrying.set(retryKey(pageId, url), { fileName, key });
-      quietly(() => pages.download(pageId, url));
+      quietly(() => pages.download(pageId, url, fileName || null));
     },
   };
 }

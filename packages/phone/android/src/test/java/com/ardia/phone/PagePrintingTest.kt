@@ -51,7 +51,7 @@ class PagePrintingTest {
         override fun zoomIn() = Unit
         override fun zoomOut() = Unit
         override fun setDesktopSite(enabled: Boolean) = Unit
-        override fun download(url: String) = Unit
+        override fun download(url: String, fileName: String?) = Unit
         override suspend fun readableContent(): ReadableContent = throw UnsupportedOperationException()
         override suspend fun snapshot(maxWidth: Int, windowCopy: Boolean): Bitmap? = null
         override suspend fun sampleTone(topInset: Int, bottomInset: Int): PageTone? = null

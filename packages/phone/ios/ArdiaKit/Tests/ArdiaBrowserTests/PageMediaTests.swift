@@ -99,6 +99,11 @@ struct PageMediaCommandTests {
     #expect(PageMediaCommand.skipSeconds(12) == nil)
     #expect(PageMediaCommand.skipSeconds(.nan) == nil)
     #expect(PageMediaCommand.skipSeconds(nil) == nil)
+    for extreme in [1e100, -1e100, Double.greatestFiniteMagnitude, -Double.greatestFiniteMagnitude, 9.3e18, -9.3e18, Double.leastNonzeroMagnitude, 15.4, 15.6, -0.0, .infinity, -.infinity] {
+      #expect(PageMediaCommand.skipSeconds(extreme) == nil)
+    }
+    #expect(PageMediaCommand.skipSeconds(15.0) == 15)
+    #expect(PageMediaCommand.skipSeconds(-10) == -10)
   }
 
   @Test func commandScriptsCarryOnlyACheckedTokenAndANumber() throws {

@@ -152,10 +152,8 @@ public enum PageMediaCommand: String, CaseIterable, Sendable {
   public static let standardSkip = 15
 
   public static func skipSeconds(_ value: Double?) -> Int? {
-    guard let value, value.isFinite else { return nil }
-    let whole = Int(value.magnitude.rounded())
-    guard skipChoices.contains(whole) else { return nil }
-    return value < 0 ? -whole : whole
+    guard let value, let choice = skipChoices.first(where: { Double($0) == value.magnitude }) else { return nil }
+    return value < 0 ? -choice : choice
   }
 
   public func script(token: String, seconds: Int?) -> String? {

@@ -543,17 +543,32 @@ test("an automatic run whose password prompt went unanswered offers Update, not 
   assert.deepEqual([other.seen.offered, other.seen.offeredInstalls.length], [["0.2.46 failed"], 0], "a window that didn't start the run can't tell it was automatic, so the release page stays");
   assert.notEqual(JSON.parse(sharedDisk.get(UPDATE_PREFERENCES)).askFirst, true);
 
+  const crossEngine = fakeEngine({ kind: "deb", fail: "polkit", failWhile: "installing" });
+  const crossDisk = new Map();
+  const settingsWindow = harness({ engine: crossEngine, disk: crossDisk, wait: stopsFollowing, showsToasts: false });
+  const browserWindow = harness({ engine: crossEngine, disk: crossDisk });
+  await settingsWindow.updater.methods.checkForUpdates();
+  await settled(() => crossEngine.updates.length === 1);
+  await browserWindow.updater.check(false);
+  assert.deepEqual(crossEngine.updates, ["0.2.46"], "an automatic check leaves a run already in progress alone");
+  crossEngine.finish();
+  await browserWindow.updater.watch();
+  await browserWindow.updater.watch();
+  await settled(() => browserWindow.seen.offered.length === 1);
+  assert.deepEqual([browserWindow.seen.offered, browserWindow.seen.offeredInstalls.length], [["0.2.46 failed"], 0], "a run Check Now started in another window keeps the release page");
+  assert.notEqual(JSON.parse(crossDisk.get(UPDATE_PREFERENCES)).askFirst, true);
+
   const joinedEngine = fakeEngine({ kind: "deb", fail: "polkit", failWhile: "installing" });
   const joined = harness({ engine: joinedEngine, wait: stopsFollowing });
-  await joined.updater.methods.checkForUpdates();
-  await settled(() => joinedEngine.updates.length === 1);
   await joined.updater.check(false);
-  assert.deepEqual(joinedEngine.updates, ["0.2.46", "0.2.46"], "the automatic check joined the run Check Now started");
+  await settled(() => joinedEngine.updates.length === 1);
+  await joined.updater.methods.checkForUpdates();
+  await settled(() => joinedEngine.updates.length === 2);
   joinedEngine.finish();
   await joined.updater.watch();
   await joined.updater.watch();
   await settled(() => joined.seen.asked.length === 1);
-  assert.deepEqual([joined.seen.asked, joined.seen.offeredInstalls.length], [[["0.2.46", "0.2.45", "failed"]], 0], "joining never turns a run the user asked for into an automatic one");
+  assert.deepEqual([joined.seen.asked, joined.seen.offeredInstalls.length], [[["0.2.46", "0.2.45", "failed"]], 0], "Check Now joining an automatic run makes it one the user asked for");
 
   const acceptedEngine = fakeEngine({ kind: "tarball", fail: "timeout", failWhile: "installing" });
   const accepted = harness({ engine: acceptedEngine, wait: async () => { throw new Error("stopped following"); } });

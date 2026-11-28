@@ -273,7 +273,7 @@ export function linuxUpdater(deps: UpdateDeps) {
         return;
       }
       if (asked) return startRun(release, "asked", consent);
-      if (saved.failed === release.version) return;
+      if (saved.failed === release.version || updateBusy(status)) return;
       const latest = await preferences();
       const askFirst = latest.askFirst && installsThroughPkexec(status.kind);
       if (latest.automaticDownloads && !askFirst) return startRun(release, "automatic", consent);

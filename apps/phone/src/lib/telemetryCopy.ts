@@ -206,6 +206,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["glass_unsourced"],
       },
       {
+        text: "In the same daily counts, on Android: how often a glass button or bar had to be darkened or lightened so its text stayed readable over a very bright or very dark page. Counts only, never which page",
+        fields: ["glass_plates_pulled"],
+      },
+      {
         text: "In the same daily counts, on Android: how often you tapped the Ardia logo on the start page to search. Counts only, and never while browsing privately",
         fields: ["start_logo_taps"],
       },

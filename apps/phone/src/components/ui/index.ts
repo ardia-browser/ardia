@@ -33,6 +33,8 @@ export { screenReaderActions, type ScreenReaderAction } from "./screenReaderActi
 export { PageView, type PageNavigationState, type PageTone, type PageViewHandle } from "./Page";
 export { PressInPlace } from "./PressInPlace";
 export { Symbol } from "./Symbol";
+export { PlatePlusGlyph, PlateSymbol, PlateSystemGlyph, PlateText, type PlateRole } from "./PlateGlyphs";
+export { backdropColors, backdropShade, PlateInk, SurfaceInkProvider, surfaceInkFor, useBackdropDark, useOnPlate, useSurfaceInk, type BackdropKind, type SurfaceInk } from "./surfaceInk";
 export { IncognitoSpecs } from "./IncognitoSpecs";
 export { SystemGlyph, systemGlyphsAvailable, type SystemGlyphWeight } from "./SystemGlyph";
 export { placeholderTint, TabFace, tabFill } from "./TabFace";
@@ -45,7 +47,7 @@ export { FullSheet, SheetBackground, useSheetFrame } from "./FullSheet";
 export { SwipeToDelete } from "./SwipeToDelete";
 export { useIncreasedContrast, useReduceMotion, useReduceTransparency } from "./contrast";
 export { FadingBackdrop } from "./FadingBackdrop";
-export { ChromeSurface, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, GlassBehind, GlassBranch, GlassPrivacy, GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST, usesGlass } from "./LookViews";
+export { ChromeSurface, overlayInkFor, overlayPlateFill, CustomLookBackdrop, DeckLookBackdrop, DeckLookBackdropBase, LookBackdrop, LookBackdropBase, LookFrost, LookGlass, GlassBehind, GlassBranch, GlassPrivacy, GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST, usesGlass } from "./LookViews";
 export { appDesign, currentDesign, DesignProvider, designWith, followDesign, materialYouOffered, useDesign, usePageUnderBars } from "./design";
 export { FadeView, fadeIsNative, FrostSource, motionReportsNearEnd, pageObscuresInsets, pageReportsDrawn, PasteButton, pasteButtonIsNative, ScrollActions } from "@ardia/phone-native";
 export { MotionView, type MotionCurve, type MotionTarget } from "@ardia/phone-native";

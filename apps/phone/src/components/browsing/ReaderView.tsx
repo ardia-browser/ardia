@@ -19,7 +19,7 @@ import {
 } from "../../state/page/pagePrompts";
 import { copy } from "../../lib/platformCopy";
 import { dismissWords, ELLIPSIS } from "../../lib/sharedWords";
-import { ChromeSurface, EmptyState, FrostSource, GlassSource, font, LoadingState, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
+import { ChromeSurface, PlateInk, PlateText, EmptyState, FrostSource, GlassSource, font, LoadingState, motionAliases, readerInk, readerLayout, smoothCorners, space, tabsMotion, TextSizeGlyph, useDesign, useModalOverlay, usePressStyle, useReduceMotion, type MenuItem } from "../ui";
 import { MaterialIconAction, MaterialTopBar } from "../ui/MaterialTopBar";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { pageMenuOpener } from "./pageMenuOpener";
@@ -111,7 +111,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
             {({ onPress }) => (
               <Pressable accessibilityRole="button" accessibilityLabel="Text Appearance" onPress={onPress} style={appearancePress}>
                 <ChromeSurface shape="circle" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} privately={readsPrivately} style={styles.circle}>
-                  <TextSizeGlyph size={readerGlyphs.textSize} color={ink.ink} />
+                  <PlateInk>{(plate) => <TextSizeGlyph size={readerGlyphs.textSize} color={plate.roles.label} />}</PlateInk>
                 </ChromeSurface>
               </Pressable>
             )}
@@ -120,7 +120,7 @@ export function ReaderView({ tabId, closing = false }: { tabId: string; closing?
         <View style={styles.fill} />
         <Pressable ref={done} testID="readerDone" accessibilityRole="button" accessibilityLabel={dismissWords.done} onPress={closeReader} style={donePress}>
           <ChromeSurface shape="capsule" cornerRadius={readerLayout.chromeButton / 2} dark={shown === "dark"} privately={readsPrivately} style={styles.capsule}>
-            <Text style={[font.body, styles.bold, { color: ink.ink }]}>{dismissWords.done}</Text>
+            <PlateText style={[font.body, styles.bold]}>{dismissWords.done}</PlateText>
           </ChromeSurface>
         </Pressable>
       </View>

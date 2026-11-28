@@ -1,4 +1,5 @@
 import { luminance, mixColors } from "./color.ts";
+import { compositeOver } from "./readableInk.ts";
 
 export type InkLayer = "cover" | "voice" | "sheet" | "search" | "deck" | "page";
 
@@ -18,7 +19,7 @@ const CONTRAST_MIDPOINT = 0.179;
 
 const isLight = (color: string) => luminance(color) > CONTRAST_MIDPOINT;
 
-export type InkColors = { cover: string; surface: string; deck: string; incognito: boolean };
+export type InkColors = { cover: string; under: string; deck: string; searchDim: string | null; incognito: boolean };
 
 export function lightStatusIcons(layer: InkLayer, colors: InkColors): boolean | null {
   switch (layer) {
@@ -29,10 +30,14 @@ export function lightStatusIcons(layer: InkLayer, colors: InkColors): boolean | 
     case "cover":
       return !isLight(colors.cover);
     case "sheet":
-      return !isLight(mixColors(colors.surface, "#000000", SCRIM_ALPHA));
+      return !isLight(mixColors(colors.under, "#000000", SCRIM_ALPHA));
     case "search":
-      return colors.incognito || !isLight(colors.surface);
+      return colors.incognito || !isLight(colors.searchDim ? compositeOver(colors.searchDim, colors.under) : colors.under);
     case "deck":
       return !isLight(colors.deck);
   }
 }
+
+export type UnderStatus = { surface: InkScene["surface"]; pageTop: string | null; blankPage: string; start: string; deck: string };
+
+export const underStatusBar = ({ surface, pageTop, blankPage, start, deck }: UnderStatus) => (surface === "browsing" ? (pageTop ?? blankPage) : surface === "deck" ? deck : start);

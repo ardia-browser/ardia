@@ -3,6 +3,15 @@ import Foundation
 import Testing
 
 struct GlassToneTests {
+  @Test func `only glass over the page bar's own source tells the bar its tone`() throws {
+    #expect(GlassToneSend.tells(source: GlassToneSend.pageSource))
+    #expect(!GlassToneSend.tells(source: "surfaces"), "a toast or menu over the page measures what is under itself, not the bar")
+    #expect(!GlassToneSend.tells(source: "start"))
+    #expect(!GlassToneSend.tells(source: nil))
+    let views = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../../../../apps/phone/src/components/ui/LookViews.tsx").standardizedFileURL, encoding: .utf8)
+    #expect(views.contains("export const PAGE_FROST = \"\(GlassToneSend.pageSource)\";"), "the page bar's source name is the app's")
+  }
+
   @Test func `the bar's tone follows what is under it after a short settle, with a band where it holds`() {
     var gate = GlassToneGate()
     var flips: [Bool] = []

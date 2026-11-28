@@ -9,7 +9,7 @@ import { editPageQuery, menuBack, menuForward, menuReload, menuStop, openPageMen
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { isSyncableUrl, type BrowserTab } from "../../state/tabs/tabModels";
 import { shownTone } from "../../lib/pageTone";
-import { capsule, chromeInk, controlRadius, ChromeSurface, floatingBarLayout, iconRoles, isDarkColor, PressInPlace, rolesFor, smoothCorners, Symbol, Tappable, useTheme, type SymbolName } from "../ui";
+import { capsule, controlRadius, ChromeSurface, floatingBarLayout, iconRoles, isDarkColor, PlateSymbol, PressInPlace, smoothCorners, Symbol, Tappable, useSurfaceInk, useTheme, type SymbolName } from "../ui";
 import { AddressFace } from "../browsing/AddressFace";
 import { barAddress } from "../browsing/FloatingBar";
 import { openPageMenuFrom } from "../browsing/pageMenuOpener";
@@ -69,21 +69,19 @@ export function DuoToolbar({ showsAddress, sidebarShown, sidebar, onToggleSideba
 }
 
 function RoundButton({ icon, label, dark, incognito, enabled, onPress, buttonRef }: { icon: SymbolName; label: string; dark: boolean; incognito: boolean; enabled: boolean; onPress: () => void; buttonRef?: Ref<ViewInstance> }) {
-  const roles = rolesFor(dark);
   return (
     <PressInPlace ref={buttonRef} label={label} disabled={!enabled} onPress={onPress} onPressIn={haptics.barPress} style={styles.round}>
       <ChromeSurface testID={`duoToolbar:${label}`} shape="circle" cornerRadius={capsule(DUO.toolbarButton)} incognito={incognito} dark={dark} style={styles.round}>
-        <Symbol name={icon} size={DUO.toolbarGlyph} color={enabled ? roles.foregroundPrimary : roles.foregroundTertiary} />
+        <PlateSymbol name={icon} size={DUO.toolbarGlyph} role={enabled ? "foregroundPrimary" : "foregroundTertiary"} />
       </ChromeSurface>
     </PressInPlace>
   );
 }
 
 function AddressCapsule({ tab, dark, sidebarShown, onToggleSidebar }: { tab: BrowserTab | null; dark: boolean; sidebarShown: boolean; onToggleSidebar: () => void }) {
-  const roles = rolesFor(dark);
   const toggle = (
     <Tappable kind="icon" label={sidebarShown ? "Hide Sidebar" : "Show Sidebar"} onPress={onToggleSidebar} style={styles.sidebarButton}>
-      <Symbol name={iconRoles.sidebar} size={DUO.sidebarGlyph} color={roles.foregroundPrimary} />
+      <PlateSymbol name={iconRoles.sidebar} size={DUO.sidebarGlyph} role="foregroundPrimary" />
     </Tappable>
   );
   return <DuoAddressField layout="toolbar" tab={tab} dark={dark} leading={toggle} onPress={tab ? editPageQuery : newTab} />;
@@ -103,13 +101,13 @@ export function DuoAddressField({ layout, tab, dark, leading, onPress }: { layou
   return (
     <ChromeSurface testID={face.testID} shape={face.shape} cornerRadius={face.corner} incognito={incognito} dark={dark} style={[layout === "toolbar" ? styles.address : styles.sidebarField, smoothCorners]}>
       {leading}
-      {tab ? <AddressFace address={barAddress(tab)} dark={dark} testIDPrefix="duo" style={hit} onPress={onPress} /> : <NewTabFace dark={dark} style={hit} onPress={onPress} />}
+      {tab ? <AddressFace address={barAddress(tab)} testIDPrefix="duo" style={hit} onPress={onPress} /> : <NewTabFace style={hit} onPress={onPress} />}
     </ChromeSurface>
   );
 }
 
-function NewTabFace({ dark, style, onPress }: { dark: boolean; style: StyleProp<ViewStyle>; onPress: () => void }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
+function NewTabFace({ style, onPress }: { style: StyleProp<ViewStyle>; onPress: () => void }) {
+  const ink = useSurfaceInk().chrome;
   return (
     <Tappable testID="duoNewTab" kind="text" label={actionWords.newTab} onPress={onPress} style={style}>
       <Symbol name={iconRoles.newTab} size={floatingBarLayout.siteIcon} color={ink.secondary} />

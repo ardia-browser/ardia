@@ -9,7 +9,7 @@ import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
 import { isUnseenReceived } from "../../lib/tabFace";
-import { capsule, ChromeSurface, controlSize, deckChromeLayout, FadeView, font, shadowCss, smoothCorners, stroke, Symbol, TabFace, Tappable, tabsLayout, tabsMotion, usePressStyle, useTheme } from "../ui";
+import { capsule, ChromeSurface, controlSize, deckChromeLayout, FadeView, font, shadowCss, smoothCorners, stroke, PlateSymbol, TabFace, Tappable, tabsLayout, tabsMotion, usePressStyle, useBackdropDark, useTheme } from "../ui";
 import { CardIcon, CardMenu, deckHeaderTitle, ReceivedBadge, type Reads } from "./DeckCard";
 import { CLOSE_TAB, tabCardAccess, tabCardTitle, tabCardTitleText } from "./tabCard";
 import { nativeMenus } from "../ui/MenuTrigger";
@@ -119,6 +119,7 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
   const coverStyle = useAnimatedStyle(() => ({ opacity: covering && covering.value === id ? 0 : 1 }), [covering, id]);
   const cardPress = usePressStyle("icon");
   const fill = tone.top ?? theme.canvas;
+  const deckDark = useBackdropDark("deck", false);
   return (
     <View testID="tabGridCellStack" style={styles.cell}>
       <View testID="tabGridHeader" style={styles.header}>
@@ -127,8 +128,8 @@ const TabGridCell = memo(function TabGridCell({ tab, selected, width, aspect, co
           {deckHeaderTitle(tab, title)}
         </Text>
         <Tappable testID="tabGridClose" kind="icon" label={CLOSE_TAB} onPress={close} style={styles.closeSlot}>
-          <ChromeSurface testID="tabGridClosePlate" shape="circle" cornerRadius={CLOSE_CORNER} dark={theme.dark} style={styles.closePlate}>
-            <Symbol name="xmark" size={tabGridLayout.closeGlyph} color={theme.secondaryLabel} />
+          <ChromeSurface testID="tabGridClosePlate" shape="circle" cornerRadius={CLOSE_CORNER} dark={deckDark} style={styles.closePlate}>
+            <PlateSymbol name="xmark" size={tabGridLayout.closeGlyph} role="secondaryLabel" />
           </ChromeSurface>
         </Tappable>
       </View>

@@ -1,6 +1,8 @@
 import { StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { DeckBar } from "../components/tabs/DeckBar";
+import { Symbol } from "../components/ui/Symbol";
+import { PlateSymbol } from "../components/ui/PlateGlyphs";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 const lookModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
@@ -28,7 +30,7 @@ const bar = () =>
   );
 
 const symbolSizes = (root: ReturnType<typeof renderSurface>) =>
-  root.root.findAll((node) => typeof node.props.name === "string" && typeof node.props.size === "number" && typeof node.type !== "string").map((node) => node.props.size as number);
+  root.root.findAll((node) => node.type === Symbol).map((node) => node.props.size as number);
 
 test("where the system glass exists, the deck bar's three buttons are glass (circle, capsule, circle) with SwiftUI's icon sizes, and the icons let touches through to the glass", () => {
   const glass = jest.spyOn(lookModule, "glassIsNative").mockImplementation(() => true);
@@ -39,7 +41,7 @@ test("where the system glass exists, the deck bar's three buttons are glass (cir
   const glasses = root.root.findAll((node) => node.type === lookModule.Glass);
   for (const button of glasses) expect(StyleSheet.flatten(button.props.style).borderWidth).toBeUndefined();
   for (const button of glasses) expect(button.props.reduceTransparency).toBeUndefined();
-  const icons = root.root.findAll((node) => typeof node.props.name === "string" && typeof node.props.size === "number" && typeof node.type !== "string");
+  const icons = root.root.findAll((node) => node.type === PlateSymbol);
   for (const icon of icons) expect(icon.parent?.props.pointerEvents).toBe("none");
   glass.mockRestore();
   unmount(root);

@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewInstance } from "react-native";
-import { ChromeFrost } from "./LookViews";
+import { ChromeFrost, overlayPlateFill } from "./LookViews";
 import { usePressStyle } from "./pressFeedback";
 import { Symbol } from "./Symbol";
 import type { SymbolName } from "./symbolPaths";
@@ -14,7 +14,7 @@ export type ActionTone = "accent" | "neutral" | "overlay";
 export type ActionInk = { fill: string; label: string; edge: string };
 
 export function actionInk(theme: Pick<Theme, "spaceAccent" | "spaceAccentInk" | "onSpaceAccent" | "secondaryFill" | "label" | "separator">, variant: ActionVariant, tone: ActionTone): ActionInk {
-  if (variant === "glass") return { fill: overlayInk.glass, label: overlayInk.label, edge: ink.clear };
+  if (variant === "glass") return { fill: overlayPlateFill, label: overlayInk.label, edge: ink.clear };
   if (tone === "overlay") {
     if (variant === "filled") return { fill: overlayInk.fill, label: overlayInk.onFill, edge: ink.clear };
     return { fill: ink.clear, label: overlayInk.label, edge: variant === "outlined" ? overlayInk.edge : ink.clear };
@@ -68,7 +68,7 @@ export function ActionButton({ title, onPress, variant = "filled", tone = "accen
       onPress={onPress}
       style={pressStyle}
     >
-      {frosted ? <ChromeFrost source={frostSource} variant="glass" dark cornerRadius={cornerRadius} fill={colors.fill} solidFill={overlayInk.solidGlass} style={StyleSheet.absoluteFill} /> : null}
+      {frosted ? <ChromeFrost source={frostSource} variant="glass" dark carriesInk cornerRadius={cornerRadius} fill={overlayInk.glass} solidFill={overlayInk.solidGlass} style={StyleSheet.absoluteFill} /> : null}
       <View style={[styles.content, busy ? styles.hidden : null]}>
         {icon ? <Symbol name={icon} size={actionLayout.icon[size]} color={colors.label} /> : null}
         <Text style={[actionLayout.label[size], styles.label, { color: colors.label }]}>{title}</Text>

@@ -244,7 +244,8 @@ function MaterialMenu({ items, place, placer, onDismiss, origin = "top", shown =
 
 function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin = "top", frost, glassSource, shown = true, privately = false }: Props) {
   const theme = useTheme();
-  const paint = theme.dark ? menuInk.dark : menuInk.light;
+  const menuDark = theme.dark;
+  const paint = menuDark ? menuInk.dark : menuInk.light;
   const reduceMotion = useReduceMotion();
   const frostAround = useMenuFrost();
   const frostSource = frost === undefined ? frostAround : frost;
@@ -415,7 +416,7 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
         accessibilityViewIsModal
         style={[styles.panel, { boxShadow: menuLook.shadow, borderColor: glassFace ? ink.clear : paint.rim, transformOrigin: spot.origin }, spot.place, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight }, revealed ? null : styles.unseen, grow]}
       >
-        <MenuMaterial source={source} glass={glassFace} privately={privately} fill={paint.fill} solid={paint.solid} radius={menuLook.radius} style={[styles.material, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight - 2 * menuLook.rim }]}>
+        <MenuMaterial source={source} glass={glassFace} privately={privately} dark={menuDark} fill={paint.fill} solid={paint.solid} radius={menuLook.radius} style={[styles.material, spot.maxHeight === undefined ? null : { maxHeight: spot.maxHeight - 2 * menuLook.rim }]}>
           {MATERIAL || glassFace ? null : <View pointerEvents="none" style={[styles.specular, { backgroundColor: paint.specular }]} />}
           <ScrollView testID="drawnMenuRows" keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.rows} bounces={false} overScrollMode="never" onContentSizeChange={(_width, height) => setContent(height + 2 * menuLook.rim)}>
           <Animated.View style={rowsFade}>
@@ -436,10 +437,10 @@ function ClassicMenu({ items, place, placer, onDismiss, dimmed = false, origin =
   );
 }
 
-export function MenuMaterial({ source, glass = false, privately = false, fill, solid, radius, style, children }: { source: string | null; glass?: boolean; privately?: boolean; fill: string; solid: string; radius: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+export function MenuMaterial({ source, glass = false, privately = false, dark, fill, solid, radius, style, children }: { source: string | null; glass?: boolean; privately?: boolean; dark: boolean; fill: string; solid: string; radius: number; style?: StyleProp<ViewStyle>; children: ReactNode }) {
   if (!source || !lookIsNative() || MATERIAL) return <View style={[style, { backgroundColor: solid, borderRadius: radius }]}>{children}</View>;
   return (
-    <LookFrost source={source} variant={glass ? "glass" : "thin"} privately={privately} overlay={glass} cornerRadius={radius} fill={ink.clear} style={style}>
+    <LookFrost source={source} variant={glass ? "glass" : "thin"} privately={privately} overlay={glass} cornerRadius={radius} fill={ink.clear} dark={dark} style={style}>
       {glass ? null : <View testID="menuMaterialFill" pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} />}
       {children}
     </LookFrost>

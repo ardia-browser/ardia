@@ -10,7 +10,7 @@ import { deckHitAccepted, switchDeckIncognito } from "../../state/browse/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
+import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PlateInk, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useBackdropDark, useReduceMotion, type MenuItem, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { PressedGlyph } from "../ui/PressInPlace";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
@@ -61,7 +61,7 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
       <ChromeSurface testID="deckBarIncognito" shape="circle" cornerRadius={capsule(controlSize.bar)} incognito={incognito} dark={dark || incognito} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
         <FadingGlyphs testID="deckBarIncognitoGlyph" pointerEvents="none" fade={glyphFade} style={[styles.centered, size]}>
           <PressedGlyph>
-            <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={rolesFor(dark).label} />
+            <PlateInk>{(plate) => <IncognitoEyes incognito={incognito} size={deckChromeLayout.incognitoEyes} color={plate.roles.label} />}</PlateInk>
           </PressedGlyph>
         </FadingGlyphs>
       </ChromeSurface>
@@ -136,8 +136,7 @@ export function useSearchTabs(shown: boolean, incognito: boolean, onQuery: (need
 const TurnTextInput = Animated.createAnimatedComponent(TextInput) as unknown as (props: ComponentProps<typeof TextInput> & { onFocusOnTurn?: unknown }) => ReactNode;
 
 export function SearchTabsField({ search, testID = "deckSearchTabs", style, incognito = false, glassShown, glassShownMs, glyphFade }: { search: SearchTabs; testID?: string; style?: StyleProp<ViewStyle>; incognito?: boolean } & ChromeFade) {
-  const roles = useTheme();
-  const dark = roles.dark || incognito;
+  const dark = useBackdropDark("deck", incognito);
   const { input, text, change, focus, blur } = search;
   const nativeField = useAnimatedRef<TextInput>();
   const fieldRef = useCallback(
@@ -156,9 +155,11 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, inco
   return (
     <Pressable accessible={false} onPress={() => input.current?.focus()} style={style} collapsable={false}>
       <ChromeSurface testID={testID} shape="capsule" cornerRadius={deckLook.fieldCorner} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.search, { paddingRight: text ? deckLook.clearTrail : deckChromeLayout.searchTrail }]}>
+        <PlateInk>
+        {(plate) => (
         <FadingGlyphs testID={`${testID}Content`} fade={glyphFade} style={styles.searchRow}>
             <View pointerEvents="none">
-              <SystemGlyph testID="deckSearchGlyph" systemName="magnifyingglass" pointSize={14} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={roles.secondaryLabel} />
+              <SystemGlyph testID="deckSearchGlyph" systemName="magnifyingglass" pointSize={14} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={plate.roles.secondaryLabel} />
             </View>
             <TurnTextInput
               ref={fieldRef}
@@ -166,8 +167,8 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, inco
               testID="deckSearchField"
               accessibilityLabel="Search Tabs"
               placeholder="Search Tabs"
-              placeholderTextColor={iPhoneOr(roles.tertiaryLabel, roles.secondaryLabel)}
-              selectionColor={roles.formAccent}
+              placeholderTextColor={iPhoneOr(plate.roles.tertiaryLabel, plate.roles.secondaryLabel)}
+              selectionColor={plate.roles.formAccent}
               value={text}
               onChangeText={change}
               onFocus={focus}
@@ -176,13 +177,15 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, inco
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
-              keyboardAppearance={dark ? "dark" : "light"}
-              style={[font.callout, styles.field, { color: roles.label }]}
+              keyboardAppearance={plate.dark ? "dark" : "light"}
+              style={[font.callout, styles.field, { color: plate.roles.label }]}
             />
             {text ? (
-              <FieldAccessory testID="deckSearchClear" icon={iconRoles.clearText} label={actionWords.clearText} color={roles.secondaryLabel} onPress={() => change("")} />
+              <FieldAccessory testID="deckSearchClear" icon={iconRoles.clearText} label={actionWords.clearText} color={plate.roles.secondaryLabel} onPress={() => change("")} />
             ) : null}
         </FadingGlyphs>
+        )}
+        </PlateInk>
       </ChromeSurface>
     </Pressable>
   );
@@ -190,8 +193,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, inco
 
 export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, barCenterY, deckHeight, width, layout, incognito, privateCount = 0, onCloseIncognito, onCloseAll, onQuery, menusShown = true, onMenu, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
   const fade = { glassShown, glassShownMs, glyphFade };
-  const roles = useTheme();
-  const dark = roles.dark || incognito;
+  const dark = useBackdropDark("deck", incognito);
   const search = useSearchTabs(shown, incognito, onQuery);
   const { focused } = search;
   useLayoutEffect(() => {

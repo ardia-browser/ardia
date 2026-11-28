@@ -1539,12 +1539,25 @@ class FrostSourceView(context: Context, appContext: AppContext) : ExpoView(conte
     private var scroller: WeakReference<View>? = null
 
     internal fun pageScroll(): Long? {
-        val view = scroller?.get()?.takeIf { it.isAttachedToWindow } ?: findScroller()?.also { scroller = WeakReference(it) } ?: return null
+        val view = scrollingPage() ?: return null
         return (view.scrollX.toLong() shl 32) or (view.scrollY.toLong() and 0xFFFFFFFFL)
     }
 
+    private fun scrollingPage(): View? = scroller?.get()?.takeIf { it.isAttachedToWindow } ?: findScroller()?.also { scroller = WeakReference(it) }
+
+    private var tonePage: WeakReference<PageView>? = null
+
+    internal var findPageTone: () -> com.ardia.browser.PageTone? = {
+        val page = tonePage?.get()?.takeIf { it.isAttachedToWindow }
+            ?: generateSequence(scrollingPage()?.parent) { it.parent }.filterIsInstance<PageView>().firstOrNull()?.also { tonePage = WeakReference(it) }
+        page?.glassTone
+    }
+
+    internal fun pageTone(): com.ardia.browser.PageTone? = if (holdsPage) findPageTone() else null
+
     private val laidOut = ViewTreeObserver.OnGlobalLayoutListener {
         scroller = null
+        tonePage = null
         val pageBefore = if (pageKnown) pageHeld else null
         pageKnown = false
         val before = knownFinding
@@ -2221,19 +2234,105 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         }
     }
 
-    private fun drawSample(canvas: Canvas, sample: HeldSample, style: com.ardia.design.FrostedStyle, dark: Boolean) {
-        val margin = sample.stamp.margin
-        val scale = sample.stamp.scale
+    private fun drawSample(canvas: Canvas, sample: HeldSample, plate: Plate): Boolean {
+        sampleBox.set(0f, 0f, sample.layerWidth.toFloat(), sample.layerHeight.toFloat())
+        return drawPlate(canvas, sample.layerWidth, sample.layerHeight, sample.stamp.margin, sample.stamp.scale, plate) { it.drawBitmap(sample.bitmap, null, sampleBox, samplePaint) }
+    }
+
+    internal class Plate(val tint: Int, val dark: Boolean, val limit: GlassReadability.Limit)
+
+    private var plateNode: RenderNode? = null
+    private var plateKey: ReadablePlate.Key? = null
+    private var plateEffect: RenderEffect? = null
+    private val pulls = PullWatch()
+    private val tone = ToneEase()
+
+    internal var platesDrawn = 0L
+        private set
+    internal var veilsDrawn = 0L
+        private set
+
+    internal val platePulled: Boolean get() = pulls.pulled
+
+    internal open fun overTint(dark: Boolean): Int? = null
+
+    private fun plateTint(style: com.ardia.design.FrostedStyle, dark: Boolean): Int {
+        val styled = style.tint.resolve(dark).toArgb()
+        return overTint(dark)?.let { GlassReadability.over(it, styled) } ?: styled
+    }
+
+    private fun plateEffect(plate: Plate): RenderEffect? {
+        if (Build.VERSION.SDK_INT < LiquidGlassRules.LENS_MIN_SDK) return null
+        val key = ReadablePlate.Key(plate.tint, plate.limit.ceiling, plate.limit.floor)
+        if (key == plateKey && plateEffect != null) return plateEffect
+        val made = GlassShaders.readableFor(key) ?: return null
+        plateKey = key
+        plateEffect = made
+        return made
+    }
+
+    private fun drawPlate(canvas: Canvas, layerWidth: Int, layerHeight: Int, margin: Float, scale: Float, plate: Plate, content: (Canvas) -> Unit): Boolean {
+        val effect = if (canvas.isHardwareAccelerated) plateEffect(plate) else null
         canvas.save()
         canvas.clipPath(clip)
         canvas.translate(-margin, -margin)
         canvas.scale(scale, scale)
-        sampleBox.set(0f, 0f, sample.layerWidth.toFloat(), sample.layerHeight.toFloat())
-        canvas.drawBitmap(sample.bitmap, null, sampleBox, samplePaint)
+        if (effect != null) {
+            val node = plateNode ?: RenderNode("ardiaPlate:$role").also { plateNode = it }
+            node.setPosition(0, 0, layerWidth.coerceAtLeast(1), layerHeight.coerceAtLeast(1))
+            node.setRenderEffect(effect)
+            val recording = node.beginRecording()
+            try {
+                content(recording)
+            } finally {
+                node.endRecording()
+            }
+            canvas.drawRenderNode(node)
+            canvas.restore()
+            platesDrawn += 1
+            return true
+        }
+        content(canvas)
         canvas.restore()
+        val veil = GlassReadability.veil(plate.tint, plate.dark)
         paint.style = Paint.Style.FILL
-        paint.color = style.tint.resolve(dark).toArgb()
+        paint.color = veil
         canvas.drawPath(clip, paint)
+        veilsDrawn += 1
+        pulls.note(veil != plate.tint)
+        return false
+    }
+
+    private fun fillPlate(canvas: Canvas, fill: Int, plate: Plate) {
+        val drawn = GlassReadability.plateFill(fill, plate.dark, plate.limit)
+        pulls.note(if (drawn == fill) false else GlassReadability.plateFill(fill, plate.dark, GlassReadability.steady(plate.dark)) != fill)
+        paint.style = Paint.Style.FILL
+        paint.color = drawn
+        canvas.drawPath(clip, paint)
+    }
+
+    private var estimatedFrom = 0
+    private var estimatedTint = 0
+    private var estimatedDark = false
+    private var estimated = false
+
+    private fun notePageEstimate(from: FrostSourceView, plate: Plate, saturation: Float) {
+        val under = from.pageTone()
+        val page = if (under == null) null else if (isInUpperHalfOf(from)) under.top ?: under.bottom else under.bottom ?: under.top
+        if (page == null) return pulls.note(false)
+        if (page != estimatedFrom || plate.tint != estimatedTint || plate.dark != estimatedDark) {
+            estimatedFrom = page
+            estimatedTint = plate.tint
+            estimatedDark = plate.dark
+            estimated = GlassReadability.pulls(GlassReadability.estimatedPlate(page, saturation, plate.tint), plate.dark)
+        }
+        pulls.note(estimated)
+    }
+
+    private fun isInUpperHalfOf(from: View): Boolean {
+        val offset = offsetTo(from)
+        val top = -offset.toInt()
+        return top + height / 2 < from.height / 2
     }
 
     override fun onAttachedToWindow() {
@@ -2288,6 +2387,8 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         joined = null
         blurNode?.discardDisplayList()
         blurNode = null
+        plateNode?.discardDisplayList()
+        plateNode = null
         layerWidth = 0
         layerHeight = 0
     }
@@ -2322,6 +2423,9 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
     override fun drawLook(canvas: Canvas) {
         val dark = isDark
         val style = LookRules.frost(variant, lookOrNull)
+        val (limit, easing) = tone.limit(dark)
+        if (easing) postInvalidateOnAnimation()
+        val plate = Plate(plateTint(style, dark), dark, limit)
         val radius = cornerRadius * density
         bounds.set(0f, 0f, width.toFloat(), height.toFloat())
         clip.reset()
@@ -2330,11 +2434,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         val held = from?.heldNow()
         if (held != null) {
             report(FrostPage.Choice(FrostPage.Path.Solid, FrostHold.REASON), from.finding.why)
-            paint.style = Paint.Style.FILL
-            paint.color = held
-            canvas.drawPath(clip, paint)
-            paint.color = style.tint.resolve(dark).toArgb()
-            canvas.drawPath(clip, paint)
+            fillPlate(canvas, GlassReadability.over(plate.tint, held), plate)
             drawEdge(canvas, style, dark)
             return
         }
@@ -2344,7 +2444,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         if (SampleHoldRules.holds(sampleHold, pageScrolling, samplesNow && blurs, sample?.stamp, stampNow)) {
             markHeld(true)
             report(FrostPage.Choice(FrostPage.Path.Solid, SampleHoldRules.HELD_REASON), from?.finding?.why)
-            drawSample(canvas, sample!!, style, dark)
+            if (drawSample(canvas, sample!!, plate) && from != null) notePageEstimate(from, plate, style.saturation)
             drawEdge(canvas, style, dark)
             return
         }
@@ -2368,7 +2468,7 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         report(choice, from?.finding?.why)
         val bridge = heldSample
         if (bridge != null && SampleHoldRules.bridges(sampleHold, choice, bridge.stamp, stampNow)) {
-            drawSample(canvas, bridge, style, dark)
+            if (drawSample(canvas, bridge, plate) && from != null) notePageEstimate(from, plate, style.saturation)
             drawEdge(canvas, style, dark)
             return
         }
@@ -2395,25 +2495,16 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
             } finally {
                 layerNode.endRecording()
             }
-            canvas.save()
-            canvas.clipPath(clip)
-            canvas.translate(-margin, -margin)
-            canvas.scale(scale, scale)
-            canvas.drawRenderNode(layerNode)
-            canvas.restore()
-            paint.style = Paint.Style.FILL
-            paint.color = style.tint.resolve(dark).toArgb()
-            canvas.drawPath(clip, paint)
+            if (drawPlate(canvas, layerWidth, layerHeight, margin, scale, plate) { it.drawRenderNode(layerNode) }) notePageEstimate(from, plate, style.saturation)
             drawnMargin = margin
             drawnScale = scale
             if (!pageScrolling) heldSample = null else if (heldSample == null) requestSample()
-        } else if (choice.path == FrostPage.Path.Tinted && from != null && tintedFill(canvas, from, style, dark)) {
+        } else if (choice.path == FrostPage.Path.Tinted && from != null && tintedFill(canvas, from, style, plate)) {
             if (blurNode != null || joined != null) forgetLayer()
         } else {
             if (blurNode != null || joined != null) forgetLayer()
-            paint.style = Paint.Style.FILL
-            paint.color = solidFill(dark) ?: style.fallback.resolve(dark).toArgb()
-            canvas.drawPath(clip, paint)
+            val fill = solidFill(dark) ?: style.fallback.resolve(dark).toArgb()
+            fillPlate(canvas, overTint(dark)?.let { GlassReadability.over(it, fill) } ?: fill, plate)
         }
         drawEdge(canvas, style, dark)
     }
@@ -2462,10 +2553,16 @@ open class FrostView(context: Context, appContext: AppContext) : LookView(contex
         invalidate()
     }
 
-    private fun tintedFill(canvas: Canvas, from: FrostSourceView, style: com.ardia.design.FrostedStyle, dark: Boolean): Boolean {
-        if (!tintColours(from, style, dark)) return false
+    private fun tintedFill(canvas: Canvas, from: FrostSourceView, style: com.ardia.design.FrostedStyle, plate: Plate): Boolean {
+        if (!tintColours(from, style, plate.dark)) return false
+        val over = overTint(plate.dark)
+        val top = over?.let { GlassReadability.over(it, tinted[0]) } ?: tinted[0]
+        val bottom = over?.let { GlassReadability.over(it, tinted[1]) } ?: tinted[1]
+        val shownTop = GlassReadability.readable(top, plate.limit)
+        val shownBottom = GlassReadability.readable(bottom, plate.limit)
+        pulls.note(GlassReadability.pulls(top, plate.dark) || GlassReadability.pulls(bottom, plate.dark))
         paint.style = Paint.Style.FILL
-        paint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), tinted[0], tinted[1], Shader.TileMode.CLAMP)
+        paint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), shownTop, shownBottom, Shader.TileMode.CLAMP)
         canvas.drawPath(clip, paint)
         paint.shader = null
         drawnTint[0] = tinted[0]

@@ -3,7 +3,7 @@ import { act } from "react-test-renderer";
 import { BottomBar } from "../components/browsing/BottomBar";
 import { BrowsingScreen } from "../components/browsing/BrowsingScreen";
 import { barAddress, FloatingBar } from "../components/browsing/FloatingBar";
-import { appDesign, barGlyphLayout, chromeInk, DesignProvider, Symbol } from "../components/ui";
+import { appDesign, barGlyphLayout, chromeInk, DesignProvider, surfaceInkFor, Symbol } from "../components/ui";
 import { storeFullscreen, storeNavigation, storeTone, usePages, type PageState } from "../state/pages/store";
 import { usePageUi } from "../state/page/store";
 import { setPreference } from "../state/settings/store";
@@ -191,7 +191,7 @@ test("the bar's glass and glyphs follow the page's sampled bottom colour, not th
   const symbols = light.root.findAll((node) => node.type === Symbol);
   expect(symbols.find((node) => node.props.name === "ellipsis")!.props.size).toBeCloseTo(23.3);
   expect(symbols.find((node) => node.props.name === "plus")!.props.size).toBeCloseTo(barGlyphLayout.plus.side);
-  expect(symbols.find((node) => node.props.name === privateMark)!.props).toMatchObject({ size: 28, color: "rgba(0,0,0,0.5)" });
+  expect(symbols.find((node) => node.props.name === privateMark)!.props).toMatchObject({ size: 28, color: surfaceInkFor(false).chrome.secondary });
   unmount(light);
   act(() => storeTone(tab.id, { top: "#101418", bottom: "#101418" }));
   const dark = page("redesigned", tab);

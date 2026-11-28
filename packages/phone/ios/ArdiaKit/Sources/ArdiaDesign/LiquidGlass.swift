@@ -306,6 +306,15 @@ public enum LiquidGlassRules {
     made.alpha = high
     return made
   }
+
+  public static func materialVeil(tint: GlassInk, dark: Bool) -> GlassInk {
+    readableVeil(tint, dark: dark)
+  }
+
+  public static func materialVeil(dark: Bool) -> GlassInk {
+    let shade = dark ? 0.0 : 1.0
+    return readableVeil(GlassInk(red: shade, green: shade, blue: shade, alpha: 0), dark: dark)
+  }
   public static let budgetCooldownBase: TimeInterval = 3
   public static let budgetCooldownLongest: TimeInterval = 30
   public static let budgetTripMemory: TimeInterval = 60

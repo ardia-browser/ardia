@@ -47,6 +47,7 @@ class LookModule : Module() {
             SystemMotion.note(systemLook.seed())
             GlassShaders.onFailed = PendingCounts.glassShaderFailures(context.applicationContext)
             GlassCounts.onUnsourced = PendingCounts.glassUnsourced(context.applicationContext)
+            GlassReadability.onPulled = PendingCounts.glassPlatesPulled(context.applicationContext)
             systemLookObserver = SystemLookObserver(context.applicationContext) { systemLook.check() }.also { it.start() }
         }
 

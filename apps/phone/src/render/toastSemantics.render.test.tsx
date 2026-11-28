@@ -172,9 +172,9 @@ test("over a page the toast takes the bar's shade, so a light page in dark mode 
   const { notePageBarDark } = require("../state/toasts/store") as typeof import("../state/toasts/store");
   const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
   const surfaceWas = useBrowse.getState().surface;
+  const scheme = jest.spyOn(require("react-native"), "useColorScheme").mockReturnValue("dark");
   const plate = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "toastPlate" && node.props.source !== undefined)[0]!;
   const label = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Couldn’t Download otter.pdf")[0]!.props.style).color;
-  act(() => useTabs.setState({ incognito: true }));
   act(() => useBrowse.setState({ surface: "browsing" }));
   act(() => notePageBarDark(false));
   const overPage = renderSurface(<ToastHost />);
@@ -187,6 +187,6 @@ test("over a page the toast takes the bar's shade, so a light page in dark mode 
   unmount(overPage);
   act(() => notePageBarDark(null));
   act(() => useBrowse.setState({ surface: surfaceWas }));
-  act(() => useTabs.setState({ incognito: false }));
   glass.mockRestore();
+  scheme.mockRestore();
 });

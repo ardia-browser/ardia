@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { haptics } from "../../state/app/haptics";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
@@ -18,7 +18,9 @@ import { useTabs } from "../../state/tabs/store";
 import { recencyOrder, type BrowserTab } from "../../state/tabs/tabModels";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { actionWords } from "../../lib/sharedWords";
-import { capsule, ChromeSurface, ConfirmSheet, Favicon, font, iconRoles, IncognitoSpecs, rolesFor, shadowCss, smoothCorners, startInk, startLayout, Symbol, Tappable, tabsInk, tabsLayout, useTheme, type Confirmation, usePressStyle } from "../ui";
+import { backdropShade, capsule, ChromeSurface, ConfirmSheet, Favicon, font, iconRoles, IncognitoSpecs, PlateInk, rolesFor, shadowCss, smoothCorners, startInk, startLayout, SurfaceInkProvider, surfaceInkFor, Symbol, Tappable, tabsInk, tabsLayout, useTheme, type Confirmation, usePressStyle } from "../ui";
+import { legibleInk } from "../../lib/color";
+import { plateIsDark } from "../../lib/readableInk";
 import { confirmInSheet, MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger";
 import { barAddress } from "../browsing/FloatingBar";
 import { spaceMenuSymbol, SpaceTitle } from "../search/StartSpaces";
@@ -35,7 +37,7 @@ type Props = { variant: DuoSidebarVariant; onClose: () => void };
 export function DuoSidebar({ variant, onClose }: Props) {
   const theme = useTheme();
   const incognito = useIncognito();
-  const dark = theme.dark || incognito;
+  const dark = variant === "overlay" ? incognito || backdropShade(theme, "canvas", false) : backdropShade(theme, "start", incognito);
   const status = useSyncStatus();
   const view = useSyncView();
   const shown = useSelectedProfile();
@@ -80,13 +82,15 @@ export function DuoSidebar({ variant, onClose }: Props) {
             >
               {({ onPress }) => (
                 <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop}>
-                  <SpaceTitle space={current} dark={dark} showsChevron />
+                  <SpaceTitle space={current} showsChevron />
                 </Tappable>
               )}
             </MenuTrigger>
           ) : current ? (
             <View accessible accessibilityRole="header" accessibilityLabel={current.name}>
-              <SpaceTitle space={current} dark={dark} showsChevron={false} />
+              <SurfaceInkProvider dark={dark}>
+                <SpaceTitle space={current} showsChevron={false} />
+              </SurfaceInkProvider>
             </View>
           ) : (
             <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.semibold, { color: rolesFor(dark).headerText }]}>
@@ -256,8 +260,9 @@ function NewTabRow({ dark, onClose, onCloseAll }: { dark: boolean; onClose: () =
   );
 }
 
-function TabRow({ tab, dark, selected, onOpen, onCloseTab }: { tab: BrowserTab; dark: boolean; selected: boolean; onOpen: () => void; onCloseTab: () => void }) {
-  const roles = rolesFor(dark);
+function TabRow({ tab, dark: listDark, selected, onOpen, onCloseTab }: { tab: BrowserTab; dark: boolean; selected: boolean; onOpen: () => void; onCloseTab: () => void }) {
+  const dark = selected ? plateIsDark({ requested: listDark, incognitoLook: tab.isPrivate, themeDark: listDark, os: Platform.OS }) : listDark;
+  const roles = surfaceInkFor(dark).roles;
   const title = tabTitle(tab);
   const host = barAddress(tab).host;
   const rowHitStyle = usePressStyle("text", { style: styles.rowHit });
@@ -320,7 +325,7 @@ function SidebarTile({ tile, dark, onOpen }: { tile: PinnedTile; dark: boolean; 
     <Tappable kind="icon" label={label} hint={folder ? "Shows the folder’s tabs." : undefined} onPress={onPress} style={styles.tileSlot}>
       <ChromeSurface testID="duoSidebarTile" shape="rounded" cornerRadius={startLayout.tileRadius} incognito={incognito} dark={dark} style={styles.tile}>
         <View pointerEvents="none" style={folder ? styles.folderInk : null}>
-          {folder ? <Symbol name="folderFill" size={startLayout.tileIcon * startLayout.folderIconShare} color={rolesFor(dark).formAccent} /> : <Favicon iconUrl={null} pageUrl={tile.url} size={startLayout.tileIcon} />}
+          {folder ? <PlateInk>{(plate) => <Symbol name="folderFill" size={startLayout.tileIcon * startLayout.folderIconShare} color={legibleInk(plate.roles.formAccent, plate.dark)} />}</PlateInk> : <Favicon iconUrl={null} pageUrl={tile.url} size={startLayout.tileIcon} />}
         </View>
       </ChromeSurface>
     </Tappable>

@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated from "react-native-reanimated";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
@@ -11,7 +11,7 @@ import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { browseLayout, capsule, ChromeSurface, deckChromeLayout, font, iconRoles, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
+import { browseLayout, capsule, ChromeSurface, deckChromeLayout, font, iconRoles, PlateText, SurfaceInkProvider, Tappable, tabsLayout, useBackdropDark, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
 import { MenuTrigger, spaceSystemImage, type MenuOpener } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
@@ -118,18 +118,18 @@ type SwitcherProps = ChromeFade & {
 type FadeStyle = ComponentProps<typeof Animated.View>["style"];
 
 export function DeckSpacesSwitcher({ opener, height, place, drawn = false, live, originY, hitStyle, fade, covered = false, onWidth, truncates = false, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: SwitcherProps) {
-  const theme = useTheme();
   const incognito = useIncognito();
+  const deckDark = useBackdropDark("deck", incognito);
   const { current, spaceItems } = useDeckSpaces();
   if (!current) return null;
   const corner = capsule(height);
   const trigger = (
     <MenuTrigger opener={opener} items={spaceItems} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown || covered} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={corner} place={place} drawn={drawn}>
       {({ onPress }) => (
-        <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={corner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
+        <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={corner} incognito={incognito} dark={deckDark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
           <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={[styles.switcherPress, { height }]}>
             <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
-              <SpaceTitle space={current} dark={theme.dark} showsChevron truncates={truncates} />
+              <SpaceTitle space={current} showsChevron truncates={truncates} />
             </FadingGlyphs>
           </Tappable>
         </ChromeSurface>
@@ -150,7 +150,8 @@ export function DeckSpacesSwitcher({ opener, height, place, drawn = false, live,
 }
 
 export function DeckHeader({ safeTop, sides, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
-  const theme = useTheme();
+  const incognito = useIncognito();
+  const deckDark = useBackdropDark("deck", incognito);
   const { spaces, current } = useDeckSpaces();
   const below = safeTop + deckHeaderBottom() + deckChromeLayout.menuGap;
   const rowTop = safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2;
@@ -176,12 +177,16 @@ export function DeckHeader({ safeTop, sides, menusShown = true, onMenu, moreOpen
         <FadingGlyphs testID="deckSwitcher" fade={glyphFade} style={styles.switcher}>
           {current ? (
             <View accessible accessibilityRole="header" accessibilityLabel={current.name}>
-              <SpaceTitle space={current} dark={theme.dark} showsChevron={false} />
+              <SurfaceInkProvider dark={deckDark}>
+                <SpaceTitle space={current} showsChevron={false} />
+              </SurfaceInkProvider>
             </View>
           ) : (
-            <Text accessibilityRole="header" numberOfLines={1} style={[font.body, styles.fallback, { color: theme.headerText }]}>
-              Tabs
-            </Text>
+            <SurfaceInkProvider dark={deckDark}>
+              <PlateText accessibilityRole="header" numberOfLines={1} inkRole="headerText" style={[font.body, styles.fallback]}>
+                Tabs
+              </PlateText>
+            </SurfaceInkProvider>
           )}
         </FadingGlyphs>
       )}
@@ -193,7 +198,7 @@ export function DeckHeader({ safeTop, sides, menusShown = true, onMenu, moreOpen
         testID="deckHeaderMore"
         live={hits}
         originY={rowTop}
-        dark={theme.dark}
+        dark={deckDark}
         underlay={underlay}
         menusShown={menusShown}
         onMenu={onMenu}

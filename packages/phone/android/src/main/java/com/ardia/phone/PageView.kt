@@ -46,6 +46,7 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
     private var sampled: PageTone? = null
     private var sampledDocument = -1L
     private var sentTone: PageTone? = null
+    internal val glassTone: PageTone? get() = sentTone
     private var toneSampledSinceBind = false
     private var failedId: String? = null
     private var document = PageDocument()

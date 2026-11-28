@@ -290,12 +290,13 @@ final class GlassFrames: NSObject {
       let reason = GlassLaunch.pageMode != .shift ? "mode" : !pageFrame.contains(strip) ? "frame" : page == nil ? "nopage" : "overlap"
       stats.unshifted[reason, default: 0] += 1
     }
+    let toneMembers = members.filter { GlassToneSend.tells(source: $0.source) }
     if let web, page != nil, capture.page.observe(web, now: now) {
       capture.drop()
       for surface in members where surface.overlay { surface.dropLensNow() }
       if capture.page.arrived { capture.motion.arrive(now: now) }
       capture.tone = GlassToneGate()
-      NotificationCenter.default.post(name: GlassTone.changed, object: web)
+      if !toneMembers.isEmpty { NotificationCenter.default.post(name: GlassTone.changed, object: web) }
     }
     capture.motion.observe(pieces.map { $0.bounds.applying($0.transform) }, in: space.bounds, now: now)
     capture.page.heldUntil = capture.motion.heldUntil
@@ -323,7 +324,7 @@ final class GlassFrames: NSObject {
     if let web, let page {
       let under = strip.applying(page.transform.inverted())
       capture.page.request(web, around: under, pixelsPerPoint: pixelsPerPoint, now: now, privately: workPrivately, consentWindow: workWindow)
-      let toneStrip = GlassFrames.toneStrip(of: members, in: space)
+      let toneStrip = GlassFrames.toneStrip(of: toneMembers, in: space)
       if !toneStrip.isNull, let luminance = capture.page.luminance(under: toneStrip.applying(page.transform.inverted()), of: web), capture.tone.observe(luminance: luminance, now: now), let dark = capture.tone.dark {
         NotificationCenter.default.post(name: GlassTone.changed, object: web, userInfo: [GlassTone.darkKey: dark])
         if PhoneTestBuild.isOn {

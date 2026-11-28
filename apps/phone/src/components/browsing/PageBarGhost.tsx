@@ -1,12 +1,12 @@
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { pageBarGhostOpacity } from "../../lib/deckGeometry";
-import { shownTone } from "../../lib/pageTone";
-import { usePageTone } from "../../state/browse/hooks";
+import { pageBarDark, shownTone } from "../../lib/pageTone";
+import { useNavigation, usePageTone } from "../../state/browse/hooks";
 import { useDeckOrder } from "../../state/tabs/hooks";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { barCenterFromBottom, barHeight, browseLayout, floatingBarLayout, isDarkColor, rolesFor, useDesign, useTheme } from "../ui";
+import { barCenterFromBottom, barHeight, browseLayout, floatingBarLayout, isDarkColor, rolesFor, useDesign, usePageUnderBars, usesGlass, useTheme } from "../ui";
 import { BottomBar } from "./BottomBar";
 import { FloatingBar } from "./FloatingBar";
 import { MaterialBarBand } from "./MaterialPageBar";
@@ -18,9 +18,12 @@ export function PageBarGhost({ tab, positionProgress, cardsOpacity }: { tab: Bro
   const design = useDesign();
   const insets = useSafeAreaInsets();
   const order = useDeckOrder();
-  const tone = shownTone(usePageTone(tab.id), tab.themeColorHex);
+  const live = usePageTone(tab.id);
+  const failed = useNavigation(tab.id, (n) => n?.failure != null);
+  const tone = failed ? null : shownTone(live, tab.themeColorHex);
   const redesigned = design === "redesigned";
-  const dark = redesigned && !tone?.bottom ? theme.dark : isDarkColor(tone?.bottom ?? theme.canvas);
+  const bottom = tone?.bottom ?? (usePageUnderBars() ? theme.pageSurface : theme.canvas);
+  const dark = pageBarDark({ design, glassTone: failed ? undefined : live?.barDark, toneBottom: tone?.bottom, themeDark: theme.dark, bottomDark: isDarkColor(bottom), incognitoLook: tab.isPrivate, os: Platform.OS, nativeGlass: usesGlass() });
   const control = redesigned ? floatingBarLayout.control : browseLayout.hitTarget;
   const style = useAnimatedStyle(() => ({ opacity: pageBarGhostOpacity(positionProgress.value) * (cardsOpacity ? cardsOpacity.value : 1) }));
   if (design === "material") {

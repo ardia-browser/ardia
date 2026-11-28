@@ -301,16 +301,13 @@ class GlassView(context: Context, appContext: AppContext) : FrostView(context, a
         }
     }
 
+    override fun overTint(dark: Boolean): Int? = tint
+
     private fun drawGlass(canvas: Canvas) {
         super.drawLook(canvas)
         box.set(0f, 0f, width.toFloat(), height.toFloat())
         outlinePath.reset()
         outlinePath.addRoundRect(box, radiusPx, radiusPx, Path.Direction.CW)
-        tint?.let { tinting ->
-            paint.style = Paint.Style.FILL
-            paint.color = tinting
-            canvas.drawPath(outlinePath, paint)
-        }
         if (drawsRim && canvas.isHardwareAccelerated) drawRim(canvas)
     }
 

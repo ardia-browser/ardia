@@ -5,7 +5,7 @@ import { newIncognitoTab, newRegularTab, newTab, reopenLastClosed } from "../../
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { useCanReopen, useIncognito } from "../../state/tabs/hooks";
 import { actionWords } from "../../lib/sharedWords";
-import { BarPlusGlyph, capsule, ChromeSurface, controlSize, iconRoles, PressInPlace, rolesFor, startLayout, Symbol, SystemGlyph, type MenuItem, type SymbolName } from "../ui";
+import { capsule, ChromeSurface, controlSize, iconRoles, PlatePlusGlyph, PlateSymbol, PlateSystemGlyph, PressInPlace, startLayout, type MenuItem, type SymbolName } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { PressedGlyph } from "../ui/PressInPlace";
 
@@ -63,9 +63,9 @@ export function GlassCircleButton({ icon, label, testID, diameter = controlSize.
       <ChromeSurface testID={testID} shape="circle" cornerRadius={capsule(diameter)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay} style={[styles.centered, size]}>
         <PressedFadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
           {CIRCLE_SYSTEM_NAMES[icon] ? (
-            <SystemGlyph systemName={CIRCLE_SYSTEM_NAMES[icon]} pointSize={CIRCLE_SYSTEM_GLYPH} weight="medium" name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />
+            <PlateSystemGlyph systemName={CIRCLE_SYSTEM_NAMES[icon]} pointSize={CIRCLE_SYSTEM_GLYPH} weight="medium" name={icon} size={startLayout.circleGlyph} />
           ) : (
-            <Symbol name={icon} size={startLayout.circleGlyph} color={rolesFor(dark).label} />
+            <PlateSymbol name={icon} size={startLayout.circleGlyph} />
           )}
         </PressedFadingGlyphs>
       </ChromeSurface>
@@ -87,7 +87,7 @@ export function PlusMenuButton({ width, label, testID, dark, incognito = false, 
         <PressInPlace label={label} hint={PLUS_HINT} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} dims="glyph" style={size}>
           <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>
             <PressedFadingGlyphs testID={`${testID}Glyph`} pointerEvents="none" fade={glyphFade}>
-              <BarPlusGlyph color={rolesFor(dark).label} />
+              <PlatePlusGlyph />
             </PressedFadingGlyphs>
           </ChromeSurface>
         </PressInPlace>

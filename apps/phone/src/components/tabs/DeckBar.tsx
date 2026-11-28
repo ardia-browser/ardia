@@ -4,7 +4,8 @@ import { haptics } from "../../state/app/haptics";
 import { StyleSheet, View, type ViewInstance } from "react-native";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
 import type { FrostVariant } from "@ardia/phone-native";
-import { browseLayout, capsule, LookGlass, PressInPlace, Symbol, tabsLayout, usesGlass, useTheme, type SymbolName } from "../ui";
+import { backdropColors, browseLayout, capsule, LookGlass, PlateSymbol, PressInPlace, SurfaceInkProvider, tabsLayout, useBackdropDark, usesGlass, useTheme, type SymbolName } from "../ui";
+import { backdropIsDark, compositeOver } from "../../lib/readableInk";
 import { NoticeDot, dotBesideGlyph, withUpdateWords } from "../settings/UpdateDot";
 import { useUpdateDot } from "../../state/appUpdate/store";
 
@@ -22,10 +23,12 @@ type Props = {
 
 type PlateProps = ComponentProps<typeof LookGlass>;
 
-function PlainPlate({ cornerRadius, fill, style, children }: PlateProps) {
+function PlainPlate({ cornerRadius, fill, incognito = false, style, children }: PlateProps) {
+  const theme = useTheme();
+  const dark = backdropIsDark([compositeOver(fill, backdropColors(theme, "deck", incognito)[0]!)]);
   return (
     <View testID="deckBarPlain" style={[style, { backgroundColor: fill, borderRadius: cornerRadius }]}>
-      {children}
+      <SurfaceInkProvider dark={dark}>{children}</SurfaceInkProvider>
     </View>
   );
 }
@@ -33,6 +36,7 @@ function PlainPlate({ cornerRadius, fill, style, children }: PlateProps) {
 export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSettings, covered = false }: Props) {
   const Plate = covered ? PlainPlate : LookGlass;
   const theme = useTheme();
+  const deckDark = useBackdropDark("deck", frost.incognito ?? false);
   const updateDot = useUpdateDot();
   const plus = tabsLayout.barPlus;
   const glass = usesGlass();
@@ -52,9 +56,9 @@ export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSetti
       <View style={styles.side}>
         {leading ? (
           <PressInPlace label={leading.label} onPress={leading.onPress} onPressIn={haptics.barPress} style={styles.hit}>
-            <Plate {...frost} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
+            <Plate {...frost} dark={deckDark} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
               <View pointerEvents="none">
-                <Symbol name={leading.icon} size={sideSize(leading.icon)} color={theme.secondaryLabel} />
+                <PlateSymbol name={leading.icon} size={sideSize(leading.icon)} role="secondaryLabel" />
               </View>
             </Plate>
           </PressInPlace>
@@ -68,17 +72,17 @@ export function DeckBar({ leading, plusLabel, frost, onPlus, onPlusMenu, onSetti
         onPressIn={haptics.barPress}
         style={{ width: plus.width, height: plus.height }}
       >
-        <Plate {...frost} shape="capsule" cornerRadius={capsule(plus.height)} fill={theme.deckControl} style={[styles.plus, edge]}>
+        <Plate {...frost} dark={deckDark} shape="capsule" cornerRadius={capsule(plus.height)} fill={theme.deckControl} style={[styles.plus, edge]}>
           <View pointerEvents="none">
-            <Symbol name="plus" size={glass ? GLASS_GLYPHS.plus : FROST_ICONS.plus} color={theme.label} />
+            <PlateSymbol name="plus" size={glass ? GLASS_GLYPHS.plus : FROST_ICONS.plus} />
           </View>
         </Plate>
       </PressInPlace>
       <View style={[styles.side, styles.end]}>
         <PressInPlace label={withUpdateWords(destinationWords.settings, updateDot)} onPress={onSettings} onPressIn={haptics.barPress} style={styles.hit}>
-          <Plate {...frost} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
+          <Plate {...frost} dark={deckDark} shape="circle" cornerRadius={circleRadius} fill={theme.deckControl} style={[styles.circle, edge]}>
             <View pointerEvents="none">
-              <Symbol name="gearshape" size={sideSize("gearshape")} color={theme.secondaryLabel} />
+              <PlateSymbol name="gearshape" size={sideSize("gearshape")} role="secondaryLabel" />
             </View>
           </Plate>
           {updateDot ? <NoticeDot style={dotBesideGlyph(browseLayout.hitTarget)} /> : null}

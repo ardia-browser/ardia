@@ -164,7 +164,7 @@ enum GlassSources {
     return holds
   }
 
-  static let pageSource = "page"
+  static let pageSource = GlassToneSend.pageSource
 
   static func holdsPage(in source: UIView) -> Bool {
     (source as? FrostSourceView).map(holdsPage) ?? false

@@ -4,12 +4,12 @@ import Animated, { useAnimatedProps, useAnimatedStyle } from "react-native-reani
 import { destination, destinationAddresses, destinationStandsIn } from "../../state/browse/destination";
 import { pageBarPreviewShown } from "../../state/browse/deckPull";
 import { usePageBusy } from "../../state/page/hooks";
-import { chromeInk, Favicon, floatingBarLayout, Symbol, usePressStyle } from "../ui";
+import { Favicon, floatingBarLayout, Symbol, usePressStyle, useSurfaceInk } from "../ui";
 import { privateMark } from "../ui/IncognitoSpecs";
 import { spokenAddress, type BarAddress } from "./FloatingBar";
 import { NotSecureLock } from "./NotSecureLock";
 
-type Props = { address: BarAddress | null; dark: boolean; testIDPrefix: string; style: StyleProp<ViewStyle>; onPress: () => void; onPressIn?: () => void; pressRef?: Ref<ViewInstance> };
+type Props = { address: BarAddress | null; testIDPrefix: string; style: StyleProp<ViewStyle>; onPress: () => void; onPressIn?: () => void; pressRef?: Ref<ViewInstance> };
 
 export type SpokenValue = Partial<{ accessibilityValue: { text: string } }>;
 
@@ -21,8 +21,8 @@ function PressableWithPressStyle({ pressStyle, style: _animatedStyle, ...rest }:
 
 const AnimatedPressable = Animated.createAnimatedComponent(PressableWithPressStyle);
 
-export function AddressFace({ address, dark, testIDPrefix, style, onPress, onPressIn, pressRef, spoken }: Props & { spoken?: SpokenValue }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
+export function AddressFace({ address, testIDPrefix, style, onPress, onPressIn, pressRef, spoken }: Props & { spoken?: SpokenValue }) {
+  const ink = useSurfaceInk().chrome;
   const pressStyle = usePressStyle("text", { style });
   const busy = usePageBusy(address?.tabId ?? null);
   const glyphs = <AddressGlyphs address={address} ink={ink} testIDPrefix={testIDPrefix} />;
@@ -55,8 +55,8 @@ function AddressGlyphs({ address, ink, testIDPrefix }: { address: BarAddress | n
   );
 }
 
-export function AddressLeaf({ address, dark, testIDPrefix, style }: { address: Props["address"]; dark: boolean; testIDPrefix: string; style?: Props["style"] }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
+export function AddressLeaf({ address, testIDPrefix, style }: { address: Props["address"]; testIDPrefix: string; style?: Props["style"] }) {
+  const ink = useSurfaceInk().chrome;
   return (
     <View style={[styles.leaf, style]} pointerEvents="none">
       {address?.isPrivate ? <Symbol name={privateMark} size={floatingBarLayout.privateSymbol} color={ink.secondary} /> : null}
@@ -82,8 +82,8 @@ const styles = StyleSheet.create({
 
 const AnimatedHost = Animated.createAnimatedComponent(TextInput);
 
-export function DestinationFallbackLeaf({ shownId, leafId, dark, style }: { shownId: string; leafId: string | null; dark: boolean; style?: Props["style"] }) {
-  const ink = dark ? chromeInk.dark : chromeInk.light;
+export function DestinationFallbackLeaf({ shownId, leafId, style }: { shownId: string; leafId: string | null; style?: Props["style"] }) {
+  const ink = useSurfaceInk().chrome;
   const shows = useAnimatedStyle(() => {
     const lifted = destination.id.value;
     const previewShown = pageBarPreviewShown.value;

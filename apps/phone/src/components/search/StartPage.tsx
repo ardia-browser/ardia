@@ -10,7 +10,7 @@ import { useSyncEnabled } from "../../state/sync/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { useHasTabs, useIncognito } from "../../state/tabs/hooks";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
-import { chromeLayout, controlSize, FrostSource, GlassSource, space, START_FROST, startLayout, startMotion, tabsCurve, tabsLayout, useReduceMotion, useTheme, type SymbolName } from "../ui";
+import { chromeLayout, controlSize, FrostSource, GlassSource, space, START_FROST, startLayout, startMotion, tabsCurve, tabsLayout, useBackdropDark, useReduceMotion, type SymbolName } from "../ui";
 import { StartCircleButton } from "./StartBarButtons";
 import { useUpdateDot } from "../../state/appUpdate/store";
 import { PlusMenuButton } from "../tabs/ChromeButtons";
@@ -26,8 +26,7 @@ export function StartPage() {
   const { width, height } = measuredOr(useRootSize(), window);
   const trayUp = useSearchOpen();
   const incognito = useIncognito();
-  const theme = useTheme();
-  const dark = incognito || theme.dark;
+  const dark = useBackdropDark("start", incognito);
   const reduceMotion = useReduceMotion();
   const geometry: StartGeometry = { width, height, safeSide: Math.max(insets.left, insets.right), barCenterY: startBarCenterY(height, insets.bottom) };
   const shown = useSharedValue(trayUp ? 0 : 1);

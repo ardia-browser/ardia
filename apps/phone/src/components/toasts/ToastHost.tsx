@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
+import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, useWindowDimensions, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,13 +7,14 @@ import { keyboardIsUp } from "../../lib/trayMotion";
 import { useBottomLift } from "../search/useKeyboardHeight";
 import { useSurface } from "../../state/browse/hooks";
 import { useDeckBarTop, usePageBarDark, useToast } from "../../state/toasts/hooks";
-import { pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace, type ToastPlacement } from "../../state/toasts/placement";
+import { floatingBarClearance, pageBarClearance, TOAST_MOTION, toastDragDismisses, toastPlace, type ToastPlacement } from "../../state/toasts/placement";
+import { FLOATING_BAR_PLACE, floatingBarCenter } from "../../lib/deckGeometry";
 import { dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics, toastSpokenLabel } from "../../state/toasts/semantics";
 import { dismissToast, holdToast, tapToast, type ToastIcon } from "../../state/toasts/store";
-import { ChromeSurface, font, space, stroke, Symbol, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
+import { ChromeSurface, font, PlateSymbol, PlateText, space, stroke, tabsMotion, toastLayout, toastMotion, useDesign, usePressStyle, useTheme, type SymbolName, useReduceMotion } from "../ui";
 import { toastGesture } from "./toastTokens";
 import { materialBottomBar } from "../ui/materialTokens";
-import { IncognitoLook, rolesFor } from "../ui/theme";
+import { IncognitoLook } from "../ui/theme";
 import { useIncognito } from "../../state/tabs/hooks";
 
 const ICONS: Record<ToastIcon, SymbolName> = {
@@ -46,14 +47,16 @@ function ToastLayer() {
   const insets = useSafeAreaInsets();
   const surface = useSurface();
   const barTop = useDeckBarTop();
-  const material = useDesign() === "material";
+  const design = useDesign();
+  const material = design === "material";
   const frame = useRef<ViewInstance>(null);
   const [hostBottom, setHostBottom] = useState(0);
+  const floatingClearance = design === "redesigned" ? floatingBarClearance(floatingBarCenter(insets.bottom, Platform.OS), FLOATING_BAR_PLACE.control, space.s, insets.bottom) : toastLayout.barClearance;
   const spot: ToastSpot = {
     safeTop: insets.top,
     keyboardLift: null,
     safeBottom: insets.bottom,
-    barClearance: pageBarClearance(material ? materialBottomBar : null, toastLayout.barClearance, space.s),
+    barClearance: pageBarClearance(material ? materialBottomBar : null, floatingClearance, space.s),
     hostBottomY: hostBottom,
     barTopY: surface === "browsing" ? null : barTop,
     gap: space.s,
@@ -109,18 +112,16 @@ function ResizedPlace({ spot, children }: PlaceProps) {
 
 const ToastPlace = Platform.OS === "ios" ? KeyboardRidingPlace : ResizedPlace;
 
-function useToastShade() {
-  const theme = useTheme();
+function useToastShadeDark() {
   const material = useDesign() === "material";
   const browsing = useSurface() === "browsing";
   const pageBarDark = usePageBarDark();
-  const dark = !material && browsing && pageBarDark !== null ? pageBarDark : null;
-  return { dark, label: dark === null ? theme.toastLabel : rolesFor(dark).toastLabel };
+  return !material && browsing && pageBarDark !== null ? pageBarDark : null;
 }
 
 function ToastView({ spot }: { spot: ToastSpot }) {
   const toast = useToast();
-  const shade = useToastShade();
+  const shadeDark = useToastShadeDark();
   const reduceMotion = useReduceMotion();
   const drag = useSharedValue(0);
   const actionLabel = toast?.action?.label ?? null;
@@ -157,12 +158,12 @@ function ToastView({ spot }: { spot: ToastSpot }) {
   };
   const escape = semantics.escapes ? dismissToast : undefined;
   const content = (
-    <ToastPlate dark={shade.dark}>
-      <Symbol name={ICONS[toast.icon]} size={toastLayout.iconSize} color={shade.label} />
-      <Text style={[font.subheadline, styles.text, { color: shade.label }]} numberOfLines={3}>
+    <ToastPlate dark={shadeDark}>
+      <PlateSymbol name={ICONS[toast.icon]} size={toastLayout.iconSize} role="toastLabel" />
+      <PlateText inkRole="toastLabel" style={[font.subheadline, styles.text]} numberOfLines={3}>
         {toast.message}
-      </Text>
-      {actionLabel !== null ? <Text testID="toastAction" style={[font.subheadline, styles.action, { color: shade.label }]}>{actionLabel}</Text> : null}
+      </PlateText>
+      {actionLabel !== null ? <PlateText testID="toastAction" inkRole="toastLabel" style={[font.subheadline, styles.action]}>{actionLabel}</PlateText> : null}
     </ToastPlate>
   );
   return (

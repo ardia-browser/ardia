@@ -1595,7 +1595,28 @@ Metal.
     a grey that reads against neither, so the ink switches in one frame and the glass eases instead: it starts at the
     readable edge nearest the old look and reaches its own tone in 180 ms, readable for the new ink on every frame.
     Before this the tone was sampled only once the page had rested, so a bar that left a dark image mid-scroll stayed a
-    dark pill over white text (main's Apple glass keeps white text over a light lens the same way).
+    dark pill over white text (main's Apple glass keeps white text over a light lens the same way). Only the page
+    bar's own capture group (glass sourced from `page`, `GlassToneSend.tells`) posts `GlassTone.changed`; a toast or
+    menu glass in the `surfaces` source also sees the page, and before #4631 its tone could overwrite the bar's ink.
+  - **Readable ink is a design-system rule (#4631), on both platforms and in every look.** A plate's ink comes from
+    the shade the plate is drawn with, never from the theme beside it. `ChromeSurface`, `LookFrost`, `ChromeFrost`,
+    `LookGlass`, the overlay plate and the deck bar's plain plate wrap their children in a `SurfaceInkProvider` for the
+    shade they hand to the native glass or frost, and what sits on them reads it (`useSurfaceInk`, `PlateSymbol`,
+    `PlateText`, `PlateInk`): label, header and toast ink lifted to 4.5:1 and secondary glyphs to 3:1 over the
+    plate's whole luminance range (`lib/readableInk.ts`, the same bounds as `readableCeiling` and `readableFloor`);
+    tertiary and placeholder ink keeps the system tone. A translucent fill that carries ink and is drawn without the
+    lens (frost, the plain overlay over the scan camera, the search panel's tint, the morph's frosted panel, the
+    profile backdrop's `.bar`, `.sheet` and `.thin` materials on iPhone) is raised to a
+    readable veil over a white or black page (`readableVeil` in JS, `LiquidGlassRules.materialVeil` in Swift). On
+    Android the Incognito look is always dark natively (`LookRules.dark`), so a native Incognito plate's ink and the
+    page bar's shade are dark there too (`plateIsDark`, `pageBarDark`). Chrome over a profile backdrop (start
+    circles, deck header and bars, the Duo sidebar) takes its shade from the backdrop's colours (`useBackdropDark`),
+    so a dark scheme over a light theme's stops gets dark ink. The status bar's icons follow what is under them: the
+    page's top colour through the sheet's scrim or the search dim, the start backdrop, or the deck. Checks:
+    `plateInk.test.ts` fails when ink inside a plate comes from `theme.`, `rolesFor(`, `roles.`, `chromeInk.`,
+    `overlayInk.` or similar, and when a `MenuMaterial` doesn't name its shade; `readableSurfaces.render.test.tsx`
+    renders each plate in each shade and checks its ink against the plate bounds and the `dark` sent to native;
+    `GlassReadabilityTests` covers the iPhone material veils.
   - **Clear glass.** Whenever a refracting glass has no capture that covers it (past the snapshot during a fling,
     before its first capture, after a failure, while the shader compiles, while it is over budget), it shows clear
     glass instead of an opaque fill: a translucent veil (#FFFFFF at 66 %, #1C1C1E at 62 % in dark) under the profile
@@ -2380,6 +2401,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `web_videos_floated`, `web_videos_kept_playing` | iPhone Picture in Picture fix (the app's `audio` background mode; a customer's PiP showed Ardia's squashed UI instead of the video) | Read `kept_playing` against `floated` on iPhone. `kept_playing` needs a live page to report playing media (`requestMediaPlaybackState`) 5 s after Ardia left, so a return within 5 s or a pause from the PiP window counts in `floated` only, and the two never match exactly. Without the `audio` mode the simulator showed the video paused at the home screen; with it the ratio should rise clearly. A ratio that falls back toward zero means web video stops in the background again: check `UIBackgroundModes` and WebKit's presentation window |
 | `glass_unsourced` | Glass everywhere on Android (#3949: Reader's buttons sat inside their own source and drew the flat fill, unseen) | Counted natively and drained with the pending counts: a native Glass that, for a second after it settled, had no frost source or sat inside the one it names, so it drew the flat fill instead of glass. Counted once per glass. It should stay near zero; a rise after a release means a screen's glass lost its backdrop: look for `path=fallback (no source)` or `(inside its own source)` in the lab's `PAGELAB look frost` lines |
 | `blocker_engines_installed` | the Android content blocker (#4683: compact `NetworkRule`, about 11 MB less heap with the default lists) | Counted natively and drained with the pending counts: one each time the blocker builds and installs a rule engine, at launch and after a list or setting changes. It follows the blocker being on; a drop against `app_launched` on Android with the blocker on means engines stopped building |
+| `glass_plates_pulled` | Readable glass on Android (#4631: the dark toast was white on near-white glass over a white page) | Counted natively and drained with the pending counts: each time an Android glass or frost (page bar, host pill, toast, deck bars, sheets) starts needing the readable bound, so its plate was darkened (dark shade) or lightened (light shade) to keep `chromeInk` at 5:1. Counted when the plate starts needing it, not on every frame. Exact on the flat, held and deck-tinted paths and the Android 12 veil; on the Android 13+ shader path the GPU clamps every pixel and the count is estimated from the page's sampled tone under the glass. Expect a steady share from dark-mode users on white pages; zero across Android testers after a release means the bound stopped running, and a jump means a tint or style change made the glass brighter (dark) or darker (light) than its ink allows |
 | `night_shade_verdicts_reused`, `night_shade_verdicts_learned`, `night_shade_verdicts_corrected` | Night Shade's cached verdicts on Android (a tester's report: yahoo.com loaded white until half way) | Counted natively and drained with the pending counts, never for private tabs. `reused` is a page load, with Night Shade not off, whose site's verdict was already known, so the shade was decided before the first paint; `learned` is a site measured for the first time, whose first load can still shade late; `corrected` is a site whose verdict changed, so that load showed the old one until `DOMContentLoaded`. Read `reused` against `learned` for the hit rate, which should climb as testers revisit sites; a `corrected` share that grows means the measurement disagrees with itself between loads |
 | `bar_load_washes` | the load wash in the bottom bar (#4633), which replaced the top progress line in the redesigned and Material You designs | How many loads are slow enough to show progress at all; never counted for Incognito tabs, a tab switch onto a loading page or the original design. Read it against `tabs_opened` and `searches`: a share that drops to zero after a release means the wash stopped reaching the capsule (the frame driver never starts), and one that jumps means loads got slower or the 120 ms reveal delay stopped holding back cached pages |
 

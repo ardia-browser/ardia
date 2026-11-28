@@ -1,7 +1,7 @@
 import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 import { act } from "react-test-renderer";
 import { SyncScan } from "../components/sync/SyncScan";
-import { ActionButton, overlayInk, Portal, voiceLayout } from "../components/ui";
+import { ActionButton, overlayInk, overlayPlateFill, Portal, voiceLayout } from "../components/ui";
 import { OverlayCancelButton } from "../components/ui/LookViews";
 import * as scan from "../state/sync/scan";
 import { renderSurface, textOf, unmount, withTabs } from "../../test/render/harness";
@@ -75,7 +75,7 @@ test("the scanner's Cancel is the voice screen's: the shared top-right overlay b
   const enter = root.root.findAll((node) => node.type === ActionButton && node.props.title === "Enter Recovery Phrase");
   expect(enter).toHaveLength(1);
   expect(enter[0]!.props).toMatchObject({ variant: "glass", tone: "overlay", stretch: true });
-  expect(flat(scanHost(root, "scanEnterWords")).backgroundColor).toBe(overlayInk.glass);
+  expect(flat(scanHost(root, "scanEnterWords")).backgroundColor).toBe(overlayPlateFill);
   unmount(root);
 });
 

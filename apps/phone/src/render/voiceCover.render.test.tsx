@@ -2,7 +2,7 @@ import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
 import { getAnimatedStyle } from "react-native-reanimated";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { presentVoiceSearchFrom, VoiceSearchView } from "../components/search/VoiceSearchView";
-import { ActionButton, AppIcon, appIconLayout, capsule, overlayInk, press, voiceInk, voiceLayout } from "../components/ui";
+import { ActionButton, AppIcon, appIconLayout, capsule, overlayInk, overlayPlateFill, press, voiceInk, voiceLayout } from "../components/ui";
 import { actionRoleOf, primaryActionRoles } from "../components/ui/tokens";
 import { ChromeFrost, OverlayCancelButton } from "../components/ui/LookViews";
 import { DICTATION_IDLE, type Dictation } from "../state/voice/dictation";
@@ -92,7 +92,7 @@ test("the voice actions are the shared action's glass face over the cover's fros
   unmount(root);
 });
 
-test("the voice actions and Cancel keep the frost tint in Glass and take the solid dark overlay face in Classic and under Reduce Transparency", () => {
+test("the voice actions and Cancel frost under the overlay tint raised to its readable veil in Glass, and take the solid dark overlay face in Classic and under Reduce Transparency", () => {
   jest.spyOn(lookModule, "lookIsNative").mockImplementation(() => true);
   act(() => setAppearanceDesign("redesigned"));
   const faces = (root: Root) =>
@@ -101,7 +101,7 @@ test("the voice actions and Cancel keep the frost tint in Glass and take the sol
       .map((frost) => StyleSheet.flatten(frost.findAll((node) => typeof node.type === "string")[0]!.props.style).backgroundColor);
   const glass = show({ phase: "finished", transcript: "otters" });
   expect(faces(glass)).toHaveLength(2);
-  expect(faces(glass).every((fill) => fill === overlayInk.glass)).toBe(true);
+  expect(faces(glass).every((fill) => fill === overlayPlateFill)).toBe(true);
   unmount(glass);
   act(() => usePreferences.setState({ interfaceStyle: "classic" }));
   const classic = show({ phase: "finished", transcript: "otters" });

@@ -201,3 +201,16 @@ test("the publish check reads the token and changes nothing, and a reloaded docu
   const reloaded = page('<div id="bar" class="bar">bar</div>');
   assert.equal(reloaded.run(owns(KEY_A)), 0);
 });
+
+test("a fixed element in an open shadow root attached to the body itself is hidden once and put back", () => {
+  const dom = new JSDOM(`<!doctype html><html><head></head><body><p>text</p></body></html>`, { runScripts: "outside-only", url: "https://example.com/s" });
+  const run = (script: string) => dom.window.eval(script) as number;
+  const root = dom.window.document.body.attachShadow({ mode: "open" });
+  root.innerHTML = '<div id="badge" style="position: fixed; top: 0">badge</div><slot></slot>';
+  const badge = root.getElementById("badge")!;
+  assert.equal(run(mark(KEY_A)), 1);
+  assert.equal(run(hide(KEY_A)), 1);
+  assert.equal(badge.style.getPropertyValue("opacity"), "0");
+  run(show(KEY_A));
+  assert.equal(badge.getAttribute("style"), "position: fixed; top: 0");
+});

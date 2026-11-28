@@ -310,7 +310,9 @@ internal class PageScrollCapture(private val host: Host, private val idleLimitMi
     }
 
     private suspend fun publishable(current: Session): Boolean =
-        host.capturablePage() == current.page && current.page.evaluate(PageScrollScripts.script(PageScrollScripts.OWNS, current.key), SCRIPT_WAIT_MILLIS) == 1
+        host.capturablePage() == current.page &&
+            current.page.evaluate(PageScrollScripts.script(PageScrollScripts.OWNS, current.key), SCRIPT_WAIT_MILLIS) == 1 &&
+            host.capturablePage() == current.page
 
     private fun presented(surface: TileSurface, shot: Bitmap, width: Int): Boolean {
         val first = surface.present(shot, width)

@@ -29,6 +29,7 @@ class PageScrollCaptureTest {
         var restoredTo: Int? = null
         var draws = 0
         var onPaint: (() -> Unit)? = null
+        var onOwns: (() -> Unit)? = null
 
         fun reload() {
             marked = false
@@ -41,7 +42,7 @@ class PageScrollCaptureTest {
         override suspend fun evaluate(script: String, waitMillis: Long): Int? = when {
             script == PageScrollScripts.ZOOMED -> 0
             script.startsWith(body(PageScrollScripts.MARK)) -> if (marked) 0 else 1.also { marked = true }
-            script.startsWith(body(PageScrollScripts.OWNS)) -> if (marked) 1 else 0
+            script.startsWith(body(PageScrollScripts.OWNS)) -> (if (marked) 1 else 0).also { onOwns?.invoke(); onOwns = null }
             script.startsWith(body(PageScrollScripts.HIDE_FIXED)) -> if (marked) 1 else -1
             script.startsWith(body(PageScrollScripts.SCROLL)) -> if (!marked) -1 else y(script)!!.toInt().also { scrollY = it }
             script.startsWith(body(PageScrollScripts.SHOW_FIXED)) -> if (!marked) -1 else 1.also { y(script)?.toInt()?.let { to -> scrollY = to; restoredTo = to } }
@@ -121,6 +122,16 @@ class PageScrollCaptureTest {
         assertEquals(3000, page.restoredTo)
         assertFalse("the session's token is dropped", page.marked)
         assertTrue(page.scrollBarShown)
+    }
+
+    @Test
+    fun aPageWithdrawnWhileTheDocumentCheckRunsIsNeverPublished() = runBlocking {
+        val (capture, page, host) = opened()
+        val surface = FakeSurface()
+        page.onOwns = { host.page = null }
+        assertTrue(capture.tile(1080, belowTile, surface).isEmpty)
+        assertEquals(0, surface.presents)
+        assertEquals(3000, page.restoredTo)
     }
 
     @Test

@@ -2145,7 +2145,8 @@ the iPhone's Full Page tab below.
   is presented once more, and a second failure answers an empty rect and ends the session
   (`ScrollCapturePlan.presented`). Right before every present, a fresh tile or a repeat, the session checks again that
   the host still offers the same page (not private, no summary, visible, frontmost) and that the document still holds
-  the session's token (`OWNS`); if either fails, after any wait, the tile answers empty and the session ends at once,
+  the session's token (`OWNS`), and checks the host once more after `OWNS` returns, since the page can be withdrawn
+  while that script runs; if either fails, after any wait, the tile answers empty and the session ends at once,
   restoring the page. Only then is the tile reported. SystemUI asks for most tiles twice in a row; a repeat of the
   area just drawn presents the same rows again without touching the page. Android 15's SystemUI gives the whole
   capture about 6 s: past that its screenshot UI dismisses, cancels the pending tile and shows no editor. Two earlier
@@ -2155,7 +2156,7 @@ the iPhone's Full Page tab below.
   reached that edge. The page's height comes only from the WebView (`contentHeight` times its scale). Fixed and sticky
   elements show once, as in Chrome: the tiles of the screen you took are drawn as it was; before any other tile
   `HIDE_FIXED` sets every `position: fixed` and `sticky` element to opacity 0, in the document and in every open
-  shadow root inside it (closed ones stay out of reach) (sticky ones keep their place, so nothing moves), and a later
+  shadow root inside it, one attached to `<body>` itself included (closed ones stay out of reach) (sticky ones keep their place, so nothing moves), and a later
   request inside the screen you took shows them again. End restores the styles, the scroll position and the scroll bar
   in one script (`SHOW_FIXED` with the start position) and removes the token (`DROP`). All scripts check the token in
   the same script as their action and keep the changed elements and their original `style` attributes in a list under

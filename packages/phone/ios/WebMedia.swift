@@ -21,17 +21,25 @@ final class WebMedia {
     var updatedAt: TimeInterval
     var startedAt: TimeInterval
     var startedWallMs: Double
+    var pausedAt: TimeInterval?
+  }
+
+  struct KnownFrame {
+    var frame: WKFrameInfo
+    var at: TimeInterval
   }
 
   static let keptPlayingCheck: TimeInterval = 5
   static let playbackAnswerLimit: TimeInterval = 1
   static let pictureInPictureAnswerLimit: TimeInterval = 1.5
   static let framesPerPage = 8
-  static let pagesKeptLive = 2
+  static let knownFramesPerPage = 16
   static let defaultsKey = "media.settings"
 
   private(set) var settings: PageMediaSettings
   private var frames: [String: [String: Frame]] = [:]
+  private var known: [String: [String: KnownFrame]] = [:]
+  private var retentionCheck = 0
   private var sent: [String: Sent] = [:]
 
   struct Sent: Equatable {
@@ -54,8 +62,9 @@ final class WebMedia {
     var pageID: @MainActor (WKWebView?) -> String?
     var webView: @MainActor (String) -> WKWebView?
     var isPrivate: @MainActor (String) -> Bool
+    var anyPrivateTab: @MainActor () -> Bool
     var liveWebViews: @MainActor () -> [WKWebView]
-    var keepLive: @MainActor ([String]) -> Void
+    var keepLive: @MainActor (_ audible: [String], _ paused: [String]) -> Void
     var send: @MainActor ([String: Any?]) -> Void
     var installScripts: @MainActor ([WKUserScript]) -> Void
   }
@@ -65,6 +74,11 @@ final class WebMedia {
     self.host = host
     settings = Self.storedSettings(defaults)
     host.installScripts(scripts)
+    if PhoneTestBuild.flag("ArdiaMediaPlaybackSession") {
+      try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+      try? AVAudioSession.sharedInstance().setActive(true)
+      Self.trace("audio session set to playback for the experiment")
+    }
     let center = NotificationCenter.default
     observers.append(center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
       MainActor.assumeIsolated { self?.willLeave() }
@@ -100,8 +114,10 @@ final class WebMedia {
     defaults.set(["automaticPictureInPicture": next.automaticPictureInPicture, "keepsPlaying": next.keepsPlaying, "skipSeconds": next.skipSeconds], forKey: Self.defaultsKey)
     guard keepsPlayingChanged else { return }
     host.installScripts(scripts)
-    for (pageID, pageFrames) in frames {
-      for token in pageFrames.keys { run(.keepPlaying, pageID: pageID, token: token, seconds: next.keepsPlaying ? 1 : 0) }
+    let tokens = Set(known.flatMap { pageID, pageFrames in pageFrames.keys.map { "\(pageID) \($0)" } }).union(frames.flatMap { pageID, pageFrames in pageFrames.keys.map { "\(pageID) \($0)" } })
+    for pair in tokens {
+      let parts = pair.split(separator: " ", maxSplits: 1).map(String.init)
+      run(.keepPlaying, pageID: parts[0], token: parts[1], seconds: next.keepsPlaying ? 1 : 0)
     }
   }
 
@@ -119,13 +135,26 @@ final class WebMedia {
     case .left(_, let outcome):
       Self.trace("left \(pageID) \(outcome.rawValue)")
       if outcome == .refused { report(.resumeRefused, pageID: pageID) }
+    case .hello(let token):
+      remember(token, frame: frame, pageID: pageID)
+    case .gone(let token):
+      known[pageID]?[token] = nil
+      if known[pageID]?.isEmpty == true { known[pageID] = nil }
     }
+  }
+
+  private func remember(_ token: String, frame: WKFrameInfo, pageID: String) {
+    var pageFrames = known[pageID] ?? [:]
+    pageFrames[token] = KnownFrame(frame: frame, at: ProcessInfo.processInfo.systemUptime)
+    if pageFrames.count > Self.knownFramesPerPage, let oldest = pageFrames.min(by: { $0.value.at < $1.value.at })?.key { pageFrames[oldest] = nil }
+    known[pageID] = pageFrames
   }
 
   private func take(_ report: PageMediaReport, frame: WKFrameInfo, pageID: String) {
     Self.trace("report \(pageID) \(report.token) \(report.state.rawValue) t=\(String(format: "%.1f", report.position)) video=\(report.hasVideo) pip=\(report.inPictureInPicture) main=\(frame.isMainFrame) app=\(UIApplication.shared.applicationState.rawValue)")
     let now = ProcessInfo.processInfo.systemUptime
     let before = best(pageID)
+    remember(report.token, frame: frame, pageID: pageID)
     var pageFrames = frames[pageID] ?? [:]
     let previous = pageFrames[report.token]
     let resumedAfterLeaving = previous?.report.state == .paused && now - leftAt < Self.leaveResumeWindow
@@ -134,7 +163,8 @@ final class WebMedia {
       pageFrames[report.token] = nil
     } else {
       let wallMs = (Date().timeIntervalSince1970 * 1000).rounded()
-      pageFrames[report.token] = Frame(report: report, frame: frame, updatedAt: now, startedAt: started ? now : previous?.startedAt ?? now, startedWallMs: started ? wallMs : previous?.startedWallMs ?? wallMs)
+      let pausedAt = report.state == .playing ? nil : (previous?.report.state == report.state ? previous?.pausedAt : nil) ?? now
+      pageFrames[report.token] = Frame(report: report, frame: frame, updatedAt: now, startedAt: started ? now : previous?.startedAt ?? now, startedWallMs: started ? wallMs : previous?.startedWallMs ?? wallMs, pausedAt: pausedAt)
     }
     if pageFrames.count > Self.framesPerPage, let oldest = pageFrames.min(by: { $0.value.updatedAt < $1.value.updatedAt })?.key { pageFrames[oldest] = nil }
     frames[pageID] = pageFrames.isEmpty ? nil : pageFrames
@@ -182,22 +212,34 @@ final class WebMedia {
       "startedAt": frame.startedWallMs,
       "canPrevious": report.canPrevious,
       "canNext": report.canNext,
-      "canPictureInPicture": report.canPictureInPicture && Self.pictureInPictureSupported,
+      "canPictureInPicture": report.canPictureInPicture && (Self.pictureInPictureSupported || PhoneTestBuild.flag("ArdiaShowPictureInPictureButton")),
       "inPictureInPicture": report.inPictureInPicture,
       "isPrivate": host.isPrivate(pageID),
     ]
   }
 
   private func keepPlayingPagesLive() {
-    let kept = frames.keys.compactMap { pageID in best(pageID).map { (pageID, $0) } }
-      .sorted { $0.1.startedAt > $1.1.startedAt }
-      .prefix(Self.pagesKeptLive)
-      .map(\.0)
-    host.keepLive(Array(kept))
+    let now = ProcessInfo.processInfo.systemUptime
+    let candidates = frames.keys.compactMap { pageID in
+      best(pageID).map { frame in
+        PageMediaRetention.Candidate(id: pageID, audible: frame.report.state == .playing || frame.report.inPictureInPicture, startedAt: frame.startedAt, pausedAt: frame.pausedAt)
+      }
+    }
+    let kept = PageMediaRetention.kept(candidates, now: now)
+    host.keepLive(kept.audible, kept.paused)
+    retentionCheck += 1
+    guard let expiry = kept.nextExpiry else { return }
+    let check = retentionCheck
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(max(1, expiry - now + 1)))
+      guard let self, self.retentionCheck == check else { return }
+      self.keepPlayingPagesLive()
+    }
   }
 
   func forget(_ pageID: String) {
     returning.forget(pageID)
+    known[pageID] = nil
     guard frames.removeValue(forKey: pageID) != nil || sent[pageID] != nil else { return }
     sent[pageID] = nil
     host.send(["name": "pages.media", "pageId": pageID, "state": "none", "isPrivate": false])
@@ -205,25 +247,34 @@ final class WebMedia {
   }
 
   func pageEnded(_ pageID: String) {
+    known[pageID] = nil
     guard frames[pageID] != nil else { return }
     frames[pageID] = nil
     publish(pageID)
   }
 
-  @discardableResult
-  func command(_ pageID: String, _ name: String, seconds: Double?) -> Bool {
+  func command(_ pageID: String, _ name: String, seconds: Double?) async -> Bool {
     guard let command = PageMediaCommand(rawValue: name), [.play, .pause, .skip, .previous, .next, .pictureInPicture, .leavePictureInPicture].contains(command), let frame = best(pageID) else { return false }
     if command == .pictureInPicture, !(Self.pictureInPictureSupported && frame.report.hasVideo) { return false }
     let step = command == .skip ? PageMediaCommand.skipSeconds(seconds) : nil
     if command == .skip, step == nil { return false }
-    return run(command, pageID: pageID, token: frame.report.token, seconds: step)
+    guard let (webView, frameInfo, script) = prepare(command, pageID: pageID, token: frame.report.token, seconds: step) else { return false }
+    let answer = try? await webView.evaluateJavaScript(script, in: frameInfo, contentWorld: .page)
+    let accepted = answer as? Bool == true
+    Self.trace("answer \(pageID) \(command.rawValue) \(accepted)")
+    return accepted
+  }
+
+  private func prepare(_ command: PageMediaCommand, pageID: String, token: String, seconds: Int?) -> (WKWebView, WKFrameInfo, String)? {
+    Self.trace("command \(pageID) \(token) \(command.rawValue) \(seconds.map(String.init) ?? "")")
+    guard let frame = frames[pageID]?[token]?.frame ?? known[pageID]?[token]?.frame, let webView = host.webView(pageID), let script = command.script(token: token, seconds: seconds) else { return nil }
+    return (webView, frame, script)
   }
 
   @discardableResult
   private func run(_ command: PageMediaCommand, pageID: String, token: String, seconds: Int?) -> Bool {
-    Self.trace("command \(pageID) \(token) \(command.rawValue) \(seconds.map(String.init) ?? "")")
-    guard let frame = frames[pageID]?[token], let webView = host.webView(pageID), let script = command.script(token: token, seconds: seconds) else { return false }
-    webView.evaluateJavaScript(script, in: frame.frame, in: .page) { _ in }
+    guard let (webView, frame, script) = prepare(command, pageID: pageID, token: token, seconds: seconds) else { return false }
+    webView.evaluateJavaScript(script, in: frame, in: .page) { _ in }
     return true
   }
 
@@ -284,7 +335,9 @@ final class WebMedia {
   }
 
   private func report(_ outcome: Outcome, pageID: String?) {
-    host.send(["name": "pages.webVideo", "outcome": outcome.rawValue, "isPrivate": pageID.map(host.isPrivate) ?? frames.keys.contains(where: host.isPrivate)])
+    let isPrivate = pageID.map(host.isPrivate) ?? (host.anyPrivateTab() || frames.keys.contains(where: host.isPrivate))
+    Self.trace("outcome \(outcome.rawValue) page=\(pageID ?? "none") private=\(isPrivate)")
+    host.send(["name": "pages.webVideo", "outcome": outcome.rawValue, "isPrivate": isPrivate])
   }
 
   private static func anyPlaying(_ webViews: [WKWebView]) async -> Bool {
@@ -363,10 +416,12 @@ extension PhonePages {
       pageID: { [weak self] webView in self?.pageID(of: webView) },
       webView: { [weak self] pageID in self?.page(pageID)?.webView },
       isPrivate: { [weak self] pageID in self?.isPrivatePage(pageID) ?? false },
+      anyPrivateTab: { [weak self] in !(self?.engine.tabs.privateTabs.isEmpty ?? true) },
       liveWebViews: { [weak self] in self?.liveWebViews() ?? [] },
-      keepLive: { [weak self] pageIDs in
+      keepLive: { [weak self] audible, paused in
         guard let self else { return }
-        self.engine.keepsLive = Set(pageIDs.compactMap { self.tabIDs[$0] })
+        self.engine.keepsLive = Set(audible.compactMap { self.tabIDs[$0] })
+        self.engine.keepsLiveWhileMemoryAllows = Set(paused.compactMap { self.tabIDs[$0] })
       },
       send: { [weak self] event in self?.pageSink?(event) },
       installScripts: { [weak self] scripts in self?.engine.setExtraPageScripts(scripts) }

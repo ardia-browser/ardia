@@ -263,8 +263,8 @@ public final class PageViewModule: Module {
       WebMedia.pictureInPictureSupported
     }
 
-    AsyncFunction("mediaCommand") { (pageID: String, command: String, seconds: Double?) -> Bool in
-      MainActor.assumeIsolated { PhonePages.shared.media?.command(pageID, command, seconds: seconds) ?? false }
+    AsyncFunction("mediaCommand") { (pageID: String, command: String, seconds: Double?, promise: Promise) in
+      Self.main(promise) { await PhonePages.shared.media?.command(pageID, command, seconds: seconds) ?? false }
     }.runOnQueue(.main)
 
     AsyncFunction("setMediaSettings") { (settings: MediaSettingsRecord) in

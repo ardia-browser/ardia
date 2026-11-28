@@ -210,7 +210,7 @@ final class WebMedia {
       "startedAt": frame.startedWallMs,
       "canPrevious": report.canPrevious,
       "canNext": report.canNext,
-      "canPictureInPicture": report.canPictureInPicture && (Self.pictureInPictureSupported || PhoneTestBuild.flag("ArdiaShowPictureInPictureButton")),
+      "canPictureInPicture": PhoneTestBuild.flag("ArdiaShowPictureInPictureButton") ? report.hasVideo : report.canPictureInPicture && Self.pictureInPictureSupported,
       "inPictureInPicture": report.inPictureInPicture,
       "isPrivate": host.isPrivate(pageID),
     ]

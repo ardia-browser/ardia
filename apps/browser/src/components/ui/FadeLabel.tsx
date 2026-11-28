@@ -2,7 +2,7 @@ import { useContext } from "react";
 import { FadeLabel as NativeFadeLabel, type FadeLabelProps } from "@ardia/shell";
 import { activeLook } from "../../lib/activeLook";
 import type { FontWeight } from "../../lib/themeLook";
-import { useScopedTheme } from "./theme";
+import { hex, useScopedTheme } from "./theme";
 import { TextScopeContext } from "./Text";
 import { sidebarPoints } from "./look";
 import { singleLine } from "../../lib/singleLine";
@@ -34,5 +34,5 @@ export function drawnFadeLabel({ text, weight, fadeWidth = FADE_WIDTH, ...props 
   const look = activeLook();
   const name = WEIGHT_NAMES[weight ?? "regular"];
   const drawn = name ? NAMED[look.weights[name]] : weight;
-  return <NativeFadeLabel {...props} text={singleLine(text)} fadeWidth={inSidebar ? sidebarPoints(fadeWidth) : fadeWidth} weight={drawn ?? "regular"} fontFamily={look.family ?? ""} />;
+  return <NativeFadeLabel {...props} color={props.color && hex(props.color)} text={singleLine(text)} fadeWidth={inSidebar ? sidebarPoints(fadeWidth) : fadeWidth} weight={drawn ?? "regular"} fontFamily={look.family ?? ""} />;
 }

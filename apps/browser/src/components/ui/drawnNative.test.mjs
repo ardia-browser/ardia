@@ -4,6 +4,7 @@ import { test } from "node:test";
 globalThis.require ??= (id) => ({ asset: id });
 const { drawnSymbol } = await import("./Symbol.tsx");
 const { drawnFadeLabel } = await import("./FadeLabel.tsx");
+const { contrastTheme, themeFor } = await import("./theme.ts");
 
 test("a drawn symbol is the native view with the look's icon name and a hex colour, as the Symbol component draws it", () => {
   const drawn = drawnSymbol({ name: "globe", size: 14, color: "rgba(255,255,255,0.5)", style: { width: 16 } });
@@ -21,6 +22,16 @@ test("a drawn fade label scales its fade in the sidebar and keeps every other pr
   assert.equal(outside.props.fadeWidth, 24);
   assert.equal(typeof inside.props.fadeWidth, "number");
   assert.equal(outside.props.weight, inside.props.weight);
+});
+
+test("a drawn fade label hands the native view a hex colour with higher contrast text, in dark and light", () => {
+  for (const mode of ["dark", "light"]) {
+    const theme = contrastTheme(themeFor(`plum:${mode}`));
+    for (const role of ["textTab", "textSecondary", "textTertiary", "placeholder"]) {
+      const drawn = drawnFadeLabel({ text: "Themes_Copy01", fontSize: 13, color: theme[role] }, true);
+      assert.match(String(drawn.props.color), /^#[0-9A-F]{6}(?:[0-9A-F]{2})?$/i, `${mode} ${role}`);
+    }
+  }
 });
 
 test("every sidebar row's label and every no-favicon globe draw the native view directly, one component each instead of two", () => {

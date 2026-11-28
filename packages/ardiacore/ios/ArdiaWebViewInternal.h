@@ -84,6 +84,12 @@ struct ArdiaReveal {
   __weak NSWindow *onScreenIn;
 };
 
+struct ArdiaLoginListField {
+  NSDictionary *field;
+  NSMutableDictionary<NSString *, NSDictionary *> *fills;
+  NSInteger ticket{};
+};
+
 struct ArdiaPageReports {
   NSString *theme;
   NSString *themeSource;
@@ -156,6 +162,7 @@ struct ArdiaPageFocusState {
   ArdiaReveal _reveal;
   ArdiaPageFocusState _focus;
   ArdiaPageReports _reports;
+  ArdiaLoginListField _loginList;
   ArdiaCommits _commits;
   NSString *_profile;
   NSString *_initialURL;
@@ -213,6 +220,10 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (ArdiaTransfer)takeTransferredTab;
 - (void)bindRestoreKey;
 - (void)forgetRestoreKey;
+@end
+
+@interface ArdiaWebView (SiteInternal)
+- (void)passwordPrompt:(NSDictionary<NSString *, id> *)prompt fromTab:(nullable ArdiaCoreTab *)source;
 @end
 
 @interface ArdiaWebView (TabInternal)
@@ -338,6 +349,13 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)forgetScriptFrame:(NSString *)frameId;
 - (void)pushSelectionPopover;
 - (void)pushFieldProvider;
+- (void)pushChromeLists;
+- (void)pushClaimedAutofillKinds;
+- (void)pushLoginList;
+- (void)loginFieldFromPage:(NSDictionary *)data frame:(NSString *)frameId main:(BOOL)main origin:(nullable NSString *)origin;
+- (void)endLoginField;
+- (void)loginFilledFromPage:(NSDictionary *)data frame:(NSString *)frameId;
+- (void)callFramesWithSameSite:(NSString *)json kind:(NSString *)kind otherwise:(NSString *)other;
 - (void)pushFieldProviderHint:(NSString *)json;
 - (BOOL)sameSiteFrame:(BOOL)main origin:(NSString *)origin;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
@@ -402,6 +420,7 @@ bool SamePage(NSString *a, NSString *b);
 NSString *OriginOf(NSString *url);
 NSString *VerifiedOrigin(NSString *origin);
 NSDictionary *_Nullable FieldProviderFor(NSString *_Nullable profile);
+NSDictionary *LoginListConfig(NSString *_Nullable profile);
 NSString *FieldProviderJSON(NSString *_Nullable profile);
 void NoteEvent(int browserId, NSString *name, NSDictionary *payload);
 void AcceptDrops(NSView *root, BOOL accept);

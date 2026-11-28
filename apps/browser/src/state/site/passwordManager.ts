@@ -1,3 +1,5 @@
+import { setApplePasswordsProfiles } from "../../platform/applePasswords";
+import { startLoginListCounts } from "./loginListCounts";
 import { setFieldProviders, showSystemPanel, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../platform/passwordProviders";
 import { offerPanelHint, panelHintReported } from "./panelHints";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
@@ -25,6 +27,7 @@ import {
   type ManagerPlugin,
   type PasswordManagerChoice,
 } from "./passwordManagerChoice";
+import { followPasswordManagerChoice } from "./iCloudPasswordsExtension";
 import { closeVerificationCodePrompts, offerVerificationCode } from "./verificationCodes";
 import { followMode, forgetHeldOffOutside, forgetPendingOfferToSave, offerToSaveHeldOffSomewhere, passwordAutofill, pendingOfferToSave, startOfferToSave, watchPendingOfferToSave, writeOfferToSave } from "./offerToSave";
 
@@ -83,10 +86,12 @@ export const neverChosenCount = () => neverChosenProfiles(browser()).length;
 
 let engage = () => {};
 
-export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice) {
+export function choosePasswordManager(profileId: string, manager: PasswordManagerChoice, consent?: ConsentToken | null) {
   const s = browser();
-  notePasswordManagerChosen(choiceKind(manager));
+  const before = storedPasswordManager(s, profileId);
+  notePasswordManagerChosen(choiceKind(manager), consent);
   engage();
+  followPasswordManagerChoice(profileId, before, manager, consent ?? consentToken());
   for (const id of profilesSharingData(s, profileId)) s.updateProfile(id, { passwordManager: manager });
 }
 
@@ -244,6 +249,7 @@ export function startPasswordManager() {
   if (started || !PLATFORM_FEATURES.systemPasswordManagers || !PLATFORM_FEATURES.plugins) return;
   started = true;
   startOfferToSave();
+  startLoginListCounts();
   const startConsent = consentToken();
   let modes = new Map<string, PasswordManagerChoice>();
   let seen = new Set<string>();
@@ -257,13 +263,27 @@ export function startPasswordManager() {
 
   const plugins = () => managerPlugins(pluginsView());
 
+  let appleProfiles: string | null = null;
+  const pushAppleProfiles = (consent: ConsentToken | null) => {
+    const chosen = [...modes].filter(([, mode]) => mode === "apple").map(([profile]) => profile).sort();
+    const key = JSON.stringify(chosen);
+    if (key === appleProfiles) return;
+    appleProfiles = key;
+    void setApplePasswordsProfiles(chosen).catch((e: unknown) => {
+      appleProfiles = null;
+      warnFor(consent, "[passwords] native refused the Apple Passwords profiles", e);
+    });
+  };
+
   const syncModes = () => {
     if (!ready) return;
     const current = plugins();
     const next = engineModes(browser(), current);
     for (const [profile, mode] of next) if (modes.get(profile) !== mode) followMode(profile, mode);
     modes = next;
-    void pushProviders(providerPlugins(current), consentToken());
+    const consent = consentToken();
+    pushAppleProfiles(consent);
+    void pushProviders(providerPlugins(current), consent);
   };
 
   const syncWindows = () => {

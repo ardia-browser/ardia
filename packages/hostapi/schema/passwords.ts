@@ -3,7 +3,7 @@ import { defineDomain } from "../define.ts";
 export const passwords = defineDomain({
   kind: "engine",
   imports: {
-    "../../passwords": ["FieldProviderProfile", "PasswordExportStatus", "SavedPassword", "SystemPanelResult", "VerificationCodeSetupResult"],
+    "../../passwords": ["FieldProviderProfile", "PasswordExportStatus", "SavedPassword", "SystemPanelResult", "VerificationCodeSetupResult", "ApplePasswordsState", "ApplePasswordsPairing", "LoginListCount", "LoginListEngine", "ApplePasswordsSaveCount", "ApplePasswordsFailureKind"],
     "../wire": ["Profile"],
   },
   calls: {
@@ -112,6 +112,60 @@ export const passwords = defineDomain({
       mac: "custom",
       windows: "absent",
     },
+    applePasswordsStatus: {
+      args: "{}",
+      result: "{ state: ApplePasswordsState }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    applePasswordsPair: {
+      args: "{}",
+      result: "{ outcome: ApplePasswordsPairing }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    applePasswordsPairCode: {
+      args: "{ code: string }",
+      result: "{ outcome: ApplePasswordsPairing }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    applePasswordsCancelPairing: {
+      args: "{}",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    setApplePasswordsProfiles: {
+      args: "{ profiles: string[] }",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
   },
-  events: {},
+  events: {
+    applePasswordsChanged: {
+      payload: "{ state: ApplePasswordsState; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    loginListCounted: {
+      payload: "{ name: LoginListCount; engine?: LoginListEngine; kind?: ApplePasswordsFailureKind; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+    applePasswordsSaveCounted: {
+      payload: "{ name: ApplePasswordsSaveCount; engine?: LoginListEngine; kind?: ApplePasswordsFailureKind; epoch?: string }",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
+  },
 });

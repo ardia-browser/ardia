@@ -17,12 +17,10 @@ import { opaqueCard } from "../ui/opaqueCard";
 import { handOff, takeHandOff, wantsPage } from "../../state/tabs/tabPages";
 import { noteDiscarded, noteGone, noteReady } from "../../state/tabs/tabLifecycle";
 import { noteTabHidden, presentTab, trackPageArrival } from "../../state/tabs/busyTabWatch";
-import { forgetCommittedDocumentIfGone, notePageCommit, noteWebKitPage, persistEngine, refusedVideoSiteOf } from "../../state/engines/actions";
-import { offerWebKit } from "../../state/engines/siteMoves";
+import { forgetCommittedDocumentIfGone, notePageCommit, noteWebKitPage, persistEngine } from "../../state/engines/actions";
+import { protectedMediaRefused } from "../../state/engines/siteMoves";
 import { heldBySwap, watchFirstPaint } from "../../state/engines/engineSwap";
 import { useRetiringEngine } from "../../state/engines/hooks";
-import { noteProtectedVideoRefusal } from "../../state/telemetry/protectedVideoCounts";
-import { consentToken } from "../../state/telemetry/client";
 import { webviewRef, webviews } from "../../state/tabs/webviewHandles";
 import { noteIssued, takeStartedNavigation } from "../../state/tabs/earlyNavigate";
 import { currentEngineProfile, currentTab, isTabSilenced } from "../../state/browser/current";
@@ -36,6 +34,7 @@ import type { Tab } from "../../state/browser/types";
 import { zoomChangedByUser } from "../../state/site/zoomBubble";
 import { markTabReady, patchPage, pageOf } from "../../state/tabs/pageState";
 import { popupBlocked, showAutofillPrompt, showExternalApp, showPasswordPrompt } from "../../state/site/prompts";
+import { pairFromLoginList } from "../../state/site/loginListPairing";
 import { fieldProviderHint, fieldProviderOpened, verificationCodeFound, type FieldProviderHint, type FieldProviderOpened, type VerificationCodeFound } from "../../state/site/passwordManager";
 import { verificationCodeDocument, verificationCodeTabGone } from "../../state/site/verificationCodes";
 import { hoverStatus } from "../../state/tabs/hoverStatus";
@@ -367,14 +366,12 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
       }}
       onSelection={(selection) => setPageSelection(tabId, selection)}
       onScroll={(state) => noteScroll(tabId, state)}
-      onProtectedMedia={(request) => {
-        if (engine === "chromium") noteProtectedVideoRefusal(request, consentToken(), refusedVideoSiteOf(tabId));
-        offerWebKit(tabId, request);
-      }}
+      onProtectedMedia={(request) => protectedMediaRefused(tabId, engine, request)}
       onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}
       onFieldProviderOpened={(opened: FieldProviderOpened) => fieldProviderOpened(tabId, opened)}
       onFieldProviderHint={(hint: FieldProviderHint) => fieldProviderHint(tabId, hint)}
       onVerificationCodeFound={(found: VerificationCodeFound) => verificationCodeFound(tabId, found)}
+      onApplePasswordsConnect={() => pairFromLoginList(tabId)}
       onNotificationClose={closeWebNotification}
       onDiscarded={(url, reason) => {
         endPageDocument(tabId, documentReporter);

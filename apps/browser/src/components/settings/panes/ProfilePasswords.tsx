@@ -35,6 +35,7 @@ import { useGrowingRows } from "../../../state/settings/growingRows";
 import { notePasswordListShown } from "../../../state/telemetry/exportCounts";
 import { useManagerPlugins, useProfilePasswordManager } from "../../../state/site/passwordManager";
 import { offerToSaveHandedOver, PasswordManagerRow } from "./PasswordManagerRow";
+import { MeCardRow } from "./MeCardRow";
 
 function passwordManagerAppsNote() {
   const apps = `1Password, Bitwarden, KeePassXC and Proton Pass extensions connect to their ${PLATFORM_TERMS.computer} apps.`;
@@ -65,6 +66,7 @@ export function PasswordsSection({ profileId }: { profileId: string }) {
         <Row anchor="profiles.addresses" description={keptByExtensionNote(enabled?.addresses, addressesAsked)}>
           <Toggle value={enabled?.addresses ?? true} disabled={!enabled} onChange={(v) => setAutofillFor(profile, "addresses", v)} />
         </Row>
+        {PLATFORM_FEATURES.meCard ? <MeCardRow profile={profile} /> : null}
         <Row anchor="profiles.savedAddresses" onPress={() => open(SETTINGS_DETAIL.addresses)} />
         <Row anchor="profiles.cards" description={keptByExtensionNote(enabled?.cards, cardsAsked)}>
           <Toggle value={enabled?.cards ?? true} disabled={!enabled} onChange={(v) => setAutofillFor(profile, "cards", v)} />
@@ -84,6 +86,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
   const [exportStatus, setExportStatus] = useState("");
   const profile = currentEngineProfile(profileId);
   const unlocked = usePasswordsUnlocked(profile);
+  const onApple = useProfilePasswordManager(profileId) === "apple";
   const arrived = useRef(0);
 
   const load = () => {
@@ -135,6 +138,7 @@ export function PasswordsPage({ profileId }: { profileId: string }) {
         description={`Saved on this ${PLATFORM_TERMS.computer}, separately for each profile, and encrypted with ${PLATFORM_TERMS.passwordKey}.`}
       />
       <Group>
+        {onApple ? <Row icon={<Symbol name="key.fill" size={15} color={theme.icon} style={HELP_ICON} />} title="Apple Passwords is this profile's password manager" description={APPLE_PASSWORDS_PICKED} /> : null}
         <Row title="Import passwords" description={importStatus || "From a CSV exported by Chrome, Safari, Firefox, 1Password, Bitwarden…"}>
           <Button title="Import CSV…" onPress={() => void importCsv()} />
         </Row>
@@ -309,6 +313,7 @@ function PasswordSheet({ profile, saved, onChanged }: { profile: string; saved: 
   );
 }
 
+const APPLE_PASSWORDS_PICKED = "These aren't used while Apple Passwords is this profile's password manager. They're kept, and fill again if you switch back to Ardia.";
 const HELP_ICON = { width: 20, height: 20 } as const;
 const LOCKED = { alignItems: "center", marginTop: settingsLayout.emptyTop } as const;
 const LOCK_ICON = { width: 36, height: 36 } as const;

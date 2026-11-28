@@ -1,4 +1,4 @@
-import type { FieldProviderProfile, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../../passwords";
+import type { ApplePasswordsFailureKind, ApplePasswordsPairing, ApplePasswordsSaveCount, ApplePasswordsState, FieldProviderProfile, LoginListCount, LoginListEngine, PasswordExportStatus, SavedPassword, SystemPanelResult, VerificationCodeSetupResult } from "../../passwords";
 import type { Profile } from "../wire";
 
 export type PasswordsCalls = {
@@ -17,6 +17,15 @@ export type PasswordsCalls = {
   "passwords.systemPanelAvailable": [{}, { chromium: boolean; webkit: boolean }];
   "passwords.otpauthHandler": [{}, { app: string | null }];
   "passwords.setUpVerificationCode": [{ tab: string; token: string; generation?: number }, VerificationCodeSetupResult];
+  "passwords.applePasswordsStatus": [{}, { state: ApplePasswordsState }];
+  "passwords.applePasswordsPair": [{}, { outcome: ApplePasswordsPairing }];
+  "passwords.applePasswordsPairCode": [{ code: string }, { outcome: ApplePasswordsPairing }];
+  "passwords.applePasswordsCancelPairing": [{}, null];
+  "passwords.setApplePasswordsProfiles": [{ profiles: string[] }, null];
 };
 
-export type PasswordsEvents = {};
+export type PasswordsEvents = {
+  "passwords.applePasswordsChanged": { state: ApplePasswordsState; epoch?: string };
+  "passwords.loginListCounted": { name: LoginListCount; engine?: LoginListEngine; kind?: ApplePasswordsFailureKind; epoch?: string };
+  "passwords.applePasswordsSaveCounted": { name: ApplePasswordsSaveCount; engine?: LoginListEngine; kind?: ApplePasswordsFailureKind; epoch?: string };
+};

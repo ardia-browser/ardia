@@ -1,0 +1,468 @@
+import AppKit
+
+protocol LoginListTarget: AnyObject {
+  var loginListProfile: String { get }
+  var loginListPage: URL? { get }
+  var loginListWindow: NSWindow? { get }
+  var loginListEngine: String { get }
+  func loginListFill(username: String, password: String, frameOrigin: String, done: @escaping (Bool) -> Void)
+  func loginListFillCode(_ code: String, frameOrigin: String, done: @escaping (Bool) -> Void)
+  func loginListFillNewPassword(_ password: String, frameOrigin: String, done: @escaping (Bool) -> Void)
+  func loginListSync(open: Bool, picking: Bool)
+  func loginListConnect()
+}
+
+final class LoginList: NSObject {
+  static let shared = LoginList()
+  static let passwordsApp = "com.apple.Passwords"
+  static let iconLabel = "Apple Passwords"
+  static let footerId = "openPasswordsApp"
+  static let footerTitle = "Open Passwords app"
+  static let noLogins = "No saved logins"
+  static let insecure = "Not secure"
+  static let fillFailed = "Apple Passwords didn't fill this login. Unlock the Passwords app and try again."
+  static let connectId = "connectApplePasswords"
+  static let connectTitle = "Connect Apple Passwords"
+  static let notNowId = "notNow"
+  static let notNowTitle = "Not now"
+  static let codeFillFailed = "Apple Passwords didn't fill this code. Unlock the Passwords app and try again."
+  static func codeTitle(_ site: String) -> String { "Code for \(site)" }
+  static let strongId = "suggestStrongPassword"
+  static let strongTitle = "Suggest strong password"
+  static let strongFailed = "Ardia couldn't make a strong password for this field."
+
+  private struct Shown {
+    weak var target: LoginListTarget?
+    let field: LoginListField
+    let page: String
+    let host: String
+    let site: String
+    var logins: [ApplePasswordsMatch.Login]
+    var connect = false
+    var strong = false
+    var codes: [ApplePasswordsCode] = []
+    var codeSite = ""
+    var codePage = ""
+    var domains: [String: String] = [:]
+  }
+
+  private struct Account {
+    weak var target: LoginListTarget?
+    let site: String
+    let user: String
+    let at: Date
+  }
+
+  private struct Fetched {
+    weak var target: LoginListTarget?
+    let page: String
+    let host: String
+    let scheme: String
+    let logins: [ApplePasswordsMatch.Login]
+    let domains: [String: String]
+    var hidden = false
+  }
+
+  private struct Synced: Equatable {
+    let open: Bool
+    let picking: Bool
+  }
+
+  static let accountSeconds: TimeInterval = 300
+
+  private var shown: Shown?
+  private weak var asking: LoginListTarget?
+  private var accounts: [Account] = []
+  private var ticket = 0
+  private var declined: Set<String> = []
+  private var resume: Shown?
+  private var fetched: Fetched?
+  private weak var syncedTarget: LoginListTarget?
+  private var synced: Synced?
+
+  override init() {
+    super.init()
+    NotificationCenter.default.addObserver(forName: ApplePasswordsClient.changed, object: nil, queue: .main) { [weak self] note in
+      self?.applePasswordsChanged(note.userInfo?["state"] as? String ?? "")
+    }
+  }
+  private lazy var dropdown: WebKitAutofillDropdown = {
+    let dropdown = WebKitAutofillDropdown()
+    dropdown.onPick = { [weak self] row in self?.picked(row.id) }
+    dropdown.onSelect = { [weak self] in self?.sync() }
+    dropdown.onDismiss = { [weak self] in
+      self?.sync()
+      self?.forgetSync()
+      self?.shown = nil
+      self?.fetched = nil
+    }
+    return dropdown
+  }()
+
+  static func origin(of url: URL?) -> String? { url.flatMap { Origins.of($0) }.map(WebKitLoginsReport.normalized) }
+
+  func isShown(for target: LoginListTarget) -> Bool { dropdown.isShown && shown?.target === target }
+
+  func show(_ target: LoginListTarget, field: LoginListField) {
+    ticket += 1
+    asking = target
+    let asked = ticket
+    guard let frame = URL(string: field.frameOrigin), let scheme = frame.scheme?.lowercased(), scheme == "https" || scheme == "http",
+      let host = frame.host?.lowercased(), !host.isEmpty, let page = Self.origin(of: target.loginListPage), let pageHost = target.loginListPage?.host?.lowercased()
+    else { return close(target) }
+    let profile = target.loginListProfile
+    resume = nil
+    if field.trigger != .typing { forgetSync() }
+    if field.kind == .code {
+      guard scheme == "https" else { return close(target) }
+      return showCodes(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked)
+    }
+    if field.kind == .newPassword { return showStrong(target, field: field, host: host, page: page, pageHost: pageHost, asked: asked) }
+    if field.trigger == .typing, let cache = fetched, cache.target === target, cache.page == page, cache.host == host, cache.scheme == scheme,
+      cache.hidden || isShown(for: target)
+    {
+      return listed(.success(cache.logins), domains: cache.domains, target: target, field: field, page: page, host: host, pageHost: pageHost)
+    }
+    ApplePasswordsClient.shared.logins(host: host) { [weak self, weak target] result in
+      let entries = (try? result.get()) ?? []
+      Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.siteHosts(entries)), profile: profile) { domains in
+        guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
+        let logins = result.map { ApplePasswordsMatch.logins($0, scheme: scheme, host: host, domains: domains) }
+        self.fetched = (try? logins.get()).map { Fetched(target: target, page: page, host: host, scheme: scheme, logins: $0, domains: domains) }
+        self.listed(logins, domains: domains, target: target, field: field, page: page, host: host, pageHost: pageHost)
+      }
+    }
+  }
+
+  private func showStrong(_ target: LoginListTarget, field: LoginListField, host: String, page: String, pageHost: String, asked: Int) {
+    let profile = target.loginListProfile
+    ApplePasswordsClient.shared.status { [weak self, weak target] state in
+      Self.domains(ApplePasswordsMatch.probes([host, pageHost]), profile: profile) { domains in
+        guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
+        guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
+        var next = Shown(target: target, field: field, page: page, host: host, site: domains[pageHost] ?? pageHost, logins: [])
+        next.domains = domains
+        next.strong = true
+        next.connect = state == "notConnected" && !self.declined.contains(next.site)
+        self.present(next, notice: nil)
+      }
+    }
+  }
+
+  private func listed(
+    _ result: Result<[ApplePasswordsMatch.Login], ApplePasswordsClient.Problem>, domains: [String: String], target: LoginListTarget, field: LoginListField, page: String,
+    host: String, pageHost: String
+  ) {
+    guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return close(target) }
+    let site = domains[pageHost] ?? pageHost
+    if field.kind == .login || field.kind == .identifier, !field.typed.isEmpty { remember(field.typed, on: ApplePasswordsMatch.site(pageHost, domains: domains), in: target) }
+    var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
+    next.domains = domains
+    switch result {
+    case .success(let logins):
+      next.logins = logins
+      present(next, notice: nil)
+    case .failure(let problem):
+      Self.count("listFailed", in: target, kind: problem.kind)
+      if problem == .notConnected { return offerConnect(next) }
+      present(next, notice: Self.notice(problem))
+    }
+  }
+
+  func forgetFetchedLogins() { fetched = nil }
+
+  static func isCode(_ value: String) -> Bool { value.range(of: "^[A-Za-z0-9]{4,10}$", options: .regularExpression) != nil }
+
+  static func codePage(_ url: URL?) -> String? {
+    guard let url, url.scheme?.lowercased() == "https", var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+    parts.query = nil
+    parts.fragment = nil
+    return parts.string
+  }
+
+  private func showCodes(_ target: LoginListTarget, field: LoginListField, host: String, page: String, pageHost: String, asked: Int) {
+    guard let codePage = Self.codePage(target.loginListPage) else { return close(target) }
+    let profile = target.loginListProfile
+    ApplePasswordsClient.shared.codes(page: codePage) { [weak self, weak target] result in
+      let found = (try? result.get()) ?? []
+      Self.domains(ApplePasswordsMatch.probes([host, pageHost] + ApplePasswordsMatch.codeHosts(found)), profile: profile) { domains in
+        guard let self, let target, asked == self.ticket, Self.origin(of: target.loginListPage) == page else { return }
+        guard ApplePasswordsMatch.sameSite(host, pageHost, domains: domains) else { return self.close(target) }
+        let site = domains[pageHost] ?? pageHost
+        var next = Shown(target: target, field: field, page: page, host: host, site: site, logins: [])
+        next.codePage = codePage
+        next.codeSite = ApplePasswordsMatch.site(pageHost, domains: domains)
+        next.domains = domains
+        switch result {
+        case .success:
+          next.codes = ApplePasswordsMatch.typedFirst(ApplePasswordsMatch.codes(found, host: host, domains: domains), user: self.account(on: next.codeSite, in: target))
+          guard !next.codes.isEmpty else { return self.close(target) }
+          self.present(next, notice: nil)
+        case .failure(let problem):
+          Self.count("listFailed", in: target, kind: problem.kind)
+          if problem == .notConnected { return self.offerConnect(next) }
+          self.present(next, notice: Self.notice(problem))
+        }
+      }
+    }
+  }
+
+  private func remember(_ user: String, on site: String, in target: LoginListTarget) {
+    accounts = accounts.filter { $0.target != nil && $0.target !== target } + [Account(target: target, site: site, user: user, at: Date())]
+  }
+
+  private func account(on site: String, in target: LoginListTarget) -> String? {
+    accounts.last { $0.target === target && $0.site == site && Date().timeIntervalSince($0.at) < Self.accountSeconds }?.user
+  }
+
+  static func domains(_ hosts: [String], profile: String, done: @escaping ([String: String]) -> Void) {
+    DispatchQueue.main.async {
+      ArdiaServices.call("ac_registrable_domains", profile: ArdiaHost.baseProfile(of: profile), args: ["hosts": hosts]) { result in
+        let answers = result["domains"] as? [String] ?? []
+        let domains = answers.count == hosts.count ? Dictionary(zip(hosts, answers), uniquingKeysWith: { first, _ in first }) : [:]
+        DispatchQueue.main.async { done(domains) }
+      }
+    }
+  }
+
+  private func offerConnect(_ next: Shown) {
+    guard let target = next.target else { return }
+    guard !declined.contains(next.site) else { return close(target) }
+    var offer = next
+    offer.connect = true
+    present(offer, notice: nil)
+  }
+
+  private func applePasswordsChanged(_ state: String) {
+    fetched = nil
+    guard state == "connected" else { return declined.removeAll() }
+    guard let waiting = resume else { return }
+    resume = nil
+    guard let target = waiting.target, Self.origin(of: target.loginListPage) == waiting.page else { return }
+    show(target, field: waiting.field)
+  }
+
+  func pairingCancelled() { resume = nil }
+
+  static func notice(_ problem: ApplePasswordsClient.Problem) -> String {
+    switch problem {
+    case .notConnected: "Apple Passwords isn't connected."
+    case .refused: "Apple Passwords didn't share this site's logins. Unlock the Passwords app and try again."
+    case .timedOut, .unreadable: "Apple Passwords didn't answer. Try again."
+    case .unavailable(.helperMissing): "Apple Passwords' browser helper is missing from this Mac. Update macOS in System Settings › General › Software Update, then try again."
+    case .unavailable(.tooOld): "Needs macOS 15.4 or later."
+    case .unavailable(.notEntitled): "This copy of Ardia can't use Apple Passwords."
+    case .unavailable: "Apple Passwords isn't available on this Mac."
+    }
+  }
+
+  private static func rowId(_ login: ApplePasswordsMatch.Login) -> String { "login\n\(login.user)" }
+  private static func codeRowId(_ code: ApplePasswordsCode) -> String { "code\n\(code.user)" }
+
+  static let connectRows: [WebKitAutofillDropdown.Row] = [
+    .init(id: connectId, title: connectTitle, detail: "", symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel),
+    .init(id: notNowId, title: notNowTitle, detail: "", symbol: "xmark"),
+  ]
+
+  static func rows(
+    _ logins: [ApplePasswordsMatch.Login], bold: [NSRange] = [], notice: String?, connect: Bool = false, strong: Bool = false, codes: [ApplePasswordsCode] = [],
+    codeSite: String = ""
+  ) -> [WebKitAutofillDropdown.Row] {
+    let strongRow = WebKitAutofillDropdown.Row(id: strongId, title: strongTitle, detail: "", symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel)
+    if connect { return (strong ? [strongRow] : []) + connectRows }
+    var rows: [WebKitAutofillDropdown.Row] = []
+    if let notice { rows.append(.init(id: "", title: notice, detail: "", symbol: "exclamationmark.circle", enabled: false)) }
+    if strong {
+      rows.append(strongRow)
+      rows.append(.init(id: footerId, title: footerTitle, detail: "", symbol: "arrow.up.forward.app"))
+      return rows
+    }
+    rows += codes.map { code in
+      .init(id: codeRowId(code), title: codeTitle(codeSite), detail: code.user, symbol: "key.fill", appIcon: passwordsApp, iconLabel: iconLabel)
+    }
+    if logins.isEmpty, codes.isEmpty, notice == nil { rows.append(.init(id: "", title: noLogins, detail: "", symbol: "key", enabled: false, appIcon: passwordsApp, iconLabel: iconLabel)) }
+    rows += logins.enumerated().map { index, login in
+      let title = login.user.isEmpty ? "No username" : login.user
+      let run = bold.indices.contains(index) && bold[index].length > 0 && !login.user.isEmpty ? bold[index] : nil
+      return .init(
+        id: rowId(login), title: title, detail: login.insecure ? insecure : "", symbol: "key.fill", muted: login.user.isEmpty, appIcon: passwordsApp, iconLabel: iconLabel,
+        bold: run)
+    }
+    rows.append(.init(id: footerId, title: footerTitle, detail: "", symbol: "arrow.up.forward.app"))
+    return rows
+  }
+
+  private func present(_ next: Shown, notice: String?) {
+    guard let target = next.target else { return }
+    let hits = LoginListFilter.hits(next.logins.map(\.user), typed: next.field.typed)
+    let logins = hits.map { next.logins[$0.index] }
+    let quiet = next.field.trigger == .typing && notice == nil && logins.isEmpty && !next.connect
+    guard let window = target.loginListWindow else { return close(target) }
+    if quiet { return hide(target) }
+    if fetched?.target === target { fetched?.hidden = false }
+    let opening = !isShown(for: target) || shown?.connect != next.connect
+    var current = next
+    current.logins = logins
+    shown = current
+    let rows = Self.rows(logins, bold: hits.map(\.bold), notice: notice, connect: next.connect, strong: next.strong, codes: next.codes, codeSite: next.codeSite)
+    if LaunchConfig.shared.background { NSLog("[logins] Login list: %ld logins, %ld rows", logins.count, rows.count) }
+    dropdown.show(rows, under: next.field.screenRect, in: window)
+    sync()
+    if opening, next.connect || next.field.kind != .code { Self.count(next.connect ? "connectShown" : "shown", in: target) }
+  }
+
+  func key(_ target: LoginListTarget, _ key: String) {
+    guard isShown(for: target) else { return }
+    switch key {
+    case "down": dropdown.move(1)
+    case "up": dropdown.move(-1)
+    case "enter":
+      guard let row = dropdown.selectedRow else { return close(target) }
+      picked(row.id)
+    default: close(target)
+    }
+  }
+
+  func close(_ target: LoginListTarget) {
+    guard shown.map({ $0.target === target }) ?? (asking == nil || asking === target) else { return }
+    ticket += 1
+    dropdown.close()
+    sync()
+    forgetSync()
+    shown = nil
+    fetched = nil
+  }
+
+  func ignoredOtherFrame(_ target: LoginListTarget) {
+    guard shown?.target === target || asking === target else { return }
+    Self.count("otherFrameIgnored", in: target)
+  }
+
+  private func hide(_ target: LoginListTarget) {
+    var kept = fetched
+    close(target)
+    guard kept?.target === target else { return }
+    kept?.hidden = true
+    fetched = kept
+  }
+
+  private func sync() {
+    guard let target = shown?.target else { return }
+    let now = Synced(open: dropdown.isShown, picking: dropdown.selectedRow != nil)
+    guard syncedTarget !== target || synced != now else { return }
+    syncedTarget = target
+    synced = now
+    target.loginListSync(open: now.open, picking: now.picking)
+  }
+
+  private func forgetSync() {
+    syncedTarget = nil
+    synced = nil
+  }
+
+  private func picked(_ id: String) {
+    guard let current = shown, let target = current.target else { return }
+    if id == Self.footerId {
+      close(target)
+      return Self.openPasswordsApp()
+    }
+    if id == Self.connectId {
+      close(target)
+      resume = current
+      Self.count("connectPicked", in: target)
+      return target.loginListConnect()
+    }
+    if id == Self.notNowId {
+      close(target)
+      declined.insert(current.site)
+      return Self.count("notNow", in: target)
+    }
+    if id == Self.strongId, current.strong { return pickedStrong(current, target) }
+    if let code = current.codes.first(where: { Self.codeRowId($0) == id }) { return pickedCode(code, current, target) }
+    guard let login = current.logins.first(where: { Self.rowId($0) == id }) else { return }
+    if current.field.kind == .identifier { return pickedIdentifier(login, current, target) }
+    close(target)
+    let asked = ticket
+    let engine = target.loginListEngine
+    ApplePasswordsClient.shared.password(host: current.host, user: login.user) { [weak self, weak target] result in
+      DispatchQueue.main.async {
+        guard let self, let target, Self.origin(of: target.loginListPage) == current.page else { return }
+        switch result {
+        case .success(let password):
+          ApplePasswordsSaving.rememberReadBack(scheme: login.insecure ? "http" : "https", host: current.host, user: login.user, password: password)
+          self.remember(login.user, on: ApplePasswordsMatch.site(current.host, domains: current.domains), in: target)
+          target.loginListFill(username: login.user, password: password, frameOrigin: current.field.frameOrigin) { filled in
+            Self.count(filled ? "filled" : "fillFailed", engine: engine)
+          }
+        case .failure(let problem):
+          Self.count("fillFailed", engine: engine, kind: problem.kind)
+          guard asked == self.ticket else { return }
+          if problem == .notConnected { return self.offerConnect(current) }
+          self.present(current, notice: Self.fillFailed)
+        }
+      }
+    }
+  }
+
+  private func pickedIdentifier(_ login: ApplePasswordsMatch.Login, _ current: Shown, _ target: LoginListTarget) {
+    close(target)
+    guard Self.origin(of: target.loginListPage) == current.page else { return }
+    let engine = target.loginListEngine
+    remember(login.user, on: ApplePasswordsMatch.site(current.host, domains: current.domains), in: target)
+    target.loginListFill(username: login.user, password: "", frameOrigin: current.field.frameOrigin) { filled in
+      Self.count(filled ? "filled" : "fillFailed", engine: engine)
+    }
+  }
+
+  private func pickedCode(_ code: ApplePasswordsCode, _ current: Shown, _ target: LoginListTarget) {
+    close(target)
+    let asked = ticket
+    let engine = target.loginListEngine
+    ApplePasswordsClient.shared.code(page: current.codePage, user: code.user) { [weak self, weak target] result in
+      DispatchQueue.main.async {
+        guard let self, let target, Self.codePage(target.loginListPage) == current.codePage else { return }
+        let fresh = (try? result.get())?.first { found in
+          found.user.lowercased() == code.user.lowercased() && !ApplePasswordsMatch.codes([found], host: current.host, domains: current.domains).isEmpty
+        }
+        guard let value = fresh?.code, Self.isCode(value) else {
+          let problem: ApplePasswordsClient.Problem = if case .failure(let failed) = result { failed } else { .unreadable }
+          Self.count("codeFillFailed", engine: engine, kind: problem.kind)
+          guard asked == self.ticket else { return }
+          if case .failure(.notConnected) = result { return self.offerConnect(current) }
+          return self.present(current, notice: Self.codeFillFailed)
+        }
+        target.loginListFillCode(value, frameOrigin: current.field.frameOrigin) { filled in
+          Self.count(filled ? "codeFilled" : "codeFillFailed", engine: engine)
+        }
+      }
+    }
+  }
+
+  private func pickedStrong(_ current: Shown, _ target: LoginListTarget) {
+    close(target)
+    guard Self.origin(of: target.loginListPage) == current.page else { return }
+    guard let password = StrongPassword.make(current.field.rules) else { return present(current, notice: Self.strongFailed) }
+    let engine = target.loginListEngine
+    target.loginListFillNewPassword(password, frameOrigin: current.field.frameOrigin) { filled in
+      if filled { Self.count("strongPasswordUsed", engine: engine) }
+    }
+  }
+
+  static func openPasswordsApp() {
+    if LaunchConfig.shared.background { return NSLog("[logins] Passwords app (background mode, not opened)") }
+    guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: passwordsApp) else { return }
+    NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+  }
+
+  private static func count(_ name: String, in target: LoginListTarget, kind: String? = nil) { count(name, engine: target.loginListEngine, kind: kind) }
+
+  private static func count(_ name: String, engine: String, kind: String? = nil) {
+    if LaunchConfig.shared.background { NSLog("[logins] Login list counted: %@ in %@%@", name, engine, kind.map { " (\($0))" } ?? "") }
+    var data = ["name": name, "engine": engine]
+    if let kind { data["kind"] = kind }
+    ArdiaEvents.emit("passwords.loginListCounted", data: ArdiaConsentStamp.begin().onto(data))
+  }
+
+
+  func forget(_ target: LoginListTarget) { close(target) }
+}

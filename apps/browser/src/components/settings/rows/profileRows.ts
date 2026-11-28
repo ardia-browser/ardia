@@ -84,8 +84,8 @@ export const profileRows = {
       rows: {
         passwordManager: {
           title: "Password manager",
-          description: "Ardia's own, a plugin, or none for an extension.",
-          keywords: ["password manager", "passwords app", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords", "password manager plugin", "extension", "logins", "none"],
+          description: "Ardia's own, Apple Passwords, a plugin, or none for an extension.",
+          keywords: ["password manager", "passwords app", "apple passwords", "icloud passwords", "passkeys", "verification codes", "2fa", "one time code", "autofill passwords", "password manager plugin", "extension", "logins", "none"],
           shown: () => PLATFORM_FEATURES.systemPasswordManagers && PLATFORM_FEATURES.plugins,
         },
         offerToSavePasswords: {
@@ -103,6 +103,12 @@ export const profileRows = {
           title: "Save and fill addresses",
           description: "Names, addresses, email addresses and phone numbers.",
           keywords: ["forms", "contact", "phone", "email", "add address", "addresses"],
+        },
+        meCard: {
+          title: "Use my Me card from Contacts",
+          description: "Fills forms from your own card in Contacts and keeps it up to date.",
+          keywords: ["contacts", "me card", "my card", "address book", "contact card", "name", "phone", "email", "address"],
+          shown: () => PLATFORM_FEATURES.meCard,
         },
         savedAddresses: {
           title: "Saved addresses",

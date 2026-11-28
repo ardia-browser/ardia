@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
 
-const swift = readFileSync(new URL("../ios/WebKitLogins.swift", import.meta.url), "utf8");
+const swift = readFileSync(new URL("../ios/WebKitLogins+Script.swift", import.meta.url), "utf8");
 const source = swift.slice(swift.indexOf('static let script = #"""\n') + 25, swift.indexOf('\n"""#'));
 
 function page({ origin, fields }) {
@@ -35,6 +35,7 @@ function page({ origin, fields }) {
     window,
     document,
     location: { origin },
+    crypto: globalThis.crypto,
     addEventListener: (name, listener) => (listeners[name] = listener),
     Node: { DOCUMENT_POSITION_FOLLOWING: 4 },
     HTMLInputElement: { prototype: {} },
@@ -63,3 +64,25 @@ for (const { name, origin, fields, shown } of cases) {
     assert.equal(page({ origin, fields }).logins.formShown("https://bank.test", submitted), shown);
   });
 }
+
+const posted = (fields) => {
+  const { posted: messages, listeners } = page({ origin: "https://bank.test", fields });
+  listeners.submit({ target: null });
+  return messages.find((m) => m.kind === "loginSubmit")?.data;
+};
+
+test("a submitted change-password form offers its new password, and a sign-in form its only one", () => {
+  const changed = posted([
+    { type: "text", name: "user", value: "ada@example.test" },
+    { type: "password", name: "old", autocomplete: "current-password", value: "fixture-pw-old" },
+    { type: "password", name: "new", value: "fixture-pw-new" },
+    { type: "password", name: "again", value: "fixture-pw-new" },
+  ]);
+  assert.deepEqual([changed.password, changed.field.name], ["fixture-pw-new", "new"]);
+  const marked = posted([
+    { type: "password", name: "old", value: "fixture-pw-old" },
+    { type: "password", name: "new", autocomplete: "new-password", value: "fixture-pw-new" },
+  ]);
+  assert.equal(marked.password, "fixture-pw-new");
+  assert.equal(posted(loginForm).password, "s3cret");
+});

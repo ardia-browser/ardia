@@ -260,6 +260,7 @@ ARDIACORE_EXPORT
 - (void)tab:(ArdiaCoreTab*)tab requestsActivation:(NSString*)reason;
 - (void)tab:(ArdiaCoreTab*)tab didChangePictureInPicture:(NSDictionary<NSString*, id>*)state;
 - (void)tab:(ArdiaCoreTab*)tab didShowAutofillSuggestions:(NSArray<NSDictionary<NSString*, NSString*>*>*)items;
+- (void)tab:(ArdiaCoreTab*)tab didFillAutofillAddress:(NSString*)entry;
 - (void)tab:(ArdiaCoreTab*)tab didBlockRequests:(int)count lastURL:(NSString*)url;
 - (NSArray<NSDictionary<NSString*, NSString*>*>*)tab:(ArdiaCoreTab*)tab
                          contextMenuItemsForSelection:(NSString*)text;
@@ -300,6 +301,7 @@ ARDIACORE_EXPORT
 - (void)stopFinding;
 - (void)close;
 @property(readonly, nullable) NSDictionary<NSString*, id>* passwordPrompt;
+@property(readonly, nullable) NSDictionary<NSString*, NSString*>* pendingLogin;
 - (void)resolvePasswordPrompt:(NSString*)action
                      username:(nullable NSString*)username
                      password:(nullable NSString*)password;
@@ -397,6 +399,11 @@ ARDIACORE_EXPORT
 - (BOOL)shareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)showCastDialog;
 - (BOOL)devShowBluetoothChooser:(BOOL)unauthorized;
+@end
+
+@interface ArdiaCoreTab (AutofillSuppression)
+@property(nonatomic, copy) NSSet<NSString*>* suppressedAutofillKinds;
+@property(nonatomic, copy, nullable) NSSet<NSString*>* suppressedAutofillLogins;
 @end
 
 @interface ArdiaCoreTab (Extensions)

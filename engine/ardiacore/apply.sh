@@ -12,6 +12,7 @@ import sys
 mode, path, name = sys.argv[1:4]
 s = open(path).read()
 HOOKS = '#include "ardia/core/ac_hooks.h"  // nogncheck\n'
+MAC_HOOKS = '#include "ardia/core/ac_mac_hooks.h"  // nogncheck\n'
 CONTENT_HOOKS = '#include "ardia/core/ac_content_hooks.h"  // nogncheck\n'
 
 
@@ -480,6 +481,107 @@ def edit(s):
 hook(["void (*g_ardia_autofill_suggestions_shown)(\n",
       "  if (g_ardia_autofill_suggestions_shown && IsRootPopup() && web_contents_) {\n",
       "    auto ardia_alive = GetWeakPtr();\n"], edit, HOOKS)
+PY
+
+hook "$src/chrome/browser/ui/autofill/autofill_popup_controller_impl.cc" "AutofillPopupControllerImpl claimed dropdowns" <<'PY'
+import re
+old_fn = "void AutofillPopupControllerImpl::Show(\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) keeps a dropdown its own fill menu claimed off screen.\n"
+        "bool (*g_ardia_autofill_suggestions_suppressed)(\n"
+        "    content::WebContents* web_contents,\n"
+        "    base::span<const Suggestion> suggestions) = nullptr;\n\n")
+def edit(s):
+    assert s.count(old_fn) == 1
+    start = s.index(old_fn)
+    body = s.index(") {\n", start) + len(") {\n")
+    found = re.search(r"std::vector<Suggestion>\s+(\w+)", s[start:body])
+    assert found, "Show's suggestions parameter"
+    check = ("  // Ardia: ArdiaCore\n"
+             "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"
+             "      g_ardia_autofill_suggestions_suppressed(web_contents_.get(), " + found.group(1) + ")) {\n"
+             "    Hide(SuggestionHidingReason::kNoSuggestions);\n"
+             "    return;\n"
+             "  }\n")
+    s = s[:body] + check + s[body:]
+    return s.replace(old_fn, decl + old_fn)
+hook(["bool (*g_ardia_autofill_suggestions_suppressed)(\n",
+      "  if (g_ardia_autofill_suggestions_suppressed && IsRootPopup() && web_contents_ &&\n"], edit, MAC_HOOKS)
+PY
+
+hook "$src/chrome/browser/ui/autofill/autofill_popup_controller_impl.cc" "AutofillPopupControllerImpl accepted suggestions" <<'PY'
+old_fn = "void AutofillPopupControllerImpl::AcceptSuggestion(\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) hears which saved address a dropdown filled.\n"
+        "void (*g_ardia_autofill_suggestion_accepted)(\n"
+        "    content::WebContents* web_contents,\n"
+        "    const Suggestion& suggestion) = nullptr;\n\n")
+old = """  delegate_->DidAcceptSuggestion(
+      suggestion, GetSuggestionMetadata(index, was_obscured),
+"""
+new = """  // Ardia: ArdiaCore
+  if (g_ardia_autofill_suggestion_accepted && web_contents_) {
+    g_ardia_autofill_suggestion_accepted(web_contents_.get(), suggestion);
+  }
+""" + old
+def edit(s):
+    assert s.count(old_fn) == 1 and s.count(old) == 1
+    return s.replace(old_fn, decl + old_fn).replace(old, new)
+hook(["void (*g_ardia_autofill_suggestion_accepted)(\n",
+      "  if (g_ardia_autofill_suggestion_accepted && web_contents_) {\n"], edit, MAC_HOOKS)
+PY
+
+hook "$src/components/password_manager/content/browser/content_password_manager_driver.cc" "ContentPasswordManagerDriver fill data" <<'PY'
+namespace_open = "namespace password_manager {\n"
+old_fn = ("void ContentPasswordManagerDriver::PropagateFillDataOnParsingCompletion(\n"
+          "    const autofill::PasswordFormFillData& form_data) {\n")
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) keeps Chrome's saved logins out of a tab while Chrome still saves.\n"
+        "bool (*g_ardia_password_filling_allowed)(content::WebContents*) = nullptr;\n\n")
+check = ("  // Ardia: ArdiaCore\n"
+         "  if (g_ardia_password_filling_allowed &&\n"
+         "      !g_ardia_password_filling_allowed(\n"
+         "          content::WebContents::FromRenderFrameHost(render_frame_host_))) {\n"
+         "    return;\n"
+         "  }\n")
+def edit(s):
+    assert s.count(old_fn) == 1 and namespace_open in s
+    s = s.replace(old_fn, old_fn + check)
+    return s.replace(namespace_open, decl + namespace_open, 1)
+hook(["bool (*g_ardia_password_filling_allowed)(content::WebContents*) = nullptr;\n",
+      "      !g_ardia_password_filling_allowed(\n"], edit, MAC_HOOKS)
+PY
+
+hook "$src/components/password_manager/core/browser/password_generation_frame_helper.cc" "PasswordGenerationFrameHelper generation" <<'PY'
+old_fn = ("bool PasswordGenerationFrameHelper::IsGenerationEnabled(\n"
+          "    bool log_debug_data) const {\n")
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) turns Chrome's password generation off for a tab.\n"
+        "bool (*g_ardia_password_generation_allowed)(const PasswordManagerDriver*) = nullptr;\n\n")
+check = ("  // Ardia: ArdiaCore\n"
+         "  if (g_ardia_password_generation_allowed &&\n"
+         "      !g_ardia_password_generation_allowed(driver_.get())) {\n"
+         "    return false;\n"
+         "  }\n")
+doc = "// In order for password generation to be enabled, we need to make sure:\n"
+def edit(s):
+    assert s.count(old_fn) == 1 and s.count(doc) == 1
+    return s.replace(old_fn, old_fn + check).replace(doc, decl + doc)
+hook(["bool (*g_ardia_password_generation_allowed)(const PasswordManagerDriver*) = nullptr;\n",
+      "      !g_ardia_password_generation_allowed(driver_.get())) {\n"], edit, MAC_HOOKS)
+PY
+
+hook "$src/components/password_manager/core/browser/password_manager.cc" "PasswordManager submissions prompted" <<'PY'
+old_fn = "void PasswordManager::OnLoginSuccessful() {\n"
+decl = ("// Ardia: ArdiaCore (engine/ardiacore) has every submitted login offered through the prompt on a tab whose logins it\n"
+        "// claimed, so one Chrome's store already holds still reaches Apple Passwords and Chrome's store is left alone.\n"
+        "bool (*g_ardia_password_submissions_prompted)(const PasswordManagerDriver*) = nullptr;\n\n")
+old_check = "  if (ShouldPromptUserToSavePassword(*submitted_manager)) {\n"
+check = ("  // Ardia: ArdiaCore\n"
+         "  if (ShouldPromptUserToSavePassword(*submitted_manager) ||\n"
+         "      (g_ardia_password_submissions_prompted &&\n"
+         "       g_ardia_password_submissions_prompted(submitted_manager->GetDriver().get()))) {\n")
+def edit(s):
+    assert s.count(old_fn) == 1 and s.count(old_check) == 1
+    return s.replace(old_check, check).replace(old_fn, decl + old_fn)
+hook(["bool (*g_ardia_password_submissions_prompted)(const PasswordManagerDriver*) = nullptr;\n",
+      "       g_ardia_password_submissions_prompted(submitted_manager->GetDriver().get()))) {\n"], edit, MAC_HOOKS)
 PY
 
 hook "$src/content/browser/renderer_host/render_widget_host_view_base.cc" "RenderWidgetHostViewBase" <<'PY'

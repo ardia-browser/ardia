@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import { useBrowser } from "../browser/store";
 import { usePlugins } from "../plugins/store";
+import { useApplePasswords } from "../site/applePasswords";
+import { useMeCard } from "../site/meCard";
+import { useHeldOffers } from "./autofillOffers";
 import { activeSteps, goToStep, previousStep, questionsFor, useOnboarding, type OnboardingStep, type QuestionId } from "./onboarding";
 
 export type OnboardingSection = { step: Exclude<OnboardingStep, "intro">; sub: number; id: QuestionId };
@@ -38,6 +41,9 @@ export function useSections(): OnboardingSection[] {
   useOnboarding(sectionsKey);
   useBrowser(sectionsKey);
   usePlugins(sectionsKey);
+  useApplePasswords(sectionsKey);
+  useMeCard(sectionsKey);
+  useHeldOffers(sectionsKey);
   const key = sectionsKey();
   return useMemo(() => fromKey(key), [key]);
 }

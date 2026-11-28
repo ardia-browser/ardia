@@ -100,7 +100,7 @@ Ardia holds must never go out through telemetry, a log line, a crash report, a s
 module, an Authorization header or token request to the account's own provider, the plugin that owns the secret, and
 the settings sheet that shows it to the user. The kinds are `SECRET_KINDS`: saved passwords, OAuth tokens and grants
 (access and refresh tokens, authorization codes, PKCE verifiers, device codes), OAuth client secrets, API tokens,
-plugin secrets and the sync recovery phrase. Sealed logins in sync files are
+plugin secrets, the sync recovery phrase and the Apple Passwords Pairing code. Sealed logins in sync files are
 ciphertext and stay plain strings.
 
 **What refuses a secret.**

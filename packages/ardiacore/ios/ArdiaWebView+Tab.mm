@@ -112,6 +112,7 @@ BOOL IsBlankAddress(NSString *url) {
   [self pushPeekModifier];
   [self pushSelectionPopover];
   [self pushFieldProvider];
+  [self pushChromeLists];
   [self bindRestoreKey];
   [self takePageReports];
   [tab deliverHeldPageMessages];

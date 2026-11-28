@@ -69,7 +69,9 @@ final class WebKitAutofill: NSObject, WKScriptMessageHandler {
     controller.add(shared, contentWorld: WebKitHub.world, name: handlerName)
   }
 
-  static func count(_ name: String) { ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(["name": name])) }
+  static func count(_ name: String, entry: String? = nil) {
+    ArdiaEvents.emit("webKit.counted", data: ArdiaConsentStamp.begin().onto(entry.map { ["name": name, "entry": $0] } ?? ["name": name]))
+  }
 
   static func profileToggles(_ profile: String, _ done: @escaping ([String: Bool]) -> Void) {
     ArdiaServices.profileToggles(profile: profile, set: nil) { value, _ in
@@ -335,7 +337,7 @@ final class WebKitAutofill: NSObject, WKScriptMessageHandler {
       var values: [String: Any] = [:]
       for key in ["name", "organization", "street", "city", "state", "postalCode", "country", "phone", "email"] { values[key] = Self.text(entry, key) }
       values["countryName"] = Self.countryName(Self.text(entry, "country"))
-      fill(current, kind: "address", values: values, counted: "autofillAddressFill")
+      fill(current, kind: "address", values: values, counted: "autofillAddressFill", entry: row.id)
     case .card:
       var values: [String: Any] = ["name": Self.text(entry, "name"), "network": Self.text(entry, "network")]
       values["expMonth"] = entry["expMonth"] ?? NSNull()
@@ -352,13 +354,12 @@ final class WebKitAutofill: NSObject, WKScriptMessageHandler {
     }
   }
 
-  private func fill(_ current: Target, kind: String, values: [String: Any], counted: String) {
-    guard let tab = current.tab, Self.mainOrigin(tab) == current.origin,
-      let json = try? JSONSerialization.data(withJSONObject: values), let object = String(data: json, encoding: .utf8)
-    else { return }
-    let code = "window.__ardiaAutofill ? window.__ardiaAutofill.fill(\(WebKitTab.jsString(current.token)), \(WebKitTab.jsString(kind)), \(object)) : 0"
-    tab.runInWorld(code, frame: current.frame.isMainFrame ? nil : current.frame) { result in
-      if ((result as? NSNumber)?.intValue ?? 0) > 0 { Self.count(counted) }
+  private func fill(_ current: Target, kind: String, values: [String: Any], counted: String, entry: String? = nil) {
+    guard let tab = current.tab, Self.mainOrigin(tab) == current.origin, let view = tab.webView else { return }
+    WebKitAutofillFill.run(
+      in: view, frame: current.frame.isMainFrame ? nil : current.frame, world: WebKitHub.world, token: current.token, kind: kind, values: values
+    ) { filled in
+      if filled > 0 { Self.count(counted, entry: entry) }
     }
   }
 }

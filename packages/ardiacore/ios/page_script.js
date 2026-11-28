@@ -1125,6 +1125,210 @@
   handlers.fieldProvider = fieldProviders.configure;
   handlers.fieldFocusQuery = (message) => fieldProviders.focusQuery(message && message.query);
   handlers.fieldProviderHint = fieldProviders.hint;
+  const loginListKit = (env) => {
+    const { document, send, addEventListener, apply } = env;
+    const KEYS = { ArrowDown: "down", ArrowUp: "up", Enter: "enter", Escape: "escape", Tab: "tab" };
+    const TYPED_MAX = 200;
+    let on = false;
+    let listening = false;
+    let active = null;
+    let open = false;
+    let picking = false;
+    let tokens = 0;
+    const visible = (el) => !!el && !el.disabled && !el.readOnly && el.getClientRects().length > 0;
+    const passwordIn = (root) => Array.from((root || document).querySelectorAll("input[type=password]")).find(visible) || null;
+    const usernameFor = (password) => {
+      const scope = password.form || document;
+      const fields = Array.from(scope.querySelectorAll("input")).filter((el) => visible(el) && /^(text|email|tel|)$/i.test(el.type || "text"));
+      const before = fields.filter((el) => el.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return before.pop() || fields.find((el) => /user|mail|login|account/i.test(el.name + el.id + el.autocomplete)) || null;
+    };
+    const ONE_TIME_CODE = /(^|\s)one-time-code(\s|$)/i;
+    const OTHER_AUTOCOMPLETE = /(^|\s)(username|email|current-password|new-password|tel|postal-code|cc-[a-z-]+)(\s|$)/i;
+    const CODE_HINT = /(^|[^a-z])(otp|totp|2fa|mfa)([^a-z]|$)|one.?time.?(pass)?code|verification.?code|verify.?code|security.?code|auth(entication)?.?code|passcode/i;
+    const CODE_SHAPE = /^[A-Za-z0-9]{4,10}$/;
+    const checkVisibility = Element.prototype.checkVisibility;
+    const getAttribute = Element.prototype.getAttribute;
+    const attribute = (el, name) => apply(getAttribute, el, [name]) || "";
+    const NEW_PASSWORD = /(^|\s)new-password(\s|$)/i;
+    const CURRENT_PASSWORD = /(^|\s)current-password(\s|$)/i;
+    const passwordsIn = (root) => Array.from(root.querySelectorAll("input[type=password]")).filter(visible);
+    const newPasswordsIn = (root) => {
+      const all = passwordsIn(root);
+      const marked = all.filter((el) => NEW_PASSWORD.test(attribute(el, "autocomplete")));
+      const unmarked = all.filter((el) => !CURRENT_PASSWORD.test(attribute(el, "autocomplete")));
+      return marked.length ? marked : unmarked.length < all.length ? unmarked : all.length === 2 ? all : all.length === 3 ? all.slice(1) : [];
+    };
+    const newPasswords = (password) => {
+      if (!password || password.type !== "password") return [];
+      const found = newPasswordsIn(password.form || document);
+      return found.includes(password) ? found : [];
+    };
+    const signUpForm = (root) => {
+      const all = passwordsIn(root);
+      return all.length > 0 && newPasswordsIn(root).length === all.length;
+    };
+    const SIGN_IN_STEP = /^(next|continue|sign ?in|log ?in)\b/i;
+    const textInputs = (form) => Array.from(form.querySelectorAll("input")).filter((el) => visible(el) && /^(text|email|tel|)$/i.test(attribute(el, "type")));
+    const submitLabel = (form) => {
+      const button = form.querySelector("button[type=submit], button:not([type]), input[type=submit]");
+      if (!button) return "";
+      return String((button.localName === "input" ? button.value : button.textContent) || "").trim().slice(0, 40);
+    };
+    const identifierField = (el) => {
+      if (!/^(text|email|)$/i.test(attribute(el, "type"))) return false;
+      if (attribute(el, "autocomplete").toLowerCase().split(/\s+/).includes("username")) return true;
+      const inputs = el.form ? textInputs(el.form) : [];
+      return inputs.length === 1 && inputs[0] === el && SIGN_IN_STEP.test(submitLabel(el.form));
+    };
+    const loginField = (el) => {
+      if (!el || el.localName !== "input" || !visible(el)) return null;
+      if (el.type === "password") return { password: el, username: usernameFor(el) };
+      const password = passwordIn(el.form || document);
+      if (!password) return identifierField(el) ? { password: null, username: el } : null;
+      if (usernameFor(password) !== el || signUpForm(password.form || document)) return null;
+      return { password, username: el };
+    };
+    const passwordRules = (fields) => {
+      const limits = fields.map((f) => f.maxLength).filter((n) => n > 0);
+      const pattern = fields.map((f) => attribute(f, "pattern")).find((p) => p) || "";
+      return { maxLength: limits.length ? Math.min(...limits) : 0, minLength: Math.max(0, ...fields.map((f) => f.minLength)), pattern };
+    };
+    const seen = (el) => visible(el) && (typeof checkVisibility !== "function" || apply(checkVisibility, el, [{ opacityProperty: true, visibilityProperty: true }]));
+    const asksForCode = (el) => {
+      const auto = attribute(el, "autocomplete");
+      if (ONE_TIME_CODE.test(auto)) return true;
+      return !OTHER_AUTOCOMPLETE.test(auto) && CODE_HINT.test([attribute(el, "name"), attribute(el, "id"), attribute(el, "placeholder"), attribute(el, "aria-label")].join(" "));
+    };
+    const codeField = (el) =>
+      location.protocol === "https:" && !!el && el.localName === "input" && /^(text|tel|number|)$/i.test(attribute(el, "type")) && !el.value && seen(el) && asksForCode(el) ? { code: el } : null;
+    const inTopViewport = (el) => {
+      const r = el.getBoundingClientRect();
+      let x = r.left, y = r.top;
+      for (let view = el.ownerDocument.defaultView; view && view !== view.top; view = view.parent) {
+        const host = view.frameElement;
+        if (!host) return null;
+        const at = host.getBoundingClientRect();
+        x += at.left + host.clientLeft;
+        y += at.top + host.clientTop;
+      }
+      return { x, y, width: r.width, height: r.height };
+    };
+    const hide = () => {
+      if (active) send("loginField", { event: "hide" });
+      active = null;
+      open = picking = false;
+    };
+    const report = (event, el, login) => {
+      if (!on) return;
+      const found = login || loginField(el) || codeField(el);
+      if (!found) return hide();
+      const rect = inTopViewport(el);
+      if (!rect) return hide();
+      active = !active || active.el !== el ? { el, found, token: `${++tokens}` } : { ...active, found };
+      const fresh = found.code ? [] : newPasswords(el);
+      const field = found.code ? "code" : fresh.length ? "newPassword" : el.type === "password" ? "password" : found.password ? "username" : "identifier";
+      const rules = fresh.length ? passwordRules(fresh) : {};
+      const named = field === "username" || field === "identifier";
+      send("loginField", { event, token: active.token, field, signIn: named, typed: named ? String(el.value || "").slice(0, TYPED_MAX) : "", ...rules, ...rect });
+    };
+    const listen = () => {
+      if (listening) return;
+      listening = true;
+      addEventListener("pointerdown", (e) => e.isTrusted && report("show", e.target), true);
+      addEventListener(
+        "input",
+        (e) => {
+          const el = e.target;
+          if (!on || !e.isTrusted || !el || el.localName !== "input") return;
+          if (el.type === "password") return open && active && send("loginField", { event: "passwordInput", token: active.token });
+          const login = loginField(el);
+          if (login) report("input", el, login);
+          else if (active && active.found.code && el === active.el) hide();
+        },
+        true,
+      );
+      addEventListener(
+        "keydown",
+        (e) => {
+          if (!on || !e.isTrusted || !active || e.target !== active.el) return;
+          const key = KEYS[e.key];
+          if (!key) return;
+          if (!open) {
+            if (key === "down") {
+              e.preventDefault();
+              report("show", e.target);
+            } else if (key === "escape") send("loginField", { event: "key", key, token: active.token });
+            return;
+          }
+          if (key !== "tab" && (key !== "enter" || picking)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+          send("loginField", { event: "key", key, token: active.token });
+        },
+        true,
+      );
+      addEventListener("focusout", (e) => active && e.target === active.el && hide(), true);
+      addEventListener("scroll", () => active && hide(), true);
+      addEventListener("resize", () => active && hide());
+      addEventListener("pagehide", () => active && hide());
+    };
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    const focus = HTMLElement.prototype.focus;
+    const dispatch = EventTarget.prototype.dispatchEvent;
+    const NativeEvent = Event;
+    const put = (el, value) => {
+      if (document.activeElement !== el) apply(focus, el, []);
+      apply(valueSetter, el, [value]);
+      apply(dispatch, el, [new NativeEvent("input", { bubbles: true })]);
+      apply(dispatch, el, [new NativeEvent("change", { bubbles: true })]);
+    };
+    const fillable = (message) =>
+      on && !!message && !!active && message.token === active.token && message.origin === location.origin &&
+      active.el.isConnected && (active.found.code || active.found.password || active.found.username).isConnected && document.activeElement === active.el;
+    const fillCode = (message) => {
+      const filled = typeof message.code === "string" && CODE_SHAPE.test(message.code) && !!codeField(active.found.code);
+      if (filled) put(active.found.code, message.code);
+      return filled;
+    };
+    const fillNewPassword = (message) => {
+      const fields = active.el === active.found.password ? newPasswords(active.el) : [];
+      const filled = !!message.newPassword && fields.length > 0;
+      if (filled) for (const field of fields) put(field, message.newPassword);
+      return filled;
+    };
+    const fillLogin = (message) => {
+      const { username, password } = active.found;
+      const user = !!username && typeof message.username === "string" && !!message.username;
+      const secret = !!password && typeof message.password === "string" && !!message.password;
+      if (user) put(username, message.username);
+      if (secret) put(password, message.password);
+      return user || secret;
+    };
+    const fill = (message) => {
+      const ticket = message && typeof message.ticket === "string" ? message.ticket : "";
+      const filled =
+        fillable(message) && (active.found.code ? fillCode(message) : typeof message.newPassword === "string" ? fillNewPassword(message) : fillLogin(message));
+      if (filled) open = picking = false;
+      send("loginFilled", { ticket, filled });
+    };
+    const configure = (state) => {
+      on = !!(state && state.on === true);
+      if (on) return listen();
+      active = null;
+      open = picking = false;
+    };
+    const state = (message) => {
+      open = !!(message && message.open === true);
+      picking = !!(message && message.picking === true);
+    };
+    return { configure, state, fill };
+  };
+  const loginList = loginListKit({ document, send, addEventListener, apply });
+  handlers.loginList = loginList.configure;
+  handlers.loginListState = loginList.state;
+  handlers.loginFill = loginList.fill;
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
@@ -2045,6 +2249,7 @@
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
     if (config.fieldProvider !== undefined) handlers.fieldProvider(config.fieldProvider);
+    if (config.loginList !== undefined) handlers.loginList(config.loginList);
   };
   send("hello", { top: isTop, url: location.href });
   const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));

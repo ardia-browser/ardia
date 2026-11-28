@@ -79,6 +79,15 @@ export function startDevHarness() {
     get history(): typeof import("../../state/history/history") {
       return require("../../state/history/history");
     },
+    get applePasswords(): typeof import("../../state/site/applePasswords") {
+      return require("../../state/site/applePasswords");
+    },
+    get prompts(): typeof import("../../state/site/prompts") {
+      return require("../../state/site/prompts");
+    },
+    get iCloudPasswordsExtension(): typeof import("../../state/site/iCloudPasswordsExtension") {
+      return require("../../state/site/iCloudPasswordsExtension");
+    },
     get profileLoading(): typeof import("../../state/profiles/profileLoading") {
       return require("../../state/profiles/profileLoading");
     },
@@ -100,6 +109,9 @@ export function startDevHarness() {
     },
     get translate(): typeof import("../../state/site/translate") {
       return require("../../state/site/translate");
+    },
+    get meCard(): typeof import("../../state/site/meCard") {
+      return require("../../state/site/meCard");
     },
     get reactNative(): typeof import("react-native") | null {
       return __DEV__ || require("../../platform/launchConfig").isTestInstance() ? require("react-native") : null;

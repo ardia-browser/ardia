@@ -1028,6 +1028,41 @@ extension CalendarNative where Self: Module {
   }
 }
 
+protocol ContactsNative {
+  static func authorizationStatus() -> String
+  func requestAccess(_ promise: Promise)
+  func meCard() throws -> [String: Any]?
+  func openMeCard()
+}
+
+extension ContactsNative {
+  static var moduleName: String { "ArdiaContacts" }
+
+  static var eventsDefinition: AnyDefinition {
+    Events("onContactsChanged")
+  }
+
+  static var authorizationStatusFunction: AnyDefinition {
+    Function("authorizationStatus") { () -> String in Self.authorizationStatus() }
+  }
+}
+
+extension ContactsNative where Self: Module {
+  func sendOnContactsChanged(_ payload: [String: Any?]) { sendEvent("onContactsChanged", payload) }
+
+  var requestAccessFunction: AnyDefinition {
+    AsyncFunction("requestAccess") { (promise: Promise) in self.requestAccess(promise) }.runOnQueue(.main)
+  }
+
+  var meCardFunction: AnyDefinition {
+    AsyncFunction("meCard") { () throws -> [String: Any]? in try self.meCard() }.runOnQueue(DispatchQueue.global(qos: .userInitiated))
+  }
+
+  var openMeCardFunction: AnyDefinition {
+    AsyncFunction("openMeCard") { () in self.openMeCard() }.runOnQueue(.main)
+  }
+}
+
 protocol KeychainNative {
   static func get(_ account: String) -> String?
   static func read(_ account: String) -> [String: Any]

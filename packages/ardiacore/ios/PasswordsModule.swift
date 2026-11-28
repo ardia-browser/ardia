@@ -3,6 +3,8 @@ import ExpoModulesCore
 public class PasswordsModule: Module {
   public func definition() -> ModuleDefinition {
     Name(Self.calls.moduleName)
+    Events(Self.calls.domain)
+    Self.calls.forwardEvents(to: self)
 
     Self.calls.function
 
@@ -74,6 +76,24 @@ public class PasswordsModule: Module {
       if !ArdiaWebView.setUpVerificationCode(token, tab: tab, generation: generation, completion: { reply.ok($0) }) {
         reply.ok(["opened": false, "reason": "noTab"])
       }
+    },
+    applePasswordsStatus: { _, reply in ApplePasswordsClient.shared.status { reply.ok(["state": $0]) } },
+    applePasswordsPair: { _, reply in ApplePasswordsClient.shared.beginPairing { reply.ok(["outcome": $0.rawValue]) } },
+    applePasswordsPairCode: { args, reply in
+      let code = try args.text("code")
+      ApplePasswordsClient.shared.finishPairing(code: code) { reply.ok(["outcome": $0.rawValue]) }
+    },
+    applePasswordsCancelPairing: { _, reply in
+      DispatchQueue.main.async {
+        LoginList.shared.pairingCancelled()
+        ApplePasswordsSaving.pairingCancelled()
+      }
+      ApplePasswordsClient.shared.cancelPairing { reply.ok(nil) }
+    },
+    setApplePasswordsProfiles: { args, reply in
+      ApplePasswordsProfiles.set(try args.strings("profiles"))
+      DispatchQueue.main.async { ArdiaWebView.applePasswordsProfilesChanged() }
+      reply.ok(nil)
     }
   )
 }

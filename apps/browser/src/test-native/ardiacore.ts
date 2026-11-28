@@ -25,7 +25,7 @@ import type {
 } from "@ardia/ardiacore";
 import type { EventSubscription } from "expo-modules-core";
 import { nativeEvents, unfaked } from "./events";
-import type { AutofillToggle } from "../platform/autofill";
+import type { AutofillToggle, SavedAddress } from "../platform/autofill";
 
 
 type TabStripHost = {
@@ -38,6 +38,7 @@ type ExtensionEngine = {
   install(path: string, profile: string): Promise<string>;
   reload(id: string, profile: string): Promise<void>;
   uninstall(id: string, profile: string): Promise<void>;
+  setEnabled?(id: string, profile: string, enabled: boolean): Promise<void>;
   configure?(id: string, profile: string, options: Record<string, unknown>): Promise<void>; inspect?(path: string): Promise<CallResult<"extensions.inspectUnpacked">>;
 };
 const testGlobals = globalThis as {
@@ -168,6 +169,27 @@ const providerFakes = {
   systemPanelAvailable: () => ({ chromium: true, webkit: true }),
   otpauthHandler: async () => (passwordProviders.calls.push(["otpauthHandler"]), await passwordProviders.handlerGate, { app: passwordProviders.handlerApp }),
   setUpVerificationCode: ({ tab, token, generation }: { tab: string; token: string; generation?: number }) => (passwordProviders.opened.push({ tab, token, generation }), { opened: passwordProviders.openResult }),
+  setApplePasswordsProfiles: ({ profiles }: { profiles: string[] }) => (passwordProviders.calls.push(["setApplePasswordsProfiles", [...profiles]]), null),
+};
+export const applePasswords = {
+  state: "notEntitled" as CallResult<"passwords.applePasswordsStatus">["state"],
+  code: "246810",
+  pairOutcome: "awaitingCode" as CallResult<"passwords.applePasswordsPair">["outcome"],
+  calls: [] as string[],
+  hold: null as Promise<void> | null,
+};
+const applePasswordsFakes = {
+  applePasswordsStatus: () => ({ state: applePasswords.state }),
+  applePasswordsPair: () => (applePasswords.calls.push("pair"), { outcome: applePasswords.pairOutcome }),
+  applePasswordsCancelPairing: () => (applePasswords.calls.push("cancelPairing"), null),
+  applePasswordsPairCode: async ({ code }: { code: string }) => {
+    applePasswords.calls.push("pairCode");
+    await applePasswords.hold;
+    applePasswords.hold = null;
+    if (code !== applePasswords.code) return { outcome: "wrongCode" as const };
+    applePasswords.state = "connected";
+    return { outcome: "paired" as const };
+  },
 };
 export const current = { device: null as string | null };
 
@@ -413,6 +435,18 @@ export const extensionAnswers = {
 
 const tabStripHost = () => testGlobals.acTestTabStrip!;
 let autofillIds = 0;
+export const addressStores = new Map<string, Map<string, SavedAddress>>();
+export const addressSaves = { made: 0, failOn: null as number | null };
+const addressStore = (profile: string) => addressStores.get(profile) ?? addressStores.set(profile, new Map()).get(profile)!;
+function saveFakeAddress(profile: string, address: Partial<SavedAddress>) {
+  const store = addressStore(profile);
+  if (++addressSaves.made === addressSaves.failOn) throw new Error("the address store refused the save");
+  if (address.id && !store.has(address.id)) throw new Error("No such address");
+  const id = address.id ?? `address-${++autofillIds}`;
+  const fields = Object.fromEntries(Object.entries(address).filter(([key, value]) => key !== "id" && typeof value === "string" && value.trim()));
+  store.set(id, { ...fields, id, created: store.get(id)?.created ?? Date.now(), modified: Date.now() });
+  return { id };
+}
 export const profileToggles = {
   user: new Map<string, Partial<Record<AutofillToggle, boolean>>>(),
   extension: new Map<string, Partial<Record<AutofillToggle, boolean>>>(),
@@ -601,6 +635,7 @@ const fakeModules = {
         return null;
       },
       ...providerFakes,
+      ...applePasswordsFakes,
     },
     {
       save: async (_profile: string, origin: string, username: string, password: string) => {
@@ -632,10 +667,10 @@ const fakeModules = {
         setProfileToggle(profile, "cards", cards);
         return null;
       },
-      addresses: () => ({ addresses: [] }),
-      saveAddress: () => ({ id: `address-${++autofillIds}` }),
+      addresses: ({ profile }) => ({ addresses: [...addressStore(profile).values()] }),
+      saveAddress: ({ profile, address }) => saveFakeAddress(profile, address),
       cards: () => ({ cards: [] }),
-      remove: () => ({ ok: true }),
+      remove: ({ profile, id }) => (addressStore(profile).delete(id), { ok: true }),
       cardNumber: () => ({ number: null }),
       showSuggestions: () => false,
     },
@@ -648,7 +683,7 @@ const fakeModules = {
       if (!engine) throw Object.assign(new Error("no extension engine in this test"), { code: "ERR_ENGINE" });
       return { id: await engine.install(path, profile) };
     },
-    setEnabled: async ({ id }) => (await extensionAnswers.change("setEnabled", id), { ok: true }),
+    setEnabled: async ({ profile, id, enabled }) => (await extensionAnswers.change("setEnabled", id), await extensionEngine()?.setEnabled?.(id, profile, enabled), { ok: true }),
     uninstall: async ({ profile, id }) => (await extensionAnswers.change("uninstall", id), await extensionEngine()?.uninstall(id, profile), { ok: true }),
     reload: async ({ profile, id }) => (await extensionAnswers.change("reload", id), await extensionEngine()?.reload(id, profile), { ok: true }),
     configure: async ({ profile, id, options }) => (await extensionAnswers.change("configure", id), await extensionEngine()?.configure?.(id, profile, options), { ok: true }),

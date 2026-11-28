@@ -5,6 +5,22 @@
 using namespace ardia_web_view;
 using namespace ardia_runtime;
 
+@interface ApplePasswordsProfiles : NSObject
++ (BOOL)containsProfile:(NSString *)profile;
+@end
+
+@interface ApplePasswordsSaving : NSObject
++ (void)offerLogin:(NSDictionary<NSString *, NSString *> *)login
+           profile:(NSString *)profile
+                on:(id)view
+              show:(void (^)(NSDictionary<NSString *, id> *prompt))show
+          notSaved:(void (^)(NSDictionary<NSString *, id> *prompt))notSaved;
++ (NSString *)answer:(NSString *)action
+            username:(NSString *)username
+                  on:(id)view
+            notSaved:(void (^)(NSDictionary<NSString *, id> *prompt))notSaved;
+@end
+
 namespace {
 constexpr NSSize kExtensionPopupMinimum = {25, 25};
 constexpr NSSize kExtensionPopupMaximum = {800, 600};
@@ -54,8 +70,41 @@ constexpr NSSize kExtensionPopupMaximum = {800, 600};
   [ArdiaServices clearSiteData:_profile origin:origin reply:reply];
 }
 
+- (BOOL)savesToApplePasswords {
+  return [ApplePasswordsProfiles containsProfile:_profile ?: @""];
+}
+
+- (void)passwordPrompt:(NSDictionary<NSString *, id> *)prompt fromTab:(ArdiaCoreTab *)source {
+  ardia_host::NotePasswordPromptSource(self, source);
+  if (!self.savesToApplePasswords) return [self emit:@"passwordPrompt" payload:prompt];
+  if ([prompt[@"state"] isEqual:@"saved"]) return;
+  __weak ArdiaCoreTab *tab = source ?: _tab;
+  NSDictionary<NSString *, NSString *> *login = tab.pendingLogin;
+  if (!login) return [tab resolvePasswordPrompt:@"dismiss" username:nil password:nil];
+  __weak ArdiaWebView *weakSelf = self;
+  [ApplePasswordsSaving offerLogin:login
+      profile:_profile ?: @""
+      on:self
+      show:^(NSDictionary<NSString *, id> *offer) {
+        ArdiaWebView *view = weakSelf;
+        if (!view) return;
+        if (offer) return [view emit:@"passwordPrompt" payload:offer];
+        ardia_host::NotePasswordPromptSource(view, nil);
+        [tab resolvePasswordPrompt:@"dismiss" username:nil password:nil];
+      }
+      notSaved:^(NSDictionary<NSString *, id> *prompt) {
+        [weakSelf emit:@"passwordPrompt" payload:prompt];
+      }];
+}
+
 - (void)resolvePasswordPrompt:(NSString *)action username:(NSString *)username password:(NSString *)password {
-  [ardia_host::PasswordPromptTab(self, _tab) resolvePasswordPrompt:action username:username password:password];
+  ArdiaCoreTab *tab = ardia_host::PasswordPromptTab(self, _tab);
+  if (!self.savesToApplePasswords) return [tab resolvePasswordPrompt:action username:username password:password];
+  __weak ArdiaWebView *weakSelf = self;
+  NSString *chrome = [ApplePasswordsSaving answer:action username:username on:self notSaved:^(NSDictionary<NSString *, id> *prompt) {
+    [weakSelf emit:@"passwordPrompt" payload:prompt];
+  }];
+  [tab resolvePasswordPrompt:chrome username:nil password:nil];
 }
 
 - (void)resolveAutofillPrompt:(NSInteger)promptId action:(NSString *)action {

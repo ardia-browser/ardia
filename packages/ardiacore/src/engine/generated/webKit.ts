@@ -27,7 +27,7 @@ export type WebKitCalls = {
 };
 
 export type WebKitEvents = {
-  "webKit.counted": { name: WebKitCount; epoch?: string };
+  "webKit.counted": { name: WebKitCount; epoch?: string; entry?: string };
   "webKit.copyAddress": { url: string; request: number; epoch?: string };
   "webKit.siteDataWanted": { id: string; profile: string; origin: string; epoch?: string };
   "webKit.siteCookiesChanged": { profile: string; domains: string[]; epoch?: string };

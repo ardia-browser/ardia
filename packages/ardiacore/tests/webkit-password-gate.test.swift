@@ -37,6 +37,18 @@ private let choices = [
     #expect(WebKitPasswordGate.verdict(.fill, passwordsOn: false, systemProvider: false, privateProfile: true) == .ardia)
   }
 
+  @Test func `an Apple Passwords profile fills and saves through Apple Passwords, never Ardia's store, whatever Offer to save says`() {
+    for passwordsOn in [true, false] {
+      #expect(WebKitPasswordGate.verdict(.fill, passwordsOn: passwordsOn, systemProvider: false, applePasswords: true, privateProfile: false) == .applePasswords)
+      #expect(WebKitPasswordGate.verdict(.offerToSave, passwordsOn: passwordsOn, systemProvider: false, applePasswords: true, privateProfile: false) == .applePasswords)
+    }
+  }
+
+  @Test func `a private window on an Apple Passwords profile fills from Apple Passwords but never offers to save`() {
+    #expect(WebKitPasswordGate.verdict(.fill, passwordsOn: true, systemProvider: false, applePasswords: true, privateProfile: true) == .applePasswords)
+    #expect(WebKitPasswordGate.verdict(.offerToSave, passwordsOn: true, systemProvider: false, applePasswords: true, privateProfile: true) == .privateProfile)
+  }
+
   @Test func `a private window still leaves fields to the chosen manager`() {
     #expect(WebKitPasswordGate.verdict(.fill, passwordsOn: true, systemProvider: true, privateProfile: true) == .leftToManager)
   }

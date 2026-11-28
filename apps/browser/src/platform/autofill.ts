@@ -1,7 +1,7 @@
-import { call, saveCard, type CardNetwork, type SavedAddress, type SavedCard, type AddressInput } from "@ardia/ardiacore";
+import { call, on, saveCard, type CardNetwork, type SavedAddress, type SavedCard, type AddressInput } from "@ardia/ardiacore";
 
 export { saveCard };
-export type { SavedAddress, SavedCard, CardNetwork };
+export type { SavedAddress, SavedCard, CardNetwork, AddressInput };
 export type AutofillToggle = "passwords" | "addresses" | "cards";
 
 export const getAutofillSettings = (profile = "") => call("autofill.settings", { profile });
@@ -17,5 +17,6 @@ export const deleteCard = async (profile: string, id: string) => {
   await call("autofill.remove", { profile, id });
 };
 export const revealCardNumber = async (profile: string, id: string) => (await call("autofill.cardNumber", { profile, id })).number ?? null;
+export const onAddressFilled = (listener: (e: { entry: string; epoch?: string }) => void) => on("autofill.addressFilled", listener);
 export const showAutofillSuggestions = (tabId: string, kind: "passwords" | "field") =>
   call("autofill.showSuggestions", { tabId, passwords: kind === "passwords" });

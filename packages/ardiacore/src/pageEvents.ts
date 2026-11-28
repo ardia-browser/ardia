@@ -99,6 +99,7 @@ type NativeEvents = {
   onFieldProviderOpened: FieldProviderOpened;
   onFieldProviderHint: { state?: string };
   onVerificationCodeFound: VerificationCodeFound;
+  onApplePasswordsConnect: object;
 };
 type Handlers = keyof NativeEvents;
 export type PageEvent = { name: string; data: unknown };
@@ -162,6 +163,7 @@ const PAGE_EVENTS = {
   onFieldProviderOpened: "fieldProviderOpened",
   onFieldProviderHint: "fieldProviderHint",
   onVerificationCodeFound: "verificationCodeFound",
+  onApplePasswordsConnect: "applePasswordsConnect",
 } as const satisfies Record<Handlers, string>;
 export type PageEventName = (typeof PAGE_EVENTS)[Handlers];
 export const pageEventOf = (handler: Handlers): PageEventName => PAGE_EVENTS[handler];
@@ -229,6 +231,7 @@ const unwrap: { [K in Handlers]: (e: NativeEvents[K]) => Parameters<NonNullable<
   ],
   onFieldProviderHint: (e) => [{ state: e.state === "dismissed" ? "dismissed" : "shown" } as FieldProviderHint],
   onVerificationCodeFound: (e) => [{ token: String(e.token), app: String(e.app ?? ""), main: e.main === true }],
+  onApplePasswordsConnect: () => [],
 };
 
 export function fullScreenTransitionOf(e: unknown): FullScreenTransition | null {

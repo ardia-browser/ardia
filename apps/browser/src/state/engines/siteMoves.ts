@@ -3,7 +3,8 @@ import { useBrowser } from "../browser/store";
 import { patchPage } from "../tabs/pageState";
 import { canSwitchEngine, chosenEngine, chromiumOnly, modeEngineFor, needsChromium, singleEngine, siteOf, tabEngine, webStorePage } from "./engines";
 import { navigationOf } from "../tabs/pageSession";
-import { declineSite, modeStillHolds, openPageIn, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
+import { declineSite, modeStillHolds, openPageIn, pageUrl, refusedVideoSiteOf, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
+import { noteProtectedVideoRefusal } from "../telemetry/protectedVideoCounts";
 import { openedByPage, openerState } from "./openedPages";
 import { noteSiteMove } from "../telemetry/engineSwitchCounts";
 import { heldByCli } from "../tabs/cliHolds";
@@ -225,6 +226,11 @@ async function moveForProtectedVideo(tabId: string, site: string, keySystem: str
     return showEngineOffer(tabId, site, keySystem);
   }
   startMove(tabId, { from: tabEngine(store(), tabId), to: "webkit", url: pageUrl(store().tabs[tabId]), navigation: navigationNow(tabId), previousUrl: "", consent, forVideo: { site } });
+}
+
+export function protectedMediaRefused(tabId: string, engine: PageEngine, request: ProtectedMediaRequest) {
+  if (engine === "chromium") noteProtectedVideoRefusal(request, consentToken(), refusedVideoSiteOf(tabId));
+  offerWebKit(tabId, request);
 }
 
 export function offerWebKit(tabId: string, { keySystem }: ProtectedMediaRequest) {

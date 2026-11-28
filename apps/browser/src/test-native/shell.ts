@@ -2,10 +2,12 @@ import type {
   AppEvent,
   BangListReply,
   CommandEvent,
+  ContactsAuthorization,
   CrashReport,
   DiagnosticsSample,
   HardwareInfo,
   LaunchConfig,
+  MeCard,
   NativeDevtoolsEndpoint,
   OpenSurface,
   OpenWindowOptions,
@@ -45,6 +47,7 @@ export const copiedDocs: [string, string][] = [];
 export const refusedCopies = { on: false, of: new Set<string>() };
 export const takenNames = new Set<string>();
 export const syncedDocs: string[] = [];
+export const savedDocNames: string[] = [];
 export const refusedSyncs = { on: false };
 export const linkedButUnsynced = { on: false };
 export const heldCopies = { on: false, queue: [] as (() => void)[] };
@@ -272,6 +275,7 @@ const documents: Modules["ArdiaDocuments"] = {
   },
   saveDocument: (name, contents) =>
     new Promise((resolve, reject) => {
+      savedDocNames.push(name);
       if (refusedSaves.of.has(name)) return reject(new Error("save refused"));
       stagedDocs.set(name, contents);
       if (refusedSaves.on) return reject(new Error("save refused"));
@@ -430,6 +434,38 @@ const calendar: Modules["ArdiaCalendar"] = {
   requestAccess: () => Promise.resolve({ granted: false, status: "notDetermined", error: null, responsible: "self", ms: 0 }),
   calendars: () => Promise.resolve([]),
   events: () => Promise.resolve([]),
+};
+
+const contactsEvents = nativeEvents();
+export const contacts = {
+  status: "notDetermined" as ContactsAuthorization,
+  answer: "authorized" as ContactsAuthorization,
+  requests: 0,
+  card: null as MeCard | null,
+  opened: 0,
+  reads: 0,
+  readError: null as string | null,
+  changed: (epoch?: string) => contactsEvents.emit("onContactsChanged", { epoch }),
+  listeners: () => contactsEvents.count("onContactsChanged"),
+};
+const contactsModule: Modules["ArdiaContacts"] = {
+  addListener: contactsEvents.addListener,
+  authorizationStatus: () => contacts.status,
+  requestAccess: () => {
+    contacts.requests++;
+    if (contacts.status === "notDetermined") contacts.status = contacts.answer;
+    return Promise.resolve({ granted: contacts.status === "authorized", status: contacts.status, error: null });
+  },
+  meCard: () => {
+    contacts.reads++;
+    if (contacts.readError) return Promise.reject(new Error(contacts.readError));
+    if (contacts.status !== "authorized" && contacts.status !== "limited") return Promise.reject(new Error(`Contacts access is ${contacts.status}`));
+    return Promise.resolve(contacts.card ? structuredClone(contacts.card) : null);
+  },
+  openMeCard: () => {
+    contacts.opened++;
+    return Promise.resolve();
+  },
 };
 
 const keychainReads = { values: new Map<string, string>(), errors: new Map<string, string>() };
@@ -867,6 +903,7 @@ export const shellNativeModules: Modules = {
   ArdiaDev: dev,
   ArdiaSystem: system,
   ArdiaCalendar: calendar,
+  ArdiaContacts: contactsModule,
   ArdiaKeychain: keychain,
   ArdiaGlassEffect: { isLiquidGlass: () => false },
   ArdiaDockSelection: { iconTheme: () => Promise.resolve(null), iconAccent: () => Promise.resolve(null) },

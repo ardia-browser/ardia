@@ -15,6 +15,7 @@ const CANARY = {
   pluginSecret: "canary-plugin-secret-55-kv",
   syncPhrase: "canaryword alpha bravo charlie delta echo",
   devtoolsToken: "CanaryDevtoolsToken_q1w2e3r4t5y6u7i8o9p0",
+  pairingCode: "CanaryPairingCode-4h8j2k6m",
 };
 
 const keychain = new Map([
@@ -83,6 +84,7 @@ const { recoveryWords } = await import("./state/sync/recoveryKit.ts");
 const { controlDevtoolsEndpoint } = await import("./platform/automation.ts");
 const { devtoolsEndpointLine } = await import("./state/automation/socketDevtools.ts");
 const { Clock } = await import("../../../packages/sync/src/hlc.ts");
+const applePasswords = await import("./state/site/applePasswords.ts");
 const { syncScope } = await import("../../../packages/sync/src/scope.ts");
 const { emptyScope } = await import("../../../packages/sync/src/scopeState.ts");
 
@@ -111,6 +113,7 @@ const SOURCES = {
     return read.value;
   },
   syncPhrase: async () => recoveryWords(),
+  pairingCode: async () => applePasswords.pairingCodeSecret(CANARY.pairingCode),
   devtoolsToken: async () => {
     stub.controlSocket.devtoolsEndpoint = () => ({ port: 41234, generation: 3, token: CANARY.devtoolsToken });
     const read = await controlDevtoolsEndpoint(1);
@@ -503,6 +506,7 @@ const WRAP_SITES = {
   "apps/browser/src/state/live/googleAuth.ts": ["oauthToken"],
   "apps/browser/src/state/plugins/secrets.ts": ["pluginSecret"],
   "apps/browser/src/state/sync/recoveryKit.ts": ["syncPhrase"],
+  "apps/browser/src/state/site/applePasswords.ts": ["pairingCode"],
   "apps/browser/src/components/settings/panes/SyncSheets.tsx": ["syncPhrase"],
   "apps/desktop/src/syncEngine.ts": ["syncPhrase"],
   "apps/desktop/src/syncAuthority.ts": ["*"],
@@ -516,6 +520,7 @@ const REVEAL_SINKS = {
   "apps/browser/src/platform/passwords.ts": { calls: 2, why: "Chrome's password store saves and updates the plaintext" },
   "apps/browser/src/state/live/net.ts": { calls: 7, why: "Authorization headers and token request bodies to the account's own provider, and the Keychain copy of Google's tokens" },
   "apps/browser/src/state/plugins/channelData.ts": { calls: 1, why: "secrets.get answers the plugin that owns the secret" },
+  "apps/browser/src/platform/applePasswords.ts": { calls: 1, why: "Apple's helper checks the Pairing code the user typed" },
   "apps/browser/src/state/sync/engine.ts": { calls: 2, why: "the native sync module unlocks with the recovery phrase" },
   "apps/browser/src/components/settings/panes/ProfilePasswords.tsx": { calls: 1, why: "the password sheet shows and edits the password the user unlocked" },
   "apps/browser/src/components/settings/panes/SyncSheets.tsx": { calls: 1, why: "Show Words displays the recovery phrase to the user" },

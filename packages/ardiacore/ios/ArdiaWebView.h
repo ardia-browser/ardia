@@ -140,6 +140,18 @@ NS_ASSUME_NONNULL_BEGIN
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end
 
+@interface ArdiaWebView (ChromeLists)
++ (void)applePasswordsProfilesChanged;
+@end
+
+@interface ArdiaWebView (LoginList)
+@property (nonatomic, readonly, nullable) NSURL *loginListPageURL;
+- (void)fillLoginList:(NSDictionary<NSString *, NSString *> *)values origin:(NSString *)origin completion:(void (^)(BOOL filled))completion
+    NS_SWIFT_NAME(fillLoginList(_:origin:completion:));
+- (void)syncLoginListOpen:(BOOL)open picking:(BOOL)picking NS_SWIFT_NAME(syncLoginList(open:picking:));
+- (void)connectApplePasswordsFromLoginList;
+@end
+
 @interface ArdiaWebView (FieldProviders)
 @property(class, nonatomic, readonly) NSDictionary<NSString *, NSNumber *> *systemPanelAvailability;
 @property(class, nonatomic, readonly, nullable) NSString *otpauthHandlerName;

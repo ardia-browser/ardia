@@ -155,13 +155,14 @@ export type ZoomState = { zoom: number; host: string; isDefault: boolean; pinchS
 export type ContentBlockedState = { count: number; url: string };
 
 export type PasswordPrompt = {
-  state: "save" | "update" | "saved";
+  state: "save" | "update" | "saved" | "notSaved";
   origin: string;
   username: string;
   passwordLength: number;
   federation: string;
   usernames: string[];
   offer?: string;
+  target?: "applePasswords";
 };
 export type PasswordPromptAnswer = "save" | "update" | "never" | "nope" | "dismiss";
 export type AutofillPrompt = {
@@ -261,6 +262,7 @@ export type WebViewProps = ViewProps & {
   onFieldProviderOpened?: (opened: FieldProviderOpened) => void;
   onFieldProviderHint?: (hint: FieldProviderHint) => void;
   onVerificationCodeFound?: (found: VerificationCodeFound) => void;
+  onApplePasswordsConnect?: () => void;
 };
 
 export type WebViewHandle = {

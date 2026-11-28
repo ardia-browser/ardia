@@ -152,6 +152,8 @@
 	<string>Signing in with a passkey from your phone uses Bluetooth, and websites may ask to use Bluetooth devices.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Ardia shows your upcoming meetings on pinned calendar tabs, alerts you before they start, and groups the tabs you open during a call.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Ardia fills forms with the name, email, phone and addresses on your own card in Contacts, when you turn on Use my Me card from Contacts.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Websites may ask to use your camera.</string>
 	<key>NSDockTilePlugIn</key>

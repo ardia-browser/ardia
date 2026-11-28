@@ -88,6 +88,24 @@
    ]
   },
   {
+   "id": "chromium-page-message:loginField",
+   "source": "frame",
+   "guard": "ArdiaLoginListReport keeps only an event, a digit token, a field kind (username, identifier for a username-first step, password, newPassword or code), whether a username field belongs to a sign-in form (a true boolean, which only widens which of Chrome's own lists stay closed there), the username field's typed value (200 characters), a new-password field's maxlength and minlength (whole numbers, 0 to 1024) and whether it has a pattern (the pattern's text is dropped, so no page regex runs) and a bounded rect; Apple Passwords profiles only; the frame's origin is the engine's verified one, never the page's, and must be the top page's; trusted pointer or key; the Login list fills only after a native pick, into the frame and field token it was opened for; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the form whose new-password field it was opened for",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaLoginListReport.mm#ArdiaLoginListReport",
+    "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#loginFieldFromPage"
+   ]
+  },
+  {
+   "id": "chromium-page-message:loginFilled",
+   "source": "frame",
+   "guard": "Only answers a fill native started: the ticket must be pending and the reply must come from the frame it was sent to; it carries only whether the fill happened",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaLoginListReport.mm#ArdiaLoginListTicket",
+    "packages/ardiacore/ios/ArdiaWebView+LoginList.mm#answerLoginFill"
+   ]
+  },
+  {
    "id": "chromium-page-message:fieldProviderHint",
    "source": "frame",
    "guard": "Same-site checked against the browser-verified origin",
@@ -282,7 +300,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 40,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -341,6 +359,11 @@
    "id": "page-script-listener:input",
    "source": "page",
    "guard": "isTrusted checked before a field counts as typed by the user"
+  },
+  {
+   "id": "page-script-listener:pointerdown",
+   "source": "page",
+   "guard": "isTrusted checked before the Login list is asked to open"
   },
   {
    "id": "page-script-listener:keydown",
@@ -426,7 +449,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 68,
+   "count": 75,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -474,12 +497,21 @@
   {
    "id": "webkit-page-message:loginField",
    "source": "frame",
-   "guard": "Main frame only, trusted pointer or key, bound to the page origin; fills only after a native dropdown pick"
+   "guard": "Any frame, trusted pointer or key; the origin is the frame's own (frameInfo) and must be the top page's origin for the Login list (Ardia's own saved-password list takes the main frame only), and the fill runs in that frame, and a page's claimed origin only has to match it; WebKitLoginsReport keeps only a listed event and key, a digit token of 1 to 16 characters that names the frame's script (a hide or key from one frame never closes or drives the Login list opened for another, as Chromium's frame id does), and drops a message without one, true booleans, a username's typed value (200 UTF-16 units, cut at a character), a rect clamped to finite values within 1e6, and for a new-password field a maxlength and minlength clamped to 0 to 1024 (LoginListField.rules), and whether the new-password fields have a pattern as a true boolean (the pattern's text never reaches native, so no page regex runs); fills only after a native dropdown pick; a Verification code only on https, into an empty, visible code field, and only a code of 4 to 10 letters and digits; a strong password only into the new-password fields of the field's form",
+   "checks": [
+    "packages/ardiacore/ios/WebKitLoginsReport.swift#static func read",
+    "packages/ardiacore/ios/WebKitLoginsReport.swift#static func frameOrigin",
+    "packages/ardiacore/ios/LoginListField.swift#static func rules"
+   ]
   },
   {
    "id": "webkit-page-message:loginSubmit",
    "source": "frame",
-   "guard": "Main frame only, origin from frameInfo; offers save or update for that origin only. Open: synthetic submit not refused (B4)",
+   "guard": "Main frame only, origin from frameInfo, and a page's claimed origin only has to match it; offers save or update for that origin only; Apple Passwords saves only a non-empty password and a username of at most 1024 UTF-16 units each, with no NUL and no lone surrogate (ApplePasswordsMatch.savable, checked again before every save). Open: synthetic submit not refused (B4)",
+   "checks": [
+    "packages/ardiacore/ios/ApplePasswordsMatch.swift#static func savable",
+    "packages/ardiacore/ios/ApplePasswordsSaving.swift#ApplePasswordsMatch.savable"
+   ],
    "findings": [
     "B4"
    ]
@@ -552,12 +584,12 @@
    ]
   },
   {
-   "id": "webkit-page-listener-count:WebKitLogins.swift",
+   "id": "webkit-page-listener-count:WebKitLogins+Script.swift",
    "source": "page",
    "guard": "Isolated world; trusted pointer or key before a field counts; submit is open (B4)",
    "count": 9,
    "checks": [
-    "packages/ardiacore/ios/WebKitLogins.swift"
+    "packages/ardiacore/ios/WebKitLogins+Script.swift"
    ],
    "findings": [
     "B4"
@@ -2864,6 +2896,35 @@
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateInstaller.kt#install",
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateInstaller.kt#report",
     "packages/phone/android/src/main/java/com/ardia/phone/AppUpdateHandoff.kt#noteInstallRequest"
+   ],
+   "detected": false
+  },
+  {
+   "id": "apple-passwords-helper:replies",
+   "source": "other-app",
+   "guard": "Apple's helper is found through a native-messaging manifest any same-user app can write, so its replies are taken as hostile: a frame past 1 MB ends the helper before it is buffered (ApplePasswordsPipe.frames); only a JSON object is a message; login names, sites, passwords and Verification code fields are used only as text a save would take (1,024 UTF-16 units, no NUL, no lone surrogate), at most 1,000 entries and 100 sites each, and a code only of 4 to 10 letters and digits (ApplePasswordsReply); a Pairing round refuses a salt past 64 bytes or a number past the 3072-bit group's 384 before any arithmetic; sealed messages open only under the session key",
+   "checks": [
+    "packages/ardiacore/ios/ApplePasswordsPipe.swift#static func frames",
+    "packages/ardiacore/ios/ApplePasswordsMatch.swift#enum ApplePasswordsReply",
+    "packages/ardiacore/ios/ApplePasswordsSRP.swift#Self.saltMax",
+    "packages/ardiacore/tests/apple-passwords-replies.test.swift"
+   ],
+   "findings": [
+    "B3"
+   ],
+   "detected": false
+  },
+  {
+   "id": "contacts:me-card",
+   "source": "other-app",
+   "guard": "The Me card is whatever any app with Contacts access last wrote to it: meCardEntries takes only strings, drops NUL and lone surrogates, trims, cuts each field at 1,000 UTF-16 units on a character boundary, takes the first email and phone of an array and at most 20 addresses that are objects, before anything reaches Chrome's address store",
+   "checks": [
+    "packages/shell/ios/ContactsModule.swift#func meCard",
+    "apps/browser/src/state/site/meCard.ts#function meCardEntries",
+    "apps/browser/src/components/settings/panes/meCard.test.mjs#B4"
+   ],
+   "findings": [
+    "B4"
    ],
    "detected": false
   }

@@ -4,8 +4,8 @@ import type { Profile } from "../browser/types";
 import { engineProfile, incognitoOriginal, isIncognitoProfile } from "../browser/model";
 import { activeManifest, type PluginsStore } from "../plugins/store";
 
-export type PasswordManagerChoice = "ardia" | "none" | `plugin:${string}`;
-export type PasswordManagerKind = "ardia" | "none" | "plugin";
+export type PasswordManagerChoice = "ardia" | "apple" | "none" | `plugin:${string}`;
+export type PasswordManagerKind = "ardia" | "apple" | "none" | "plugin";
 export type ManagerPlugin = { name: string; title: string; spec: PasswordManagerSpec; builtIn: boolean; approval: string };
 
 const PLUGIN_PREFIX = "plugin:";
@@ -14,8 +14,9 @@ const PLUGIN_CHOICE = /^plugin:[a-z0-9][a-z0-9-]{0,39}$/;
 export const pluginChoice = (name: string): PasswordManagerChoice => `${PLUGIN_PREFIX}${name}` as PasswordManagerChoice;
 export const choicePlugin = (choice: string): string | null => (choice.startsWith(PLUGIN_PREFIX) ? choice.slice(PLUGIN_PREFIX.length) : null);
 const isPasswordManagerChoice = (value: unknown): value is PasswordManagerChoice =>
-  value === "ardia" || value === "none" || (typeof value === "string" && PLUGIN_CHOICE.test(value));
-export const choiceKind = (choice: PasswordManagerChoice): PasswordManagerKind => (choice === "ardia" || choice === "none" ? choice : "plugin");
+  value === "ardia" || value === "apple" || value === "none" || (typeof value === "string" && PLUGIN_CHOICE.test(value));
+export const choiceKind = (choice: PasswordManagerChoice): PasswordManagerKind => (choice === "ardia" || choice === "apple" || choice === "none" ? choice : "plugin");
+export const keepsOfferToSave = (choice: PasswordManagerChoice) => choice === "ardia" || choice === "apple";
 
 type PluginsView = Pick<PluginsStore, "listings" | "records" | "order">;
 
@@ -90,10 +91,11 @@ export function fieldProviderSet(s: ProviderState, plugins: readonly ManagerPlug
 }
 
 export function passwordManagerProfileCounts(s: ChoiceState, plugins: readonly ManagerPlugin[]): Record<string, string> {
-  const counts: Record<PasswordManagerKind, number> = { ardia: 0, none: 0, plugin: 0 };
+  const counts: Record<PasswordManagerKind, number> = { ardia: 0, apple: 0, none: 0, plugin: 0 };
   for (const id of Object.keys(s.profiles)) counts[choiceKind(profilePasswordManager(s, plugins, id))]++;
   return {
     password_manager_profiles_ardia: String(counts.ardia),
+    password_manager_profiles_apple: String(counts.apple),
     password_manager_profiles_none: String(counts.none),
     password_manager_profiles_plugin: String(counts.plugin),
   };

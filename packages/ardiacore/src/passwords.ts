@@ -8,6 +8,12 @@ export type FieldProviderProfile = { profile: string; fields: FieldProviderField
 type SystemPanelRefusal = "noTab" | "noProvider" | "stale" | "hidden" | "notFocused" | "unavailable" | "notKey" | "notEditing" | "throttled" | "refused" | "noPanel" | "tabGone";
 export type SystemPanelResult = { shown: boolean; reason?: SystemPanelRefusal };
 type VerificationCodeRefusal = "noTab" | "unknownToken" | "stale" | "navigated" | "noProvider" | "frameGone" | "handlerChanged" | "failed";
+export type ApplePasswordsState = "connected" | "notConnected" | "refused" | "helperMissing" | "tooOld" | "notEntitled";
+export type ApplePasswordsPairing = "awaitingCode" | "paired" | "wrongCode" | "failed" | Exclude<ApplePasswordsState, "connected" | "notConnected">;
+export type LoginListCount = "shown" | "filled" | "fillFailed" | "listFailed" | "connectShown" | "connectPicked" | "notNow" | "codeFilled" | "codeFillFailed" | "strongPasswordUsed" | "otherFrameIgnored";
+export type ApplePasswordsFailureKind = "notPaired" | "refused" | "helperMissing" | "timedOut" | "unreadable";
+export type LoginListEngine = "chromium" | "webkit";
+export type ApplePasswordsSaveCount = "saveSent" | "saveFailed";
 export type VerificationCodeSetupResult = { opened: boolean; reason?: VerificationCodeRefusal };
 
 const Passwords = nativeModule("ArdiaPasswords");

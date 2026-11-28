@@ -12,7 +12,7 @@ extension WebKitTab {
     if kind == "selection" { return noteSelection(data, main: frameInfo.isMainFrame) }
     guard let data else { return }
     switch kind {
-    case "loginField": if frameInfo.isMainFrame { WebKitHub.shared.logins.fieldPressed(self, data: data, origin: frameInfo.securityOrigin) }
+    case "loginField": if frameInfo.isMainFrame || ApplePasswordsProfiles.contains(profile) { WebKitHub.shared.logins.fieldPressed(self, data: data, frame: frameInfo) }
     case "loginSubmit": if frameInfo.isMainFrame { WebKitHub.shared.logins.submitted(self, data: data, origin: frameInfo.securityOrigin) }
     case "notification": if frameInfo.isMainFrame { WebKitHub.shared.notifications.received(data, from: self, sender: frameInfo.securityOrigin) }
     case "appBadge": if frameInfo.isMainFrame { noteAppBadge(data, origin: frameInfo.securityOrigin) }
@@ -26,8 +26,8 @@ extension WebKitTab {
   }
 
   func fillLogin(username: String, password: String, origin: String) {
-    let code = "window.__ardiaLogins ? window.__ardiaLogins.fill(\(Self.jsString(username)), \(Self.jsString(password)), \(Self.jsString(origin))) : false"
-    webView?.evaluateJavaScript(code, in: nil, in: WebKitHub.world) { _ in }
+    guard let webView else { return }
+    WebKitLoginFill.run(in: webView, world: WebKitHub.world, username: username, password: password, origin: origin)
   }
 
   func noteLinkStatus(_ data: Any?, main: Bool) {

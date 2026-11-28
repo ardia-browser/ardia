@@ -1,8 +1,9 @@
 import { setSiteSetting } from "../../state/site/siteSettings";
-import { answerAutofillPrompt, answerExternalApp, answerPasswordPrompt } from "../../state/site/prompts";
+import { answerAutofillPrompt, answerExternalApp, answerPasswordPrompt, passwordPromptAction, passwordPromptCopy } from "../../state/site/prompts";
 import { acceptVerificationCode, declineVerificationCode, verificationCodeCopy } from "../../state/site/verificationCodes";
 import {
   type AutofillPromptAnswer,
+  type PasswordPrompt,
   type PasswordPromptAnswer,
   patchPage,
   pageOf,
@@ -150,13 +151,19 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
   );
 }
 
+export function passwordPromptWidth(prompt: Pick<PasswordPrompt, "state" | "target">): number {
+  if (prompt.state === "update") return POPOVER_WIDTH.s;
+  return prompt.target === "applePasswords" && prompt.state !== "notSaved" ? POPOVER_WIDTH.l : POPOVER_WIDTH.m;
+}
+
 export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: number; top: number }) {
   const prompt = usePage(tabId, (p) => p.passwordPrompt);
   const [chosen, setChosen] = useState<string | null>(null);
   const guard = usePromptInputGuard(prompt ? `${prompt.origin}|${prompt.username}|${prompt.state}` : null);
   if (!prompt) return null;
-  const site = hostOrOrigin(prompt.origin);
   const update = prompt.state === "update";
+  const notSaved = prompt.state === "notSaved";
+  const copy = passwordPromptCopy(prompt);
   const username = chosen ?? prompt.username;
   const answer = guard((action: PasswordPromptAnswer) => {
     answerPasswordPrompt(tabId, action, username, prompt);
@@ -164,12 +171,12 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   });
   const choices = update && prompt.usernames.length > 1 ? prompt.usernames : [];
   return (
-    <Popover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={update ? POPOVER_WIDTH.s : POPOVER_WIDTH.m} top={top} right={right} modal={false}>
+    <Popover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={passwordPromptWidth(prompt)} top={top} right={right} modal={false}>
       <View>
         <PromptBody
           icons={["key.fill"]}
-          title={update ? "Update saved password?" : `Save password for ${site}?`}
-          message={update ? `It will be auto-filled on ${site}` : "That way, it'll be auto-filled next time"}
+          title={copy.title}
+          message={copy.message}
           detail={
             choices.length ? (
               <Well list>
@@ -191,9 +198,15 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
             )
           }
         >
-          {!update && <Button variant="pill" title="Never on This Site" onPress={() => answer("never")} />}
-          <Button variant="pill" title="Not Now" onPress={() => answer(update ? "nope" : "dismiss")} />
-          <Button variant="pill" title={update ? "Update" : "Save"} primary onPress={() => answer(update ? "update" : "save")} />
+          {notSaved ? (
+            <Button variant="pill" title="OK" primary onPress={() => answer("dismiss")} />
+          ) : (
+            <>
+              {!update && <Button variant="pill" title="Never on This Site" onPress={() => answer("never")} />}
+              <Button variant="pill" title="Not Now" onPress={() => answer(update ? "nope" : "dismiss")} />
+              <Button variant="pill" title={passwordPromptAction(prompt)} primary onPress={() => answer(update ? "update" : "save")} />
+            </>
+          )}
         </PromptBody>
         <PanelCloseButton onPress={() => answer("dismiss")} />
       </View>

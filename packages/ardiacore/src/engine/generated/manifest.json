@@ -46,7 +46,14 @@
           "windows": "absent"
         }
       },
-      "events": {}
+      "events": {
+        "addressFilled": {
+          "topic": "autofill.addressFilled",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
     },
     "bookmarks": {
       "kind": "engine",
@@ -884,9 +891,53 @@
           "mac": "custom",
           "desktop": "absent",
           "windows": "absent"
+        },
+        "applePasswordsStatus": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "applePasswordsPair": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "applePasswordsPairCode": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "applePasswordsCancelPairing": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "setApplePasswordsProfiles": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
         }
       },
-      "events": {}
+      "events": {
+        "applePasswordsChanged": {
+          "topic": "passwords.applePasswordsChanged",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "loginListCounted": {
+          "topic": "passwords.loginListCounted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
+        "applePasswordsSaveCounted": {
+          "topic": "passwords.applePasswordsSaveCounted",
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        }
+      }
     },
     "permissions": {
       "kind": "engine",
@@ -1510,8 +1561,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "06503bc68a8671906f150d0d1be7518834ce298287002970a5db2ae16b4eb4f3",
-        "swift": "1b0f1f7827a5f96df5bb21b9bb6725cc0e33419e7e003532f1c8d4492be92645"
+        "types": "c83de532deb029699533abd1469495403b5ab609888a03d347f81fff9d42c853",
+        "swift": "eb16f7e75fb5c2e64885210a13694fdc7f783cc7419954863f668d91e51b5077"
       },
       "modules": {
         "ArdiaShell": {
@@ -3182,6 +3233,46 @@
             "onCalendarChanged": {
               "mac": "custom",
               "desktop": "host",
+              "windows": "absent"
+            }
+          }
+        },
+        "ArdiaContacts": {
+          "native": "ContactsNative",
+          "functions": {
+            "authorizationStatus": {
+              "args": [],
+              "async": false,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "requestAccess": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "meCard": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "openMeCard": {
+              "args": [],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            }
+          },
+          "events": {
+            "onContactsChanged": {
+              "mac": "custom",
+              "desktop": "absent",
               "windows": "absent"
             }
           }

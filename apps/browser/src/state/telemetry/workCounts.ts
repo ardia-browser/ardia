@@ -11,7 +11,7 @@ type Phase = "extract" | "apply";
 
 const phase = () => ({ runs: 0, msTotal: 0, msMax: 0 });
 const work = () => ({ extract: phase(), apply: phase(), recordsMax: 0 });
-const noSync = () => ({ bookmark: work(), history: work(), historyTitlesKept: 0 });
+const noSync = () => ({ bookmark: work(), history: work(), historyTitlesKept: 0, profileChangesHeld: 0 });
 
 let syncPending = noSync();
 
@@ -39,6 +39,11 @@ function timed<T>(run: () => T, done: (result: Awaited<T>, ms: number) => void):
 export const noteSyncHistoryTitlesKept = (kept: number, consent: ConsentToken | null) =>
   countFor(consent, () => void (isSharing() && (syncPending.historyTitlesKept += kept)));
 
+export function noteSyncProfileChangesHeld(held: number, consent?: ConsentToken | null) {
+  if (!held) return;
+  countFor(consentOrNow(consent), () => void (isSharing() && (syncPending.profileChangesHeld += held)));
+}
+
 export function withSyncWorkCounts(kind: SyncWorkKind, adapter: Adapter): Adapter {
   return {
     ...adapter,
@@ -62,7 +67,7 @@ export function takeSyncWorkCounts(): Record<string, number> {
       [`sync_${kind}_records_max`]: recordsMax,
     };
   };
-  return { ...fields("bookmark"), ...fields("history"), sync_history_titles_kept: taken.historyTitlesKept };
+  return { ...fields("bookmark"), ...fields("history"), sync_history_titles_kept: taken.historyTitlesKept, sync_profile_changes_held: taken.profileChangesHeld };
 }
 
 const none = () => ({

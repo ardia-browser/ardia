@@ -3,13 +3,14 @@ import { useBrowser } from "../browser/store";
 import { isIncognitoProfile } from "../browser/model";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { PROFILE, PROFILE_OPEN_TABS, PROFILE_TOP_APPS, SHARE, openTabsRecord, profileRecord, profileScope, recordId, shareRecord, topAppsRecord } from "./records";
-import type { ProfileRecord } from "./profileAdapters";
+import { pausableSyncId, type ProfileRecord } from "./profileAdapters";
 import { APP_SCOPE, type SyncDoc } from "./syncDoc";
 import { pairTheme } from "./syncThemes";
 import { noteTopAppsSharingFromSync, startedBySync } from "../telemetry/topAppsSharing";
 import { noteJoinWait } from "../telemetry/syncSafetyCounts";
 import { oweRebase } from "./rebaseObligations";
 import type { ConsentToken } from "../telemetry/consentPeriod";
+import { noteSyncProfileChangesHeld } from "../telemetry/workCounts";
 
 const remoteTopApps = (doc: SyncDoc, syncId: string) => topAppsRecord(doc.scopes[APP_SCOPE]?.records[`${PROFILE_TOP_APPS}${syncId}`]?.v);
 
@@ -133,4 +134,17 @@ function freshScopeAfter(before: ScopeState | undefined, device: string): ScopeS
   const queued = [...(before.journal ?? []).map((file) => ({ ops: file.ops, o: [file.device, file.seq] as [string, number] })), { ops: before.outbox, o: [device, before.seq + 1] as [string, number] }];
   for (const { ops, o } of queued) for (const op of ops) if (!records[op.k] || records[op.k]!.h < op.h) records[op.k] = { h: op.h, v: op.v, o };
   return { ...fresh, seq: before.seq, outbox: before.outbox, records, unapplied: Object.keys(records), ...(before.journal?.length ? { journal: before.journal } : {}) };
+}
+
+function noteChangesHeldWhileOff(app: ScopeState | undefined, syncId: string) {
+  noteSyncProfileChangesHeld((app?.unapplied ?? []).filter((key) => pausableSyncId(key) === syncId).length);
+}
+
+export function setLinkSynced(doc: SyncDoc, profileId: string, enabled: boolean): boolean {
+  const link = doc.profiles[profileId];
+  if (!link) return false;
+  const { retire: _retire, ...kept } = link;
+  doc.profiles[profileId] = enabled ? { ...kept, enabled } : { ...link, enabled, retire: true };
+  if (enabled && !link.enabled && !link.retire) noteChangesHeldWhileOff(doc.scopes[APP_SCOPE], link.syncId);
+  return true;
 }

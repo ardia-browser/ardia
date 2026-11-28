@@ -985,6 +985,14 @@
    ]
   },
   {
+   "id": "sync-adapter:profileAdapters.ts#holdingPaused",
+   "source": "sync",
+   "guard": "Wraps another adapter; defers the keys of a profile whose sync is off here and decodes nothing",
+   "checks": [
+    "apps/browser/src/state/sync/profileAdapters.ts#holdingPaused"
+   ]
+  },
+  {
    "id": "sync-adapter:profileAdapters.ts#profileOpenTabsAdapter",
    "source": "sync",
    "guard": "openTabsRecord decoder; a boolean",

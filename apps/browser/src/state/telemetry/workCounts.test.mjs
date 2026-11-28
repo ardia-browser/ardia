@@ -111,6 +111,19 @@ test("a page title Sync left as this device had it is counted while sharing is o
   assert.equal(takeSyncWorkCounts().sync_history_titles_kept, 0);
 });
 
+test("profile changes held while a profile's sync was off are counted once while sharing is on, and never after sharing went off (#3312)", () => {
+  client.setSharing(true, "onboarding");
+  takeSyncWorkCounts();
+  work.noteSyncProfileChangesHeld(3, client.consentToken());
+  work.noteSyncProfileChangesHeld(0, client.consentToken());
+  assert.equal(takeSyncWorkCounts().sync_profile_changes_held, 3);
+  const before = client.consentToken();
+  client.setSharing(false, "settings");
+  work.noteSyncProfileChangesHeld(2, before);
+  work.noteSyncProfileChangesHeld(2);
+  assert.equal(takeSyncWorkCounts().sync_profile_changes_held, 0);
+});
+
 test("live and extension work reaches usage_counts once, then resets", async () => {
   client.setSharing(true, "onboarding");
   await usageCounts();

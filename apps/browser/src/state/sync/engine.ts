@@ -10,7 +10,7 @@ import { APP_SCOPE, emptyDoc, emptyUi, typeSyncedFor, type DataType, type SendTa
 import { syncFiles } from "./syncFiles";
 import { settleThemeAdoption, themeChosenHere } from "./syncThemes";
 import { editClock, startEditClock } from "./editClock";
-import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile } from "./profileLinks";
+import { addSyncedProfile, appScopeOf, linkProfiles, readyToPair, retireDeletedProfile, setLinkSynced } from "./profileLinks";
 import { summarize } from "./syncSummary";
 import { markNewSync, sessionMarkHooks, settleLaunchMark } from "./sessionMarks";
 import { noteChainHealthy, noteChainMissing, noteCycle, timedCycle } from "./cycleWork";
@@ -327,11 +327,7 @@ const docChanged = () => void (save(), publishUi(), scheduleSync(0));
 export const setTypeSynced = (type: DataType, enabled: boolean): void => void ((doc.types = { ...doc.types, [type]: enabled }), docChanged());
 
 export function setProfileSynced(profileId: string, enabled: boolean) {
-  const link = doc.profiles[profileId];
-  if (!link) return;
-  const { retire: _retire, ...kept } = link;
-  doc.profiles[profileId] = enabled ? { ...kept, enabled } : { ...link, enabled, retire: true };
-  docChanged();
+  if (setLinkSynced(doc, profileId, enabled)) docChanged();
 }
 
 export const setOpenTabsSynced = (profileId: string, on: boolean): void => void (markOpenTabsSynced(doc, profileId, on), docChanged());

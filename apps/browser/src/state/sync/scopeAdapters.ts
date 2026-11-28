@@ -2,7 +2,7 @@ import { emptyScope, SyncNative, type Adapter, type ExtensionsAdapter } from "..
 import { useBrowser } from "../browser/store";
 import { bookmarksAdapter, deviceAdapter, deviceTabsAdapter, inTodaysNames, passwordsAdapter, sharedDataAdapter } from "./adapters";
 import { historyAdapter } from "./historyAdapter";
-import { profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
+import { holdingPaused, profileOpenTabsAdapter, profilesAdapter, profileThemesAdapter, profileTopAppsAdapter } from "./profileAdapters";
 import { settingsAdapter } from "./settingsAdapter";
 import { withSettingEdits } from "./settingEdits";
 import { pinnedAreaAdapters } from "./pinned";
@@ -61,18 +61,25 @@ const withSharedOwners = (doc: SyncDoc, links: () => SyncDoc["profiles"]) => ():
   return owners.length ? { ...shown, ...Object.fromEntries(owners) } : shown;
 };
 
+const pausedBeside = (doc: SyncDoc, shown: () => SyncDoc["profiles"]) => (): ReadonlySet<string> => {
+  const on = new Set(Object.values(shown()).map((link) => link.syncId));
+  const profiles = useBrowser.getState().profiles;
+  return new Set(Object.entries(doc.profiles).flatMap(([id, link]) => (!link.enabled && profiles[id] && !on.has(link.syncId) ? [link.syncId] : [])));
+};
+
 export function appAdapters(doc: SyncDoc, retiring: boolean): Adapter[] {
   const id = doc.deviceId!;
   if (retiring) return [deviceAdapter(id, deviceName, true)];
   const enabledLinks = () => Object.fromEntries(Object.entries(doc.profiles).filter(([, l]) => l.enabled));
   const removed = () => removedRecordKeys(doc);
+  const shownLinks = withSharedOwners(doc, enabledLinks);
   return [
     ...(doc.types.settings ? [fromSession(withSettingEdits(inTodaysNames(settingsAdapter)))] : []),
     sharedDataAdapter(() => doc.profiles, removed),
-    fromSession(profilesAdapter(withSharedOwners(doc, enabledLinks), removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks)),
-    fromSession(profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed)),
-    fromSession(profileTopAppsAdapter(enabledLinks, removed)),
-    fromSession(profileOpenTabsAdapter(enabledLinks, removed)),
+    fromSession(holdingPaused(profilesAdapter(shownLinks, removed, () => doc.scopes[APP_SCOPE]?.records, enabledLinks), pausedBeside(doc, shownLinks))),
+    fromSession(holdingPaused(profileThemesAdapter(enabledLinks, () => doc.scopes[APP_SCOPE]?.records, removed), pausedBeside(doc, enabledLinks))),
+    fromSession(holdingPaused(profileTopAppsAdapter(enabledLinks, removed), pausedBeside(doc, enabledLinks))),
+    fromSession(holdingPaused(profileOpenTabsAdapter(enabledLinks, removed), pausedBeside(doc, enabledLinks))),
     alsoDeleting(deviceAdapter(id, deviceName, false, () => syncedProfileOrder(enabledLinks())), () => removedDeviceKeys(doc)),
   ];
 }

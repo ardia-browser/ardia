@@ -378,6 +378,13 @@ Profiles).
 - Limit: a profile that shares the data of an owner deleted on its Mac publishes no `share:`; on other Macs it gets
   data of its own, as before 0.2.39. That data group's bookmarks, history and passwords no longer sync from that Mac
   anyway: only a profile without `dataId` syncs data.
+- A profile whose sync is off on this Mac leaves its `prof:`, `pth:`, `pta:` and `ptab:` records unapplied
+  (`holdingPaused` defers them, so their base stays what this Mac last applied). Turning it back on applies what
+  arrived meanwhile instead of publishing this Mac's older values over it; an edit made here while it was off still
+  goes out (#3312, tested). When both Macs changed the same record while it was off, each adapter's usual rule
+  decides, record by record: `prof:` (name, colour and icon together) publishes this Mac's whole record, so it wins,
+  while `pth:`, `pta:` and `ptab:` take the other Mac's and drop this Mac's edit. A field-level merge for `prof:` would
+  keep both a rename there and a colour change here; it isn't done yet.
 
 | Key | Scope | What | Notes |
 |---|---|---|---|

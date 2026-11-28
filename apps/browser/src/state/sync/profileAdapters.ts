@@ -185,6 +185,23 @@ export function profileOpenTabsAdapter(links: () => Record<string, { syncId: str
   };
 }
 
+const PAUSABLE = [PROFILE, PROFILE_THEME, PROFILE_TOP_APPS, PROFILE_OPEN_TABS];
+
+const syncIdOf = (key: string, prefix: string) => (key.startsWith(prefix) ? key.slice(prefix.length).split(":")[0] : undefined);
+
+export const pausableSyncId = (key: string) => PAUSABLE.map((prefix) => syncIdOf(key, prefix)).find((syncId) => syncId !== undefined);
+
+export function holdingPaused(adapter: Adapter, paused: () => ReadonlySet<string>): Adapter {
+  return {
+    ...adapter,
+    apply: (visible, changed, base, records) => {
+      const off = paused();
+      if (off.size) for (const key of changed) if (off.has(syncIdOf(key, adapter.prefix) ?? "")) records.defer(key);
+      return adapter.apply(visible, changed, base, records);
+    },
+  };
+}
+
 export function profileSyncAdapters(links: () => Record<string, { syncId: string; themeAdopting?: true }>, records: () => Record<string, Stamped> | undefined): Adapter[] {
   return [profilesAdapter(links, NOTHING_REMOVED, records), profileThemesAdapter(links, records)];
 }

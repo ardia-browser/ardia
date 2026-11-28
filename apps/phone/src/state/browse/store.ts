@@ -190,6 +190,10 @@ export function openPageFromAnotherApp(url: string, origin: TabOrigin) {
   tabFromAnotherApp = openPage(url, origin).id;
 }
 
+export function forgetTabFromAnotherApp() {
+  tabFromAnotherApp = null;
+}
+
 useTabs.subscribe((tabs) => {
   if (tabFromAnotherApp !== null && tabs.selectedId !== tabFromAnotherApp) tabFromAnotherApp = null;
 });

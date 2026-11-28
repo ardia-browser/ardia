@@ -1,6 +1,6 @@
 import { AppState, Platform } from "react-native";
 import { addLinkListener, initialLink, type SystemLink } from "../../platform/links";
-import { openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
+import { forgetTabFromAnotherApp, openPage, openPageFromAnotherApp, openSpaces, openTab, reopenArchived, searchFor, showDeck, useBrowse } from "../browse/store";
 import { readPreferences, writePreference } from "../store/browserDatabase";
 import { browserDatabase } from "../store/database";
 import { useOnboarding } from "../onboarding/store";
@@ -146,6 +146,7 @@ export function listenForLinks() {
     waiting = [...restoredLinks(readPreferences(browserDatabase())[KEPT_KEY]).map(replayed), ...(waiting ?? [])];
   });
   addLinkListener((link: SystemLink) => {
+    forgetTabFromAnotherApp();
     if (!waiting) {
       take(link);
       return;

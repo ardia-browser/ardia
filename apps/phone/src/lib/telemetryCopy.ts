@@ -194,7 +194,7 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["web_videos_floated", "web_videos_kept_playing"],
       },
       {
-        text: "In the same daily counts, on iPhone: how many pages opened with a fix from your filter lists that stops a site putting its ads back. Counts only, never which page, and never while browsing privately",
+        text: "In the same daily counts, on iPhone: how many pages you opened on a site your filter lists have a fix for that stops it putting its ads back. Counts only, never which page or site, and never while browsing privately",
         fields: ["scriptlet_pages"],
       },
       {

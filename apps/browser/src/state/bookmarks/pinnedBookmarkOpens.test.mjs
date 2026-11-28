@@ -4,6 +4,7 @@ const { useBrowser } = await import("../browser/store.ts");
 const { activeTabId } = await import("../browser/model.ts");
 const { openBookmark, openModeFor } = await import("./actions.ts");
 const { runCommand } = await import("../commands/commands.ts");
+const { webviews } = await import("../../platform/webviews.ts");
 const { takeBookmarkletCounts } = await import("../telemetry/bookmarkletCounts.ts");
 const { navigationOf } = await import("../tabs/pageSession.ts");
 const { setConsentPeriod, consentToken } = await import("../telemetry/consentPeriod.ts");
@@ -84,8 +85,13 @@ test("a bookmark that opens outside a tab doesn't count as keeping the Top App",
 
 test("a bookmarklet clicked on a Top App still runs in that tab and opens no new one", () => {
   const { w, tile } = onTopApp();
+  const loads = [];
+  webviews.set(tile, { loadUrl: (u) => void loads.push(u) });
   const before = S().windows[w].tabIds.length;
-  openBookmark("javascript:void(document.title='ran')", w, openModeFor({}), consentToken());
+  const BOOKMARKLET = "javascript:void(document.title='ran')";
+  openBookmark(BOOKMARKLET, w, openModeFor({}), consentToken());
+  webviews.delete(tile);
+  assert.deepEqual(loads, [BOOKMARKLET]);
   assert.equal(S().windows[w].tabIds.length, before);
   assert.equal(activeTabId(S(), w), tile);
   assert.equal(keptPinnedTab(), 0);

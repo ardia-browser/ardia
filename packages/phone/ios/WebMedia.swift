@@ -41,6 +41,8 @@ final class WebMedia {
   private var returning = PictureInPictureReturn()
   private var observers: [NSObjectProtocol] = []
   private var departure = 0
+  private var leftAt: TimeInterval = -.infinity
+  static let leaveResumeWindow: TimeInterval = 5
   private var inBackground = false
   private var leftWhilePlaying = false
   private var automatic: (pageID: String, token: String, departure: Int)?
@@ -125,7 +127,8 @@ final class WebMedia {
     let before = best(pageID)
     var pageFrames = frames[pageID] ?? [:]
     let previous = pageFrames[report.token]
-    let started = report.state == .playing && (previous?.report.state != .playing || (previous?.report.plays ?? 0) < report.plays)
+    let resumedAfterLeaving = previous?.report.state == .paused && now - leftAt < Self.leaveResumeWindow
+    let started = report.state == .playing && !resumedAfterLeaving && (previous?.report.state != .playing || (previous?.report.plays ?? 0) < report.plays)
     if report.state == .none {
       pageFrames[report.token] = nil
     } else {
@@ -224,6 +227,7 @@ final class WebMedia {
 
   private func willLeave() {
     departure += 1
+    leftAt = ProcessInfo.processInfo.systemUptime
     returning.resignedActive()
     let playing = frames.flatMap { pageID, pageFrames in pageFrames.values.filter { $0.report.state == .playing }.map { (pageID, $0) } }
     leftWhilePlaying = !playing.isEmpty

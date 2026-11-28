@@ -281,6 +281,7 @@ onIos("closing the page menu over Site Settings takes the card with it, and the 
   act(() => menuSheet(root)!.props.onIsPresentedChange({ nativeEvent: { isPresented: false, token: showing() } }));
   expect(usePageUi.getState().menuOpen).toBe(false);
   expect(menuSheet(root)!.props.isPresented).toBe(false);
+  expect(siteLayer(root).props).toMatchObject({ pointerEvents: "none", accessibilityElementsHidden: true, accessibilityViewIsModal: false });
   act(() => pageMenuHidden());
   await act(async () => void (await openPageMenu()));
   expect(usePageUi.getState().menuPage).toBe("main");

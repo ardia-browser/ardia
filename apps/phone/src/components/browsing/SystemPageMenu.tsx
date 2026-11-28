@@ -83,6 +83,7 @@ const SiteCardOverMenu = memo(function SiteCardOverMenu() {
     return () => clearTimeout(later);
   }, [menuOpen, warm]);
   const built = warm || shown;
+  const live = shown && menuOpen;
   const ink = usePageMenuInk();
   const dim = (useTheme().dark ? menuInk.dark : menuInk.light).dim;
   const progress = useSharedValue(0);
@@ -100,7 +101,7 @@ const SiteCardOverMenu = memo(function SiteCardOverMenu() {
     <View testID="menuSiteLayer" style={StyleSheet.absoluteFill} onLayout={(event) => {
         layerHeight.value = event.nativeEvent.layout.height;
         setRoom(Math.max(0, event.nativeEvent.layout.height - SITE_CARD_TOP - pageMenuCards.padding));
-      }} pointerEvents={shown ? "auto" : "none"} accessibilityViewIsModal={shown} accessibilityElementsHidden={!shown} importantForAccessibility={shown ? "auto" : "no-hide-descendants"}>
+      }} pointerEvents={live ? "auto" : "none"} accessibilityViewIsModal={live} accessibilityElementsHidden={!live} importantForAccessibility={live ? "auto" : "no-hide-descendants"}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: dim }, dimStyle]}>
         <Pressable testID="menuSiteDim" accessibilityRole="button" accessibilityLabel="Back" style={styles.fill} onPress={closeMenuSubpage} />
       </Animated.View>

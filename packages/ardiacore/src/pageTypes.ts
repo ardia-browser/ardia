@@ -342,7 +342,7 @@ export type WebViewNativeHandle = Omit<
   discard(unload: boolean): Promise<DiscardOutcome>;
 };
 
-export type ScreenshotCopy = { ok: true; width: number; height: number } | { ok: false; reason: "noPage" | "noPicture" | "unencodable" };
+export type ScreenshotCopy = { ok: true; width: number; height: number } | { ok: false; reason: "noPage" | "noPicture" | "unencodable" | "unwritable" };
 
 export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";
 export type DiscardRefusal = number;

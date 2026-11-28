@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { requireNativeModule } from "expo-modules-core";
+import { withAppUrl } from "../../lib/fixtures/reactNativeUrl.mjs";
 
 const { filterListAddress, filterListLabel, setBlockingCategory, setFilterList } = await import("./contentBlocking.ts");
 
@@ -49,4 +50,16 @@ test("an added list without a title of its own shows its address", () => {
   assert.equal(filterListLabel("https://example.com/filters.txt", ""), "example.com/filters.txt");
   assert.equal(filterListLabel("https://example.com/filters.txt", "https://example.com/filters.txt"), "example.com/filters.txt");
   assert.equal(filterListLabel("https://example.com/filters.txt", "My List"), "My List");
+});
+
+test("with React Native's URL as the global, a typed list address and its label keep the path as typed", async () => {
+  await withAppUrl(() => {
+    assert.equal(filterListAddress("https://ubofilters.ukg.one/filters.txt"), "https://ubofilters.ukg.one/filters.txt");
+    assert.equal(filterListAddress("example.com/list.txt"), "https://example.com/list.txt");
+    assert.equal(filterListAddress("HTTPS://Example.COM:443/a.txt?v=1"), "https://example.com/a.txt?v=1");
+    assert.equal(filterListAddress("https://example.com"), "https://example.com/");
+    for (const bad of ["not a url", "https://intranet/l.txt", "file:///etc/hosts", "https://user:pw@example.com/l.txt"]) assert.equal(filterListAddress(bad), null, bad);
+    assert.equal(filterListLabel("https://example.com/filters.txt", ""), "example.com/filters.txt");
+    assert.equal(filterListLabel("https://example.com/", ""), "example.com");
+  });
 });

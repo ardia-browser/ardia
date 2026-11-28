@@ -70,7 +70,7 @@ export type CompletedItem = { item: LiveItem; state: CompletionState; at: number
 
 export type CompletionState = "merged" | "closed" | "reviewed";
 
-export type LiveErrorKind = "signedOut" | "sso" | "tokenBlocked" | "rateLimited" | "network" | "notConfigured" | "other";
+export type LiveErrorKind = "signedOut" | "forbidden" | "notFound" | "sso" | "tokenBlocked" | "rateLimited" | "network" | "notConfigured" | "other";
 
 export type FolderStatus = {
   state: "initializing" | "idle" | "updating" | "error";
@@ -83,6 +83,16 @@ export class LiveError extends Error {
   constructor(kind: LiveErrorKind, message: string) {
     super(message);
     this.kind = kind;
+  }
+}
+
+export class PartialFetch extends Error {
+  items: LiveItem[];
+  failures: unknown[];
+  constructor(items: LiveItem[], failures: unknown[]) {
+    super("Part of the source couldn't be loaded");
+    this.items = items;
+    this.failures = failures;
   }
 }
 

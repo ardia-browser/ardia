@@ -435,15 +435,18 @@ const calendar: Modules["ArdiaCalendar"] = {
 const keychainReads = { values: new Map<string, string>(), errors: new Map<string, string>() };
 
 const keychain: Modules["ArdiaKeychain"] = {
-  get: () => Promise.resolve(null),
+  get: (account) => Promise.resolve(keychainReads.values.get(account) ?? null),
   read: (account) => {
     const reason = keychainReads.errors.get(account);
     if (reason !== undefined) return Promise.resolve({ status: "error", reason });
     const value = keychainReads.values.get(account);
     return Promise.resolve(value === undefined ? { status: "missing" } : { status: "ok", value });
   },
-  set: () => Promise.resolve(true),
-  delete: () => Promise.resolve(true),
+  set: (account, secret) => Promise.resolve(!!keychainReads.values.set(account, secret)),
+  delete: (account) => {
+    keychainReads.values.delete(account);
+    return Promise.resolve(true);
+  },
 };
 
 const translate: Modules["ArdiaTranslate"] = {

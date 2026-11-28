@@ -9,6 +9,7 @@ import { tabsLeftInOpenWindows } from "../windows/frontTabs";
 import { repoKey } from "./rows";
 import { hideNewRepos } from "./repoFilter";
 import { SOURCES } from "./sources";
+import { settleSources } from "./settle";
 import { beginLiveRefresh, applyFetch, createFolder, finishCompleting, live, markRead, removeFolder, setStatus, unhide, updateFolder, useLive } from "./store";
 import { LiveError, type CompletionState, type LiveFolder, type LiveFolderKind, type LiveItem, type LiveSourceId, type PullRequestSection } from "./types";
 import { noteLiveCompletedTabsClosed } from "../telemetry/liveCompletedTabs";
@@ -124,13 +125,7 @@ async function run(folderId: string, interactive: boolean, allowed: () => boolea
   setStatus(folderId, { state: before.status[folderId]?.lastFetch ? "updating" : "initializing" });
   const results = await Promise.allSettled(folder.sources.map((id) => fetchSource(id, folder, interactive)));
 
-  const fetched: LiveItem[] = [];
-  const failed: { source: LiveSourceId; error: unknown }[] = [];
-  results.forEach((r, i) => {
-    const source = folder.sources[i]!;
-    if (r.status === "fulfilled") fetched.push(...r.value);
-    else failed.push({ source, error: r.reason });
-  });
+  const { fetched, failed, partlyFailed } = settleSources(folder.sources, results);
   if (!live().folders[folderId] || staleRun(folderId, folder, allowed)) return;
   const fromFailedSource = (it: LiveItem) => failed.some((f) => f.source === it.source);
   const listedByFilters = (it: LiveItem) => (it.section === "review" || it.section === "team" ? folder.filters.reviewRequests : folder.filters.authored);
@@ -181,8 +176,9 @@ async function run(folderId: string, interactive: boolean, allowed: () => boolea
   fetchedSources.set(folderId, succeeded);
   applyFetch(folderId, order(next), gone, Date.now(), quiet, fence, succeeded);
   markCompletedTabs(folderId, gone, ids);
-  const warned = firstFailure ? null : folder.sources.map((source) => ({ source, error: SOURCES[source].warning?.() ?? null })).find((w) => w.error);
-  const problem = firstFailure ?? warned;
+  const firstProblem = firstFailure ?? partlyFailed[0];
+  const warned = firstProblem ? null : folder.sources.map((source) => ({ source, error: SOURCES[source].warning?.() ?? null })).find((w) => w.error);
+  const problem = firstProblem ?? warned;
   if (problem) setStatus(folderId, { state: "error", error: describe(problem.source, problem.error) });
   const leaving = Object.keys(gone);
   if (leaving.length) setTimeout(() => finishCompleting(folderId, leaving, fence), COMPLETION_MS);
@@ -215,6 +211,10 @@ export function errorText(kind: LiveError["kind"], source: LiveSourceId, now = D
       return `Connect ${name} in Settings`;
     case "signedOut":
       return `Sign back in to ${name}`;
+    case "forbidden":
+      return `Your ${name} token can't access this. Check its ${source === "bitbucket" ? "scopes and workspace access" : "permissions"} in Settings.`;
+    case "notFound":
+      return `${name} couldn't find something this folder needs. Check your access in Settings, or update Ardia.`;
     case "sso":
       return `${name} needs Single Sign-On for this organization`;
     case "tokenBlocked":

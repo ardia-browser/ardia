@@ -739,10 +739,13 @@ function downloadEvent(event: DownloadEvent) {
     notePrivateDownloadStopped();
     return;
   }
+  const counted = event.isPrivate === false;
   if (event.failure) {
-    showToast(downloadFailedToast(event.fileName), "warning");
+    if (counted) countUsage("downloads_failed");
+    showToast(downloadFailedToast(event.fileName, event.failure), "warning", TOAST_LONG_DURATION_MS);
     return;
   }
+  if (counted) countUsage("downloads_saved");
   const uri = event.uri;
   const open = opensInInstaller(Platform.OS, event.fileName) && downloads.installsPackages() ? (target: string) => quietly(async () => (await installDownloadedPackage(target)) || showToast("Couldn’t open the installer.", "warning")) : (target: string) => quietly(() => downloads.open(target));
   showToast(downloadedToast(event.fileName), "download", TOAST_LONG_DURATION_MS, uri ? { label: actionWords.open, run: () => open(uri) } : null);
@@ -763,8 +766,10 @@ function pageEvent(event: PageEngineEvent) {
       void openPopup(event.pageId, event.popupId, event.url, event.isPrivate, event.inBackground === true);
       return;
     case "page.download":
-      if (event.downloadId === null) showToast(downloadFailedToast(event.fileName), "warning");
-      else showToast(downloadingToast(event.fileName), "download");
+      if (event.downloadId === null) {
+        if (!event.isPrivate) countUsage("downloads_refused");
+        showToast(downloadFailedToast(event.fileName, event.failure ?? null), "warning", TOAST_LONG_DURATION_MS);
+      } else showToast(downloadingToast(event.fileName), "download");
       return;
     case "page.longPress":
       if (event.pageId !== selectedId()) return;

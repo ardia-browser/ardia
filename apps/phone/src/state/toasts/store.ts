@@ -9,7 +9,11 @@ export type Toast = { id: number; message: string; icon: ToastIcon; durationMs: 
 export const TOAST_DURATION_MS = 2400;
 export const TOAST_LONG_DURATION_MS = 3200;
 
-export const useToasts = create<{ toast: Toast | null; barTopY: number | null }>()(() => ({ toast: null, barTopY: null }));
+export const useToasts = create<{ toast: Toast | null; barTopY: number | null; pageBarDark: boolean | null }>()(() => ({ toast: null, barTopY: null, pageBarDark: null }));
+
+export const notePageBarDark = (pageBarDark: boolean | null) => {
+  if (useToasts.getState().pageBarDark !== pageBarDark) useToasts.setState({ pageBarDark });
+};
 
 export const noteDeckBarTop = (barTopY: number | null) => {
   if (useToasts.getState().barTopY !== barTopY) useToasts.setState({ barTopY });

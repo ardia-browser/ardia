@@ -86,6 +86,10 @@ fun interface DownloadTransport {
     fun endConnectionScope(scope: String) = Unit
 }
 
+fun interface DownloadSource {
+    fun open(call: DownloadCall): DownloadResponse
+}
+
 class DownloadRefused(val failure: DownloadFailure) : Exception(failure.name)
 
 object DownloadRules {
@@ -219,8 +223,7 @@ object DownloadRules {
 
     fun safeFileName(raw: String?, fallback: String = FALLBACK_NAME): String {
         val lastSegment = raw.orEmpty().substringAfterLast('/').substringAfterLast('\\')
-        val cleaned = lastSegment
-            .filter { it >= ' ' && it != '\u007f' && it !in forbiddenNameCharacters }
+        val cleaned = visibleNameCharacters(lastSegment)
             .trim()
             .trim('.')
             .trim()
@@ -228,11 +231,39 @@ object DownloadRules {
         if (cleaned.length <= MAX_NAME_LENGTH) return cleaned
         val extension = cleaned.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 10 && it.length < cleaned.length - 1 }
         return if (extension == null) {
-            cleaned.take(MAX_NAME_LENGTH).trim()
+            wholeCharacters(cleaned.take(MAX_NAME_LENGTH)).trim()
         } else {
-            cleaned.dropLast(extension.length + 1).take(MAX_NAME_LENGTH - extension.length - 1).trim() + "." + extension
+            wholeCharacters(cleaned.dropLast(extension.length + 1).take(MAX_NAME_LENGTH - extension.length - 1)).trim() + "." + extension
         }
     }
+
+    private fun visibleNameCharacters(raw: String): String {
+        val out = StringBuilder(raw.length)
+        var index = 0
+        while (index < raw.length) {
+            val char = raw[index]
+            if (Character.isHighSurrogate(char) && index + 1 < raw.length && Character.isLowSurrogate(raw[index + 1])) {
+                val codePoint = Character.toCodePoint(char, raw[index + 1])
+                if (Character.getType(codePoint) != Character.FORMAT.toInt()) out.append(char).append(raw[index + 1])
+                index += 2
+                continue
+            }
+            if (isVisibleNameCharacter(char)) out.append(char)
+            index += 1
+        }
+        return out.toString()
+    }
+
+    private fun isVisibleNameCharacter(char: Char): Boolean {
+        if (char < ' ' || char in '\u007f'..'\u009f' || char in forbiddenNameCharacters || Character.isSurrogate(char)) return false
+        return when (Character.getType(char).toByte()) {
+            Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR, Character.CONTROL -> false
+            else -> true
+        }
+    }
+
+    private fun wholeCharacters(text: String): String =
+        if (text.isNotEmpty() && Character.isHighSurrogate(text.last())) text.dropLast(1) else text
 
     fun linkName(url: String, contentDisposition: String?, contentType: String?, extensionFor: (String) -> String?): String? {
         dispositionName(contentDisposition)?.let { return it }
@@ -281,6 +312,26 @@ object DownloadRules {
         "video/mp4" to "mp4",
         "audio/mpeg" to "mp3",
     )
+
+    fun pageMadeName(
+        declared: String?,
+        guessed: String,
+        mimeType: String?,
+        fallback: String = FALLBACK_NAME,
+        extensionFor: (String) -> String?,
+    ): String {
+        val type = mimeType?.substringBefore(';')?.trim()?.lowercase()?.ifEmpty { null }
+        val typeExtension = type?.let { extensionFor(it) ?: commonExtensions[it] }
+        val named = declared?.let { safeFileName(it, "") }?.ifEmpty { null }
+        if (named != null) {
+            if (named.substringAfterLast('.', "").isNotEmpty() || typeExtension == null) return named
+            return safeFileName("$named.$typeExtension", named)
+        }
+        val base = safeFileName(guessed, fallback)
+        if (typeExtension == null) return base
+        val stem = base.substringBeforeLast('.').ifEmpty { base }
+        return safeFileName("$stem.$typeExtension", base)
+    }
 
     fun uniqueName(name: String, taken: Set<String>): String {
         val lowered = taken.mapTo(HashSet()) { it.lowercase() }

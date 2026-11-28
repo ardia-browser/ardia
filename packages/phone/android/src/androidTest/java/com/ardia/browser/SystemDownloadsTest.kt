@@ -141,10 +141,57 @@ class SystemDownloadsTest {
     }
 
     @Test
-    fun blobAndDataAddressesAreNotStarted() {
+    fun aBlobNoFrameCanServeAndOtherSchemesAreRefusedAsUnsupported() {
         val downloads = SystemDownloads(harness.context, harness.engine)
-        assertNull(downloads.enqueue(download("blob:http://127.0.0.1/1", "a.bin")))
-        assertNull(downloads.enqueue(download("data:text/plain,hi", "a.txt")))
+        assertEquals(DownloadStart.Refused(DownloadFailure.Unsupported), downloads.start(download("blob:http://127.0.0.1/1", "a.bin")))
+        assertEquals(DownloadStart.Refused(DownloadFailure.Unsupported), downloads.start(download("ftp://127.0.0.1/a.txt", "a.txt")))
+        assertEquals(DownloadStart.Refused(DownloadFailure.Unsupported), downloads.start(download("data:text/plain", "a.txt")))
+        assertNull(downloads.enqueue(download("javascript:alert(1)", "a.txt")))
+    }
+
+    @Test
+    fun aDataAddressIsDecodedAndSavedWithTheNameThePageGave() {
+        val downloads = SystemDownloads(harness.context, harness.engine)
+        val named = download("data:text/plain;base64,aGVsbG8gd29ybGQ=", "downloadfile.txt")
+            .copy(contentDisposition = PageMadeDownloads.dispositionFor("greeting.txt"))
+        val outcome = DownloadHarness.run(downloads, named).also(created::add)
+        assertEquals("greeting.txt", outcome.fileName)
+        assertEquals("hello world", DownloadHarness.contents(harness.context, outcome))
+        val guessed = DownloadHarness.run(downloads, download("data:image/svg+xml,%3Csvg%2F%3E", "downloadfile.bin")).also(created::add)
+        assertEquals("downloadfile.svg", guessed.fileName)
+        assertEquals("<svg/>", DownloadHarness.contents(harness.context, guessed))
+    }
+
+    @Test
+    fun aMalformedDataAddressFailsAndLeavesNothingBehind() {
+        val downloads = SystemDownloads(harness.context, harness.engine)
+        val outcome = DownloadHarness.run(downloads, download("data:;base64,a", "broken.txt"))
+        assertEquals(DownloadOutcome.Failed("broken.txt", DownloadFailure.Unsupported), outcome)
+    }
+
+    @Test
+    fun aPageSourceIsSavedThroughTheSameEntryAndKeepsThePrivateFlag() {
+        val downloads = SystemDownloads(harness.context, harness.engine)
+        val bytes = ByteArray(300_000) { (it % 251).toByte() }
+        val source = DownloadSource {
+            DownloadResponse(
+                200,
+                mapOf(
+                    "content-type" to listOf("image/png"),
+                    "content-length" to listOf(bytes.size.toString()),
+                    "content-disposition" to listOf(PageMadeDownloads.dispositionFor("canvas")),
+                ),
+                bytes.inputStream(),
+            )
+        }
+        val outcome = DownloadHarness.run(downloads, download("blob:https://a.example/cf30724d", "cf30724d.bin").copy(source = source)).also(created::add)
+        assertEquals("canvas.png", outcome.fileName)
+        val uri = (outcome as DownloadOutcome.Finished).uri!!
+        assertTrue(harness.context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }.contentEquals(bytes))
+        assertFalse(outcome.isPrivate)
+        val failing = DownloadSource { throw DownloadRefused(DownloadFailure.Server) }
+        val failed = DownloadHarness.run(downloads, download("blob:https://a.example/gone", "gone.bin", isPrivate = true).copy(source = failing))
+        assertEquals(DownloadOutcome.Failed("gone.bin", DownloadFailure.Server, isPrivate = true), failed)
     }
 
     @Test
@@ -221,6 +268,33 @@ class SystemDownloadsTest {
         assertFalse(server.requested("/quiet"))
         assertTrue(downloads.active.value.isEmpty())
         assertNull(runBlocking { withTimeoutOrNull(500) { downloads.outcomes.first() } })
+    }
+
+    @Test
+    fun aPrivateSessionEndingRightBeforePublishLeavesNothingInDownloads() {
+        val name = "private-${System.nanoTime()}.txt"
+        var bodyEnded = false
+        var checksAfterBody = 0
+        val sessions = object : DownloadSessions {
+            override fun privateCookieHeader(url: String, session: String): String? = null
+
+            override fun isPrivateSessionLive(session: String): Boolean = !bodyEnded || ++checksAfterBody <= 1
+
+            override fun addPrivateSessionEndListener(listener: (String) -> Unit): AutoCloseable? = null
+        }
+        val body = object : java.io.InputStream() {
+            private var left = "hello".toByteArray().inputStream()
+
+            override fun read(): Int = left.read().also { if (it < 0) bodyEnded = true }
+
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int = left.read(buffer, offset, length).also { if (it < 0) bodyEnded = true }
+        }
+        val source = DownloadSource { DownloadResponse(200, mapOf("content-length" to listOf("5"), "content-type" to listOf("text/plain")), body) }
+        val downloads = SystemDownloads(harness.context, sessions = sessions)
+        val held = download("blob:https://a.example/p", name, isPrivate = true).copy(privateSession = "s1", source = source)
+        val outcome = DownloadHarness.run(downloads, held).also(created::add)
+        assertEquals(DownloadOutcome.Failed(name, DownloadFailure.PrivateSessionEnded, isPrivate = true), outcome)
+        assertFalse(name in storedNames())
     }
 
     private fun storedNames(): Set<String> {

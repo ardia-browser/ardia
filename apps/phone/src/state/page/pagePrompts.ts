@@ -1,3 +1,4 @@
+import type { DownloadFailure } from "@ardia/phone-native";
 import { actionWords, dismissWords } from "../../lib/sharedWords.ts";
 export type FindResult = { query: string; activeIndex: number; total: number; isDone: boolean };
 
@@ -183,7 +184,34 @@ export const downloadedToast = (fileName: string) => `Downloaded ${fileName}`;
 
 export const opensInInstaller = (os: string, fileName: string) => os === "android" && /\.apk$/i.test(fileName.trim());
 
-export const downloadFailedToast = (fileName: string) => (fileName ? `Couldn’t Download ${fileName}` : "Couldn’t Download File");
+const DOWNLOAD_FAILURE_WHY: Record<Exclude<DownloadFailure, "privateSessionEnded">, string> = {
+  network: "Check your connection and try again.",
+  server: "The site didn’t send the file.",
+  insecureRedirect: "The site moved it to an insecure address.",
+  tooManyRedirects: "The site kept redirecting.",
+  unsupported: "Ardia can’t save this kind of link.",
+  storage: "Ardia couldn’t write it to Downloads.",
+  noSpace: "Your phone is out of space.",
+};
+
+const SHOWN_NAME_LIMIT = 32;
+
+export function shownFileName(fileName: string) {
+  const characters = Array.from(fileName.trim());
+  if (characters.length <= SHOWN_NAME_LIMIT) return characters.join("");
+  const dot = characters.lastIndexOf(".");
+  const extension = dot > 0 && characters.length - dot <= 8 ? characters.slice(dot) : [];
+  const stem = characters.slice(0, characters.length - extension.length);
+  const room = SHOWN_NAME_LIMIT - extension.length - 1;
+  const head = Math.ceil(room / 2);
+  return [...stem.slice(0, head), "…", ...stem.slice(stem.length - (room - head)), ...extension].join("");
+}
+
+export function downloadFailedToast(fileName: string, failure: DownloadFailure | null = null) {
+  const headline = fileName ? `Couldn’t Download ${shownFileName(fileName)}` : "Couldn’t Download File";
+  const why = failure && failure !== "privateSessionEnded" ? DOWNLOAD_FAILURE_WHY[failure] : undefined;
+  return why ? `${why} ${headline}.` : headline;
+}
 
 export const stoppedPrivateDownloadsToast = (count: number) => (count === 1 ? "Stopped 1 Private Download" : `Stopped ${count} Private Downloads`);
 

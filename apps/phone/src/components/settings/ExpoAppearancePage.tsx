@@ -8,8 +8,11 @@ import { rainbow } from "../../lib/themeEditor";
 import { INTERFACE_STYLE_NAMES, INTERFACE_STYLES, offeredInterfaceStyle, offeredScheme, SCHEME_CHOICES, SCHEME_NAMES } from "../../lib/appearance";
 import { setColorChoice, setInterfaceStyle, setSchemeChoice } from "../../state/settings/actions";
 import { usePreferences } from "../../state/settings/hooks";
-import { openThemeEditor } from "../../state/settings/customTheme";
+import { chooseCustomTheme, resetPresetTheme } from "../../state/settings/customTheme";
+import { selectedSwatch } from "../../state/settings/themeDraft";
 import { settingsRouteKey } from "../../state/settings/nav";
+import { CUSTOM_CHOICE } from "../../lib/profileLook";
+import type { PresetColor } from "../../state/settings/preferences";
 import { matchMyMac } from "../../state/sync/actions";
 import { useSyncEnabled } from "../../state/sync/hooks";
 import { syncOffered } from "../../state/sync/offer";
@@ -31,7 +34,9 @@ export function ExpoAppearancePage() {
   const styleChoices = offersSync ? INTERFACE_STYLES : INTERFACE_STYLES.filter((choice) => choice !== "matchMac");
   const schemeChoices = offersSync ? SCHEME_CHOICES : SCHEME_CHOICES.filter((choice) => choice !== "matchMac");
   const chosen = usePreferences((p) => p.colorChoice);
+  const edited = usePreferences((p) => (p.colorChoice && p.colorChoice !== CUSTOM_CHOICE ? Boolean(p.presetThemes[p.colorChoice]) : false));
   const look = useProfileLook();
+  const picked = usePreferences((p) => selectedSwatch(p, look));
   return (
     <Form modifiers={modifierList(navigationTitle("Appearance"), navigationBarTitleDisplayMode("inline"), tint(PlatformColor("systemBlue")), settingsChrome(), neverBounces(), contentMargins({ edges: "top", length: settingsLayout.expoListTop }))}>
       <Section>
@@ -39,21 +44,20 @@ export function ExpoAppearancePage() {
           <Text>{actionWords.color}</Text>
           <HStack spacing={0}>
             {COLORS.slice(0, ROW_LENGTH).map((color) => (
-              <Swatch key={color} color={color} selected={color === look.preset} />
+              <Swatch key={color} color={color} selected={color === picked} />
             ))}
           </HStack>
           <HStack spacing={0}>
             {COLORS.slice(ROW_LENGTH).map((color) => (
-              <Swatch key={color} color={color} selected={color === look.preset} />
+              <Swatch key={color} color={color} selected={color === picked} />
             ))}
-            <CustomSwatch selected={chosen === "custom"} />
+            <CustomSwatch selected={picked === "custom"} />
           </HStack>
         </VStack>
-        {chosen === "custom" ? (
-          <NavigationLink value={settingsRouteKey({ page: "theme" })}>
-            <Text>Edit theme</Text>
-          </NavigationLink>
-        ) : null}
+        <NavigationLink value={settingsRouteKey({ page: "theme" })}>
+          <Text>Edit theme</Text>
+        </NavigationLink>
+        {edited && chosen && chosen !== CUSTOM_CHOICE ? <Button label={resetLabel(chosen)} onPress={() => resetPresetTheme(chosen)} /> : null}
         {syncEnabled ? (
           <Toggle isOn={chosen === null} onIsOnChange={(on) => matchMyMac(on, look)} modifiers={modifierList(settingsSwitchStyle())}>
             <Text>Match My Mac</Text>
@@ -74,11 +78,17 @@ export function ExpoAppearancePage() {
   );
 }
 
-function Swatch({ color, selected }: { color: ProfileColor; selected: boolean }) {
-  const name = PROFILE_COLORS[color].name;
+export const presetName = (color: PresetColor, edited: boolean) => (edited ? `${PROFILE_COLORS[color].name}, edited` : PROFILE_COLORS[color].name);
+
+const resetLabel = (color: PresetColor) => `Reset to ${PROFILE_COLORS[color].name}`;
+
+function Swatch({ color, selected }: { color: PresetColor; selected: boolean }) {
+  const edits = usePreferences((p) => p.presetThemes[color] ?? null);
+  const colors = useMemo(() => (edits ? [...themePalette(edits)] : null), [edits]);
+  const name = presetName(color, edits !== null);
   return (
     <Button onPress={() => setColorChoice(color)} modifiers={[buttonStyle("plain"), frame({ maxWidth: FILL, minHeight: SWATCH_HIT }), accessibilityLabel(name), accessibilityAddTraits(selected ? ["isButton", "isSelected"] : ["isButton"])]}>
-      {settingsUIAvailable() ? <ColorSwatch preset={color} isSelected={selected} /> : <Text>{name}</Text>}
+      {settingsUIAvailable() ? colors && edits ? <ColorSwatch preset={color} colors={colors} ring={themeAccent(edits)} isSelected={selected} /> : <ColorSwatch preset={color} isSelected={selected} /> : <Text>{name}</Text>}
     </Button>
   );
 }
@@ -89,7 +99,7 @@ function CustomSwatch({ selected }: { selected: boolean }) {
   const colors = useMemo(() => (saved ? themePalette(saved) : RAINBOW), [saved]);
   const ring = saved ? themeAccent(saved) : settingsTint.neutral;
   return (
-    <Button onPress={() => openThemeEditor(look)} modifiers={[buttonStyle("plain"), frame({ maxWidth: FILL, minHeight: SWATCH_HIT }), accessibilityLabel(CUSTOM_SWATCH_LABEL), accessibilityAddTraits(selected ? ["isButton", "isSelected"] : ["isButton"])]}>
+    <Button onPress={() => chooseCustomTheme(look)} modifiers={[buttonStyle("plain"), frame({ maxWidth: FILL, minHeight: SWATCH_HIT }), accessibilityLabel(CUSTOM_SWATCH_LABEL), accessibilityAddTraits(selected ? ["isButton", "isSelected"] : ["isButton"])]}>
       {settingsUIAvailable() ? <ColorSwatch preset="plum" colors={[...colors]} ring={ring} isSelected={selected} /> : <Text>{CUSTOM_SWATCH_LABEL}</Text>}
     </Button>
   );

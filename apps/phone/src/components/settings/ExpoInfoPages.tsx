@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { AppState, PlatformColor } from "react-native";
 import { Divider, Form, HStack, Image, ScrollView, Section, Text, VStack } from "@expo/ui/swift-ui";
 import { accessibilityAddTraits, accessibilityElement, background, clipShape, fixedSize, font, foregroundStyle, frame, multilineTextAlignment, navigationBarTitleDisplayMode, navigationTitle, padding, tint } from "@expo/ui/swift-ui/modifiers";
@@ -7,6 +6,7 @@ import { askForDefaultBrowser, refreshDefaultBrowser, useDefaultBrowser } from "
 import { defaultBrowserCopy } from "../../state/settings/settingsRules";
 import { AppIconPreview, modifierList, neverBounces, settingsChrome, SettingsIconTile, settingsUIAvailable } from "../ui";
 import { ExpoSettingsAction } from "./ExpoSettingsParts";
+import { useWhenOpened } from "./settingsOpened";
 
 const FILL = Number.MAX_SAFE_INTEGER;
 const SECONDARY = { type: "hierarchical", style: "secondary" } as const;
@@ -14,7 +14,7 @@ const BLUE = PlatformColor("systemBlue");
 
 export function ExpoDefaultBrowserPage() {
   const status = useDefaultBrowser((s) => s.status);
-  useEffect(() => {
+  useWhenOpened(() => {
     void refreshDefaultBrowser();
     const returns = AppState.addEventListener("change", (next) => {
       if (next === "active") void refreshDefaultBrowser();

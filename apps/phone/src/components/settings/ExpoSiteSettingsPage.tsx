@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { PlatformColor, View } from "react-native";
 import { Button, ConfirmationDialog, Form, HStack, LabeledContent, NavigationLink, Picker, RNHostView, Section, SwipeActions, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import { accessibilityElement, accessibilityHint, accessibilityLabel, accessibilityValue, buttonStyle, disabled, font, foregroundStyle, frame, labelStyle, monospacedDigit, navigationBarTitleDisplayMode, navigationTitle, pickerStyle, tag, tint } from "@expo/ui/swift-ui/modifiers";
@@ -13,6 +13,7 @@ import type { SitePermissionGrant } from "../../platform/pages";
 import { contentMargins, Favicon, modifierList, neverBounces, settingsChrome, settingsLayout, settingsSwitchStyle, useDesign } from "../ui";
 import { ExpoRowText } from "./ExpoRowLabel";
 import { NIGHT_SHADE, SITE_DEFAULTS_FOOTER, SWIPE_NAVIGATION } from "./SitePages";
+import { SettingsPageOpenedContext, useWhenOpened } from "./settingsOpened";
 import { THIS_SITE_FOOTER, useThisSite } from "./ThisSite";
 import { resetZoom, setDesktopSite, setNightShadeOn, zoomIn, zoomOut } from "../../state/page/actions";
 
@@ -21,6 +22,7 @@ const ZOOM_GAP = 16;
 const FILL = Number.MAX_SAFE_INTEGER;
 
 export function ExpoSiteSettingsPage() {
+  const opened = useContext(SettingsPageOpenedContext);
   const design = useDesign();
   const state = useBlocking((s) => s.state);
   const nightShade = useEngines((s) => s.nightShade);
@@ -71,7 +73,7 @@ export function ExpoSiteSettingsPage() {
           <ExpoRowText title="Collapse bottom bar" description="Shrinks the bar while you scroll down a page." />
         </Toggle>
       </Section>
-      <AllowedSites />
+      {opened ? <AllowedSites /> : null}
     </Form>
   );
 }
@@ -104,9 +106,9 @@ function ExpoThisSite() {
 function AllowedSites() {
   const listed = useSitePermissions((s) => s.listed);
   const grants = useSitePermissions((s) => s.grants);
-  useEffect(() => {
+  useWhenOpened(() => {
     void refreshSitePermissions();
-  }, []);
+  });
   if (!listed) return null;
   return (
     <Section title="Camera, microphone and location" footer={<Text>Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.</Text>}>

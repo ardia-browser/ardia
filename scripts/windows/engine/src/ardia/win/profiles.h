@@ -16,12 +16,14 @@ struct ProfileName {
   bool off_the_record = false;
 };
 
-ProfileName ParseProfileName(std::string_view name);
+ProfileName ParseProfileName(std::string_view name,
+                             std::string_view empty_original = {});
 
 base::FilePath ProfilePath(const ProfileName& name);
 
 void WithProfile(std::string_view name,
-                 base::OnceCallback<void(Profile*)> callback);
+                 base::OnceCallback<void(Profile*)> callback,
+                 std::string_view empty_original = {});
 
 std::string NameOfProfile(Profile* profile);
 

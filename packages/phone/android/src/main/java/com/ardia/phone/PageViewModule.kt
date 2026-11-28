@@ -90,6 +90,10 @@ class PageViewModule : Module() {
             main.post { PhonePages.permissionAsks.pump() }
         }
 
+        OnActivityEntersBackground {
+            PhonePages.leftForeground()
+        }
+
         OnActivityDestroys {
             PhonePages.permissionAsks.lost()
             appContext.currentActivity?.let(PhonePages::detach)
@@ -259,6 +263,8 @@ class PageViewModule : Module() {
         AsyncFunction("discardBackgroundPages") { keeping: String? -> PhonePages.discardBackgroundPages(keeping) }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("livePageIds") { -> PhonePages.livePageIds() }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("setShownPage") { pageId: String? -> PhonePages.setShownPage(pageId) }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("saveState") { pageId: String -> PhonePages.saveState(pageId) }.runOnQueue(Queues.MAIN)
 

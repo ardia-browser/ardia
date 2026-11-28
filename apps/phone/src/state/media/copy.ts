@@ -2,7 +2,7 @@ export const PICTURE_IN_PICTURE_COPY = {
   title: "Picture in Picture",
   automatic: "Automatic Picture in Picture",
   automaticFooter: "A playing video floats over your other apps when you leave Ardia. Its return button brings you back to its tab.",
-  automaticUnsupported: "This iPhone can’t float videos, so they keep playing as sound instead.",
+  automaticUnsupported: "This iPhone can’t float videos.",
   keepsPlaying: "Keep playing in the background",
   keepsPlayingFooter: "On: videos and music keep playing when you switch tabs or leave Ardia. Off: leaving Ardia pauses them.",
   miniPlayerSection: "Mini player",

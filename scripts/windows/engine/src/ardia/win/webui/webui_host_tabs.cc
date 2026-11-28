@@ -100,7 +100,12 @@ base::DictValue ShellHostView::Identity(PageBinding* binding) const {
   lease.Set("documentEpoch", "1");
   base::DictValue snapshot;
   snapshot.Set("watermark", static_cast<double>(binding->sequence));
-  snapshot.Set("events", base::ListValue().Append(binding->NavigationEvent()));
+  base::ListValue events;
+  events.Append(binding->NavigationEvent());
+  if (binding->contents() && binding->contents()->IsFullscreen()) {
+    events.Append(binding->FullscreenEvent(true));
+  }
+  snapshot.Set("events", std::move(events));
   return base::DictValue()
       .Set("browserId", binding->id())
       .Set("chromeTabId", binding->id())
@@ -145,15 +150,18 @@ void ShellHostView::StartTab(base::DictValue args,
     return std::move(done).Run(
         false, base::Value("The shell document that asked for this tab is gone"));
   }
-  const std::string profile = Text(args, "profile");
-  if (profile.empty() || profile == config_.page_profile) {
+  const std::string profile(webui_window::TabProfileName(
+      args.FindString("profile") != nullptr, Text(args, "profile"),
+      config_.page_profile));
+  if (webui_window::SameRegularProfile(profile, config_.page_profile)) {
     return CreateTabIn(std::move(args), std::move(done), std::move(origin),
                        generation, page_profile());
   }
   WithProfile(profile,
               base::BindOnce(&ShellHostView::CreateTabIn, GetWeakPtr(),
                              std::move(args), std::move(done), std::move(origin),
-                             generation));
+                             generation),
+              kAppProfileName);
 }
 
 void ShellHostView::CreateTabIn(base::DictValue args,
@@ -298,8 +306,11 @@ void ShellHostView::CreateTabIn(base::DictValue args,
   if (!contents) {
     return std::move(done).Run(false, base::Value("The tab did not open"));
   }
-  auto binding = std::make_unique<PageBinding>(this, contents, key,
-                                               Text(args, "profile"));
+  auto binding = std::make_unique<PageBinding>(
+      this, contents, key,
+      std::string(webui_window::TabProfileName(
+          args.FindString("profile") != nullptr, Text(args, "profile"),
+          config_.page_profile)));
   binding->SetClaim(claim);
   binding->renderer_generation = renderer_generation_;
   PageBinding* created = binding.get();
@@ -679,8 +690,9 @@ base::DictValue ShellHostView::UnclaimedOffer(content::WebContents* contents,
       .Set("adoptId", std::string(webui_window::kAdoptTabPrefix) +
                           base::NumberToString(TabId(contents)))
       .Set("url", contents->GetVisibleURL().spec())
-      .Set("profile", profile == page_profile() ? config_.page_profile
-                                                : NameOfProfile(profile))
+      .Set("profile", std::string(webui_window::ShellProfileName(
+                          profile == page_profile() ? config_.page_profile
+                                                    : NameOfProfile(profile))))
       .Set("active", active);
 }
 

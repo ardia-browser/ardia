@@ -485,7 +485,7 @@ void BadRequestsAreRefused() {
 }
 
 int main() {
-  assert(ac_passwords_replace_sensitive.max_bytes == 64 * 1024);
+  assert(ac_passwords_replace_sensitive.max_bytes >= 2 * (4096 + 65536) + 2 * 2048 + 2 * 1024 + 256);
   GroupedRealmsKeepTheirOwnPasswords();
   EveryFormOfTheLoginChanges();
   MissingLoginIsAddedToTheProfileStore();

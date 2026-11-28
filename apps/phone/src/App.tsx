@@ -39,6 +39,7 @@ import { startFullPageCapture } from "./platform/fullPageCapture";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
 import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
+import { reportShownPage, startShownPage } from "./state/browse/shownPageSource";
 import { appBecameActive, appWillResignActive, closeArchive, deckPullInFlight, goBackToStartIfEmpty, keepFrontPictureCurrent, startBrowser, type Surface } from "./state/browse/store";
 import { refreshHiddenDeck, resizeRoot } from "./state/browse/deckHold";
 import { useDeckStandbyWanted } from "./state/browse/deckStandby";
@@ -53,6 +54,7 @@ import { useVoicePresented } from "./state/voice/store";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { closeSettings } from "./state/settings/nav";
 import { applyLaunchSettings, runLaunchScenario } from "./state/app/launch";
+import { appStateChanged } from "./state/app/appStateChange";
 import { rememberLaunchLookOnLeaving, useLaunchLook } from "./state/app/launchLook";
 import { frontSheet } from "./state/settings/settingsRules";
 import { inkLayer, lightStatusIcons } from "./lib/statusInk";
@@ -81,6 +83,7 @@ export default function App() {
       followDesign(applyDesign);
       startTelemetry();
       startBrowser(applyLaunchSettings);
+      startShownPage();
       startPageUi();
       startFullPageCapture();
       startSettingsSources();
@@ -115,11 +118,7 @@ export default function App() {
     const back = BackHandler.addEventListener("hardwareBackPress", () => useBoot.getState().ready && handleSystemBack());
     const state = AppState.addEventListener("change", (next) => {
       if (!useBoot.getState().ready) return;
-      if (next === "active") appBecameActive();
-      else {
-        appWillResignActive();
-        rememberLaunchLookOnLeaving();
-      }
+      appStateChanged(next, { becameActive: appBecameActive, resignActive: appWillResignActive, reportShownPage, rememberLaunchLook: rememberLaunchLookOnLeaving });
     });
     return () => {
       back.remove();

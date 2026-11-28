@@ -1,3 +1,4 @@
+import type { LaunchArguments } from "../../lib/launchArguments.ts";
 import { PINNED_TOAST, receivedToast, sentToast } from "../sync/syncRules.ts";
 import type { ToastIcon } from "../toasts/store.ts";
 import { actionWords } from "../../lib/sharedWords.ts";
@@ -29,3 +30,7 @@ export const DEMO_PRIVATE_URLS = ["https://en.wikipedia.org/wiki/Moon", "https:/
 
 export const manyTabTitle = (index: number) =>
   index % 7 === 0 ? `An exceptionally long article title that keeps going well past eighty characters to test truncation ${index}` : `Article ${index + 1}`;
+
+const LAUNCH_SHEETS = new Set(["spaces", "archive", "settings", "history", "bookmarks", "downloads"]);
+
+export const launchSheetClosesSearch = (args: Pick<LaunchArguments, "opensSettings" | "settingsPage" | "openSheet">): boolean => args.opensSettings || args.settingsPage !== null || (args.openSheet !== null && LAUNCH_SHEETS.has(args.openSheet));

@@ -2,22 +2,23 @@ package com.ardia.blocking
 
 
 internal class NetworkRule(
-    val isException: Boolean,
-    val matchCase: Boolean,
-    val party: Int,
+    private val packed: Int,
     val typeMask: Int,
-    val restrictsType: Boolean,
     val categoryBit: Int,
-    val anchor: Int,
-    val anchorEnd: Boolean,
-    val host: CharArray?,
-    val pattern: CharArray,
+    val host: String?,
+    val pattern: String,
     val regex: MeteredRegex?,
     val include: LongArray?,
     val exclude: LongArray?,
 ) {
-    private val regexNeedsWholeUrl = regex != null && ListRegex.dependsOnInputEnd(String(pattern))
-    private val isHostOnly = host != null && !anchorEnd && pattern.size == 1 && pattern[0] == '^'
+    val isException: Boolean get() = packed and FLAG_EXCEPTION != 0
+    val matchCase: Boolean get() = packed and FLAG_MATCH_CASE != 0
+    val restrictsType: Boolean get() = packed and FLAG_RESTRICTS_TYPE != 0
+    val anchorEnd: Boolean get() = packed and FLAG_ANCHOR_END != 0
+    val party: Int get() = (packed ushr SHIFT_PARTY) and 3
+    val anchor: Int get() = (packed ushr SHIFT_ANCHOR) and 3
+    private val regexNeedsWholeUrl: Boolean get() = packed and FLAG_REGEX_WHOLE_URL != 0
+    private val isHostOnly: Boolean get() = packed and FLAG_HOST_ONLY != 0
 
     fun applies(context: RequestContext): Boolean {
         if (categoryBit and context.categoryMask == 0) return false
@@ -27,11 +28,12 @@ internal class NetworkRule(
         } else if (typeMask and type.bit == 0) {
             return false
         }
-        if (party != Party.ANY) {
+        val expectedParty = party
+        if (expectedParty != Party.ANY) {
             val actual = context.thirdParty()
             if (actual == RequestContext.PARTY_UNKNOWN) {
                 if (!isException) return false
-            } else if (actual != party) {
+            } else if (actual != expectedParty) {
                 return false
             }
         }
@@ -95,39 +97,72 @@ internal class NetworkRule(
     fun hostEquals(context: RequestContext, start: Int): Boolean {
         val expected = host ?: return false
         val end = context.hostEnd
-        if (end - start != expected.size) return false
+        if (end - start != expected.length) return false
         val chars = context.lower
-        for (offset in expected.indices) if (chars[start + offset] != expected[offset]) return false
+        for (offset in 0 until expected.length) if (chars[start + offset] != expected[offset]) return false
         return true
     }
 
     companion object {
-        fun from(filter: NetworkFilter, categoryBit: Int, regex: MeteredRegex?): NetworkRule = NetworkRule(
-            isException = filter.isException,
-            matchCase = filter.matchCase,
-            party = filter.party,
-            typeMask = filter.typeMask,
-            restrictsType = filter.restrictsType,
-            categoryBit = if (filter.isException) ALL_CATEGORIES else categoryBit,
-            anchor = filter.anchor,
-            anchorEnd = filter.anchorEnd,
-            host = filter.host?.toCharArray(),
-            pattern = filter.pattern.toCharArray(),
-            regex = regex,
-            include = DomainMatch.hashes(filter.includeDomains),
-            exclude = DomainMatch.hashes(filter.excludeDomains),
-        )
+        private const val FLAG_EXCEPTION = 1
+        private const val FLAG_MATCH_CASE = 1 shl 1
+        private const val FLAG_RESTRICTS_TYPE = 1 shl 2
+        private const val FLAG_ANCHOR_END = 1 shl 3
+        private const val FLAG_REGEX_WHOLE_URL = 1 shl 4
+        private const val FLAG_HOST_ONLY = 1 shl 5
+        private const val SHIFT_PARTY = 6
+        private const val SHIFT_ANCHOR = 8
+
+        fun from(
+            filter: NetworkFilter,
+            categoryBit: Int,
+            regex: MeteredRegex?,
+            domainIntern: HashMap<DomainKey, LongArray>? = null,
+        ): NetworkRule {
+            val pattern = filter.pattern
+            val hostOnly = filter.host != null && !filter.anchorEnd && pattern.length == 1 && pattern[0] == '^'
+            val wholeUrl = regex != null && ListRegex.dependsOnInputEnd(pattern)
+            var flags = 0
+            if (filter.isException) flags = flags or FLAG_EXCEPTION
+            if (filter.matchCase) flags = flags or FLAG_MATCH_CASE
+            if (filter.restrictsType) flags = flags or FLAG_RESTRICTS_TYPE
+            if (filter.anchorEnd) flags = flags or FLAG_ANCHOR_END
+            if (wholeUrl) flags = flags or FLAG_REGEX_WHOLE_URL
+            if (hostOnly) flags = flags or FLAG_HOST_ONLY
+            flags = flags or ((filter.party and 3) shl SHIFT_PARTY)
+            flags = flags or ((filter.anchor and 3) shl SHIFT_ANCHOR)
+            return NetworkRule(
+                packed = flags,
+                typeMask = filter.typeMask,
+                categoryBit = if (filter.isException) ALL_CATEGORIES else categoryBit,
+                host = filter.host,
+                pattern = pattern,
+                regex = regex,
+                include = DomainMatch.hashes(filter.includeDomains, domainIntern),
+                exclude = DomainMatch.hashes(filter.excludeDomains, domainIntern),
+            )
+        }
 
         const val ALL_CATEGORIES = -1
     }
 }
 
+internal class DomainKey(val hashes: LongArray) {
+    private val code = hashes.contentHashCode()
+
+    override fun hashCode(): Int = code
+
+    override fun equals(other: Any?): Boolean = other is DomainKey && hashes.contentEquals(other.hashes)
+}
+
 internal object DomainMatch {
-    fun hashes(domains: List<String>): LongArray? {
+    fun hashes(domains: List<String>, intern: HashMap<DomainKey, LongArray>? = null): LongArray? {
         if (domains.isEmpty()) return null
         val hashes = LongArray(domains.size) { HostHash.of(domains[it]) }
         hashes.sort()
-        return hashes
+        if (intern == null) return hashes
+        val key = DomainKey(hashes)
+        return intern.getOrPut(key) { hashes }
     }
 
     fun applies(suffixes: LongArray, count: Int, include: LongArray?, exclude: LongArray?): Boolean {
@@ -141,9 +176,9 @@ internal object DomainMatch {
 }
 
 internal object Glob {
-    fun matches(pattern: CharArray, text: CharArray, from: Int, to: Int, anchoredStart: Boolean, anchoredEnd: Boolean, context: RequestContext): Boolean {
+    fun matches(pattern: String, text: CharArray, from: Int, to: Int, anchoredStart: Boolean, anchoredEnd: Boolean, context: RequestContext): Boolean {
         val budget = context.globSteps
-        val patternEnd = pattern.size
+        val patternEnd = pattern.length
         var p = 0
         var s = from
         var starP = if (anchoredStart) -1 else 0
@@ -264,7 +299,8 @@ internal class RuleIndex private constructor(
                 candidates[index] = tokens
                 for (token in tokens) frequency[token] = (frequency[token] ?: 0) + 1
             }
-            val rules = Array(filters.size) { NetworkRule.from(filters[it], categories[it], regexes[it]) }
+            val domainIntern = HashMap<DomainKey, LongArray>()
+            val rules = Array(filters.size) { NetworkRule.from(filters[it], categories[it], regexes[it], domainIntern) }
             val byHost = LongBuckets.Builder()
             val byToken = LongBuckets.Builder()
             val byPageDomain = LongBuckets.Builder()

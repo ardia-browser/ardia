@@ -22,6 +22,9 @@ const ATTEMPT_CAP: u64 = 1_000_000;
 pub trait Sealer {
     fn seal(&self, plain: &[u8], purpose: &str) -> io::Result<Vec<u8>>;
     fn open(&self, sealed: &[u8], purpose: &str) -> Option<Zeroizing<Vec<u8>>>;
+    fn open_unbound(&self, sealed: &[u8]) -> Option<Zeroizing<Vec<u8>>> {
+        self.open(sealed, "")
+    }
 }
 
 pub trait Vault {
@@ -32,6 +35,7 @@ pub trait Vault {
 pub struct Layout {
     pub rnw_data: PathBuf,
     pub rnw_config: PathBuf,
+    pub rnw_chromium: PathBuf,
     pub webui_data: PathBuf,
     pub credential_prefix: String,
     pub test_instance: bool,
@@ -45,6 +49,7 @@ impl Layout {
         Layout {
             rnw_data: local_app_data.join(RNW_FOLDER),
             rnw_config: roaming_app_data.join(RNW_FOLDER),
+            rnw_chromium: local_app_data.join(RNW_FOLDER).join(names::CHROMIUM_USER_DATA),
             webui_data: local_app_data.join(WEBUI_FOLDER),
             credential_prefix: names::credential_prefix(None),
             test_instance,
@@ -55,6 +60,7 @@ impl Layout {
         let rnw = PathBuf::from(rnw_data);
         Layout {
             rnw_config: rnw.join(names::CONFIG_FOLDER),
+            rnw_chromium: rnw.join(names::CHROMIUM_FOLDER),
             rnw_data: rnw,
             webui_data: webui_data.to_path_buf(),
             credential_prefix: names::credential_prefix(Some(rnw_data)),
@@ -66,6 +72,10 @@ impl Layout {
 #[derive(Default)]
 pub struct Faults {
     pub fail_at_commit: Option<usize>,
+    pub fail_at_file: Option<usize>,
+    pub free_space: Option<u64>,
+    pub crash_at_commit: Option<usize>,
+    pub crash_in_rollback_at: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -285,8 +295,21 @@ pub fn overlapping(a: &Path, b: &Path) -> bool {
     fsafe::within(a, b) || fsafe::within(b, a)
 }
 
+pub(crate) fn source_root(path: &Path) -> Result<Option<Root>, ()> {
+    match fsafe::entry(path) {
+        Ok(Entry::Missing) => Ok(None),
+        Ok(Entry::Directory) => Root::new(path).map(Some).map_err(|_| ()),
+        _ => Err(()),
+    }
+}
+
 pub fn check_layout(layout: &Layout) -> io::Result<()> {
-    for path in [&layout.rnw_data, &layout.rnw_config, &layout.webui_data] {
+    for path in [
+        &layout.rnw_data,
+        &layout.rnw_config,
+        &layout.rnw_chromium,
+        &layout.webui_data,
+    ] {
         if !absolute(path) {
             return Err(fsafe::unsafe_path(path.clone()));
         }
@@ -295,8 +318,8 @@ pub fn check_layout(layout: &Layout) -> io::Result<()> {
         fsafe::check_ancestors(path)?;
     }
     let webui = resolved(&layout.webui_data)?;
-    let rnw_user_data = layout.rnw_data.join(names::CHROMIUM_USER_DATA);
-    for theirs in [&layout.rnw_data, &layout.rnw_config, &rnw_user_data] {
+    fsafe::check_ancestors(&layout.rnw_chromium)?;
+    for theirs in [&layout.rnw_data, &layout.rnw_config, &layout.rnw_chromium] {
         if overlapping(&webui, &resolved(theirs)?) || overlapping(&layout.webui_data, theirs) {
             return Err(fsafe::unsafe_path(theirs.clone()));
         }
@@ -309,14 +332,14 @@ pub fn check_layout(layout: &Layout) -> io::Result<()> {
     Ok(())
 }
 
-fn read_report(root: &Root, name: &str) -> Option<Value> {
+pub(crate) fn read_report(root: &Root, name: &str) -> Option<Value> {
     match root.dir().read(name, SECRET_FILE_LIMIT).ok()? {
         Fetched::Data(bytes) => serde_json::from_slice::<Value>(&bytes).ok().filter(Value::is_object),
         _ => None,
     }
 }
 
-fn valid_run(report: &Value) -> bool {
+pub(crate) fn valid_run(report: &Value) -> bool {
     report
         .get("run")
         .and_then(Value::as_str)
@@ -733,11 +756,6 @@ pub fn migrate(layout: &Layout, sealer: &dyn Sealer, vault: &dyn Vault, faults: 
             report.failed_stage = Some(Stage::Layout);
             return finish(report);
         }
-    };
-    let source_root = |path: &Path| match fsafe::entry(path) {
-        Ok(Entry::Missing) => Ok(None),
-        Ok(Entry::Directory) => Root::new(path).map(Some).map_err(|_| ()),
-        _ => Err(()),
     };
     let (Ok(rnw_data), Ok(rnw_config)) = (source_root(&layout.rnw_data), source_root(&layout.rnw_config)) else {
         return refuse(report, Stage::Layout);

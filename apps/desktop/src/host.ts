@@ -47,6 +47,10 @@ export function hostProfile(profile: string | undefined, host: ArdiaHost = ardia
   return profile || host.bootstrap.profileId;
 }
 
+export function shellProfile(engine: string, host: Pick<ArdiaHost, "bootstrap"> = ardiaHost!) {
+  return engine === host.bootstrap.profileId ? "" : engine;
+}
+
 export function invokeHost<T = unknown>(method: string, args: Record<string, unknown>, host: ArdiaHost = ardiaHost!): Promise<T> {
   if (!host) return Promise.reject(new Error(`Ardia host unavailable: ${method}`));
   return Promise.resolve().then(() => host.invoke(method, args)) as Promise<T>;

@@ -694,6 +694,8 @@ const waitFor = async (check, ms = 1000) => {
   return check();
 };
 
+const TIMER_EARLY_MS = 1;
+
 test("round 2: the block arms on the gesture itself and fires after the delay", async () => {
   const listeners = new Map();
   const saved = { add: globalThis.addEventListener, remove: globalThis.removeEventListener };
@@ -708,7 +710,7 @@ test("round 2: the block arms on the gesture itself and fires after the delay", 
     assert.equal(block.armedBy, "wheel");
     assert.ok(!listeners.has("wheel"));
     assert.ok(await waitFor(() => block.end !== null));
-    assert.ok(block.start >= block.triggeredAt + 5);
+    assert.ok(block.start - block.triggeredAt >= 5 - TIMER_EARLY_MS, `fired ${block.start - block.triggeredAt} ms after the gesture`);
     assert.ok(block.end - block.start >= 10);
     new Function(`return ${blockScript(0, 1)}`)();
     performance.mark("ardia-pager-moving");

@@ -18,7 +18,7 @@ import { clearArchivedTabs, currentTabs, setAutoArchiveInterval } from "../tabs/
 import type { AutoArchiveInterval } from "../tabs/tabModels";
 import { countUsage } from "../telemetry/telemetry";
 import { closeSettings } from "./nav";
-import type { ColorChoice, NightShadeMode, Preferences, SwipeNavigationMode } from "./preferences";
+import { clampPageCornerRadius, type ColorChoice, type NightShadeMode, type Preferences, type SwipeNavigationMode } from "./preferences";
 import { clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
 import { currentPreferences, setPreference } from "./store";
 
@@ -85,6 +85,8 @@ export function setMaterialYou(on: boolean) {
 }
 export const setInterfaceStyle = (choice: InterfaceStyleChoice) => setPreference("interfaceStyle", choice);
 export const setSchemeChoice = (choice: SchemeChoice) => setPreference("schemeChoice", choice);
+export const setPageBorder = (on: boolean) => setPreference("pageBorder", on);
+export const setPageCornerRadius = (radius: number) => setPreference("pageCornerRadius", clampPageCornerRadius(radius));
 export const setArchiveInterval = (interval: AutoArchiveInterval) => setAutoArchiveInterval(interval);
 
 export function setDefaultNightShade(mode: NightShadeMode) {

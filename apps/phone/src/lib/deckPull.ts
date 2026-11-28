@@ -68,6 +68,7 @@ export type DeckHit = { ids: readonly string[]; scroll: number; g: DeckGeometry 
 export function deckCardAt(hit: DeckHit, x: number, y: number): string | null {
   "worklet";
   const { g, ids, scroll } = hit;
+  if ((g.cardsLeft > 0 || g.cardsRight < g.width) && (x < g.cardsLeft || x > g.cardsRight)) return null;
   for (let index = ids.length - 1; index >= 0; index--) {
     const relative = index - scroll;
     const scale = deckPileScale(g, relative);

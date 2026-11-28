@@ -27,6 +27,8 @@ public final class WebEngine {
   @ObservationIgnored public var onPopup: (@MainActor (_ opener: WebTab, _ popup: WebTab) -> Void)?
   @ObservationIgnored public var onOpenLink: (@MainActor (_ url: URL, _ opener: UUID, _ inBackground: Bool) -> Void)?
   @ObservationIgnored public var onPrivateBrowsingEnded: (@MainActor () -> Void)?
+  @ObservationIgnored public private(set) var shownTabID: UUID?
+  @ObservationIgnored public var onPageProcess: (@MainActor (_ tab: UUID, _ outcome: PageProcessOutcome, _ isPrivate: Bool) -> Void)?
   @ObservationIgnored public var omnibox: Omnibox?
   @ObservationIgnored private let pageScriptControllers = NSHashTable<WKUserContentController>.weakObjects()
   @ObservationIgnored private var sharedPrivateDataStore: WKWebsiteDataStore?
@@ -77,7 +79,13 @@ public final class WebEngine {
       return page
     }()
     roster.activate(id)
+    page.pageShown()
     return page
+  }
+
+  func revive(_ page: WebTab) {
+    guard roster.page(page.id) === page else { return }
+    roster.activate(page.id)
   }
 
   public func existingWebTab(_ id: UUID) -> WebTab? {
@@ -239,8 +247,14 @@ public final class WebEngine {
     }
   }
 
-  public func discardBackgroundTabs() {
-    roster.discardAll(except: tabs.selectedTabID)
+  public func discardBackgroundTabs(keepingShown: Bool = true) {
+    roster.discardAll(keeping: Set([tabs.selectedTabID, keepingShown ? shownTabID : nil].compactMap { $0 }))
+  }
+
+  public func show(_ id: UUID?) {
+    guard shownTabID != id else { return }
+    shownTabID = id
+    if let id { roster.page(id)?.pageShown() }
   }
 
   public func saveAll() {
@@ -269,6 +283,15 @@ public final class WebEngine {
         self?.discardBackgroundTabs()
       }
     })
+    notificationTasks.append(Task { [weak self] in
+      for await _ in center.notifications(named: UIApplication.didBecomeActiveNotification).map({ _ in () }) {
+        self?.pagesShown()
+      }
+    })
+  }
+
+  private func pagesShown() {
+    if let shownTabID { roster.page(shownTabID)?.pageShown() }
   }
 
   isolated deinit {

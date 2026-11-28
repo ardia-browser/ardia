@@ -6,6 +6,8 @@ let missingProfiles = 0;
 let joinWaits = 0;
 let passwordReplaces = 0;
 let passwordReplaceFailures = 0;
+let passwordAdds = 0;
+let passwordAddFailures = 0;
 
 export const noteSessionRebase = (token: ConsentToken | null) => counted(token, () => void rebases++);
 
@@ -19,6 +21,12 @@ export const notePasswordReplace = (token: ConsentToken | null, saved: boolean) 
     if (!saved) passwordReplaceFailures++;
   });
 
+export const notePasswordAdd = (token: ConsentToken | null, saved: boolean) =>
+  counted(token, () => {
+    passwordAdds++;
+    if (!saved) passwordAddFailures++;
+  });
+
 export const takeSyncDataCounts = () => ({ ...takeOpenTabSyncCounts(), ...takeSyncSafetyCounts() });
 
 function takeSyncSafetyCounts() {
@@ -28,7 +36,9 @@ function takeSyncSafetyCounts() {
     sync_join_waits: joinWaits,
     sync_password_replaces: passwordReplaces,
     sync_password_replace_failures: passwordReplaceFailures,
+    sync_password_adds: passwordAdds,
+    sync_password_add_failures: passwordAddFailures,
   };
-  rebases = missingProfiles = joinWaits = passwordReplaces = passwordReplaceFailures = 0;
+  rebases = missingProfiles = joinWaits = passwordReplaces = passwordReplaceFailures = passwordAdds = passwordAddFailures = 0;
   return taken;
 }

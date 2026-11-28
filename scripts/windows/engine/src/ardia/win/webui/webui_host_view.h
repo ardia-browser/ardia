@@ -132,6 +132,8 @@ class PageBinding : public content::WebContentsObserver {
   void ReportNavigation();
   void ReportFind(base::DictValue result);
   void ReportClosed();
+  base::DictValue FullscreenEvent(bool fullscreen) const;
+  void ReportFullscreen(bool fullscreen);
   ardiacore::LinuxFind* Find();
 
  private:
@@ -139,6 +141,8 @@ class PageBinding : public content::WebContentsObserver {
   void TitleWasSet(content::NavigationEntry* entry) override;
   void DidStartLoading() override;
   void DidStopLoading() override;
+  void DidToggleFullscreenModeForTab(bool entered,
+                                     bool will_cause_resize) override;
   void WebContentsDestroyed() override;
 
   bool CanReport() const;
@@ -301,6 +305,8 @@ class ShellHostView : public views::View,
   base::DictValue WindowState() const;
   base::ListValue WindowFrame() const;
   void ReportWindowState();
+  bool PageHoldsFullScreen() const;
+  void ReleasePageFullScreen();
   void WatchSystemState();
   void NoteUnhandled(const std::string& method);
   views::Widget* widget() const;

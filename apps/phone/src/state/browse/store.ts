@@ -16,6 +16,7 @@ import {
   type SnapshotTiming,
   storeTone,
   type PageEngineEvent,
+  type PageProcessOutcome,
   type PageState,
   type PageTone,
 } from "../pages/store";
@@ -117,6 +118,8 @@ export function startBrowser(beforeOpening: () => void = () => undefined) {
 }
 
 let appActive = true;
+
+export const appIsActive = () => appActive;
 
 const SCROLL_REST_IS_REPORTED = Platform.OS === "ios";
 
@@ -1090,6 +1093,7 @@ function pageEvent(event: PageEngineEvent) {
   if (event.name === "page.visited") pageVisited(event.pageId, event.url, event.title, event.kind);
   else if (event.name === "page.state" && currentTabs().selectedId !== event.pageId) backgroundPageState(event.pageId, event.state);
   else if (event.name === "page.closeRequested") closeTabById(event.pageId);
+  else if (event.name === "page.processEnded") pageProcessEnded(event.pageId, event.outcome);
   else if (event.name === "page.snapshotLanded") snapshotLanded(event.pageId, event.uri, event.generation);
   else if (event.name === "page.viewMoved") noteViewMoved(event.pageId, event.viewId, event.view);
   else if (event.name === "page.scrollSettled") frontScrollCameToRest(event.pageId, event.y, frontPageId(), pictureScrolledOrQuietPage);
@@ -1226,7 +1230,6 @@ function scheduleSnapshot(id: string, tries = SNAPSHOT_RETRIES) {
 function backgroundPageState(id: string, state: PageState) {
   const tab = findTab(currentTabs(), id);
   if (!tab) return;
-  noteCrash(tab, state);
   keepTitleThroughFailure(tab, state);
   const patch = pageStatePatch(tab, state, false);
   if (patch) updateTabById(id, patch);
@@ -1234,8 +1237,6 @@ function backgroundPageState(id: string, state: PageState) {
   loading.set(id, state.isLoading);
   if (wasLoading && !state.isLoading) scheduleSnapshot(id);
 }
-
-const crashedPages = new Set<string>();
 
 const titlesBeforeLoad = new Map<string, string>();
 
@@ -1247,21 +1248,17 @@ function keepTitleThroughFailure(tab: BrowserTab, state: PageState) {
   if (title !== null) updateTabById(tab.id, { title });
 }
 
-function noteCrash(tab: BrowserTab, state: PageState) {
-  if (state.failure?.kind !== "crashed") {
-    crashedPages.delete(tab.id);
-    return;
-  }
-  if (crashedPages.has(tab.id)) return;
-  crashedPages.add(tab.id);
-  if (!tab.isPrivate) countUsage("page_processes_gone");
+const PROCESS_OUTCOME_COUNTS = { gone: "page_processes_gone", recovered: "page_processes_recovered", failed: "page_process_recoveries_failed" } as const;
+
+function pageProcessEnded(id: string, outcome: PageProcessOutcome) {
+  const tab = findTab(currentTabs(), id);
+  if (tab && !tab.isPrivate) countUsage(PROCESS_OUTCOME_COUNTS[outcome]);
 }
 
 export function pageStateChanged(id: string, state: PageState) {
   storeNavigation(id, state);
   const tab = findTab(currentTabs(), id);
   if (!tab) return;
-  noteCrash(tab, state);
   keepTitleThroughFailure(tab, state);
   const title = state.failure ? null : state.title.trim() ? state.title : null;
   const patch = pageStatePatch(tab, state, true);

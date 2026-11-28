@@ -177,7 +177,7 @@ test("the native host follows the window's engine profile, once per engine chang
   await tick();
   stop();
   assert.deepEqual(host.calls.filter(([method]) => method === "ArdiaShell.setActiveProfile").map(([, { args }]) => args),
-    [["", 1], [work, 2], ["", 3]], "sharing profiles keep the engine profile, so only engine changes reach the host");
+    [["default", 1], [work, 2], ["default", 3]], "sharing profiles keep the engine profile, so only engine changes reach the host, and the default profile goes by the host's own name, as every other call sends it");
 });
 
 test("a private window never reports an active engine profile", async () => {

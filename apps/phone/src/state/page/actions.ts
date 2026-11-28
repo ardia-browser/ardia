@@ -796,6 +796,9 @@ function pageEvent(event: PageEngineEvent) {
       if (field) countUsage(field);
       return;
     }
+    case "page.summaryShared":
+      if (!event.isPrivate) countUsage("page_summaries_shared");
+      return;
     case "page.summarySettled":
       if (!event.isPrivate) for (const field of [...pageSummarySettledCounts(event.outcome, event.chatGPTFellBack), ...geminiNanoMissingCount(event.geminiNanoMissing)]) countUsage(field);
       return;

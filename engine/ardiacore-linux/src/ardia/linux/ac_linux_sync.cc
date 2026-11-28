@@ -6,6 +6,7 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <map>
 #include <set>
 #include <utility>
 
@@ -115,7 +116,10 @@ StoredLogin::StoredLogin(std::string realm, std::string username, std::string&& 
 }
 
 StoredLogin::StoredLogin(StoredLogin&& other) noexcept
-    : realm(std::move(other.realm)), username(std::move(other.username)), created_ms(other.created_ms) {
+    : realm(std::move(other.realm)),
+      username(std::move(other.username)),
+      created_ms(other.created_ms),
+      modified_ms(other.modified_ms) {
   TakeSecret(password, other.password);
 }
 
@@ -124,6 +128,7 @@ StoredLogin& StoredLogin::operator=(StoredLogin&& other) noexcept {
     realm = std::move(other.realm);
     username = std::move(other.username);
     created_ms = other.created_ms;
+    modified_ms = other.modified_ms;
     TakeSecret(password, other.password);
   }
   return *this;
@@ -580,13 +585,33 @@ Outcome SyncCore::SaveKit(const std::string& path, std::string_view created) {
 Outcome SyncCore::SealLogins(LoginRead read) {
   if (!keys_ || !read.complete) return Outcome::Value(JsonValue::Null());
   JsonValue logins = JsonValue::Array();
-  std::set<std::pair<std::string, std::string>> seen;
-  for (StoredLogin& login : read.logins) {
-    auto origin = login.password.empty() || login.password.size() > kMaxLoginPasswordBytes ||
-                          login.username.size() > kMaxLoginUsernameBytes
-                      ? std::nullopt
-                      : LoginOrigin(login.realm);
-    if (!origin || !seen.emplace(*origin, login.username).second) continue;
+  std::vector<std::optional<std::string>> origins;
+  origins.reserve(read.logins.size());
+  std::map<std::pair<std::string, std::string>, size_t> newest;
+  for (size_t index = 0; index < read.logins.size(); ++index) {
+    const StoredLogin& login = read.logins[index];
+    origins.push_back(login.password.empty() || login.username.size() > kMaxLoginUsernameBytes
+                          ? std::nullopt
+                          : LoginOrigin(login.realm));
+    if (!origins.back()) continue;
+    auto [found, added] = newest.emplace(std::make_pair(*origins.back(), login.username), index);
+    if (!added && login.modified_ms > read.logins[found->second].modified_ms) found->second = index;
+  }
+  for (size_t index = 0; index < read.logins.size(); ++index) {
+    StoredLogin& login = read.logins[index];
+    const std::optional<std::string>& origin = origins[index];
+    if (!origin || newest[{*origin, login.username}] != index) {
+      Wipe(login.password);
+      continue;
+    }
+    if (login.password.size() > kMaxLoginPasswordBytes) {
+      Wipe(login.password);
+      logins.Append(JsonValue::Object({{"origin", JsonValue::String(*origin)},
+                                       {"username", JsonValue::String(login.username)},
+                                       {"passwordless", JsonValue::Bool(true)},
+                                       {"created", JsonValue::Number(login.created_ms)}}));
+      continue;
+    }
     auto sealed = keys_->SealPassword(login.password, *origin, login.username);
     Wipe(login.password);
     if (!sealed) {

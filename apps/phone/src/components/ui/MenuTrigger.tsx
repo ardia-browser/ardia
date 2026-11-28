@@ -28,6 +28,7 @@ type Props = {
   frost?: string | null;
   restoresAfterChoice?: boolean;
   place?: ViewStyle;
+  drawn?: boolean;
   previewRadius?: number;
   dark?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -81,7 +82,7 @@ export const onNativeMenuOpened = (handler: (privately: boolean) => void) => {
 };
 
 export function MenuTrigger(props: Props) {
-  return nativeMenus() ? <NativeTrigger {...props} /> : <DrawnTrigger {...props} />;
+  return nativeMenus() && !props.drawn ? <NativeTrigger {...props} /> : <DrawnTrigger {...props} />;
 }
 
 function NativeTrigger({ items, trigger = "longPress", fixedOrder, onOpen, onClose, disabled, privately = false, previewRadius, dark, style, testID, children }: Props) {

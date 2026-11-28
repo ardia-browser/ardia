@@ -28,16 +28,18 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
 - **Say when an instruction caused it.** When the owner asks for a change to something you did and it came out
   that way because you followed an instruction (this file, a doc, a skill), say so at once and name the
   instruction, so it can be fixed where it is written.
-- **Ask Codex for a second opinion** on risky logic (races, lifetimes, security, migrations, sync) and reviews,
-  before and after the change. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
+- **Ask Codex for a second opinion** only on risky logic (races, lifetimes, crashes, security, migrations, sync,
+  engine), before and after the change. UI, copy, theme, layout and screenshot PRs get CI and a capture, not Codex. Ask a Codex subagent, not the CLI: T3's `delegate_task` with
   `target: {providerInstanceId: "codex", model: "gpt-6.2-sol", options: {reasoningEffort: "high"}}` (the model rejects `serviceTier`; a `400 Bad Request` is usually a
   flaky service or an oversized request, so keep the reviewer's command outputs small and retry with a new id),
   `role: "review"`, `mode: "async"`, and a new `clientRequestId` per round. Codex may run any command it needs
   (builds, tests, scripts, hidden instances, captures) in its own target and data dirs, but never writes, edits,
   formats or stages code. Give it the full brief each round (it doesn't share your context), including what you
   changed since the last round, how you verified it and which earlier findings you fixed or rejected and why.
-  Reproduce each finding before fixing it. Cap review loops at 5 rounds per PR (stop earlier once approved
-  or only nits remain; if blockers stay open after round 5, stop and escalate to the owner).
+  Round 1 asks for every finding at once, nits included, ranked by severity, so later rounds only check fixes.
+  Reproduce each finding before fixing it. Cap review loops at 2 rounds per PR, plus a third only for a
+  high-severity finding still open (stop earlier once approved or only nits remain). Blockers still open after
+  that go to the owner with the finding and its repro; nits go in a follow-up issue, not another round.
 - **The system improves and heals itself.** "The system" is everything agents work with: this file, the docs,
   skills and briefs, the scripts and tools, the build and test machinery, the review loop and how agents are
   orchestrated. When anything goes wrong, fix the cause in the system so the next agent can't hit it, then carry
@@ -284,6 +286,9 @@ cross-builds. Don't spin up Boat VMs.
     and Codex are for engine, native lifetime, focus, quit or security changes, and run once at the end.
   - After a fix, test that fix and move on. Don't re-run the full suite, the whole release sequence or
     checks that already passed; run only what covers the fix (the failed row, the smoke checks for its area).
+- **Build the whole app before you push native code.** A Swift, Kotlin or Objective-C change is built in the full
+  app target (the iPhone app for `packages/phone/ios`, the Android app for `packages/phone/android`), not only the
+  test target, before the push: a file the tests don't compile still breaks CI.
 - **Build safely.** Build the app with `scripts/agent/build-app --as <you>`: quiet, in parallel with other agents'
   builds, and it refuses JS-only changes. Run `pod install`/`pnpm install` and Chromium builds through
   `scripts/agent/locked <pod|chromium> -- <command>` (usage in the script); its lock dies with its holder.

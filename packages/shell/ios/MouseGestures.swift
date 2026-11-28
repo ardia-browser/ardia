@@ -136,7 +136,7 @@ final class MouseGestures {
       lastOutcome = "unrecognized"
       return nil
     }
-    guard window !== NSApp.keyWindow || MenuTarget.shared.validateMenuItem(item) else {
+    guard !pageTab.isEmpty || window !== NSApp.keyWindow || MenuTarget.shared.validateMenuItem(item) else {
       lastOutcome = "unavailable:\(action.command)"
       return nil
     }

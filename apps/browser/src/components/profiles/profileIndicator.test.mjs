@@ -4,7 +4,7 @@ import { mount } from "../../test-hooks.mjs";
 
 const { useBrowser } = await import("../../state/browser/store.ts");
 const { WindowContext } = await import("../../state/browser/hooks.ts");
-const { HeaderAppMenu, ProfileIndicator, useAppMenuInHeader, useProfileIndicatorWidth } = await import("./ProfileIndicator.tsx");
+const { HeaderAppMenu, ProfileIndicator, profileIndicatorX, sidebarProfileRow, useAppMenuInHeader, useProfileIndicatorWidth } = await import("./ProfileIndicator.tsx");
 
 const S = () => useBrowser.getState();
 
@@ -40,4 +40,30 @@ test("the shared header keeps no app menu of its own: only Linux draws one there
   const windowId = windowWithTwoProfiles();
   assert.equal(rendered(windowId, () => useAppMenuInHeader()), false);
   assert.equal(HeaderAppMenu({ size: 28 }), null);
+});
+
+test("in full screen the sidebar header centres the profile name at every sidebar width, with or without Downloads beside it (#4680)", () => {
+  for (const width of [150, 205, 260, 390, 480]) {
+    for (const downloadsRoom of [0, 36]) {
+      const row = sidebarProfileRow({ width, fullScreen: true, edge: 8, captionRoom: 0, downloadsRoom });
+      assert.equal(row.centered, true);
+      const chip = Math.min(row.room, 60);
+      const freeLeft = row.left;
+      const freeRight = width - row.right - downloadsRoom;
+      const chipLeft = freeLeft + (freeRight - freeLeft - chip) / 2;
+      assert.equal(chipLeft + chip / 2, width / 2, `width ${width}, downloads ${downloadsRoom}`);
+      assert.equal(row.room, width - 2 * (8 + downloadsRoom));
+    }
+  }
+});
+
+test("outside full screen the profile name still starts right of the traffic lights, as Dia's header stack places it", () => {
+  for (const width of [205, 390]) {
+    const row = sidebarProfileRow({ width, fullScreen: false, edge: 8, captionRoom: 0, downloadsRoom: 36 });
+    assert.deepEqual(row, { left: profileIndicatorX(), right: 8, room: width - profileIndicatorX() - 8 - 36, centered: false });
+  }
+});
+
+test("a full-screen header never hands the name negative room on a very narrow sidebar", () => {
+  assert.equal(sidebarProfileRow({ width: 40, fullScreen: true, edge: 8, captionRoom: 0, downloadsRoom: 36 }).room, 0);
 });

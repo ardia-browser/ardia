@@ -16,6 +16,18 @@ const MIN_CUT_NAME = 52;
 const ICON_WIDTH = 32;
 export const profileIndicatorX = () => Math.max(WINDOW_CHROME.leadingWidth + 6, CARD_INSET);
 
+type SidebarProfileRowInput = { width: number; fullScreen: boolean; edge: number; captionRoom: number; downloadsRoom: number };
+
+export function sidebarProfileRow({ width, fullScreen, edge, captionRoom, downloadsRoom }: SidebarProfileRowInput) {
+  const right = edge + captionRoom;
+  if (fullScreen) {
+    const side = Math.max(edge, right) + downloadsRoom;
+    return { left: side, right: side - downloadsRoom, room: Math.max(0, width - 2 * side), centered: true };
+  }
+  const left = profileIndicatorX();
+  return { left, right, room: width - left - right - downloadsRoom, centered: false };
+}
+
 function useIndicator(room: number, profileShown: boolean) {
   const theme = useTheme();
   const incognito = useIsIncognito();

@@ -3,6 +3,7 @@ import { tabTitle } from "../browser/model";
 import type { GroupColor, Tab } from "../browser/types";
 import { isPeekTab } from "../peek/peek";
 import { sharedTabsIn, sharesTabs } from "../tabs/tabShare";
+import { recentlyClosedIn } from "../windows/recentlyClosedList";
 
 export type Row =
   | { kind: "tab"; id: string; title: string; url: string; favicon: string | null; icon: string | null; where: string | null; current: boolean }
@@ -32,7 +33,7 @@ function candidates(s: BrowserState, windowId: string): { open: Row[]; closed: R
     ...s.closedTabs
       .filter((c) => c.tab.profileId === profileId)
       .map((c) => ({ kind: "closed" as const, id: c.id, title: tabTitle(c.tab), url: c.tab.url, favicon: c.tab.favicon, icon: c.tab.customIcon, detail: "", at: c.closedAt })),
-    ...s.closedGroups.map((c) => ({
+    ...recentlyClosedIn(s, w).groups.map((c) => ({
       kind: "closed" as const,
       id: c.id,
       title: c.group.name,

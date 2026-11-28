@@ -5,6 +5,7 @@ import { dockMoving, lightsCenter, sidebarLightsCenter, stackedLightsCenter, sti
 import { useWindowSettings } from "../../state/browser/keyedWatch";
 import { collapsesToIconsIn } from "../../state/browser/model";
 import { cardTopInset } from "../../state/windows/layout";
+import { useToolbarRowCenter } from "../../state/windows/toolbarRow";
 import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { currentValue } from "../ui/motion";
 import { noteSidebarLightsLeftBehind } from "../../state/telemetry/dockCounts";
@@ -37,8 +38,9 @@ type SidebarLights = {
 export function useStackedLights(windowId: string, right: boolean, fullscreen: boolean, lights: readonly [number, number], frameInset: number): readonly [number, number] | null {
   const icons = useWindowSettings(windowId, (s) => collapsesToIconsIn(s, windowId));
   const shift = useWindowSettings(windowId, (s) => cardTopInset(s, windowId, frameInset) - frameInset);
+  const toolbarRow = useToolbarRowCenter(windowId);
   const on = icons && !right && !fullscreen && PLATFORM_FEATURES.stacksTrafficLights;
-  return useMemo(() => (on ? stackedLightsCenter(lights, shift) : null), [on, lights, shift]);
+  return useMemo(() => (on ? stackedLightsCenter(lights, shift, toolbarRow) : null), [on, lights, shift, toolbarRow]);
 }
 
 export function useSidebarLights(windowId: string, dock: Animated.Value, slide: Animated.Value, o: SidebarLights, onSlide: (value: number) => void = () => {}) {

@@ -20,7 +20,7 @@ export const TOP_STRIP_LIGHTS_CENTER: readonly [number, number] = [20.75, 20.75]
 export const LIGHTS_PITCH = 23;
 const LIGHT_SIDE = 14;
 export const STACKED_LIGHTS_GAP = 8;
-export const stackedLightsCenter = (lights: readonly [number, number], cardTopShift = 0): [number, number] => [ICON_STRIP.width / 2, lights[1] + cardTopShift];
+export const stackedLightsCenter = (lights: readonly [number, number], cardTopShift = 0, toolbarRow?: number): [number, number] => [ICON_STRIP.width / 2, toolbarRow ?? lights[1] + cardTopShift];
 export const stackedLightsBottom = (red: readonly [number, number]) => red[1] + 2 * LIGHTS_PITCH + LIGHT_SIDE / 2;
 export const belowStackedLights = (top: number, lightsBottom: number | null) => (lightsBottom === null ? top : Math.max(top, Math.ceil(lightsBottom) + STACKED_LIGHTS_GAP));
 

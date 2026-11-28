@@ -544,6 +544,20 @@ test("in Icons the window buttons stack in the strip's column: red stays put as 
   }
 });
 
+test("stacked red follows the toolbar row the window measured, snapped to a device pixel, and falls back to the constant without one", async () => {
+  const { noteToolbarRowCenter, useToolbarRows } = await import("../../state/windows/toolbarRow.ts");
+  assert.deepEqual(dm.stackedLightsCenter(dm.LIGHTS_CENTER, 6, 30.2), [23, 30.2], "a measured row wins over the constant and the card shift");
+  noteToolbarRowCenter("w-row", 30.2);
+  const snapped = useToolbarRows.getState()["w-row"];
+  assert.ok(Math.abs(snapped - 30.2) <= 0.5 && Number.isInteger(snapped * 2), `on the device grid: ${snapped}`);
+  const before = useToolbarRows.getState();
+  noteToolbarRowCenter("w-row", 30.21);
+  assert.equal(useToolbarRows.getState(), before, "the same pixel row doesn't republish");
+  noteToolbarRowCenter("w-row", null);
+  assert.equal(useToolbarRows.getState()["w-row"], undefined, "cleared when the toolbar goes");
+  assert.deepEqual(dm.stackedLightsCenter(dm.LIGHTS_CENTER, 0, undefined), [23, dm.LIGHTS_CENTER[1]]);
+});
+
 test("the strip's icons start below the stacked green button, and nothing moves where the lights don't stack", () => {
   const red = dm.stackedLightsCenter(dm.LIGHTS_CENTER);
   const greenBottom = red[1] + 2 * dm.LIGHTS_PITCH + 7;

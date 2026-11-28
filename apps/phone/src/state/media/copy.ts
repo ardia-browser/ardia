@@ -4,7 +4,7 @@ export const PICTURE_IN_PICTURE_COPY = {
   automaticFooter: "A playing video floats over your other apps when you leave Ardia. Its return button brings you back to its tab.",
   automaticUnsupported: "This iPhone can’t float videos, so they keep playing as sound instead.",
   keepsPlaying: "Keep playing in the background",
-  keepsPlayingFooter: "Videos and music keep playing when you switch tabs or leave Ardia.",
+  keepsPlayingFooter: "On: videos and music keep playing when you switch tabs or leave Ardia. Off: leaving Ardia pauses them.",
   miniPlayerSection: "Mini player",
   miniPlayer: "Mini player",
   miniPlayerFooter: "Shows what’s playing when its tab isn’t on screen. Tap it to go to the tab.",

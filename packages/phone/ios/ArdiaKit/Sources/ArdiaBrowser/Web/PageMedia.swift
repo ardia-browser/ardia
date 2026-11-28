@@ -630,6 +630,30 @@ public enum PageMediaScript {
   """#
 }
 
+public enum PageMediaDeparture {
+  public struct Playing: Sendable, Equatable {
+    public var pageID: String
+    public var token: String
+    public var inPictureInPicture: Bool
+    public var isFullscreen: Bool
+
+    public init(pageID: String, token: String, inPictureInPicture: Bool = false, isFullscreen: Bool = false) {
+      self.pageID = pageID
+      self.token = token
+      self.inPictureInPicture = inPictureInPicture
+      self.isFullscreen = isFullscreen
+    }
+  }
+
+  public static func pauses(_ playing: [Playing], keepsPlaying: Bool, pictureInPictureSupported: Bool, floating: Playing?) -> [Playing] {
+    guard !keepsPlaying else { return [] }
+    return playing.filter { one in
+      let goesIntoPictureInPicture = one.inPictureInPicture || (pictureInPictureSupported && one.isFullscreen) || (one.pageID == floating?.pageID && one.token == floating?.token)
+      return !goesIntoPictureInPicture
+    }
+  }
+}
+
 public enum PageMediaRetention {
   public struct Candidate: Sendable, Equatable {
     public var id: String

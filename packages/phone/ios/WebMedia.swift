@@ -10,6 +10,7 @@ final class WebMedia {
     case keptPlaying
     case playingInBackground
     case resumeRefused
+    case pausedOnLeaving
     case pictureInPictureStarted
     case pictureInPictureRefused
     case returnedToTab
@@ -288,12 +289,20 @@ final class WebMedia {
     returning.resignedActive()
     let playing = frames.flatMap { pageID, pageFrames in pageFrames.values.filter { $0.report.state == .playing }.map { (pageID, $0) } }
     leftWhilePlaying = !playing.isEmpty
+    automatic = nil
+    let floating = settings.automaticPictureInPicture && Self.pictureInPictureSupported && !WebVideoFloat.isPresentingWebVideo
+      ? playing.filter({ $0.1.report.hasVideo && $0.1.report.canPictureInPicture && !$0.1.report.inPictureInPicture && !$0.1.report.isFullscreen && host.webView($0.0)?.window != nil }).max(by: { $0.1.startedAt < $1.1.startedAt })
+      : nil
     if settings.keepsPlaying {
       for (pageID, frame) in playing { run(.leave, pageID: pageID, token: frame.report.token, seconds: nil) }
+    } else {
+      let departing = playing.map { PageMediaDeparture.Playing(pageID: $0.0, token: $0.1.report.token, inPictureInPicture: $0.1.report.inPictureInPicture, isFullscreen: $0.1.report.isFullscreen) }
+      let floatingOne = floating.map { PageMediaDeparture.Playing(pageID: $0.0, token: $0.1.report.token) }
+      for one in PageMediaDeparture.pauses(departing, keepsPlaying: false, pictureInPictureSupported: Self.pictureInPictureSupported, floating: floatingOne) where run(.pause, pageID: one.pageID, token: one.token, seconds: nil) {
+        report(.pausedOnLeaving, pageID: one.pageID)
+      }
     }
-    automatic = nil
-    guard settings.automaticPictureInPicture, Self.pictureInPictureSupported, !WebVideoFloat.isPresentingWebVideo,
-          let (pageID, frame) = playing.filter({ $0.1.report.hasVideo && $0.1.report.canPictureInPicture && !$0.1.report.inPictureInPicture && !$0.1.report.isFullscreen && host.webView($0.0)?.window != nil }).max(by: { $0.1.startedAt < $1.1.startedAt }) else { return }
+    guard let (pageID, frame) = floating else { return }
     guard run(.pictureInPicture, pageID: pageID, token: frame.report.token, seconds: nil) else { return }
     let departed = departure
     automatic = (pageID, frame.report.token, departed)

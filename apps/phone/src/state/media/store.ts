@@ -51,6 +51,7 @@ const WEB_VIDEO_COUNTS: Record<WebVideoOutcome, Counted> = {
   keptPlaying: "web_videos_kept_playing",
   playingInBackground: "media_kept_playing_background",
   resumeRefused: "media_resumes_refused",
+  pausedOnLeaving: "media_paused_on_leaving",
   pictureInPictureStarted: "auto_pip_started",
   pictureInPictureRefused: "auto_pip_refused",
   returnedToTab: "pip_returned_to_tab",

@@ -227,7 +227,7 @@ export type PageEngineEvent =
   | PageMediaEvent
   | { name: "pages.mediaReturn"; pageId: string };
 
-export type WebVideoOutcome = "floated" | "keptPlaying" | "playingInBackground" | "resumeRefused" | "pictureInPictureStarted" | "pictureInPictureRefused" | "returnedToTab";
+export type WebVideoOutcome = "floated" | "keptPlaying" | "playingInBackground" | "resumeRefused" | "pausedOnLeaving" | "pictureInPictureStarted" | "pictureInPictureRefused" | "returnedToTab";
 
 export type PageMediaState = "playing" | "paused" | "none";
 

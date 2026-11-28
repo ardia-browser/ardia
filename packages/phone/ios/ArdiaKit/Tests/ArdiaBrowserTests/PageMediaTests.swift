@@ -445,6 +445,17 @@ struct PageMediaScriptTests {
     #expect(messages.reports().last?.keepsPlaying == false)
   }
 
+  @Test func withTheSettingOffAPauseOnLeavingStaysPaused() async throws {
+    let (webView, messages) = try await load(keepsPlaying: false)
+    let report = try await startPlaying(webView, messages)
+    #expect(try await command(webView, .pause, token: report.token))
+    try await hide(webView)
+    try await Task.sleep(for: .milliseconds(800))
+    #expect(try await run(webView, "return document.getElementById('a').paused") as? Bool == true)
+    #expect(messages.reports().last?.state == .paused)
+    #expect(try await seen(webView) == ["hidden", "1"])
+  }
+
   @Test func thePageCannotTakeTheCommandEntry() async throws {
     let (webView, _) = try await load(keepsPlaying: true)
     let kept = try await run(webView, "try { window.__ardiaMediaCommand = () => 'mine'; } catch (_) {} return window.__ardiaMediaCommand('zzzzzzzzzz', 'play', 0) === false;") as? Bool
@@ -518,5 +529,23 @@ struct MediaRosterTests {
     #expect(pages[0].isLive && pages[1].isLive && pages[2].isLive)
     #expect(!pages[3].isLive && !pages[4].isLive)
     #expect(pages[5].isLive)
+  }
+}
+
+struct PageMediaDepartureTests {
+  typealias Playing = PageMediaDeparture.Playing
+
+  @Test func withTheSettingOffLeavingPausesEverythingPlayingButAVideoGoingIntoPictureInPicture() {
+    let song = Playing(pageID: "music", token: "aaaaaa")
+    let floated = Playing(pageID: "video", token: "bbbbbb")
+    let alreadyFloating = Playing(pageID: "pip", token: "cccccc", inPictureInPicture: true)
+    let fullScreen = Playing(pageID: "full", token: "dddddd", isFullscreen: true)
+    let all = [song, floated, alreadyFloating, fullScreen]
+    #expect(PageMediaDeparture.pauses(all, keepsPlaying: false, pictureInPictureSupported: true, floating: Playing(pageID: "video", token: "bbbbbb")) == [song])
+    #expect(PageMediaDeparture.pauses(all, keepsPlaying: false, pictureInPictureSupported: false, floating: nil) == [song, floated, fullScreen])
+  }
+
+  @Test func withTheSettingOnLeavingPausesNothing() {
+    #expect(PageMediaDeparture.pauses([Playing(pageID: "music", token: "aaaaaa")], keepsPlaying: true, pictureInPictureSupported: false, floating: nil).isEmpty)
   }
 }

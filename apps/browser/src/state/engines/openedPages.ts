@@ -6,6 +6,7 @@ import { webviews } from "../../platform/webviews";
 import { withDeadline } from "../../lib/deadline";
 import { adoptKind } from "../tabs/adoptIds";
 import { adoptOf } from "../tabs/pageSession";
+import { awaitsFirstPage } from "../tabs/pendingAddress";
 
 export type OpenerState = "live" | "none" | "unknown";
 
@@ -47,18 +48,27 @@ const HAS_OPENER = `post("result", window.opener ? "true" : "false")`;
 const OPENER_CHECK_MS = 400;
 const OPENER_RETRY_MS = 250;
 const OPENER_GIVE_UP_MS = 4000;
+const OPENER_FIRST_PAGE_WAIT_MS = 30_000;
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const openerAnswer = (answer: unknown): OpenerState => (answer === true ? "live" : answer === false ? "none" : "unknown");
 
-export async function openerState(tabId: string, stillWanted: () => boolean): Promise<OpenerState> {
-  const until = Date.now() + OPENER_GIVE_UP_MS;
-  while (stillWanted()) {
-    const web = webviews.get(tabId);
+export type OpenerBudget = { until: number; latest: number };
+
+export function openerBudget(): OpenerBudget {
+  const now = Date.now();
+  return { until: now + OPENER_GIVE_UP_MS, latest: now + OPENER_FIRST_PAGE_WAIT_MS };
+}
+
+export async function openerState(tabId: string, stillWanted: () => boolean, budget = openerBudget()): Promise<OpenerState> {
+  while (stillWanted() && Date.now() + OPENER_CHECK_MS <= budget.until) {
+    const firstPagePending = awaitsFirstPage(tabId);
+    if (firstPagePending) budget.until = Math.min(budget.latest, Math.max(budget.until, Date.now() + OPENER_GIVE_UP_MS));
+    const web = firstPagePending ? undefined : webviews.get(tabId);
     const state = openerAnswer(web ? await withDeadline(web.evaluate<unknown>(HAS_OPENER).catch(() => null), OPENER_CHECK_MS, null) : null);
     if (state !== "unknown") return state;
-    if (Date.now() + OPENER_RETRY_MS > until) return "unknown";
+    if (Date.now() + OPENER_RETRY_MS + OPENER_CHECK_MS > budget.until) return "unknown";
     await pause(OPENER_RETRY_MS);
   }
   return "unknown";

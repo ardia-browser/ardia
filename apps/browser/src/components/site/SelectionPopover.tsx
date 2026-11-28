@@ -5,6 +5,7 @@ import { useTabValue } from "../../state/tabs/tabWatch";
 import { consentToken, type ConsentToken } from "../../state/telemetry/client";
 import { notePageOverlay } from "../../state/telemetry/usage";
 import { defaultSearchEngine } from "../../state/settings/settings";
+import { snappedToDevicePixels } from "../../state/settings/interfaceScale";
 import { POPOVER_MOTION, PopoverSurface, space } from "../ui";
 import { searchSelection, setPageSelection, usePageSelection, type ClickModifiers, type PageSelection } from "../../state/site/selection";
 import { selectionBar } from "./tokens";
@@ -51,26 +52,35 @@ export function SelectionPopover({ tabId }: { tabId: string }) {
   );
 }
 
-function SelectionBar({ tabId, selection, zoom, area, onShown, onHidden }: { tabId: string; selection: PageSelection; zoom: number; area: { width: number; height: number }; onShown: () => void; onHidden: () => void }) {
+type Area = { width: number; height: number };
+
+export function barPlacement(rect: PageSelection["rect"], zoom: number, area: Area, width: number) {
+  const top = rect.y * zoom;
+  const bottom = (rect.y + rect.height) * zoom;
+  if (bottom < 0 || top > area.height) return null;
+  const above = top - GAP - HEIGHT >= 4;
+  const y = above ? top - GAP - HEIGHT : Math.min(bottom + GAP, area.height - HEIGHT - 4);
+  const center = (rect.x + rect.width / 2) * zoom;
+  const barWidth = snappedToDevicePixels(width);
+  const x = snappedToDevicePixels(Math.max(8, Math.min(center - barWidth / 2, area.width - barWidth - 8)));
+  return { x, y, above };
+}
+
+function SelectionBar({ tabId, selection, zoom, area, onShown, onHidden }: { tabId: string; selection: PageSelection; zoom: number; area: Area; onShown: () => void; onHidden: () => void }) {
   const [width, setWidth] = useState(0);
   const appear = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(appear, { toValue: 1, ...POPOVER_MOTION.open, useNativeDriver: true }).start();
   }, []);
-  const r = selection.rect;
-  const top = r.y * zoom;
-  const bottom = (r.y + r.height) * zoom;
-  const inPane = bottom >= 0 && top <= area.height;
+  const placement = barPlacement(selection.rect, zoom, area, width);
+  const inPane = placement !== null;
   const visible = inPane && width > 0;
   useEffect(() => {
     if (visible) onShown();
     else if (!inPane) onHidden();
   }, [visible, inPane]);
-  if (!inPane) return null;
-  const above = top - GAP - HEIGHT >= 4;
-  const y = above ? top - GAP - HEIGHT : Math.min(bottom + GAP, area.height - HEIGHT - 4);
-  const center = (r.x + r.width / 2) * zoom;
-  const x = Math.max(8, Math.min(center - width / 2, area.width - width - 8));
+  if (!placement) return null;
+  const { x, y, above } = placement;
 
   return (
     <Animated.View

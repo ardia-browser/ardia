@@ -215,3 +215,35 @@ test("exact theme data equality ignores fields left undefined and nothing else",
   assert.ok(!sameData(null, undefined));
   assert.ok(sameData(null, null));
 });
+
+test("a drag runs with the browser's own requestAnimationFrame, which throws Illegal invocation when called on anything but the window", () => {
+  const frames = new Map();
+  let next = 1;
+  const applied = [];
+  function hostRequestFrame(run) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    frames.set(next, run);
+    return next++;
+  }
+  function hostCancelFrame(handle) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    frames.delete(handle);
+  }
+  let current = {};
+  const g = themeGesture({
+    apply: (theme) => (applied.push(theme?.intensity ?? null), (current = {})),
+    showing: () => "p:plum",
+    current: () => current,
+    draft: () => {},
+    requestFrame: hostRequestFrame,
+    cancelFrame: hostCancelFrame,
+  });
+  g.change(look(0.5), "p:plum");
+  g.change(look(0.2), "p:plum");
+  [...frames.values()].forEach((run) => run());
+  frames.clear();
+  g.change(look(0.1), "p:plum");
+  g.change(look(0), "p:plum", true);
+  assert.deepEqual(applied, [0.2, 0]);
+  assert.equal(frames.size, 0);
+});

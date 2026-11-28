@@ -25,13 +25,14 @@ export function sameData(a: unknown, b: unknown): boolean {
 
 export function themeGesture(deps: Deps) {
   const same = deps.same ?? Object.is;
+  const { requestFrame, cancelFrame } = deps;
   let pending: ThemeEdit | undefined;
   let frame: number | null = null;
   let gesture: string | null = null;
   let cancelled = false;
   let expected: unknown;
   const stopFrame = () => {
-    if (frame !== null) deps.cancelFrame(frame);
+    if (frame !== null) cancelFrame(frame);
     frame = null;
   };
   const flush = (final = false) => {
@@ -76,7 +77,7 @@ export function themeGesture(deps: Deps) {
         flush(true);
         gesture = null;
         cancelled = false;
-      } else if (frame === null) frame = deps.requestFrame(() => flush());
+      } else if (frame === null) frame = requestFrame(() => flush());
     },
     selectionChanged() {
       if (gesture === null) return;

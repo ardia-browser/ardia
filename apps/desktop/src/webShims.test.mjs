@@ -30,6 +30,7 @@ const { materialFill } = await import("./shims/web/materials.ts");
 const { colorRoles } = await import("../../browser/src/components/ui/tokens.ts");
 const { parseColor } = await import("./shims/web/chrome.tsx");
 const { frameSubscription, measuredSize, MIN_FRAME_INTERVAL, stepAnimation, wantsFrames } = await import("./shims/web/gl/viewClock.ts");
+const { claimsResponder, UNSELECTABLE, withoutTextSelection } = await import("./shims/web/motion/textSelection.ts");
 
 function runFrame(now) {
   const pending = [...frames];
@@ -369,4 +370,23 @@ test("scrolled glass keeps main's frosted surface, fades only its glass layer an
   const surface = source.slice(source.indexOf("function scrolledGlassSurface("), source.indexOf("\n}\n", source.indexOf("function scrolledGlassSurface(")));
   assert.match(surface, /inset 0 1px 0\.5px rgba\(255,255,255,0\.2\), inset 0 0 0 0\.5px rgba\(255,255,255,0\.1\), 0 1px 3px rgba\(0,0,0,0\.26\)/, "dark scrolled glass keeps main's hairline edge");
   assert.match(surface, /inset 0 1px 0\.5px rgba\(255,255,255,0\.82\), inset 0 0 0 0\.5px rgba\(255,255,255,0\.48\), 0 1px 3px rgba\(0,0,0,0\.07\)/, "light scrolled glass keeps main's hairline edge");
+});
+
+test("a view that takes the responder never starts a text selection, so a slider dragged to its end isn't cut short by a selectionchange", () => {
+  const claim = () => true;
+  for (const name of ["onStartShouldSetResponder", "onStartShouldSetResponderCapture", "onMoveShouldSetResponder", "onMoveShouldSetResponderCapture"]) {
+    assert.equal(claimsResponder({ [name]: claim }), true, name);
+    assert.deepEqual(withoutTextSelection({ [name]: claim }, { width: 172 }), [UNSELECTABLE, { width: 172 }], name);
+  }
+  assert.equal(UNSELECTABLE.userSelect, "none");
+  const own = { userSelect: "text" };
+  assert.equal(withoutTextSelection({ onStartShouldSetResponder: claim }, own)[1], own);
+});
+
+test("a view that never takes the responder keeps its style and stays selectable", () => {
+  const style = { flex: 1 };
+  assert.equal(claimsResponder({}), false);
+  assert.equal(claimsResponder({ onStartShouldSetResponder: undefined }), false);
+  assert.equal(withoutTextSelection({}, style), style);
+  assert.equal(withoutTextSelection({ onStartShouldSetResponder: undefined }, style), style);
 });

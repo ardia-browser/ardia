@@ -4,6 +4,7 @@ import "./sidebarEdge";
 import { borderBoxClip } from "./borderClip";
 import { watchLayout } from "../mountLayout";
 import { macEvent, trackHover, type MouseHandler } from "./hover";
+import { withoutTextSelection } from "./textSelection";
 
 export type { MacMouseEvent } from "./hover";
 
@@ -117,7 +118,7 @@ export const MacView = forwardRef<unknown, MacProps>(function MacView(props, ref
       {...strip(props)}
       {...domHover}
       onLayout={undefined}
-      style={clip.style}
+      style={withoutTextSelection(props as Record<string, unknown>, clip.style)}
       ref={(value: HTMLElement | null) => {
         node.current = value;
         assign(ref, value);

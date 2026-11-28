@@ -1,7 +1,6 @@
 // Copyright 2026 Ardia. Apache-2.0.
 
 #include <array>
-#include <map>
 #include <memory>
 #include <string>
 #include <utility>
@@ -14,6 +13,7 @@
 #include "base/no_destructor.h"
 #include "base/task/cancelable_task_tracker.h"
 #include "base/time/time.h"
+#include "chrome/browser/ardia/ac_favicon_touch_throttle.h"
 #include "chrome/browser/favicon/favicon_service_factory.h"
 #include "chrome/browser/ardia/ac_engine.h"
 #include "chrome/browser/history/history_service_factory.h"
@@ -37,6 +37,7 @@ const base::ListValue& EmptyList() {
 constexpr int kDefaultSize = 32;
 constexpr size_t kMaxPerCall = 500;
 constexpr base::TimeDelta kTouchAgainAfter = base::Days(1);
+constexpr size_t kMaxTouchedEntries = 2048;
 
 enum class Use { kMarkUsed, kReadOnly };
 
@@ -88,18 +89,16 @@ struct Results {
 };
 
 void MarkUsed(const Results& r) {
-  static base::NoDestructor<
-      std::map<std::pair<base::FilePath, GURL>, base::TimeTicks>>
-      touched;
+  static base::NoDestructor<FaviconTouchThrottle<
+      std::pair<base::FilePath, GURL>, base::TimeTicks, base::TimeDelta>>
+      touched(kTouchAgainAfter, kMaxTouchedEntries);
   favicon::FaviconService* service = FaviconsFor(r.profile.get());
   if (!service) {
     return;
   }
   const base::TimeTicks now = base::TimeTicks::Now();
   for (const GURL& icon : r.used) {
-    base::TimeTicks& last = (*touched)[{r.profile->GetPath(), icon}];
-    if (last.is_null() || now - last >= kTouchAgainAfter) {
-      last = now;
+    if (touched->ShouldTouch({r.profile->GetPath(), icon}, now)) {
       service->TouchOnDemandFavicon(icon);
     }
   }

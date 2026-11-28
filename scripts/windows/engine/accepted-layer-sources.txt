@@ -37,6 +37,7 @@ ac_extensions_sync_apply.cc
 ac_extensions_sync_approval.cc
 ac_extensions_sync_installers.cc
 ac_extensions_sync_internal.h
+ac_favicon_touch_throttle.h
 ac_favicons.cc
 ac_history.cc
 ac_memory.cc

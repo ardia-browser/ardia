@@ -3,6 +3,7 @@ import { answerAutofillPrompt, answerExternalApp, answerPasswordPrompt, password
 import { acceptVerificationCode, declineVerificationCode, verificationCodeCopy } from "../../state/site/verificationCodes";
 import {
   type AutofillPromptAnswer,
+  type PasswordPrompt,
   type PasswordPromptAnswer,
   patchPage,
   pageOf,
@@ -150,6 +151,11 @@ export function BlockedPopupsPrompt({ tabId, right, left, top }: { tabId: string
   );
 }
 
+export function passwordPromptWidth(prompt: Pick<PasswordPrompt, "state" | "target">): number {
+  if (prompt.state === "update") return POPOVER_WIDTH.s;
+  return prompt.target === "applePasswords" && prompt.state !== "notSaved" ? POPOVER_WIDTH.l : POPOVER_WIDTH.m;
+}
+
 export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: number; top: number }) {
   const prompt = usePage(tabId, (p) => p.passwordPrompt);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -165,7 +171,7 @@ export function PasswordPrompt({ tabId, right, top }: { tabId: string; right: nu
   });
   const choices = update && prompt.usernames.length > 1 ? prompt.usernames : [];
   return (
-    <Popover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={update ? POPOVER_WIDTH.s : POPOVER_WIDTH.m} top={top} right={right} modal={false}>
+    <Popover key={`${prompt.origin}|${prompt.username}|${prompt.state}`} width={passwordPromptWidth(prompt)} top={top} right={right} modal={false}>
       <View>
         <PromptBody
           icons={["key.fill"]}

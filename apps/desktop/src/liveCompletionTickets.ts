@@ -1,8 +1,9 @@
 import type { LiveCompletionInvalidation, LivePersistenceIntent, LiveProjection } from "../../browser/src/platform/livePersistence";
+import type { CompletedItem } from "../../browser/src/state/live/types";
 import { equalDocumentValue, type DocumentSnapshot } from "./liveDocumentTypes";
 
 type Ticket = { folderId: string; fence: unknown; epoch: string; incarnation: string; owner: string; generation?: number; ids: Set<string>; expected: Map<string, unknown> };
-const entries = (payload: LiveProjection, folderId: string): any[] => (payload.completed as Record<string, any[]> | undefined)?.[folderId] ?? [];
+const entries = (payload: LiveProjection, folderId: string): CompletedItem[] => (payload.completed as Record<string, CompletedItem[]> | undefined)?.[folderId] ?? [];
 
 export function createLiveCompletionTickets() {
   const tickets = new Map<unknown, Ticket>();

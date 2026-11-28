@@ -97,10 +97,10 @@ Measured materials (our own non-activating panels over solid backdrops; sRGB; ac
   effective inset to 0 and leaves `pageFrame` saved. Issue #999 adds two off-by-default synced flags
   (`pageFrameZeroInFullScreen`, `pageFrameZeroWhenTabsHidden`): the first drops the effective inset to 0 in macOS full
   screen; the second only when full screen and Auto-Hide Tabs are both on (`pageFrameInsetOf`); borderless wins over both.
-  Both apply only while full screen is edge to edge: while the menu bar is shown over a full-screen window (pointed at,
-  or set to never hide) the frame comes back (#4778). The host learns it from a titlebar accessory whose reveal amount
-  AppKit sets as the menu bar slides in, as Chromium's immersive mode does, and from the screen's visible frame
-  stopping below the menu bar (`ArdiaChromeWindowHost+FullScreenMenuBar.mm`, the `menuBar` window event).
+  Remove applies only while full screen is edge to edge: while the menu bar is shown over a full-screen window (pointed at,
+  or set to never hide) the frame comes back (#4778). Remove when tabs are hidden keeps its frame rule. The host reads
+  `NSMenu.menuBarVisible()` on HIToolbox's menu bar shown and hidden events and on Space changes, for each full-screen
+  window on the active Space (`packages/shell/ios/FullScreenMenuBar.swift`, the `menuBar` window event).
   Otherwise the slider still applies. The inset applies at the window's edges, below the top strip's
   sides, in Little Ardia below its bar, and to the floating sidebar (the peek), which sits `max(1, frame)` from the window's left, top and bottom, so it lines up with the card at every frame and keeps 1 pt off the edges at 0 (#3381);
   split panes and the extension side panel sit `max(frame, 2)` apart, so two panes still read as two edge to edge.

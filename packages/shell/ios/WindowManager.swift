@@ -11,6 +11,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   var managed: [String: ManagedWindow] = [:]
   private var pending: [PendingOpen] = []
   private var lightsCenters: [String: (center: NSPoint, trailing: Bool)] = [:]
+  private var menuBarShown: [String: Bool] = [:]
   private var hostFitSizes: [String: CGSize] = [:]
   private var landingFits: [String: LittleLandingFit] = [:]
   private var unreportedFrames = Set<ObjectIdentifier>()
@@ -446,7 +447,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let window = notification.object as? NSWindow, let id = id(of: window), let entry = managed[id] else { return }
     SavedKeyResponders.shared.windowClosed(window, id: id)
     let closedByJS = entry.closingFromJS
-    ArdiaChromeWindowHost.stopWatchingMenuBar(of: window)
+    menuBarShown[id] = nil
     flushFrameReport(window)
     managed[id] = nil
     NotificationCenter.default.removeObserver(self, name: nil, object: window)
@@ -468,7 +469,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
   @objc func fullScreenWillChange(_ notification: Notification) {
     guard let window = notification.object as? NSWindow, let id = id(of: window), managed[id] != nil else { return }
     let entering = notification.name == NSWindow.willEnterFullScreenNotification
-    if !entering { ArdiaChromeWindowHost.stopWatchingMenuBar(of: window) }
+    if !entering { menuBarShown[id] = nil }
     sendFullScreen(window, id: id, on: entering)
   }
 
@@ -482,7 +483,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
       fullScreen.entered(id)
       watchMenuBar(window, id: id)
     } else {
-      ArdiaChromeWindowHost.stopWatchingMenuBar(of: window)
+      menuBarShown[id] = nil
     }
   }
 
@@ -496,9 +497,21 @@ final class WindowManager: NSObject, NSWindowDelegate {
 
   private func watchMenuBar(_ window: NSWindow, id: String) {
     guard isMainWindow(window), !ArdiaChromeWindowHost.windowFullScreenIs(forPage: window) else { return }
-    ArdiaChromeWindowHost.watchMenuBar(of: window) { shown in
-      ShellEvents.send(.window, ArdiaConsentStamp.begin().onto(["type": "menuBar", "id": id, "shown": shown]))
+    FullScreenMenuBar.shared.watch { [weak self] in self?.reportMenuBars() }
+    reportMenuBar(window, id: id)
+  }
+
+  private func reportMenuBars() {
+    for id in Array(menuBarShown.keys) {
+      if let window = window(id) { reportMenuBar(window, id: id) }
     }
+  }
+
+  private func reportMenuBar(_ window: NSWindow, id: String) {
+    let shown = FullScreenMenuBar.shared.shown && window.isOnActiveSpace
+    guard menuBarShown[id] != shown else { return }
+    menuBarShown[id] = shown
+    ShellEvents.send(.window, ArdiaConsentStamp.begin().onto(["type": "menuBar", "id": id, "shown": shown]))
   }
 
   private func sendFullScreen(_ window: NSWindow, id: String, on: Bool) {

@@ -263,6 +263,7 @@ public enum PageMediaScript {
     const isEnded = (element) => read(elementEnded, element, false) === true;
     const isPlaying = (element) => !!element && !isPaused(element) && !isEnded(element);
     let keepsPlaying = __ARDIA_MEDIA_KEEPS_PLAYING__;
+    const PAUSED_HOLD_MS = 600000;
     let held = false;
     let leaving = null;
     let plays = 0;
@@ -405,8 +406,11 @@ public enum PageMediaScript {
           becameCurrent(element);
         } else if (kind === "pause" && leaving && leaving.element === element && Date.now() < leaving.until) {
           setTimeout(() => resume(element, "pause"), 250);
-        } else if ((kind === "pause" || kind === "ended") && element === current && held && !(leaving && Date.now() < leaving.until)) {
-          setTimeout(() => { if (held && element === current && isPaused(element) && !(leaving && Date.now() < leaving.until)) release(); }, 1000);
+        } else if (kind === "ended" && element === current && held) {
+          setTimeout(() => { if (held && element === current && isEnded(element)) release(); }, 1000);
+        } else if (kind === "pause" && element === current && held && !(leaving && Date.now() < leaving.until)) {
+          const pausedAt = plays;
+          setTimeout(() => { if (held && element === current && plays === pausedAt && isPaused(element)) release(); }, PAUSED_HOLD_MS);
         } else if (kind === "emptied" && element === current && !element.currentSrc) {
           current = null;
         }

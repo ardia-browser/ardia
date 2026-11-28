@@ -3956,8 +3956,9 @@ titles and phrases that post links instead.
   background on: when the app is about to leave (`willResignActive`), `WebMedia` tells each playing frame, which plays the
   element again if WebKit pauses it within 4 s; and when the document goes hidden while its media plays, the script keeps
   `visibilityState`, `hidden` and their `webkit` forms at visible and stops that `visibilitychange` from reaching the
-  page. A pause by the person (the lock screen, the mini player, the page) lets the page see it is hidden again, and
-  turning the setting off releases every held page at once. Brave and Orion keep background play the same way.
+  page. A page paused by the person stays held for up to 10 minutes, so a site such as YouTube keeps its media loaded
+  for the mini player (released 1 s after each pause, YouTube unloaded its video and the mini player lost its skip
+  buttons); it is released then, 1 s after the media ends, or at once when the setting is turned off. Brave and Orion keep background play the same way.
 - **Automatic Picture in Picture.** With the setting on, iPhone able to float video and the playing video's tab on
   screen, `WebMedia` asks that video to float at `willResignActive` (Home, the app switcher, locking), through
   `webkitSetPresentationMode("picture-in-picture")` evaluated by the app, which WebKit runs as a user gesture. WebKit has

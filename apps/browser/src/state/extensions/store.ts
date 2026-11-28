@@ -1,5 +1,5 @@
 import type { ActionState, ExtensionInstallPrompt, ExtensionPackage, InstalledExtension } from "../../platform/extensions";
-import type { SettingsPane, SettingsPlace } from "../settings/settingsWindows";
+import { keptSettingsProfile, type SettingsPane, type SettingsPlace } from "../settings/settingsWindows";
 import { useMemo } from "react";
 import { create } from "zustand";
 import { useBrowser, type BrowserState } from "../browser/store";
@@ -75,7 +75,7 @@ export function extensionsProfileId(profileId?: string | null, windowId?: string
 }
 
 export const settingsProfileFor = (pane: SettingsPane, current: SettingsPlace): string | null =>
-  pane === "profiles" ? extensionsProfileId(current.pane === "profiles" ? current.profileId : null) : null;
+  pane === "profiles" ? extensionsProfileId(current.pane === "profiles" ? current.profileId : keptSettingsProfile()) : null;
 
 export const isPrivate = (s: BrowserState, windowId: string) => s.windows[windowId]?.kind === "private";
 

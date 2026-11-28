@@ -48,6 +48,14 @@ const stopOf = (s: SettingsStop): SettingsStop =>
 
 export const useSettingsNav = create<Nav>()(() => ({ pane: "general", profileId: null, detail: null, scroll: 0, visit: newSettingsVisit(), shownProfile: null, back: [], forward: [] }));
 
+let lastProfileShown: string | null = null;
+
+useSettingsNav.subscribe((nav) => {
+  if (nav.pane === "profiles") lastProfileShown = shownSettingsProfile(nav);
+});
+
+export const keptSettingsProfile = (): string | null => (lastProfileShown && useBrowser.getState().profiles[lastProfileShown] ? lastProfileShown : null);
+
 export function goToSettingsPane(pane: SettingsPane, profileId: string | null = null, detail: string | null = null) {
   const current = useSettingsNav.getState();
   if (current.pane === pane && current.profileId === profileId && current.detail === detail) return;

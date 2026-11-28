@@ -512,16 +512,17 @@ applied to the tree):
     python3 scripts/engine/series-base-pack.py extend --platform mac --dest <scratch dir>
     scripts/agent/locked chromium --release <you>
 
-`extend` starts from the pinned archive (`--archive`, or the copy `series-zero-fuzz.py` cached; either way its sha256
-must be the one `series-bases.tsv` pins) and adds each file the series changes that the archive lacks. It takes a file
+`extend` starts from a private copy of the pinned archive (`--archive`, or the one `series-zero-fuzz.py` cached; either
+way the copy's sha256 must be the one `series-bases.tsv` pins) and adds each file the series changes that the archive lacks. It takes a file
 only when:
-- **no step-3 stage selects it.** It isn't a `.grd`, `.grdp` or `.xtb` (the name substitution, translation and
-  branding passes rewrite every one), `chrome/VERSION`, or a file `03-helium.py`'s `FIXUPS` edits. No Helium patch,
-  `domain_substitution.list`, `pruning.list` or resource list of the pinned checkouts, nor `ardia_resources.txt`,
-  names it;
+- **no step-3 stage selects it.** Its name doesn't end in `grd`, `grdp` or `xtb`, in any case (the name
+  substitution, translation and branding passes rewrite every such file). It isn't `chrome/VERSION` or a file
+  `03-helium.py`'s `FIXUPS` edits. No Helium patch, `domain_substitution.list`, `pruning.list` or resource list at the
+  pinned Helium commits names it (they're read from git, so a sparse or edited checkout can't hide one), nor does
+  `ardia_resources.txt`;
 - **it's Chromium's own file at the tag.** Chromium's repository tracks it as a regular file at the pinned tag's
   commit (resolved on chromium.googlesource.com), which must be the tree's HEAD. The bytes and mode come from that
-  commit;
+  commit, with git replacement refs ignored;
 - **the archive doesn't already hold it** or record it as absent;
 - **the tree agrees:** it holds the same bytes and mode.
 

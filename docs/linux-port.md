@@ -646,8 +646,8 @@ a `.sha256` file beside it (`sha256sum -c <asset>.sha256` checks a download):
   ```
 
   It installs under `/usr` (or `--prefix`), and no package manager knows about it: install the libraries yourself, and
-  to remove it delete `<prefix>/lib/ardia`, `<prefix>/bin/ardia`, the desktop entry, the icon,
-  `/usr/share/polkit-1/actions/dev.ardia.linux.policy` and, on Ubuntu, `/etc/apparmor.d/ardia`.
+  to remove it run `sudo /usr/lib/ardia/install.sh --uninstall` (or `sudo ./ardia/install.sh --uninstall` from the
+  extracted package), with the same `--prefix` if you used one (see Uninstalling below).
 
 The `.deb`, a tarball installed with `install.sh` and the AppImage update themselves from each release's signed
 self-update manifest (`lib/ardia/ardia-update`, under Packaging and installing). `ardia-bin` updates by building the
@@ -741,7 +741,7 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     (9.5 and later), or else two renames (the old tree to `ardia.old-<pid>`, the new one to `ardia`), and deletes the
     old tree, so a running Ardia keeps the files it has open and a failed copy
     leaves the old install whole. A failure between the renames puts the old tree back; leftovers of a run that died
-    are removed by the next one.
+    are removed by the next one, and `--uninstall` removes them with the install.
   - It always installs the polkit policy at `<destdir>/usr/share/polkit-1/actions` (mode 0644), whatever the prefix,
     because polkit reads actions only from there. Without the policy Ardia can't ask for the system password, so saved
     passwords and card numbers stay hidden. The update action's `org.freedesktop.policykit.exec.path` names
@@ -750,6 +750,9 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
     `/` down to `<prefix>/lib/ardia` is owned by root and writable by no one else and the helper is root's, mode 0755
     (with `--destdir`, only for `--prefix /usr`); otherwise it installs the policy without it, says so, and that
     install reports `unsupported noPolicy` and doesn't update itself.
+  - Without `--destdir` it also keeps a copy of itself at `<prefix>/lib/ardia/install.sh` and adds the prefix to
+    `/var/lib/ardia/installs`. A prefix is made canonical first (`realpath -ms`), so `//opt/./ardia/` installs as
+    `/opt/ardia`. Installs and uninstalls without `--destdir` run one at a time (`flock` on `/var/lib/ardia/lock`).
 - **Debian package.** `package.py --deb <path> --version <version>` (`scripts/linux/linux_formats.py`) builds it from
   the staged tree with `dpkg-deb`, so it needs `dpkg-deb` and `readelf` (`apt install dpkg binutils`, Arch:
   `pacman -S dpkg binutils`):
@@ -862,6 +865,15 @@ command ([linux-ci.md](linux-ci.md) › Linux releases).
   To try a local tarball, write the pair with `update-pkgbuild.sh <version> --package <tarball> --out <folder>`, put
   the tarball beside them renamed `ardia-bin-<pkgver>.tar.xz` (makepkg then skips the download), and run
   `makepkg -si`. `pkaction --action-id dev.ardia.linux.reauthenticate` then lists the polkit action.
+- **Uninstalling.** `sudo /usr/lib/ardia/install.sh --uninstall` (or the extracted package's `install.sh --uninstall`,
+  with the same `--prefix`, and the same `--destdir` for a staged tree) removes what the install put down: `lib/ardia`, the launcher and the desktop entry and
+  icon when they're Ardia's for that prefix, the AppArmor profile when its attachment is exactly that prefix's `chrome`
+  (unloaded first), and the polkit policy unless a package owns it, `/usr/lib/ardia` still holds an Ardia, or another
+  prefix in `/var/lib/ardia/installs` still does. It refuses a prefix
+  with no Ardia in it, and an Ardia a `.deb`, Arch or RPM package installed, also when the prefix reaches it through a symlink (remove that
+  with its package manager).
+  Each user's profile in `~/.config/ardia` stays. Two tarball installs share one AppArmor profile, so the last
+  install's prefix owns it. `scripts/linux/install.test.mjs` covers the staged round trip.
 - **Ubuntu.** On a host whose AppArmor reads the 4.0 ABI (`/etc/apparmor.d/abi/4.0`, Ubuntu 24.04 and later), an
   install without `--destdir` also writes `/etc/apparmor.d/ardia` and loads it with `apparmor_parser -r`. The profile
   leaves `<prefix>/lib/ardia/chrome` unconfined and allows it user namespaces, which Ubuntu denies to unprivileged
@@ -939,6 +951,7 @@ python3 -m unittest discover -s engine/patches/build/tests
 python3 -m unittest discover -s engine/chromium/src/chrome/browser/ardia/tests
 python3 -m unittest discover -s engine/ardiacore-linux/tests
 node --test engine/ardiacore-linux/tests/bootstrap.test.mjs
+node --test scripts/linux/install.test.mjs
 ```
 
 - **Patch tooling tests.** These cover platform selection, separate bases, repeat application, materialization,

@@ -48,6 +48,7 @@ type Entry = {
   pending: { generation: number; key: string } | null;
   applied: Applied | null;
   translucent: boolean;
+  resizing: boolean;
   held: boolean;
   stop: () => void;
 };
@@ -62,6 +63,23 @@ const keyOf = (geometry: GlassGeometry | null) =>
         geometry.scale ?? 1,
       ])
     : "";
+const resizedInPlace = (previous: GlassGeometry | null, next: GlassGeometry | null) => {
+  if (!previous || !next) return false;
+  const same = (a: number, b: number) => round(a) === round(b);
+  const a = previous.radii;
+  const b = next.radii;
+  return (
+    same(previous.rect.x, next.rect.x) &&
+    same(previous.rect.y, next.rect.y) &&
+    same(a.upperLeft, b.upperLeft) &&
+    same(a.upperRight, b.upperRight) &&
+    same(a.lowerRight, b.lowerRight) &&
+    same(a.lowerLeft, b.lowerLeft) &&
+    same(previous.opacity, next.opacity) &&
+    (previous.scale ?? 1) === (next.scale ?? 1) &&
+    (!same(previous.rect.width, next.rect.width) || !same(previous.rect.height, next.rect.height))
+  );
+};
 const lookOf = (look: GlassLook): GlassLook => ({
   ...(look.material ? { material: look.material } : {}),
   ...(look.tint ? { tint: look.tint } : {}),
@@ -125,6 +143,7 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
     !!entry.geometry && entry.geometry.opacity > 0 && overSurface(entry.geometry.rect) && !nested(element);
 
   const setTranslucent = (element: Element, entry: Entry, translucent: boolean) => {
+    if (!translucent) entry.resizing = false;
     if (entry.translucent === translucent) return;
     entry.translucent = translucent;
     deps.apply(element, translucent);
@@ -133,15 +152,15 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
   const evaluate = () => {
     for (const [element, entry] of entries) {
       const applied = entry.applied;
-      const ready =
-        available &&
-        eligible(element, entry) &&
+      const settled =
         !entry.moving &&
         entry.stable >= STABLE_FRAMES &&
         !!applied &&
         applied.accepted &&
         applied.key === entry.key &&
         presented >= applied.generation;
+      if (settled) entry.resizing = false;
+      const ready = available && eligible(element, entry) && !!applied?.accepted && (settled || entry.resizing);
       setTranslucent(element, entry, ready);
     }
     for (const image of [...afterimages]) if (presented >= image.generation) dropAfterimage(image);
@@ -181,14 +200,19 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
       return;
     }
     inFlight = true;
+    const sentIds = new Set(update.regions.map((region) => region.id));
     deps.send!(update)
       .then(
         (reply) => {
           if (!reply || reply.available === false) return setAvailable(false);
           const accepted = new Set(reply?.accepted ?? []);
           for (const entry of entries.values()) {
-            if (entry.pending?.generation !== update.generation) continue;
             const accepting = accepted.has(entry.id);
+            if (sentIds.has(entry.id) && !accepting) {
+              entry.resizing = false;
+              entry.applied = null;
+            }
+            if (entry.pending?.generation !== update.generation) continue;
             const unchanged = accepting && !!entry.applied?.accepted && entry.applied.key === entry.pending.key;
             entry.applied = { generation: unchanged ? entry.applied!.generation : update.generation, key: entry.pending.key, accepted: accepting };
             entry.pending = null;
@@ -197,8 +221,16 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
         },
         (error) => {
           deps.report?.(error);
-          for (const entry of entries.values()) if (entry.pending?.generation === update.generation) entry.pending = null;
+          for (const entry of entries.values()) {
+            if (sentIds.has(entry.id)) {
+              entry.resizing = false;
+              entry.applied = null;
+            }
+            if (entry.pending?.generation !== update.generation) continue;
+            entry.pending = null;
+          }
           sentKey = "";
+          evaluate();
         },
       )
       .finally(() => {
@@ -230,11 +262,13 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
       const key = keyOf(geometry);
       entry.moving = deps.animating(element);
       if (key !== entry.key || entry.moving) {
+        const resizing = !entry.moving && entry.translucent && !options.behindWindow && resizedInPlace(entry.geometry, geometry);
         if (!geometry) leaveBehind(element, entry);
         entry.geometry = geometry;
         entry.key = key;
         entry.stable = 0;
-        setTranslucent(element, entry, false);
+        entry.resizing = resizing;
+        if (!resizing) setTranslucent(element, entry, false);
       } else if (entry.stable < STABLE_FRAMES) entry.stable += 1;
       if (entry.held && entry.stable >= STABLE_FRAMES && !entry.moving) entry.held = false;
       if (entry.stable < STABLE_FRAMES || entry.moving) unsettled = true;
@@ -281,7 +315,7 @@ export function createGlassRegions(deps: GlassDeps, initiallyAvailable: boolean,
 
   return {
     add(element: Element, blur = GLASS_BLUR, look: GlassLook = {}) {
-      const entry: Entry = { id: `g${++nextId}`, blur, look: lookOf(look), geometry: null, key: "", stable: 0, moving: false, pending: null, applied: null, translucent: false, held: false, stop: () => {} };
+      const entry: Entry = { id: `g${++nextId}`, blur, look: lookOf(look), geometry: null, key: "", stable: 0, moving: false, pending: null, applied: null, translucent: false, resizing: false, held: false, stop: () => {} };
       entries.set(element, entry);
       deps.apply(element, false);
       entry.stop = deps.watch(element, nextFrame);

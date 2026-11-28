@@ -193,8 +193,11 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
     `presented` newer than anything it sent.
   - **Translucency is earned.** A panel starts opaque. It turns translucent only once its region for its current
     geometry has been stable for two frames, with no animation or transition running on it or an ancestor, and is
-    presented. It goes opaque again the moment it moves, resizes, fades or an animation starts on it or an ancestor (not inside
-    it), and the moment it falls past the region limit. A refused or
+    presented. It goes opaque again the moment it moves, fades or an animation starts on it or an ancestor (not inside
+    it), and the moment it falls past the region limit. A translucent panel that only grows or shrinks in place (same
+    origin, corners, opacity and scale, no animation, glass over pages) keeps its glass while the shell sends the new
+    region; it goes opaque if that region is refused, the send fails or it falls past the limit, and settles once the
+    new region is presented and stable. Behind-window glass still goes opaque on any resize. A refused or
     never-presented region keeps it opaque, and so does the absence of the capability. A region that leaves the set
     the shell sends loses its acceptance, so coming back waits for a new answer and presentation. Panels mounted while
     glass was off register when it comes back.

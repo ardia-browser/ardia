@@ -508,3 +508,200 @@ test("a slice too narrow for its rounded corner cuts no hole, so no hole can spi
   const square = { upperLeft: 0, upperRight: 0, lowerRight: 0, lowerLeft: 0 };
   assert.deepEqual(offPagePieces(rect, square, [{ x: 203, y: 0, width: 800, height: 800 }]).map((piece) => piece.rect.width), [3]);
 });
+
+const sized = (width = 240, height = 160, x = 100, y = 100) => ({ rect: { x, y, width, height }, radii: RADII, opacity: 1 });
+
+function resize(h, panel, geometry) {
+  panel.geometry = geometry;
+  h.glass.refresh();
+  h.tick();
+}
+
+test("a panel that grows or shrinks in place keeps its glass while the new region is sent, presented and settles", async () => {
+  for (const next of [sized(240, 320), sized(240, 80), sized(300, 160)]) {
+    const h = harness();
+    h.glass.setPages([PAGE]);
+    const panel = node(sized());
+    await shown(h, panel);
+    const states = [];
+    const record = () => states.push(panel.attributes.glass);
+    resize(h, panel, next);
+    record();
+    assert.equal(h.sent.length, 2);
+    assert.deepEqual(h.sent.at(-1).regions[0].rect, next.rect);
+    await h.accept();
+    record();
+    h.glass.presented(h.sent.at(-1).generation);
+    record();
+    h.tick(STABLE_FRAMES);
+    record();
+    assert.deepEqual([...new Set(states)], ["on"]);
+    assert.equal(h.glass.status().panels[0].applied.key, JSON.stringify([[100, 100, next.rect.width, next.rect.height], [10, 10, 10, 10], 1, 1]));
+    resize(h, panel, sized(next.rect.width, next.rect.height, 140));
+    assert.equal(panel.attributes.glass, "off", "a move after the resize settles still turns it opaque");
+  }
+});
+
+test("rapid resizes before presentation keep the glass and settle on the final region", async () => {
+  const h = harness();
+  h.glass.setPages([PAGE]);
+  const panel = node(sized());
+  await shown(h, panel);
+  const states = [];
+  for (const height of [180, 200, 220, 240]) {
+    resize(h, panel, sized(240, height));
+    states.push(panel.attributes.glass);
+  }
+  await h.accept(1);
+  states.push(panel.attributes.glass);
+  await h.accept();
+  states.push(panel.attributes.glass);
+  assert.equal(h.sent.at(-1).regions[0].rect.height, 240);
+  h.glass.presented(h.sent.at(-1).generation);
+  h.tick(STABLE_FRAMES);
+  states.push(panel.attributes.glass);
+  assert.deepEqual([...new Set(states)], ["on"]);
+  const status = h.glass.status().panels[0];
+  assert.equal(status.applied.generation, h.sent.at(-1).generation);
+  assert.equal(status.geometry.rect.height, 240);
+  resize(h, panel, sized(240, 240, 100, 130));
+  assert.equal(panel.attributes.glass, "off");
+});
+
+test("a resize that also moves, animates, is interrupted by motion or uses behind-window glass turns the panel opaque", async () => {
+  for (const moved of [sized(260, 160, 110), sized(240, 200, 100, 90)]) {
+    const h = harness();
+    h.glass.setPages([PAGE]);
+    const panel = node(sized());
+    await shown(h, panel);
+    resize(h, panel, moved);
+    assert.equal(panel.attributes.glass, "off");
+  }
+  const animated = harness();
+  animated.glass.setPages([PAGE]);
+  const growing = node(sized());
+  await shown(animated, growing);
+  animated.running.add(growing);
+  resize(animated, growing, sized(240, 200));
+  assert.equal(growing.attributes.glass, "off");
+  const interrupted = harness();
+  interrupted.glass.setPages([PAGE]);
+  const panel = node(sized());
+  await shown(interrupted, panel);
+  resize(interrupted, panel, sized(240, 200));
+  assert.equal(panel.attributes.glass, "on");
+  interrupted.glass.motion(panel);
+  assert.equal(panel.attributes.glass, "off");
+  await interrupted.accept();
+  interrupted.glass.presented(interrupted.sent.at(-1).generation);
+  assert.equal(panel.attributes.glass, "off", "motion cleared the resize, so it waits to settle again");
+  interrupted.tick(STABLE_FRAMES);
+  assert.equal(panel.attributes.glass, "on");
+  const behind = harness({ behindWindow: true });
+  const pill = node(sized());
+  await shown(behind, pill);
+  resize(behind, pill, sized(240, 200));
+  assert.equal(pill.attributes.glass, "off");
+});
+
+test("a resize whose new region is refused, fails to send or falls past the limit turns the panel opaque", async () => {
+  const refused = harness();
+  refused.glass.setPages([PAGE]);
+  const panel = node(sized());
+  await shown(refused, panel);
+  resize(refused, panel, sized(240, 200));
+  assert.equal(panel.attributes.glass, "on");
+  await refused.accept(refused.replies.length - 1, []);
+  assert.equal(panel.attributes.glass, "off");
+  refused.glass.presented(refused.sent.at(-1).generation);
+  refused.tick(STABLE_FRAMES);
+  assert.equal(panel.attributes.glass, "off");
+
+  const failed = harness();
+  failed.glass.setPages([PAGE]);
+  const other = node(sized());
+  await shown(failed, other);
+  resize(failed, other, sized(240, 200));
+  assert.equal(other.attributes.glass, "on");
+  failed.replies.at(-1).reject(new Error("gone"));
+  await failed.settle();
+  assert.equal(other.attributes.glass, "off", "a failed update can't leave glass over the stale native rect");
+  assert.equal(failed.errors.length, 1);
+
+  const crowded = harness();
+  crowded.glass.setPages([PAGE]);
+  const early = node(null);
+  crowded.glass.add(early);
+  const panels = [];
+  for (let i = 0; i < GLASS_MAX_REGIONS; i++) {
+    const item = node(sized(5, 5, i * 10, 0));
+    panels.push(item);
+    crowded.glass.add(item);
+  }
+  const late = panels.at(-1);
+  crowded.tick(STABLE_FRAMES + 1);
+  await crowded.accept();
+  crowded.glass.presented(crowded.sent.at(-1).generation);
+  assert.equal(late.attributes.glass, "on");
+  early.geometry = menu();
+  late.geometry = sized(5, 9, late.geometry.rect.x, 0);
+  crowded.glass.flushNow();
+  assert.ok(!crowded.sent.at(-1).regions.some((r) => r.rect.x === late.geometry.rect.x));
+  assert.equal(late.attributes.glass, "off");
+});
+
+test("a panel that shrinks to nothing still leaves an afterimage", async () => {
+  const h = harness();
+  h.glass.setPages([PAGE]);
+  const panel = node(sized());
+  await shown(h, panel);
+  resize(h, panel, null);
+  assert.equal(panel.attributes.glass, "off");
+  assert.equal(h.ghosts.length, 1);
+  assert.deepEqual(h.ghosts[0].geometry, sized());
+});
+
+test("an in-flight refusal or failure clears resize preservation even when a newer resize is queued", async () => {
+  const refused = harness();
+  refused.glass.setPages([PAGE]);
+  const panel = node(sized());
+  await shown(refused, panel);
+  resize(refused, panel, sized(240, 200));
+  resize(refused, panel, sized(240, 240));
+  assert.equal(panel.attributes.glass, "on");
+  await refused.accept(1, []);
+  assert.equal(panel.attributes.glass, "off");
+
+  const revertedRefused = harness();
+  revertedRefused.glass.setPages([PAGE]);
+  const backPanel = node(sized());
+  await shown(revertedRefused, backPanel);
+  resize(revertedRefused, backPanel, sized(240, 200));
+  resize(revertedRefused, backPanel, sized());
+  revertedRefused.tick(STABLE_FRAMES);
+  await revertedRefused.accept(1, []);
+  assert.equal(backPanel.attributes.glass, "off", "reverted size cannot stay translucent via stale applied baseline after refusal");
+
+  const failed = harness();
+  failed.glass.setPages([PAGE]);
+  const other = node(sized());
+  await shown(failed, other);
+  resize(failed, other, sized(240, 200));
+  resize(failed, other, sized(240, 240));
+  assert.equal(other.attributes.glass, "on");
+  failed.replies[1].reject(new Error("gone"));
+  await failed.settle();
+  assert.equal(other.attributes.glass, "off");
+  assert.equal(failed.errors.length, 1);
+
+  const revertedFailed = harness();
+  revertedFailed.glass.setPages([PAGE]);
+  const backOther = node(sized());
+  await shown(revertedFailed, backOther);
+  resize(revertedFailed, backOther, sized(240, 200));
+  resize(revertedFailed, backOther, sized());
+  revertedFailed.tick(STABLE_FRAMES);
+  revertedFailed.replies[1].reject(new Error("gone"));
+  await revertedFailed.settle();
+  assert.equal(backOther.attributes.glass, "off", "reverted size cannot stay translucent via stale applied baseline after send error");
+});

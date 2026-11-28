@@ -7,10 +7,13 @@ type GestureEvent = Pick<CommandEvent, "command" | "mouseGesture" | "gestureTabI
 
 export type GestureRoute = { run: boolean; tabId: string | null };
 
+const DROPPED: GestureRoute = { run: false, tabId: null };
+
 export function gestureRoute(s: BrowserState, e: GestureEvent): GestureRoute {
   if (!e.mouseGesture) return { run: true, tabId: null };
-  if (isSmall(s, e.windowId)) return { run: !LITTLE_ARDIA_DISABLED_COMMANDS.includes(e.command), tabId: null };
-  if (!e.gestureTabId) return { run: true, tabId: null };
-  const tab = s.tabs[e.gestureTabId];
-  return tab && e.windowId && tab.windowId === e.windowId ? { run: true, tabId: e.gestureTabId } : { run: false, tabId: null };
+  if (!e.windowId || !s.windows[e.windowId]) return DROPPED;
+  const tabId = e.gestureTabId || null;
+  if (tabId && s.tabs[tabId]?.windowId !== e.windowId) return DROPPED;
+  if (isSmall(s, e.windowId)) return LITTLE_ARDIA_DISABLED_COMMANDS.includes(e.command) ? DROPPED : { run: true, tabId: null };
+  return { run: true, tabId };
 }

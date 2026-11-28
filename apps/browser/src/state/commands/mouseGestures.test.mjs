@@ -83,6 +83,12 @@ test("a gesture runs on its own tab, drops when that tab is gone, and keeps Litt
   assert.deepEqual(route(w, c), { run: false, tabId: null }, "a tab that moved to another window is never acted on");
   S().closeTab(b);
   assert.deepEqual(route(w, b, "closeTab", "close_tab"), { run: false, tabId: null }, "a closed tab never falls back to the active tab or the selection");
-  assert.deepEqual(route(small, null, "nextTab", "next_tab"), { run: false, tabId: null }, "Little Ardia keeps Next Tab off, key window or not");
-  assert.deepEqual(route(small, null, "back"), { run: true, tabId: null });
+  const [little] = S().windows[small].tabIds;
+  assert.deepEqual(route(small, little, "nextTab", "next_tab"), { run: false, tabId: null }, "Little Ardia keeps Next Tab off, key window or not");
+  assert.deepEqual(route(small, little, "back"), { run: true, tabId: null }, "Little Ardia keeps its own routing");
+  assert.deepEqual(route(small, a, "back"), { run: false, tabId: null }, "a main window's tab never runs through Little Ardia");
+  assert.deepEqual(route("w-gone", null, "closeTab", "close_tab"), { run: false, tabId: null }, "a window that closed never falls back to another one");
+  S().closeWindow(small);
+  assert.equal(S().windows[small], undefined);
+  assert.deepEqual(route(small, little, "closeTab", "close_tab"), { run: false, tabId: null }, "a Little Ardia window that closed never sends its gesture to the main window");
 });

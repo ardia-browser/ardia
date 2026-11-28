@@ -169,7 +169,7 @@ final class MouseGestures {
       return nil
     }
     lastOutcome = action.command
-    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: targetsPage ? pageTab : nil)
+    MenuTarget.shared.perform(item, in: window, windowId: windowId, mouseGesture: action.telemetry, gestureTab: pageTab.isEmpty ? nil : pageTab)
     return nil
   }
 

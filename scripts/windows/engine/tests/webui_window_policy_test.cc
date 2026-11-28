@@ -223,6 +223,56 @@ void TestUnclaimedTabs() {
   assert(!ParseAdoptId("tab:99999999999"));
 }
 
+void TestProfileNames() {
+  assert(IsAppProfileName(""));
+  assert(IsAppProfileName("default"));
+  assert(!IsAppProfileName("p-work"));
+  assert(!IsAppProfileName("Default"));
+  assert(!IsAppProfileName("incognito:w@default"));
+
+  assert(RegularProfileName("") == "default");
+  assert(RegularProfileName("default") == "default");
+  assert(RegularProfileName("p-work") == "p-work");
+  assert(RegularProfileName("incognito:w@") == "incognito:w@");
+
+  assert(SameRegularProfile("", "default"));
+  assert(SameRegularProfile("default", ""));
+  assert(SameRegularProfile("p-work", "p-work"));
+  assert(!SameRegularProfile("", "p-work"));
+  assert(!SameRegularProfile("default", "p-work"));
+  assert(!SameRegularProfile("incognito:w@", "default"));
+
+  assert(TabProfileName(false, "", "p-work") == "p-work");
+  assert(TabProfileName(true, "", "p-work") == "default");
+  assert(!SameRegularProfile(TabProfileName(true, "", "p-work"), "p-work"));
+  assert(TabProfileName(true, "p-work", "default") == "p-work");
+  assert(TabProfileName(false, "", "incognito:w@") == "incognito:w@");
+  assert(TabProfileName(true, "", "incognito:w@") == "default");
+  assert(!SameRegularProfile(TabProfileName(true, "", "incognito:w@"),
+                             "incognito:w@"));
+  assert(SameRegularProfile(TabProfileName(true, "", "default"), "default"));
+  assert(SameRegularProfile(TabProfileName(false, "", "default"), "default"));
+
+  assert(ShellProfileName("default").empty());
+  assert(ShellProfileName("").empty());
+  assert(ShellProfileName("p-work") == "p-work");
+  assert(ShellProfileName("incognito:w@") == "incognito:w@");
+  assert(ShellProfileName(PrivateLinkProfile("default")).empty());
+  assert(ShellProfileName(PrivateLinkProfile("p-work")) == "p-work");
+}
+
+void TestFullScreenReports() {
+  assert(ReportsWindowFullScreen(true, false));
+  assert(!ReportsWindowFullScreen(true, true));
+  assert(!ReportsWindowFullScreen(false, false));
+  assert(!ReportsWindowFullScreen(false, true));
+
+  assert(ReleasesPageFullScreen(false, true));
+  assert(!ReleasesPageFullScreen(true, true));
+  assert(!ReleasesPageFullScreen(false, false));
+  assert(!ReleasesPageFullScreen(true, false));
+}
+
 void TestDocumentVerbs() {
   assert(ParseDocumentVerb("documents.watch") == DocumentVerb::kWatch);
   assert(ParseDocumentVerb("documents.unwatch") == DocumentVerb::kUnwatch);
@@ -542,6 +592,8 @@ int main() {
   TestClaims();
   TestClaimBoundHelpers();
   TestUnclaimedTabs();
+  TestProfileNames();
+  TestFullScreenReports();
   TestDocumentVerbs();
   TestRects();
   TestPlacement();

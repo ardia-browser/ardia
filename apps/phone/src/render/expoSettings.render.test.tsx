@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { act, type ReactTestInstance } from "react-test-renderer";
 import { SettingsView } from "../components/settings/SettingsView";
-import { SettingsShortcuts } from "../components/ui";
+import { PROFILE_COLORS, SettingsShortcuts } from "../components/ui";
 import * as deckGrid from "../state/browse/deckGrid";
 import { writePreference } from "../state/store/browserDatabase";
 import { browserDatabase } from "../state/store/database";
@@ -12,6 +12,12 @@ import { PHONE_SHARING_COPY } from "../lib/telemetryCopy";
 import { appVersion } from "../state/settings/actions";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 import { pages as platformPages } from "../platform/pages";
+import { drawnBeforePush } from "../components/settings/ExpoSettingsStack";
+import * as defaultBrowser from "../state/settings/defaultBrowser";
+import { useSitePermissions } from "../state/settings/sitePermissions";
+import { startingTheme } from "@ardia/core/src/theme.ts";
+import { setColorChoice } from "../state/settings/actions";
+import { useThemeDraft } from "../state/settings/themeDraft";
 
 const onIos = Platform.OS === "ios" ? test : test.skip;
 
@@ -35,7 +41,9 @@ const paneTitles = (node: ReactTestInstance) => node.findAll((inner) => typeof i
 const textsIn = (node: ReactTestInstance) => node.findAll((inner) => typeof inner.type === "string" && typeof inner.props.text === "string").map((inner) => inner.props.text as string);
 const sectionTitles = (node: ReactTestInstance, titles: string[]) => node.findAll((inner) => typeof inner.type === "string" && typeof inner.props.title === "string" && titles.includes(inner.props.title as string) && !("systemImage" in inner.props)).map((inner) => inner.props.title);
 const paneOf = (root: Root, page: string) => hosts(root, (props) => props.name === "destination" && (props.extraProps as { value?: string } | undefined)?.value === page)[0]!;
-const linksIn = (node: ReactTestInstance) => node.findAll((inner) => typeof inner.type === "string" && typeof inner.props.value === "string" && !("path" in inner.props)).map((inner) => inner.props.value);
+const isDestination = (node: ReactTestInstance) => typeof node.type === "string" && node.props.name === "destination";
+const outsideDestinations = (node: ReactTestInstance): ReactTestInstance[] => node.children.flatMap((child) => (typeof child === "string" || isDestination(child) ? [] : [child, ...outsideDestinations(child)]));
+const linksIn = (node: ReactTestInstance) => outsideDestinations(node).filter((inner) => typeof inner.type === "string" && typeof inner.props.value === "string" && !("path" in inner.props)).map((inner) => inner.props.value);
 
 onIos("on iPhone the Settings root is the Mac's pane list: the Sync card, then General, Tabs, Appearance, Search and Site settings, each a tinted tile linking to its pane, Experimental only when it has something, and nothing else, not even the version", () => {
   openSettings();
@@ -43,7 +51,7 @@ onIos("on iPhone the Settings root is the Mac's pane list: the Sync card, then G
   expect(paneTitles(stackOf(root))).toEqual(["General", "Tabs", "Appearance", "Search", "Site settings"]);
   expect(linksIn(stackOf(root))).toEqual(["sync", "general", "tabs", "appearance", "search", "siteSettings"]);
   expect(root.root.findAll((node) => node.type === SettingsShortcuts)).toHaveLength(0);
-  expect(hosts(root, (props) => typeof props.isOn === "boolean")).toHaveLength(0);
+  expect(outsideDestinations(stackOf(root)).filter((node) => typeof node.type === "string" && typeof node.props.isOn === "boolean")).toHaveLength(0);
   expect(textsIn(stackOf(root))).not.toContain(appVersion());
   unmount(root);
 });
@@ -189,7 +197,7 @@ const quietNativeReads = () => {
   jest.spyOn(platformPages, "clearsWebsiteDataSince").mockReturnValue(false);
 };
 
-onIos("every page a Settings screen links to is mounted before the tap with the same first-frame title the page itself shows, hero or inline, and is hidden from VoiceOver until pushed", () => {
+onIos("every page a Settings screen links to is mounted before the tap with the same first-frame title the page itself shows, hero or inline; a pane is drawn whole, so it slides in full, and only the sync pages that start their own work wait as a title", () => {
   quietNativeReads();
   const tops = [{ page: "root" }, { page: "general" }, { page: "appearance" }, { page: "search" }, { page: "siteSettings" }, { page: "sync" }, { page: "about" }] as const;
   let compared = 0;
@@ -200,7 +208,7 @@ onIos("every page a Settings screen links to is mounted before the tap with the 
     const links = destinationKeys(root).filter((key) => !pushed.has(key));
     for (const key of links) {
       const placeholder = paneOf(root, key);
-      expect(isPlaceholder(placeholder)).toBe(true);
+      expect(`${key}: ${isPlaceholder(placeholder)}`).toBe(`${key}: ${!drawnBeforePush(key as never)}`);
       const before = firstFrameTitle(placeholder);
       act(() => pushSettings({ page: key } as never));
       expect(isPlaceholder(paneOf(root, key))).toBe(false);
@@ -211,6 +219,76 @@ onIos("every page a Settings screen links to is mounted before the tap with the 
     unmount(root);
   }
   expect(compared).toBeGreaterThan(10);
+});
+
+onIos("a pane drawn before its push runs none of its reads or counts until it is pushed", () => {
+  quietNativeReads();
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const refreshed = jest.spyOn(defaultBrowser, "refreshDefaultBrowser").mockImplementation(async () => null);
+  openSettings();
+  const root = renderSurface(<SettingsView />);
+  expect(textsIn(paneOf(root, "general"))).toContain("About Ardia");
+  expect(counted).not.toHaveBeenCalledWith("settings_panes_opened");
+  expect(refreshed).not.toHaveBeenCalled();
+  act(() => pushSettings({ page: "general" }));
+  expect(counted.mock.calls.filter(([field]) => field === "settings_panes_opened")).toHaveLength(1);
+  expect(refreshed).toHaveBeenCalledTimes(1);
+  unmount(root);
+  jest.restoreAllMocks();
+});
+
+onIos("a pane drawn before its push touches no site data and no network: Site settings mounts no favicon and lists no allowed site until it opens, and Trusted Sites and My Filters wait as a title", () => {
+  quietNativeReads();
+  act(() => useSitePermissions.setState({ listed: true, grants: [{ origin: "https://review-permission.example", host: "review-permission.example", permissions: ["camera"], grantedAt: 1 }] }));
+  openSettings();
+  const root = renderSurface(<SettingsView />);
+  const site = () => paneOf(root, "siteSettings");
+  const favicons = () => site().findAll((node) => node.props.pageUrl === "https://review-permission.example");
+  expect(favicons()).toHaveLength(0);
+  expect(textsIn(site()).some((text) => text.includes("review-permission"))).toBe(false);
+  act(() => pushSettings({ page: "siteSettings" }));
+  expect(favicons().length).toBeGreaterThan(0);
+  expect(isPlaceholder(paneOf(root, "trustedSites"))).toBe(true);
+  expect(drawnBeforePush("myFilters")).toBe(false);
+  unmount(root);
+  act(() => useSitePermissions.setState({ listed: false, grants: [] }));
+  jest.restoreAllMocks();
+});
+
+onIos("a pane opened twice in one Settings session counts and refreshes on each open", () => {
+  quietNativeReads();
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const refreshed = jest.spyOn(defaultBrowser, "refreshDefaultBrowser").mockImplementation(async () => null);
+  openSettings();
+  const root = renderSurface(<SettingsView />);
+  act(() => followSettingsPath(["general"]));
+  act(() => followSettingsPath([]));
+  act(() => followSettingsPath(["general"]));
+  expect(counted.mock.calls.filter(([field]) => field === "settings_panes_opened")).toHaveLength(2);
+  expect(refreshed).toHaveBeenCalledTimes(2);
+  unmount(root);
+  jest.restoreAllMocks();
+});
+
+onIos("the theme editor starts from the swatch being edited: after editing Plum, an unedited Green edits from Green, not Plum", () => {
+  act(() => {
+    usePreferences.setState({ colorChoice: "plum", customTheme: null, presetThemes: {} });
+    useThemeDraft.setState({ draft: null });
+  });
+  openSettings({ page: "appearance" });
+  const root = renderSurface(<SettingsView />);
+  act(() => pushSettings({ page: "theme" }));
+  act(() => followSettingsPath(["appearance"]));
+  act(() => setColorChoice("green"));
+  act(() => pushSettings({ page: "theme" }));
+  const add = paneOf(root, "theme").findAll((node) => node.props.accessibilityLabel === "Add Color" && typeof node.props.onPress === "function")[0]!;
+  act(() => add.props.onPress());
+  const green = usePreferences.getState().presetThemes.green!;
+  const start = startingTheme(PROFILE_COLORS.green.swatch);
+  expect(green.stops.slice(0, start.stops.length).map((stop) => stop.color)).toEqual(start.stops.map((stop) => stop.color));
+  expect(usePreferences.getState().presetThemes.plum).toBeUndefined();
+  unmount(root);
+  act(() => usePreferences.setState({ colorChoice: null, presetThemes: {} }));
 });
 
 onIos("a pane being popped keeps its real content through the pop instead of turning back into its placeholder", () => {

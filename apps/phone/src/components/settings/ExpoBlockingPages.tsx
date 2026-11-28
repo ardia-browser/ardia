@@ -35,7 +35,7 @@ import { addList, applyMyFilters, openFromSettings, removeList, resetLists, setL
 import { popSettings, pushSettings, settingsRouteKey, type SettingsRoute } from "../../state/settings/nav";
 import { FILTER_LIST_ADDRESS, filterListAddress, formatNumber, listFacts, listIsBusy, listsStatus, listStatus, listsText, listUpdatedAt, myFiltersCount, myFiltersSummary, resetMessage, rulesText } from "../../state/settings/settingsRules";
 import { PasteAction, SYSTEM_PASTE_SIZE } from "../sync/SyncPage";
-import { FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, neverBounces, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
+import { bouncesWhenLong, FilterTextEditor, legibleInk, modifierList, navigationBarBackButtonHidden, neverBounces, settingsChrome, settingsLayout, settingsPage, settingsSwitchStyle } from "../ui";
 import { haptics } from "../../state/app/haptics";
 import { ExpoBusyButton, ExpoBusyToolbarAction, ExpoHero } from "./ExpoSettingsParts";
 import { actionWords, blockingWords, dismissWords } from "../../lib/sharedWords";
@@ -282,7 +282,7 @@ export function ExpoTrustedSitesPage() {
   }
   return (
     <Toolbar>
-      <List modifiers={modifierList(...page, settingsChrome(), neverBounces(), environment("editMode", editing ? "active" : "inactive"))}>
+      <List modifiers={modifierList(...page, settingsChrome(), bouncesWhenLong(), environment("editMode", editing ? "active" : "inactive"))}>
         <Section>
           <List.ForEach onDelete={(indices) => indices.forEach((index) => hosts[index] && trustSite(hosts[index], false))}>
             {hosts.map((host) => (

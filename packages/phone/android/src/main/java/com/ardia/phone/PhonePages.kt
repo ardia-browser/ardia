@@ -107,6 +107,7 @@ object PhonePages {
             }
         }
         shared = made
+        made.show(shownPageId)
         downloads = SystemDownloads(context, made)
         host?.get()?.let { activity -> actAsOldWebView(made, activity) }
         host?.get()?.let(made::attach)
@@ -125,6 +126,7 @@ object PhonePages {
         val attached = engine(activity)
         actAsOldWebView(attached, activity)
         attached.attach(activity)
+        attached.enterFront()
         blocking.refreshIfDue()
     }
 
@@ -132,8 +134,15 @@ object PhonePages {
         if (LaunchExtras.allowedInThisBuild && activity.intent?.getBooleanExtra(WITHOUT_PRIVATE_PAGES_EXTRA, false) == true) engine.multiProfileSupported = false
     }
 
+    fun leftForeground() {
+        shared?.leaveFront()
+    }
+
     fun detach(activity: Activity) {
-        if (host?.get() === activity) host = null
+        if (host?.get() === activity) {
+            host = null
+            shared?.leaveFront()
+        }
         if (drawWatched?.get() === activity.window.decorView) watchDraws(null)
         shared?.detach(activity)
         if (fullscreen.isShowing) fullscreen.hide("the activity detached")
@@ -184,6 +193,20 @@ object PhonePages {
     }
 
     fun require(pageId: String): Page = page(pageId) ?: throw CodedException("ERR_NO_PAGE", "No page is open with id $pageId", null)
+
+    private var shownPageId: String? = null
+
+    fun setShownPage(pageId: String?) {
+        shownPageId = pageId
+        val engine = shared ?: return
+        engine.show(pageId)
+        if (pageId != null && hostIsResumed()) engine.enterFront()
+    }
+
+    private fun hostIsResumed(): Boolean {
+        val activity = host?.get() as? androidx.lifecycle.LifecycleOwner ?: return false
+        return activity.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    }
 
     fun activate(pageId: String) {
         val engine = shared ?: return
@@ -478,6 +501,7 @@ object PhonePages {
                 send(id, "page.longPress", "target" to PagePayloads.pressTarget(event.target), "x" to (event.x / density).toDouble(), "y" to (event.y / density).toDouble())
             }
             PageEvent.CloseRequested -> send(id, "page.closeRequested")
+            is PageEvent.ProcessEnded -> send(id, "page.processEnded", "outcome" to event.outcome.wire)
             is PageEvent.ExternalAppMissing -> send(id, "page.externalAppMissing", "url" to event.url)
         }
     }

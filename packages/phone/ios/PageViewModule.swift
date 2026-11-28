@@ -253,6 +253,10 @@ public final class PageViewModule: Module {
       Self.main(promise) { try await PhonePages.shared.evaluate(pageID, script: script) }
     }.runOnQueue(.main)
 
+    AsyncFunction("setShownPage") { (pageID: String?) in
+      MainActor.assumeIsolated { PhonePages.shared.setShownPage(pageID) }
+    }.runOnQueue(.main)
+
     AsyncFunction("discardBackgroundPages") { (keeping: String?) in
       MainActor.assumeIsolated { PhonePages.shared.discardBackgroundPages(keeping: keeping) }
     }.runOnQueue(.main)

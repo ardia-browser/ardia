@@ -13,14 +13,16 @@ export type BlockedScroll = Parameters<ReturnType<typeof Gesture.Pan>["blocksExt
 
 type Blocks = { blocks?: BlockedScroll };
 
+type Cancels = { onCancel: () => void };
+
 const WEDGES = padWedges(L.padWedges, L.pad);
 const CENTRE = padCentre();
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
-export function ColorPad({ theme, selected, onSelect, onChange, blocks }: { theme: ProfileTheme; selected: number; onSelect: (index: number) => void; onChange: Change } & Blocks) {
-  const latest = useRef({ theme, selected, onSelect, onChange });
-  latest.current = { theme, selected, onSelect, onChange };
+export function ColorPad({ theme, selected, onSelect, onChange, onCancel, blocks }: { theme: ProfileTheme; selected: number; onSelect: (index: number) => void; onChange: Change } & Cancels & Blocks) {
+  const latest = useRef({ theme, selected, onSelect, onChange, onCancel });
+  latest.current = { theme, selected, onSelect, onChange, onCancel };
   const dragging = useRef<number | null>(null);
   const pan = useMemo(() => {
     const move = (x: number, y: number, settle: boolean) => {
@@ -36,7 +38,7 @@ export function ColorPad({ theme, selected, onSelect, onChange, blocks }: { them
       if (hit < 0) move(x, y, false);
     };
     const finish = (success: boolean) => {
-      if (!success && dragging.current !== null) latest.current.onChange(latest.current.theme, true);
+      if (!success && dragging.current !== null) latest.current.onCancel();
       dragging.current = null;
     };
     const gesture = Gesture.Pan()
@@ -48,8 +50,8 @@ export function ColorPad({ theme, selected, onSelect, onChange, blocks }: { them
       .onUpdate((e) => {
         runOnJS(move)(e.x, e.y, false);
       })
-      .onEnd((e) => {
-        runOnJS(move)(e.x, e.y, true);
+      .onEnd((e, success) => {
+        if (success) runOnJS(move)(e.x, e.y, true);
       })
       .onFinalize((_e, success) => {
         runOnJS(finish)(success);
@@ -98,12 +100,13 @@ export function ColorPad({ theme, selected, onSelect, onChange, blocks }: { them
   );
 }
 
-function Track({ value, onChange, bar, thumbColor, label, blocks }: { value: number; onChange: (value: number, settle: boolean) => void; bar: ReactNode; thumbColor?: string; label: string } & Blocks) {
+function Track({ value, onChange, onCancel, bar, thumbColor, label, blocks }: { value: number; onChange: (value: number, settle: boolean) => void; bar: ReactNode; thumbColor?: string; label: string } & Cancels & Blocks) {
   const [width, setWidth] = useState(0);
-  const latest = useRef({ value, width, onChange });
-  latest.current = { value, width, onChange };
+  const latest = useRef({ value, width, onChange, onCancel });
+  latest.current = { value, width, onChange, onCancel };
   const gesture = useMemo(() => {
     const report = (x: number, settle: boolean) => latest.current.onChange(clamp01((x - L.thumb / 2) / Math.max(1, latest.current.width - L.thumb)), settle);
+    const cancel = () => latest.current.onCancel();
     const pan = Gesture.Pan()
       .withTestId(`themeTrack:${label}`)
       .activeOffsetX([-space.xs, space.xs])
@@ -114,8 +117,9 @@ function Track({ value, onChange, bar, thumbColor, label, blocks }: { value: num
       .onUpdate((e) => {
         runOnJS(report)(e.x, false);
       })
-      .onEnd((e) => {
-        runOnJS(report)(e.x, true);
+      .onEnd((e, success) => {
+        if (success) runOnJS(report)(e.x, true);
+        else runOnJS(cancel)();
       });
     const tap = Gesture.Tap()
       .withTestId(`themeTap:${label}`)
@@ -150,7 +154,7 @@ function Track({ value, onChange, bar, thumbColor, label, blocks }: { value: num
   );
 }
 
-export function LightnessBar({ theme, index, onChange, blocks }: { theme: ProfileTheme; index: number; onChange: Change } & Blocks) {
+export function LightnessBar({ theme, index, onChange, onCancel, blocks }: { theme: ProfileTheme; index: number; onChange: Change } & Cancels & Blocks) {
   const stop = theme.stops[index]!;
   const steps = useMemo(() => lightnessSteps(stop, L.lightnessSteps), [stop.x, stop.y]);
   const latest = useRef(theme);
@@ -163,6 +167,7 @@ export function LightnessBar({ theme, index, onChange, blocks }: { theme: Profil
       thumbColor={colorHex(stop.color)}
       blocks={blocks}
       onChange={change}
+      onCancel={onCancel}
       bar={
         <View style={styles.lightness}>
           {steps.map((color, i) => (
@@ -174,7 +179,7 @@ export function LightnessBar({ theme, index, onChange, blocks }: { theme: Profil
   );
 }
 
-export function ThemeSlider({ title, value, onChange, blocks }: { title: string; value: number; onChange: (value: number, settle: boolean) => void } & Blocks) {
+export function ThemeSlider({ title, value, onChange, onCancel, blocks }: { title: string; value: number; onChange: (value: number, settle: boolean) => void } & Cancels & Blocks) {
   const theme = useTheme();
   return (
     <View style={styles.sliderRow}>
@@ -183,6 +188,7 @@ export function ThemeSlider({ title, value, onChange, blocks }: { title: string;
         label={title}
         value={value}
         onChange={onChange}
+        onCancel={onCancel}
         blocks={blocks}
         bar={
           <View style={[styles.slider, { backgroundColor: theme.separator }]}>
@@ -194,14 +200,14 @@ export function ThemeSlider({ title, value, onChange, blocks }: { title: string;
   );
 }
 
-export function DirectionDial({ angle, onChange, blocks }: { angle: number; onChange: (angle: number, settle: boolean) => void } & Blocks) {
+export function DirectionDial({ angle, onChange, onCancel, blocks }: { angle: number; onChange: (angle: number, settle: boolean) => void } & Cancels & Blocks) {
   const theme = useTheme();
-  const latest = useRef({ angle, onChange });
-  latest.current = { angle, onChange };
+  const latest = useRef({ angle, onChange, onCancel });
+  latest.current = { angle, onChange, onCancel };
   const pan = useMemo(() => {
     const report = (x: number, y: number, settle: boolean) => latest.current.onChange(dialAngle(x - L.dial / 2, y - L.dial / 2, L.dialSnap, L.dialNotch), settle);
     const cancel = (success: boolean) => {
-      if (!success) latest.current.onChange(latest.current.angle, true);
+      if (!success) latest.current.onCancel();
     };
     const gesture = Gesture.Pan()
       .withTestId("themeDial")
@@ -212,8 +218,8 @@ export function DirectionDial({ angle, onChange, blocks }: { angle: number; onCh
       .onUpdate((e) => {
         runOnJS(report)(e.x, e.y, false);
       })
-      .onEnd((e) => {
-        runOnJS(report)(e.x, e.y, true);
+      .onEnd((e, success) => {
+        if (success) runOnJS(report)(e.x, e.y, true);
       })
       .onFinalize((_e, success) => {
         runOnJS(cancel)(success);

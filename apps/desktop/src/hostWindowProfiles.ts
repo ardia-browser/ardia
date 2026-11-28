@@ -2,7 +2,7 @@ import type { WindowEvent } from "@ardia-real/shell";
 import type { BrowserState, HydrateData } from "../../browser/src/state/browser/store";
 import type { BrowserWindow, Tab } from "../../browser/src/state/browser/types";
 import type { ArdiaHost } from "./host";
-import { invokeHost, reportHostError } from "./host.ts";
+import { hostProfile, invokeHost, reportHostError } from "./host.ts";
 import { engineProfile, isIncognitoProfile } from "../../browser/src/state/browser/model";
 import { offerSmallWindow, relayedSmallWindow, relaysSmallWindows, smallWindowFrame, smallWindowSeed, withdrawSmallWindow, type ScreenArea, type SeedStorage } from "./hostSmallWindows.ts";
 
@@ -155,7 +155,7 @@ export function watchActiveProfile(host: ArdiaHost, store: ActiveProfileStore, w
     const engine = activeEngineProfile(s, windowId);
     if (engine === undefined || engine === sent) return;
     sent = engine;
-    void invokeHost("ArdiaShell.setActiveProfile", { args: [engine, ++sequence] }, host).catch((error) => {
+    void invokeHost("ArdiaShell.setActiveProfile", { args: [hostProfile(engine, host), ++sequence] }, host).catch((error) => {
       if (sent === engine) sent = undefined;
       reportHostError(error);
     });

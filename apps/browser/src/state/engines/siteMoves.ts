@@ -4,7 +4,7 @@ import { patchPage } from "../tabs/pageState";
 import { canSwitchEngine, chosenEngine, chromiumOnly, modeEngineFor, needsChromium, singleEngine, siteOf, tabEngine, webStorePage } from "./engines";
 import { navigationOf } from "../tabs/pageSession";
 import { declineSite, modeStillHolds, openPageIn, pageDocumentOf, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
-import { openedByPage, openerDeadline, openerState } from "./openedPages";
+import { openedByPage, openerBudget, openerState } from "./openedPages";
 import { noteSiteMove } from "../telemetry/engineSwitchCounts";
 import { heldByCli } from "../tabs/cliHolds";
 import { consentToken, type ConsentToken } from "../telemetry/client";
@@ -167,16 +167,16 @@ function settlePending(tabId: string, move: Move) {
   startMove(tabId, { ...move, from });
 }
 
-async function moveOpenedTab(tabId: string, url: string, move: Move, until = openerDeadline()): Promise<void> {
+async function moveOpenedTab(tabId: string, url: string, move: Move, budget = openerBudget()): Promise<void> {
   const holds = modeStillHolds();
   const visit = movesOf(tabId).visit;
   const document = pageDocumentOf(tabId);
   const sameVisit = () => tabMoves.get(tabId)?.visit === visit && navigationNow(tabId) === move.navigation;
   const onSite = () => !!store().tabs[tabId] && holds() && sameVisit() && siteOf(pageUrl(store().tabs[tabId])) === siteOf(url) && tabEngine(store(), tabId) === move.from;
   const stillOnSite = () => onSite() && pageDocumentOf(tabId) === document;
-  const opener = await openerState(tabId, stillOnSite, until);
+  const opener = await openerState(tabId, stillOnSite, budget);
   if (!onSite() || !routedTo(tabId, move.to)(pageUrl(store().tabs[tabId]))) return;
-  if (pageDocumentOf(tabId) !== document) return Date.now() < until ? moveOpenedTab(tabId, url, move, until) : noteSiteMove("dropped", true, move.consent);
+  if (pageDocumentOf(tabId) !== document) return moveOpenedTab(tabId, url, move, budget);
   if (opener === "live") return noteSiteMove("keptForOpener", true, move.consent);
   if (opener === "unknown") return noteSiteMove("dropped", true, move.consent);
   startMove(tabId, { ...move, delayed: true, askedDocument: document });

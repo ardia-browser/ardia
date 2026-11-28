@@ -102,6 +102,10 @@ final class WebMedia {
     }
   }
 
+  static func trace(_ line: String) {
+    if PhoneTestBuild.isOn { NSLog("MEDIALAB %@", line) }
+  }
+
   nonisolated static var pictureInPictureSupported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
 
   func received(_ body: Any, frame: WKFrameInfo, webView: WKWebView?) {
@@ -110,11 +114,13 @@ final class WebMedia {
     case .report(let report):
       take(report, frame: frame, pageID: pageID)
     case .left(_, let outcome):
+      Self.trace("left \(pageID) \(outcome.rawValue)")
       if outcome == .refused { report(.resumeRefused, pageID: pageID) }
     }
   }
 
   private func take(_ report: PageMediaReport, frame: WKFrameInfo, pageID: String) {
+    Self.trace("report \(pageID) \(report.token) \(report.state.rawValue) t=\(String(format: "%.1f", report.position)) video=\(report.hasVideo) pip=\(report.inPictureInPicture) main=\(frame.isMainFrame) app=\(UIApplication.shared.applicationState.rawValue)")
     let now = ProcessInfo.processInfo.systemUptime
     let before = best(pageID)
     var pageFrames = frames[pageID] ?? [:]
@@ -210,6 +216,7 @@ final class WebMedia {
 
   @discardableResult
   private func run(_ command: PageMediaCommand, pageID: String, token: String, seconds: Int?) -> Bool {
+    Self.trace("command \(pageID) \(token) \(command.rawValue) \(seconds.map(String.init) ?? "")")
     guard let frame = frames[pageID]?[token], let webView = host.webView(pageID), let script = command.script(token: token, seconds: seconds) else { return false }
     webView.evaluateJavaScript(script, in: frame.frame, in: .page) { _ in }
     return true

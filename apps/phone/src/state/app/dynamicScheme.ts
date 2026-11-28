@@ -1,10 +1,12 @@
 import { materialColors } from "@ardia/phone-native";
 import { create } from "zustand";
+import { readableSchemePair, unreadableInks } from "../../lib/material/schemePick";
 import type { MaterialSchemePair } from "../../lib/material/schemes";
 
-export const useDynamicScheme = create<{ pair: MaterialSchemePair | null }>()(() => ({ pair: null }));
+export const useDynamicScheme = create<{ pair: MaterialSchemePair | null; inksFixed: number }>()(() => ({ pair: null, inksFixed: 0 }));
 
-export const setDynamicScheme = (pair: MaterialSchemePair | null) => useDynamicScheme.setState({ pair });
+export const setDynamicScheme = (given: MaterialSchemePair | null) =>
+  useDynamicScheme.setState({ pair: readableSchemePair(given), inksFixed: given ? unreadableInks(given.light).length + unreadableInks(given.dark).length : 0 });
 
 const readDynamicScheme = (): MaterialSchemePair | null => {
   try {

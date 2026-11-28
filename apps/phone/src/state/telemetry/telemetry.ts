@@ -139,7 +139,7 @@ export async function reportLaunch(firstScreenAt: number) {
   const design = useAppearanceDesign.getState().design;
   const { status, view } = syncData();
   const glass_render = glassRenderTelemetry(Platform.OS, design, chromeStyle(design, interfaceStyle, macLookOf(status.isEnabled, view.look), systemLookNow().reduceTransparency), nativeGlassRender());
-  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors, color_choice, theme_fixed_scheme: themeFixesScheme(), glass_render, page_border: pageBorder, page_corner_radius: pageCornerRadius, previous_session: launchPrevious });
+  gate.capture("app_launched", { legacy_import: legacyImportOutcome(boot.outcome), legacy_import_failures: boot.failures, look_mode: look, ...appearanceTelemetry(offeredInterfaceStyle(interfaceStyle, syncOffered()), offeredScheme(schemeChoice, syncOffered())), material_colors, material_inks_fixed: material_colors === "wallpaper" ? useDynamicScheme.getState().inksFixed : 0, color_choice, theme_fixed_scheme: themeFixesScheme(), glass_render, page_border: pageBorder, page_corner_radius: pageCornerRadius, previous_session: launchPrevious });
   const processStart = await processStartedAt();
   const timings = launchProps(processStart, JS_STARTED_AT, firstScreenAt);
   if (timings) gate.capture("perf_launch", timings);

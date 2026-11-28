@@ -29,10 +29,17 @@ import kotlinx.coroutines.sync.withPermit
 
 sealed interface DownloadOutcome {
     val fileName: String
+    val isPrivate: Boolean
 
-    data class Finished(override val fileName: String, val uri: Uri?) : DownloadOutcome
+    data class Finished(override val fileName: String, val uri: Uri?, override val isPrivate: Boolean = false) : DownloadOutcome
 
-    data class Failed(override val fileName: String, val reason: DownloadFailure = DownloadFailure.Network) : DownloadOutcome
+    data class Failed(override val fileName: String, val reason: DownloadFailure = DownloadFailure.Network, override val isPrivate: Boolean = false) : DownloadOutcome
+}
+
+sealed interface DownloadStart {
+    data class Started(val id: Long) : DownloadStart
+
+    data class Refused(val failure: DownloadFailure) : DownloadStart
 }
 
 data class DownloadProgress(val id: Long, val fileName: String, val bytes: Long, val total: Long?, val isQueued: Boolean = false) {
@@ -80,19 +87,27 @@ class SystemDownloads(
     }
 
     private fun announce(entry: Entry, outcome: DownloadOutcome) {
-        if (entry.announced.compareAndSet(false, true)) finished.trySend(outcome)
+        val marked = when (outcome) {
+            is DownloadOutcome.Finished -> outcome.copy(isPrivate = entry.download.isPrivate)
+            is DownloadOutcome.Failed -> outcome.copy(isPrivate = entry.download.isPrivate)
+        }
+        if (entry.announced.compareAndSet(false, true)) finished.trySend(marked)
     }
 
     @Volatile
     private var sessionListener: AutoCloseable? = null
     private val sessionLock = Any()
+    private val endedSessions = LinkedHashSet<String>()
 
     val active: StateFlow<List<DownloadProgress>> = mutableActive.asStateFlow()
 
     val outcomes: Flow<DownloadOutcome> = finished.receiveAsFlow()
 
-    fun enqueue(download: PageDownload): Long? {
-        if (!BrowserUrl.isWeb(download.url)) return null
+    fun enqueue(download: PageDownload): Long? = (start(download) as? DownloadStart.Started)?.id
+
+    fun start(download: PageDownload): DownloadStart {
+        val takes = download.source != null || BrowserUrl.isWeb(download.url) || DataUrls.hasHeader(download.url)
+        if (!takes) return DownloadStart.Refused(DownloadFailure.Unsupported)
         listenForSessionEnds()
         val id = nextId.incrementAndGet()
         val requestedName = DownloadRules.safeFileName(download.fileName)
@@ -102,7 +117,7 @@ class SystemDownloads(
             else -> "$UNBOUND_PRIVATE_SCOPE$id"
         }
         val entry = synchronized(sessionLock) {
-            if (!DownloadRules.liveCheckFor(download, sessions)()) return null
+            if (hasEnded(download) || !DownloadRules.liveCheckFor(download, sessions)()) return DownloadStart.Refused(DownloadFailure.PrivateSessionEnded)
             Entry(download, transport.newCall(connectionScope)).also { entries[id] = it }
         }
         report(DownloadProgress(id, requestedName, 0, download.contentLength.takeIf { it > 0 }, isQueued = true))
@@ -124,7 +139,7 @@ class SystemDownloads(
             if (outcome != null) announce(entry, outcome)
         }
         entry.job = job
-        return id
+        return DownloadStart.Started(id)
     }
 
     fun cancel(id: Long) {
@@ -146,7 +161,12 @@ class SystemDownloads(
         }
     }
 
+    private fun hasEnded(download: PageDownload): Boolean = download.isPrivate && download.privateSession in endedSessions
+
     private fun endSession(session: String) = synchronized(sessionLock) {
+        endedSessions.remove(session)
+        endedSessions += session
+        while (endedSessions.size > ENDED_SESSIONS_KEPT) endedSessions.remove(endedSessions.first())
         transport.endConnectionScope(session)
         for (entry in entries.values) {
             if (entry.download.isPrivate && entry.download.privateSession == session) {
@@ -167,10 +187,14 @@ class SystemDownloads(
         var target: Uri? = null
         var name = requestedName
         try {
-            val (finalUrl, response) = DownloadRules.fetch(download.url, download.userAgent, download.referer, DownloadRules.cookiesFor(download, cookies, sessions), isLive, transport, call)
+            val pageMade = download.source != null || DataUrls.isData(download.url)
+            val (finalUrl, response) = open(download, isLive, call)
             response.use {
-                val served = response.header("content-type")?.substringBefore(';')?.trim()?.ifEmpty { null }
-                if (download.mimeType == null && download.contentDisposition == null) {
+                val served = PageMadeDownloads.cleanMimeType(response.header("content-type"))
+                if (pageMade) {
+                    val declared = DownloadRules.dispositionName(download.contentDisposition) ?: DownloadRules.dispositionName(response.header("content-disposition"))
+                    name = DownloadRules.pageMadeName(declared, requestedName, served ?: download.mimeType, requestedName, ::extensionFor)
+                } else if (download.mimeType == null && download.contentDisposition == null) {
                     DownloadRules.linkName(finalUrl, response.header("content-disposition"), served) { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
                         ?.let { name = DownloadRules.safeFileName(it, requestedName) }
                 }
@@ -199,9 +223,7 @@ class SystemDownloads(
                     }
                 }
             }
-            call.ensureActive()
-            if (!isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
-            publish(target!!)
+            publishWhileLive(entry, target!!, isLive)
             return DownloadOutcome.Finished(name, target)
         } catch (error: DownloadRefused) {
             target?.let(::discard)
@@ -215,6 +237,39 @@ class SystemDownloads(
             return DownloadOutcome.Failed(name, if (target == null) DownloadFailure.Network else DownloadFailure.Storage)
         }
     }
+
+    private fun publishWhileLive(entry: Entry, target: Uri, isLive: () -> Boolean) {
+        if (!entry.download.isPrivate) {
+            entry.call.ensureActive()
+            publish(target)
+            return
+        }
+        synchronized(sessionLock) {
+            entry.call.ensureActive()
+            if (entry.endedWithSession || hasEnded(entry.download) || !isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
+            publish(target)
+            if (!isLive()) {
+                discard(target)
+                throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
+            }
+        }
+    }
+
+    private fun open(download: PageDownload, isLive: () -> Boolean, call: DownloadCall): Pair<String, DownloadResponse> {
+        download.source?.let { source ->
+            call.ensureActive()
+            if (!isLive()) throw DownloadRefused(DownloadFailure.PrivateSessionEnded)
+            return download.url to source.open(call)
+        }
+        if (DataUrls.isData(download.url)) {
+            val data = DataUrls.parse(download.url) ?: throw DownloadRefused(DownloadFailure.Unsupported)
+            val headers = mapOf("content-type" to listOf(data.mimeType), "content-length" to listOf(data.byteCount.toString()))
+            return download.url to DownloadResponse(200, headers, data.body())
+        }
+        return DownloadRules.fetch(download.url, download.userAgent, download.referer, DownloadRules.cookiesFor(download, cookies, sessions), isLive, transport, call)
+    }
+
+    private fun extensionFor(mimeType: String): String? = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
 
     private fun report(progress: DownloadProgress) {
         mutableActive.update { list -> list.filterNot { it.id == progress.id } + progress }
@@ -264,6 +319,7 @@ class SystemDownloads(
 
     companion object {
         const val MAX_RUNNING = 3
+        private const val ENDED_SESSIONS_KEPT = 32
         private const val UNBOUND_PRIVATE_SCOPE = "unbound-private-"
         private const val REPORT_INTERVAL_NANOS = 250_000_000L
 

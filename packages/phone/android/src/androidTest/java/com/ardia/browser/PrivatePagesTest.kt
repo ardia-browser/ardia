@@ -61,6 +61,22 @@ class PrivatePagesTest {
     }
 
     @Test
+    fun sessionEndListenersAreToldBeforeTheSessionStopsBeingLive() {
+        assumeTrue(onMain { harness.engine.separatesPrivatePages })
+        val page = harness.open("ordering", isPrivate = true)
+        set(page, "a")
+        val session = onMain { harness.engine.currentPrivateSession() }!!
+        val liveWhenTold = ArrayList<Boolean>()
+        val listening = onMain {
+            harness.engine.addPrivateSessionEndListener { ended -> if (ended == session) liveWhenTold += harness.engine.isPrivateSessionLive(ended) }
+        }
+        onMain { harness.engine.close("ordering") }
+        listening.close()
+        assertEquals(listOf(true), liveWhenTold)
+        assertFalse(onMain { harness.engine.isPrivateSessionLive(session) })
+    }
+
+    @Test
     fun privateDataIsGoneOnceTheLastPrivatePageCloses() {
         assumeTrue(onMain { harness.engine.separatesPrivatePages })
         var ended = 0
@@ -129,7 +145,7 @@ class PrivatePagesTest {
         assertEquals("jar=a", server.requests.first { it.path == "/held" }.headers["cookie"])
         onMain { harness.engine.close("p1") }
         val ended = kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeout(10_000) { downloads.outcomes.first() } }
-        assertEquals(DownloadOutcome.Failed("held.bin", DownloadFailure.PrivateSessionEnded), ended)
+        assertEquals(DownloadOutcome.Failed("held.bin", DownloadFailure.PrivateSessionEnded, isPrivate = true), ended)
         val second = harness.open("p2", isPrivate = true)
         set(second, "b")
         assertEquals(null, onMain { harness.engine.privateCookieHeader(server.url("/after"), session) })

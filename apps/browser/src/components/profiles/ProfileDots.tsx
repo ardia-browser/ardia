@@ -1,10 +1,10 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Animated, Pressable, View, type PanResponderInstance } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { switchProfile } from "../../state/browser/actions";
 import { noteSwitcherPress } from "../../state/telemetry/switcherPresses";
 import { layout, useTheme } from "../ui/theme";
-import { useIsIncognito, useProfile, useSettings } from "../../state/browser/hooks";
+import { useIsIncognito, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import { useProfileOrder, useProfileRecords } from "../../state/profiles/hooks";
 import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../state/windows/profilePager";
 import { ContextMenuArea, useHover } from "../ui";
@@ -16,7 +16,7 @@ import { profileSwitcherShown } from "../../state/profiles/switcherShown";
 import { switcherIconOf } from "../../state/profiles/switcherMark";
 import { profileSwitcher } from "./tokens";
 import { buttonMotion, usePressScaleMotion } from "../ui/motion";
-import { useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
+import { useDragging, useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { useDotReorder } from "./useDotReorder";
 import { dotsRowLeftInset } from "./dotsRow";
@@ -36,13 +36,23 @@ export function useProfileDotsShown() {
 export function ProfileDots({ windowId, width, besideDownloads }: { windowId: string; width: number; besideDownloads: boolean }) {
   const ids = useProfileOrder(useShallow((o) => o));
   const saved = useProfileRecords(useShallow((profiles) => ids.map((id) => switcherIconOf(profiles[id]))));
-  const icons = switcherIcons(saved, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
+  const active = useWindow(windowId, (w) => w?.profileId);
+  const dragging = useDragging();
+  const room = width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM);
+  const icons = switcherIcons(saved, room, ids.indexOf(active ?? ""));
+  const liveCells = icons.map(switcherCellWidth);
+  const rowWidth = liveCells.reduce((sum, cell) => sum + cell, 0);
+  const paddingLeft = besideDownloads ? dotsRowLeftInset(width, rowWidth, SIDE_ROOM_BESIDE_DOWNLOADS) : 0;
+  const liveLayout = { ids, width, cells: liveCells, paddingLeft };
+  const restLayout = useRef(liveLayout);
+  useLayoutEffect(() => {
+    if (!dragging) restLayout.current = liveLayout;
+  });
+  const row = dragging && restLayout.current.ids === ids ? restLayout.current : liveLayout;
   const { pages, pager } = usePagerPages(windowId);
-  const cells = ids.map((_, i) => switcherCellWidth(icons[i] ?? null));
-  const reorder = useDotReorder(ids, cells);
-  const rowWidth = cells.reduce((sum, cell) => sum + cell, 0);
+  const reorder = useDotReorder(ids, row.cells);
   return (
-    <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center", paddingLeft: besideDownloads ? dotsRowLeftInset(width, rowWidth, SIDE_ROOM_BESIDE_DOWNLOADS) : 0 }}>
+    <View style={{ height: PROFILE_DOTS_HEIGHT, width: dragging ? row.width : undefined, alignItems: "center", paddingLeft: row.paddingLeft }}>
       <View style={{ marginTop: (PROFILE_DOTS_HEIGHT - 3 - BAND) / 2, height: BAND, flexDirection: "row" }}>
         {ids.map((id, i) => (
           <Dot
@@ -50,6 +60,7 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
             id={id}
             windowId={windowId}
             icon={icons[i] ?? null}
+            cell={row.cells[i]!}
             page={pages.find((p) => p.id === id)}
             pos={pager.pos}
             offset={reorder.offsetOf(id)}
@@ -67,6 +78,7 @@ type DotProps = {
   id: string;
   windowId: string;
   icon: string | null;
+  cell: number;
   page: PagerPage | undefined;
   pos: Animated.Value;
   offset: Animated.Value;
@@ -75,7 +87,7 @@ type DotProps = {
   reordering: boolean;
 };
 
-function Dot({ id, windowId, icon, page, pos, offset, pan, lifted, reordering }: DotProps) {
+function Dot({ id, windowId, icon, cell, page, pos, offset, pan, lifted, reordering }: DotProps) {
   const theme = useTheme();
   useNativePagerPosition(windowId);
   const name = useProfile(id, (p) => p?.name ?? "");
@@ -91,7 +103,6 @@ function Dot({ id, windowId, icon, page, pos, offset, pan, lifted, reordering }:
   const opacity = page
     ? pos.interpolate({ inputRange: [page.slot - 1, page.slot, page.slot + 1], outputRange: [rest, levels.selected, rest], extrapolate: "clamp" })
     : rest;
-  const cell = switcherCellWidth(icon);
   const mark = useRef<View>(null);
   return (
     <Animated.View {...hoverProps} {...pan.panHandlers} ref={mark} style={{ zIndex: lifted ? 1 : 0, transform: [{ translateX: offset }] }}>

@@ -203,6 +203,7 @@ enum BlockingScripts {
     const regexpTest = RegExp.prototype.test;
     const reflectApply = Reflect.apply;
     const arrayFrom = Array.from;
+    const reflectConstruct = Reflect.construct;
     const ProxyType = Proxy;
     const matches = (pattern, text) => reflectApply(regexpTest, pattern, [text]);
     const wholeNumber = /^-?\d+$/;
@@ -263,20 +264,26 @@ enum BlockingScripts {
         const replacement = constant(raw);
         if (!found || !replacement) return;
         const index = parseInt(position, 10);
+        if (rest.length % 2 !== 0) return;
         const extra = options(rest);
+        if (Object.keys(extra).some((key) => key !== "condition")) return;
         const condition = extra.condition === undefined ? null : toRegExp(extra.condition);
+        const replaced = (args) => {
+          const at = index >= 0 ? index : args.length + index;
+          if (at < 0 || at >= args.length) return args;
+          const value = args[at];
+          if (condition !== null && !(typeof value === "string" && matches(condition, value))) return args;
+          const out = arrayFrom(args);
+          out[at] = replacement.value;
+          return out;
+        };
         const original = found.target[found.prop];
         found.target[found.prop] = new ProxyType(original, {
           apply(fn, self, args) {
-            const at = index >= 0 ? index : args.length + index;
-            if (at >= 0 && at < args.length) {
-              const value = args[at];
-              if (condition === null || (typeof value === "string" && matches(condition, value))) {
-                args = arrayFrom(args);
-                args[at] = replacement.value;
-              }
-            }
-            return reflectApply(fn, self, args);
+            return reflectApply(fn, self, replaced(args));
+          },
+          construct(fn, args, target) {
+            return reflectConstruct(fn, replaced(args), target);
           },
         });
       },

@@ -41,9 +41,13 @@ let adShieldBody = ["trusted-replace-argument", "Element.prototype.setAttribute"
     wide.example,~shop.wide.example##+js(trusted-replace-argument, a.b, 1, x)
     this.example##+js(trusted-replace-argument, a.b, this, x)
     repl.example##+js(trusted-replace-argument, a.b, 0, repl:/a/b/)
+    as.example##+js(trusted-ra, Promise.resolve, 0, true, as, function)
+    odd.example##+js(trusted-ra, Promise.resolve, 0, true, condition)
     """
     let list = FilterListConverter.parse(text, id: "ublock-filters")
-    #expect(list.skippedLines == 6)
+    #expect(list.skippedLines == 8)
+    #expect(list.scriptlets.bodies(forHost: "as.example").isEmpty)
+    #expect(list.scriptlets.bodies(forHost: "odd.example").isEmpty)
     #expect(list.scriptlets.bodies(forHost: "mixed.example") == [["trusted-replace-argument", "a.b", "0", "x"]])
     #expect(list.scriptlets.bodies(forHost: "www.wide.example") == [["trusted-replace-argument", "a.b", "1", "x"]])
     #expect(list.scriptlets.bodies(forHost: "shop.wide.example").isEmpty)
@@ -158,7 +162,8 @@ enum ScriptletPages {
 @MainActor
 @Suite(.serialized) struct ScriptletRuntimeTests {
   @Test func replacesOnlyTheMatchingArgumentOnTheListedSitesAndLooksNative() async throws {
-    let table = FilterListConverter.parse(adShieldFilter, id: "ublock-filters").scriptlets
+    var table = FilterListConverter.parse(adShieldFilter, id: "ublock-filters").scriptlets
+    table.add(["trusted-replace-argument", "URL", "0", "https://kept.example/", "condition", "ads.example"], on: ["allrecipes.com"])
     let configuration = WKWebViewConfiguration()
     configuration.websiteDataStore = .nonPersistent()
     configuration.userContentController.addUserScript(WKUserScript(source: try #require(table.script), injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
@@ -168,6 +173,8 @@ enum ScriptletPages {
     #expect(listed.load == "")
     #expect(listed.keep == "plain value")
     #expect(listed.native == true)
+    let constructed = try await webView.evaluateJavaScript("[new URL('https://ads.example/x').host, new URL('https://news.example/').host].join()") as? String
+    #expect(constructed == "kept.example,news.example")
 
     let other = try await ScriptletPages.run(host: "example.org", nonce: "other", in: webView)
     #expect(other.load == "fetch(url).then(adShieldError)")

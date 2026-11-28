@@ -99,6 +99,8 @@ public struct ScriptletTable: Codable, Equatable, Sendable {
     case "trusted-replace-argument":
       guard body.count >= 3, !body[1].isEmpty, body[2].wholeMatch(of: /-?[0-9]+/) != nil else { return false }
       let value = body.count > 3 ? body[3] : ""
+      let extra = body.dropFirst(4)
+      guard extra.count % 2 == 0, stride(from: extra.startIndex, to: extra.endIndex, by: 2).allSatisfy({ extra[$0] == "condition" }) else { return false }
       for prefix in ["repl:", "add:", "json:"] where value.hasPrefix(prefix) { return false }
       return !(value.hasPrefix("{") && value.hasSuffix("}"))
     default:

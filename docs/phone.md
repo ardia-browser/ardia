@@ -2120,7 +2120,7 @@ Events (service `ardia-phone`, `$lib` `ardia-phone-telemetry`, tags `app: phone`
 | Event | Fields | When |
 | --- | --- | --- |
 | `sharing_turned_on` | `source` (settings, onboarding) | turning sharing on |
-| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design, and `color_choice` (match_mac, preset, custom): the colour row's choice, and `glass_render` (lens, frost, solid, classic, native, none): the best glass this phone can draw this launch, not what each surface drew (a surface can still draw less: on Android 12, which reports `frost`, the page bar keeps the solid page mode, and `glass_unsourced` counts glass left with nothing to blur): the Liquid Glass lens and rim (Android 13+, any iPhone with Metal), plain frost (Android 12 or `ArdiaFlatGlass`) or without blur (below Android 12, over the look budget or with the look off), and otherwise Classic (Classic or Reduce Transparency), Apple's own glass (`native`, iPhone builds before #3950), or none in Material You | each launch with sharing on |
+| `app_launched` | `legacy_import` (imported, started_fresh, none), `legacy_import_failures` (failed tries before the app opened), `look_mode` (full, no_blur, no_motion, neither: the look this launch shows, after the look's budget and the system's Reduce Motion and Reduce Transparency), `interface_style` (match_mac, glass, classic) and `color_scheme` (match_mac, system, light, dark): the redesign's Appearance choices, and `material_colors` (wallpaper, profile, fallback, not_material): where Android's Material design took its colours, from the wallpaper, from a picked profile colour, or from Ardia's own palette on phones that give none; not_material on iPhone and in the original design, and `color_choice` (match_mac, preset, custom): the colour row's choice, and `glass_render` (lens, frost, solid, classic, native, none): the best glass this phone can draw this launch, not what each surface drew (a surface can still draw less: on Android 12, which reports `frost`, the page bar keeps the solid page mode, and `glass_unsourced` counts glass left with nothing to blur): the Liquid Glass lens and rim (Android 13+, any iPhone with Metal), plain frost (Android 12 or `ArdiaFlatGlass`) or without blur (below Android 12, over the look budget or with the look off), and otherwise Classic (Classic or Reduce Transparency), Apple's own glass (`native`, iPhone builds before #3950), or none in Material You, and `page_border` (flag) and `page_corner_radius` (0 to 24): the saved Settings › Appearance › Page values (set on a full-screen iPad), sent on every layout, the defaults true and 16 when nothing was saved | each launch with sharing on |
 | `perf_launch` | `launch_ms`, `js_ms` | each launch, once the module gives the process start (`ArdiaPhoneSystem.processStartedAt()`, epoch ms) |
 | `perf_backdrop` | `backdrop_ms` | each launch on iPhone, once the native launch backdrop has shown (`system.launchBackdropShownAt()`, epoch ms on the process start's clock) |
 | `perf_launch_tray` | `tray_ms` | each launch with Auto-Open Keyboard on, once the launch tray is up (process start on `ArdiaPhoneSystem.processStartedAt()`'s clock) |
@@ -2206,6 +2206,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `material_you_turned_on`, `material_you_turned_off` | the Material You switch in Android Settings (the owner, 2026-11-20) | How many testers try Material You and how many go back. Read `off` against `on`: a share near one means it is tried and dropped. `app_launched.material_colors` says how many launches run with it on |
 | `app_update_checks`, `app_update_offers_shown`, `app_update_offers_opened`, `app_update_handoffs_failed`, `app_update_installs_started`, `app_update_installs_cancelled`, `app_update_installs_failed`, `app_update_installs_completed`, `app_update_checksums_refused` | Android checks for a newer APK (#4378) | Release builds only. Checks should be about one per active install per 6 hours plus Check for updates taps; zero after a release means the check broke (GitHub's API answer changed shape, or the launch hook stopped running). Shown is the first time a version's dot appears on the Settings gear, once per version, so it rises the day an Android release is published and falls back; opened against shown is how many people take the update. Shown at zero while a published release is newer than most installs means the tag lookup or the asset check refuses it. `app_update_handoffs_failed` is a Download that found neither the DownloadManager nor another browser; it should stay near zero. `app_update_installs_started` is a committed install session for a checked download and should follow opened; `app_update_installs_cancelled` is the confirmation screen dismissed, `app_update_installs_failed` an install Android refused (rising after a release means a signing or packaging problem), and `app_update_installs_completed` is counted on the first launch of the new version; `app_update_checksums_refused` should stay at zero, and any count means downloads are being changed in transit or a release's checksum asset is wrong |
 | `app_launched.glass_render` | Liquid Glass on Android (the owner, 2026-11-23) | The best glass each Android launch can draw, a capability, not what each surface drew: `lens` (Android 13+), `frost` (Android 12 or `ArdiaFlatGlass`), `solid` (below 12, over the look budget or the look off), and on iPhone `clear` when the lens's shader failed (#3950). A growing `solid` share among Android 13+ phones means the look budget is turning the glass down; `classic` counts Classic and Reduce Transparency, `native` iPhone and `none` Material You |
+| `app_launched.page_border`, `app_launched.page_corner_radius` | Page Border and Corner Radius on the full-screen iPad (2026-11-27) | The fields report the saved preference on every launch and every layout, so count launches, not people: the share of launches with `page_border` saved as false, and the spread of `page_corner_radius` across launches, show whether anyone changes them (they can only be changed on a full-screen iPad), not whether that launch showed a borderless page. `duo_layout_shown` is a daily count that also includes the Duo, so it can't single out iPad launches; the app is iPhone-only since #4383, so expect the defaults everywhere until iPad support returns. A radius outside 0 to 24 means the clamp broke |
 | `card_close_tapped` | the × on a card in Android's Material deck | Whether people close tabs with the card's own button rather than a flick; zero across Android testers after a release means the × stopped closing cards, or its tap zone opens the card instead |
 | `material_back_swiped` | a predictive back swipe on Android's Material sheets, dialogs, menus and library | Whether people swipe back out of Material surfaces; zero across Android testers after a release means the swipe stopped reaching them, or Back goes to the wrong surface |
 | `glass_shaders_failed` | Liquid Glass on Android (CodeRabbit on #3759: a lens refused mid-session still reported `lens` at launch) | Counted natively and drained with the pending counts: each time Android refused to build the lens or rim shader, so that glass drew plain frost until the app next came back to the foreground and tried again. `app_launched.glass_render` can't see this, since it's read before any glass draws. Any count on Android 13+ phones means a GPU or driver rejects the AGSL; compare it with the `lens` launches. Since #3950 the iPhone counts its Metal shader failing to compile the same way |
@@ -2648,7 +2649,11 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   fully or partly open one at 600 wide or more is the open bar.
   - **Closed** (under 600 wide): Tabs on the bar's centre line, `+` 55 above it. The bar row keeps only the address
     capsule with its `···`, from 24 to 12 short of the strip (24 to 370 on 466). The start bar keeps Settings in that
-    span; the deck bar keeps the Incognito switch (Spaces with sync on, the switch then in the header, #4551) and Search Tabs there, its `+` in the strip on the bar's line. It
+    span; the deck bar's row holds the space switcher and Search Tabs there (24 to 370, where the address capsule
+    sits; see the deck's switcher below), and stacks three 48 circles in the strip, as the open Duo does (`DECK_STRIP_SLOTS`; the owner, 2026-11-27): `+` on the bar's line, the
+    Incognito switch 55 above it and the deck's `···` 110 above it, within reach of the thumb (on 466×678, all at x
+    394 to 442: `···` y 499 to 547, Incognito 554 to 602, `+` 609 to 657). `···` opens its menu beside the strip
+    (`besideStrip`), keeps the `deckHit-more` target for taps during the deck's pull and reads "More". It
     never squeezes: with Collapse Bottom Bar on it folds into the host pill as any iPhone does, strip buttons
     included, and with it off it never collapses.
   - **Open** (600 wide or more), from the owner's sketch: three fixed slots, `+` 110 and Tabs 55 above the bar's line
@@ -2656,25 +2661,86 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
     its right end and its `···` on that slot (527 to 927 on 951). Scrolling down, whatever Collapse Bottom Bar says,
     moves only its left edge into the slot (on `barCollapse`, the host pill's spring) while the host fades, leaving
     the `···` circle; it opens the page menu (never expands the bar), shows the red open lock on an insecure page,
-    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck puts its `+` in
-    the top slot, the Incognito switch in the middle one (where the page's Tabs button turns into the Incognito
-    glyph as the deck pulls in) and Search Tabs as a 48 magnifier circle in the bottom slot that grows left into the 400-wide field when tapped (on the same spring, focused, counted in `search_tabs_opened`), runs from 24 to the slot while the keyboard is up, and shrinks back once the search closes empty; the page's capsule hands over to it on the same slot as the deck pulls in; the start page puts `+` and Tabs in the
+    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck's strip is the
+    closed Duo's (the owner, 2026-11-28, after seeing both poses): `+` on the bar's line, the Incognito switch 55
+    above it (where the page's Tabs button turns into the Incognito glyph as the deck pulls in) and `···` 110 above
+    it (y 490 to 538 on 669, well below the Wi-Fi ring at about 110 to 150 and the clock); the magnifier slot and its
+    circle-grows-into-field are gone, and the deck's bar row is its own (`deckBarSpan`): 460 wide, ending 8 before the
+    strip, 399 to 859 on 951 (from 24 on a screen too narrow for 460), holding the space switcher and Search Tabs as
+    the closed Duo does; the start page puts `+` and Tabs in the
     top two and Settings in the bottom slot. On either Duo the search panel keeps 8 from the safe edges, so it ends
     short of the strip and its clock. Closing search on the open Duo lands the panel on the capsule in one move
     (`landsDirectly`): the phone's drop, fold and then narrow read as a second slide there, the panel being twice
-    the capsule's width and off to its left. Each open Duo collapse counts in `bottom_bar_collapses`. The deck's header, cards, grid, archive capsule and the search tray keep
-  the side insets.
-- Pager: the full screen width.
+    the capsule's width and off to its left. Each open Duo collapse counts in `bottom_bar_collapses`. The deck's grid and the search tray keep
+  the side insets (grid 84 + 16, both sides). The deck has no header on a Duo
+  (the owner, 2026-11-28, to test): the space switcher moves to the bottom bar, next to Search Tabs, and `···` is in
+  the strip, so the header row would be empty. The cards grow into that room (the owner, 2026-11-28, after an empty
+  band of about 140 above them on the simulator): on a Duo the arc stack is sized from its own band (`DECK_DUO_ARC`),
+  110 below the safe top (room for the card's 28-point title row and the space above it) to 40 above the bottom
+  row, and centred in it instead of at 0.514 of the height; the card is at most 0.785 of the room beside the strip
+  and keeps the screen's aspect, so page pictures are neither cropped nor letterboxed. On either Duo the bar row is [space switcher][Search Tabs] (`deckSpacesSlot`, the
+  owner, 2026-11-28): the switcher is a 48-high glass capsule sized to its text from the row's start, the field
+  flexes in the rest, 8 between them. The switcher and its gap take at most 40% of the row, so Search Tabs keeps at
+  least 60%: the switcher at most 130.4 of 346 closed and 176 of 460 open, a longer name ending in an ellipsis
+  (`SpaceTitle`'s `truncates`). With "Personal" (about 126) the field is about 212 closed (158 to 370) and 326 open
+  (533 to 859). On the closed Duo, while Search Tabs is focused or holds text, the field grows left over the
+  switcher, drawn above it (`zIndex`), its left edge going to 24 on the bar's `barCollapse` spring (a plain timing
+  under Reduce Motion) by one negative margin, its right edge never moving; the switcher fades out underneath and
+  keeps its slot, so nothing else in the row moves, and it takes no taps or VoiceOver focus while covered. The
+  field's magnifier and text keep their offset from its left edge, so they travel with that edge as it grows and
+  never jump. Unfocused and empty, the field shrinks back and the switcher fades in. On the open Duo nothing moves
+  while searching: the switcher stays, and the field keeps its 326 with the keyboard up too (it no longer widens
+  left to 24, which would cover the switcher); the bar still rises above the keyboard as on any iPhone. The
+  switcher's menu is drawn (`MenuTrigger`'s `drawn`) 8 above the bar, left-aligned with the capsule
+  (`deckSpacesMenu`: 24 to 274 closed, 399 to 649 open) and kept inside the row, so it never reaches the strip. It
+  keeps the header's label ("Space, <name>"), hint, `deckHit-spaces` target during the deck's pull and
+  `spaces_picked` count. With one space or sync off there is no switcher, and Search Tabs fills the row. With the
+  strip on the left all of it mirrors: [Search Tabs][switcher], the closed field growing right over the switcher to
+  442, the open row 92 to 552, and the strip at 24 to 72.
+  A plain iPhone keeps its header as it was: `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
+  (`deckGeometry`'s `strip`, from `deckStripOf`): Arc's stack is laid out in the screen beside the strip, as if that
+  were the whole screen, so the focused card stays clear of the clock and the sensor. The cards beyond it run on under the strip, and
+  a curtain of the deck's own backdrop covers the strip over them (`DeckStripCurtain`, `deckCurtain`; fade, the
+  owner's choice on 2026-11-28, over a narrowing card, which looked odd while scrolling): one copy of the deck's look,
+  dark depth and Incognito backdrop, laid out at the screen's size so it lines up with the deck behind it, inside the
+  app's native `FadeView`, whose gradient mask fades it in over 32 points before the strip (350 to 382 closed, 835 to
+  867 open) and keeps it whole to the screen edge, so the fade is continuous with no steps and it follows every
+  theme. Its opacity is the expanding card's own scale progress (`deckCurtainOpacity`): 1 at rest, falling as a card
+  grows to the page over the strip and rising as it shrinks back, on the card's spring, including the pull into and
+  out of the deck; under Reduce Motion it fades plainly in `tabsMotion.fade`. It sits above the cards and below the
+  deck's header, bottom bar and strip buttons; the clock, Wi-Fi ring and camera are the system's and draw over the
+  app (a black camera over the dark curtain reads as missing, as it does over any dark page). With the strip on the
+  left it mirrors. No tab title runs under the strip: a card's title row ends at the strip. A tap on the strip lands on no
+  card. The strip's `+`, Incognito and `···` menus are drawn by the
+  app beside the strip (`MenuTrigger`'s `drawn`), never the system menu, which grows out of the button over the
+  strip's other buttons; the start page's strip `+` does the same. Closed
+  (466×678, strip from 382, bottom row 609 to 657): cards 299.9×436.3, y 121.4 to 557.6 (51 above the row), the
+  focused one centred beside the strip at 41 to 341, its title row at y 93 to 113; it was 250×364 at 78 to 328, y
+  166.5 to 530.5. Open (951×669, strip from 867, bottom row 600 to 648): cards 639.7×450, y 110 to 560 (40 above the
+  row), the focused one at 113.7 to 753.3; it was 568×400 at 177 to 745. The focused card is centred in the room
+  beside the strip, leaving about 41 either side closed and 114 open; the next card starts one spacing (0.844 of a
+  card) on, at 294 closed and 654 open, and runs on under the strip. The pile behind keeps to the room left of the
+  focused card: its peek is that room less 12 and its tail half the peek (`pileEdge`, `pileTail`), so the cards
+  behind step in from 15, 11 and 7 closed. A closed Duo turned on its side (678×466) is band-limited: 378×260, y 110
+  to 370. Hit tests, the pull, the card's growth to and from the page and the curtain all read this geometry. The
+  strip's side gets no pile margin of its own; a plain iPhone, upright or on its side, keeps the whole screen. Nothing new is
+  counted for it: it only moves the cards.
+- Pager: the full screen width. A sideways swipe on the bar commits past half the drag span the bar offers
+  (`barSwipeSpan`): the screen's width on an iPhone and the closed Duo (201 on a 402 iPhone, 233 on the closed Duo, as
+  before), and the 400-wide capsule on the open Duo, so it commits at 200 there where it needed 475.5 (half of 951),
+  more than a swipe that starts on the capsule can travel to the right. Velocity projection and the opposing-velocity
+  check are unchanged. Switches count in `tabs_bar_swiped` as on any iPhone.
 - Search tray: the panel is the safe width less 8 each side, so it clears the island; radius `searchPanelRadius` (the
   field inset plus half the field's height); placement, height and the keyboard gap come from the same
   `searchPanelPlace` and `searchPanelPreferredHeight` as on the phone (see the new-tab search panel entry), with the
   height also capped by the room above the keyboard, which usually wins in landscape.
-- Deck: side padding `max(left, right)` for the header (+24), the Archive capsule (+24), the bottom bar (+24) and the grid (+16).
+- Deck: side padding `max(left, right)` for the header (+24; a Duo has no header, see the Duo bullet), the Archive capsule (+24), the bottom bar (+24) and the grid (+16).
   Cards take the screen's aspect: `cardW = min(W·306/440, band/(H/W))`, with `bandTop = chromeBottom + 41`,
   `bandBottom = H − max(safeBottom, 20) − 43`, band at least 120; `focusLeading = W·66/440`,
   `spacing = min(cardW, W·218/440)`, `barCenterY = H − max(safeBottom, 20) − 11`. Check at 852×393, safe top 0,
   safe bottom 21: card 520.3×240, centre y 209, focus leading 127.8, spacing 422.1, bar centre 361; with the archive
-  card, 407.6×188.
+  card, 407.6×188. On a Duo the cards take the screen beside the strip instead of the
+  whole width (see the Duo bullet above).
 - Start page: `safeSide = max(left, right)` as now; nothing else changes. Main lets a second row of tiles run into
   the page dots at 393 high; match it, and note it as main's.
 - Page menu, share sheet, Settings, Archive and the other sheets: the system's, no landscape rules.
@@ -2683,6 +2749,19 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
 - Card: x = 11 + left, y = `max(33, safeTop + 4)`, width `W − 22 − left − right`, bottom margin
   `max(9, safeBottom − 20)`; radius 16 continuous; shadow black 0.12, radius 10, y 2. The page inside has no bar; its
   content inset and obscured top are 63 (toolbar 45 + 9 above and below), bottom 0.
+- Page Border (users' ask, 2026-11-27; the Mac's Page Frame at 0 and its borderless mode): Settings › Appearance ›
+  Page, shown only while the layout is `wide`, so never on iPhone, in Split View or on Android. A "Page Border"
+  switch (`browsing.pageBorder`, default on) and, while it is on, a "Corner Radius" slider 0 to 24 pt in whole points
+  (`browsing.pageCornerRadius`, default 16; clamped on load and on set, anything unreadable reads as 16). Both apply
+  live and stay on the phone. On: the card above, its radius the chosen value on the card and its clip, so the default
+  is today's card exactly. Off: the card fills the safe area edge to edge, x = left, y = safeTop (no 33 minimum, no
+  + 4), width `W − left − right`, down to the screen's bottom edge, with square corners and no shadow; the screen's
+  own corners round it, as the Mac's window corner does at frame 0. The page runs under the home indicator as every
+  full-screen page does (its obscured bottom stays 0), since a band above the indicator would read as a border left
+  behind. The toolbar stays at the card's top + 9 and the page's 63 clearance follows it, so nothing sits under the
+  status bar. The sidebar keeps its own frame. `split` always draws the bordered 16 card. Check at 1210×834, safe top
+  24, bottom 20, no side insets: on, card 1188×792 at 11, 33, toolbar at 11, 42; off, card 1210×810 at 0, 24,
+  toolbar at 0, 33; sidebar 260×814 at 11, 11 either way.
 - Toolbar at the card's top + 9, card wide, padding 8, gap 7: back, forward, reload or stop as 45 circles with 18
   medium glyphs; the address capsule (44 high, leading 8, trailing 20, inner gap 10, a 30×44 sidebar button with a
   17 glyph, the host at 15 with a 13 lock, capped at xxLarge) centred between spacers; share and `···`. The capsule
@@ -4271,7 +4350,7 @@ button's touch-and-hold menu, the search panel's eyes, a search row's touch and 
   glass, opening the Spaces sheet (`openSpacesFromDeck`, `deck_spaces_button_taps`), so Spaces keeps its bottom-left
   place once tabs are open, as the original look's deck bar already had it. The pull from a page into the deck
   cross-fades the bar's tabs circle into the laptop instead of the eyes (`DeckLeadingGlyph`), so the bar still lands
-  on the button that is there. Long space names shrink beside the two header circles, keeping the chevron inside.
+  on the button that is there. Long space names truncate beside the two header circles (`SpaceTitle`'s `truncates`), keeping the chevron inside.
 - The Incognito switch then sits in the header, a 44-point circle beside the `···`, where main's SwiftUI deck has its
   Incognito pill. Its tap, its hint and its touch and hold (Close Incognito Tabs) are unchanged, and the deck's
   entrance takes an early touch on either as before (`DeckHitTarget` `privacy`, and `sheet` for Spaces).
@@ -4279,9 +4358,9 @@ button's touch-and-hold menu, the search panel's eyes, a search row's touch and 
   (the switch now takes the hold and ignores it, as the `+` does; the flip was seen on the simulator on main and on
   this branch before the fix). VoiceOver's Close Incognito Tabs action on the switch asks the same confirmation.
 - With sync off there are no spaces to show, and the deck is as before: the switch is the bottom-left button. Spaces
-  stays in the `···` menu. The closed Duo takes the iPhone's arrangement in its bar row; the open Duo keeps the switch
-  in its strip's middle slot, and the page's Tabs button turns into whichever glyph the deck puts there. One rule
-  decides it for the deck and the pull (`incognitoInHeader` in `lib/bottomBarSpan.ts`). Both phones' redesigned look; Material You's deck is unchanged.
+  stays in the `···` menu. Either Duo keeps its own deck (#4623): no header, the switch in the strip and the space
+  switcher in the bar row, so nothing there moves. One rule decides it for the deck and the pull: sync on and no
+  strip (`incognitoInHeader` in `lib/bottomBarSpan.ts`). Both phones' redesigned look; Material You's deck is unchanged.
 
 #### Android's page menu and Site Settings (2026-11-25)
 

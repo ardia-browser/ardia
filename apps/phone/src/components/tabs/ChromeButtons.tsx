@@ -76,14 +76,14 @@ export function GlassCircleButton({ icon, label, hint, testID, diameter = contro
 
 export const PLUS_HINT = "Touch and hold for more options.";
 
-export type PlusMenuButtonProps = Look & ChromeFade & { width: number; label: string; testID: string; place: ViewStyle; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void; onCloseAll?: () => void };
+export type PlusMenuButtonProps = Look & ChromeFade & { width: number; label: string; testID: string; place: ViewStyle; drawn?: boolean; menusShown?: boolean; frost?: string | null; onMenu?: (open: boolean) => void; onCloseAll?: () => void };
 
-export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, menusShown = true, frost, onMenu, onCloseAll, glassShown, glassShownMs, glyphFade }: PlusMenuButtonProps) {
+export function PlusMenuButton({ width, label, testID, dark, incognito = false, place, drawn = false, menusShown = true, frost, onMenu, onCloseAll, glassShown, glassShownMs, glyphFade }: PlusMenuButtonProps) {
   const tabIncognito = useIncognito();
   const canReopen = useCanReopen();
   const size = { width, height: controlSize.bar };
   return (
-    <MenuTrigger items={plusMenu(tabIncognito, canReopen, onCloseAll)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} style={size}>
+    <MenuTrigger items={plusMenu(tabIncognito, canReopen, onCloseAll)} trigger="longPress" haptic={menuOpenedHaptic} disabled={!menusShown} frost={frost} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} place={place} drawn={drawn} style={size}>
       {({ onLongPress }) => (
         <PressInPlace label={label} hint={PLUS_HINT} onPress={newTab} onLongPress={onLongPress ?? noop} onPressIn={haptics.barPress} dims="glyph" style={size}>
           <ChromeSurface testID={testID} shape={width === size.height ? "circle" : "capsule"} cornerRadius={capsule(size.height)} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.centered, size]}>

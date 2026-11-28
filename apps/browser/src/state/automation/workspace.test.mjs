@@ -289,10 +289,11 @@ test("R4: sleeping a background pin never unloads a page another window shows", 
   const inA = model.activeTabId(S(), a);
   assert.equal(S().tabs[inA].page.holderId, mail);
   S().activate(other);
-  const r = await apply({ op: "tab.sleep", tabs: [mail] });
+  assert.equal(S().tabs[mail].windowId, a, "B switched away, so the page went back to A");
+  const r = await apply({ op: "tab.sleep", tabs: [mail, inA] });
   assert.equal(r.ok, true);
   assert.equal(r.results[0].outcomes[mail], "shown");
-  assert.equal(model.activeTabId(S(), a), inA);
+  assert.equal(model.activeTabId(S(), a), mail);
   assert.ok(S().tabs[mail].page.kind === "loaded" || S().tabs[mail].page.kind === "adopted");
 });
 

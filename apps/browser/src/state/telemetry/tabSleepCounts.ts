@@ -5,7 +5,7 @@ import { consentOrNow, countFor } from "./countFor";
 import type { KeptAwakeReason } from "../tabs/sleepRefusals";
 import type { MemoryPressure, SleepVeto } from "../tabs/sleepPolicy";
 
-const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, pinnedClosesBackToPinnedUrl: 0, pinnedClosesKeptLastPage: 0, pinnedReopenChoicesChanged: 0, topAppWindowsClosedFromNewTab: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null, closesWokeSleepingTab: 0, sleepVetoes: {} as Partial<Record<SleepVeto, number>>, cliTabsHeld: 0, cliTabsHeldLive: 0, cliTabsHeldUntilDisconnect: 0, cliHoldsReleasedOnDisconnect: 0, profilesKeptForCli: 0, chromeDiscardsKeptForCli: 0, tabsSleptUnderWarning: 0, tabsSleptUnderCritical: 0, memoryWarnings: 0, memoryCriticals: 0, tabsSleptUnused: 0, pinnedTabsSleptUnused: 0, tabsSleptUnusedPastSoftKeeps: 0, tabsWokenOnHover: 0, hoverWokenTabsOpened: 0, hoverWakesPutBack: 0 });
+const none = () => ({ captureIndicatorsCleared: 0, mediaCardsCleared: 0, pinnedTabsSleptByMemorySaver: 0, tabsSleptOverBudget: 0, tabsSleptOverBudgetReopened: 0, tabsOverBudgetSkippedLoading: 0, tabsOverBudgetAsksPassedOn: 0, topAppsKeptRunning: 0, pinnedClosesBackToPinnedUrl: 0, pinnedClosesKeptLastPage: 0, pinnedReopenChoicesChanged: 0, topAppWindowsClosedFromNewTab: 0, topAppsUnloadedFromMenu: 0, tabsSleptFromMenu: 0, groupsSleptFromMenu: 0, menuSleepsKeptAwake: 0, menuSleepsPastAutomatic: 0, menuSleepKeptReason: null as KeptAwakeReason | null, closesWokeSleepingTab: 0, sleepVetoes: {} as Partial<Record<SleepVeto, number>>, cliTabsHeld: 0, cliTabsHeldLive: 0, cliTabsHeldUntilDisconnect: 0, cliHoldsReleasedOnDisconnect: 0, profilesKeptForCli: 0, chromeDiscardsKeptForCli: 0, tabsSleptUnderWarning: 0, tabsSleptUnderCritical: 0, memoryWarnings: 0, memoryCriticals: 0, tabsSleptUnused: 0, pinnedTabsSleptUnused: 0, tabsSleptUnusedPastSoftKeeps: 0, tabsWokenOnHover: 0, hoverWokenTabsOpened: 0, hoverWakesPutBack: 0, sharedPagesReturned: 0 });
 
 let pending = none();
 
@@ -169,6 +169,10 @@ export function noteTabsSleptFromMenu(from: "tab" | "group", results: { outcome:
   });
 }
 
+export function noteSharedPageReturned() {
+  pending.sharedPagesReturned++;
+}
+
 export function takeTabSleepCounts() {
   const taken = pending;
   pending = none();
@@ -187,6 +191,7 @@ export function takeTabSleepCounts() {
     menu_sleeps_kept_awake: taken.menuSleepsKeptAwake,
     menu_sleeps_past_automatic: taken.menuSleepsPastAutomatic,
     ...(taken.menuSleepKeptReason ? { menu_sleep_kept_reason: taken.menuSleepKeptReason } : {}),
+    shared_pages_returned: taken.sharedPagesReturned,
     ...takeProfileUnloadCounts(),
     ...takeCleanUpCounts(),
     ...takeBusyTabCounts(),

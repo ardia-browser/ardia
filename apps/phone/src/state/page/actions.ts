@@ -1,4 +1,5 @@
 import { blocking } from "../../platform/blocking";
+import { returnToMediaTab, startMediaSettings, takeMediaEvent, webVideoCount } from "../media/store";
 import { downloads, type DownloadEvent } from "../../platform/downloads";
 import { pages, type PageEngineEvent, type PageRequestAnswer } from "../../platform/pages";
 
@@ -795,8 +796,16 @@ function pageEvent(event: PageEngineEvent) {
     case "pages.dark":
       notePageDark(event.dark);
       return;
-    case "pages.webVideo":
-      if (!event.isPrivate) countUsage(event.outcome === "floated" ? "web_videos_floated" : "web_videos_kept_playing");
+    case "pages.webVideo": {
+      const field = webVideoCount(event.outcome);
+      if (field && !event.isPrivate) countUsage(field);
+      return;
+    }
+    case "pages.media":
+      takeMediaEvent(event);
+      return;
+    case "pages.mediaReturn":
+      returnToMediaTab(event.pageId);
       return;
     default:
       return;
@@ -809,6 +818,7 @@ export function startPageUi() {
   if (started) return;
   started = true;
   listenToPages(pageEvent);
+  startMediaSettings();
   void refreshPageSummariesEnabled();
   try {
     downloads.addListener(downloadEvent);

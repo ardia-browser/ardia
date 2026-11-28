@@ -3,7 +3,8 @@ import { Form, HStack, Image, NavigationLink, Section, Text, VStack } from "@exp
 import { accessibilityElement, contentTransition, font, foregroundStyle, listSectionSpacing, navigationBarTitleDisplayMode, navigationTitle, padding, tint } from "@expo/ui/swift-ui/modifiers";
 import { useSyncStatus } from "../../state/sync/hooks";
 import { syncRowSubtitle } from "../../state/sync/syncRules";
-import { settingsRouteKey, type SettingsRoute } from "../../state/settings/nav";
+import { settingsRouteKey, settingsRouteOffered, type SettingsRoute } from "../../state/settings/nav";
+import { PICTURE_IN_PICTURE_COPY } from "../../state/media/copy";
 import { neverBounces, contentMargins, modifierList, settingsChrome, settingsLayout, SettingsIconTile, settingsTint, settingsUIAvailable, useWarningInk, type SettingsTintName } from "../ui";
 import { ExpoPaneLabel } from "./ExpoRowLabel";
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
@@ -12,13 +13,14 @@ import { browseForMeOffered } from "../../state/browseForMe/store";
 import { pageSummariesSwitchable } from "../../state/pageSummary/enabled";
 import { destinationWords } from "../../lib/sharedWords";
 
-type SettingsPaneRoute = Extract<SettingsRoute["page"], "general" | "tabs" | "appearance" | "search" | "siteSettings" | "experimental">;
+type SettingsPaneRoute = Extract<SettingsRoute["page"], "general" | "tabs" | "pictureInPicture" | "appearance" | "search" | "siteSettings" | "experimental">;
 
 type PaneLook = { page: SettingsPaneRoute; title: string; systemImage: string; tint: SettingsTintName };
 
 const SETTINGS_PANES: readonly PaneLook[] = [
   { page: "general", title: "General", systemImage: "gearshape.fill", tint: "neutral" },
   { page: "tabs", title: "Tabs", systemImage: "square.on.square.fill", tint: "orange" },
+  { page: "pictureInPicture", title: PICTURE_IN_PICTURE_COPY.title, systemImage: "pip.fill", tint: "green" },
   { page: "appearance", title: "Appearance", systemImage: "circle.lefthalf.filled", tint: "nightShade" },
   { page: "search", title: "Search", systemImage: "magnifyingglass", tint: "blue" },
   { page: "siteSettings", title: "Site settings", systemImage: "globe", tint: "bottomBar" },
@@ -30,7 +32,7 @@ const TOP_SECTION_SPACING = 12;
 
 const experimentalOffered = () => browseForMeOffered() || pageSummariesSwitchable();
 
-const paneShown = (pane: PaneLook) => pane.page !== "experimental" || experimentalOffered();
+const paneShown = (pane: PaneLook) => (pane.page === "experimental" ? experimentalOffered() : pane.page === "pictureInPicture" ? settingsRouteOffered({ page: "pictureInPicture" }) : true);
 
 export function ExpoSettingsRoot() {
   return (

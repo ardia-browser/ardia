@@ -84,6 +84,8 @@ export function SettingsPageFor({ route }: { route: SettingsRoute }) {
       return <BrowseForMePage />;
     case "pageSummary":
       return <PageSummaryPage />;
+    case "pictureInPicture":
+      return null;
   }
 }
 

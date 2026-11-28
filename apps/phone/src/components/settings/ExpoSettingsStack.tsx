@@ -24,7 +24,8 @@ import { ExpoClearDataPage } from "./ExpoClearDataPage";
 import { ExpoAboutPage, ExpoLicensesPage } from "./ExpoAboutPages";
 import { ExpoDefaultBrowserPage, ExpoWhatsSentPage } from "./ExpoInfoPages";
 import { ExpoSettingsRoot } from "./ExpoSettingsRoot";
-import { ExpoExperimentalPane, ExpoGeneralPane, ExpoSearchPane, ExpoTabsPane } from "./ExpoSettingsPanes";
+import { ExpoExperimentalPane, ExpoGeneralPane, ExpoPictureInPicturePane, ExpoSearchPane, ExpoTabsPane } from "./ExpoSettingsPanes";
+import { PICTURE_IN_PICTURE_COPY } from "../../state/media/copy";
 import { ExpoSettingsDone } from "./ExpoSettingsDone";
 import { SettingsHostedContext } from "./SettingsKit";
 import { SettingsPageFor } from "./SettingsView";
@@ -33,6 +34,7 @@ import { SettingsPageOpenedContext } from "./settingsOpened";
 const CONVERTED: Partial<Record<SettingsRoute["page"], (props: { route: SettingsRoute }) => React.JSX.Element>> = {
   general: ExpoGeneralPane,
   tabs: ExpoTabsPane,
+  pictureInPicture: ExpoPictureInPicturePane,
   search: ExpoSearchPane,
   experimental: ExpoExperimentalPane,
   appearance: ExpoAppearancePage,
@@ -57,6 +59,7 @@ const TITLES: Record<SettingsRoute["page"], string> = {
   root: destinationWords.settings,
   general: "General",
   tabs: "Tabs",
+  pictureInPicture: PICTURE_IN_PICTURE_COPY.title,
   search: "Search",
   experimental: "Experimental",
   appearance: "Appearance",

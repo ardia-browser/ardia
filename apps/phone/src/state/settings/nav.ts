@@ -4,6 +4,7 @@ export type SettingsRoute =
   | { page: "root" }
   | { page: "general" }
   | { page: "tabs" }
+  | { page: "pictureInPicture" }
   | { page: "search" }
   | { page: "experimental" }
   | { page: "appearance" }
@@ -57,6 +58,12 @@ export const offerBrowseForMePage = (offered: () => boolean) => {
   browseForMePageOffered = offered;
 };
 
+let pictureInPicturePageOffered: () => boolean = () => false;
+
+export const offerPictureInPicturePage = (offered: () => boolean) => {
+  pictureInPicturePageOffered = offered;
+};
+
 let pageSummaryPageOffered: () => boolean = () => false;
 
 export const offerPageSummaryPage = (offered: () => boolean) => {
@@ -64,7 +71,7 @@ export const offerPageSummaryPage = (offered: () => boolean) => {
 };
 
 export const settingsRouteOffered = (route: SettingsRoute) =>
-  route.page === "browseForMe" ? browseForMePageOffered() : route.page === "pageSummary" ? pageSummaryPageOffered() : !SYNC_PAGES.has(route.page) || syncPagesOffered();
+  route.page === "browseForMe" ? browseForMePageOffered() : route.page === "pageSummary" ? pageSummaryPageOffered() : route.page === "pictureInPicture" ? pictureInPicturePageOffered() : !SYNC_PAGES.has(route.page) || syncPagesOffered();
 
 export function openSettings(route: SettingsRoute = { page: "root" }, { direct = false } = {}) {
   if (!settingsRouteOffered(route)) return;
@@ -102,7 +109,7 @@ export function closeSettingsFrom(generation: number) {
   if (useSettingsNav.getState().generation === generation) closeSettings();
 }
 
-const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "general", "tabs", "search", "experimental", "appearance", "theme", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
+const SIMPLE_PAGES = new Set<SettingsRoute["page"]>(["root", "general", "tabs", "pictureInPicture", "search", "experimental", "appearance", "theme", "searchEngine", "browseForMe", "pageSummary", "siteSettings", "filterLists", "myFilters", "trustedSites", "clearData", "sync", "defaultBrowser", "syncConnect", "syncWords", "syncScan", "about", "licenses", "whatsSent"]);
 
 export const settingsRouteKey = (route: SettingsRoute): string => (route.page === "filterList" ? `filterList:${route.id}` : route.page);
 
@@ -114,7 +121,7 @@ export function settingsRouteFromKey(key: string): SettingsRoute | null {
 export const settingsPath = (stack: readonly SettingsRoute[]): string[] => stack.slice(1).map(settingsRouteKey);
 
 const LINKED_PAGES: Partial<Record<SettingsRoute["page"], readonly SettingsRoute["page"][]>> = {
-  root: ["sync", "general", "tabs", "appearance", "search", "siteSettings", "experimental"],
+  root: ["sync", "general", "tabs", "pictureInPicture", "appearance", "search", "siteSettings", "experimental"],
   general: ["defaultBrowser", "clearData", "whatsSent", "about"],
   appearance: ["theme"],
   search: ["searchEngine"],

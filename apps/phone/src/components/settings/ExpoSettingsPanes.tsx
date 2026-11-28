@@ -7,7 +7,12 @@ import { offersDefaultBrowser } from "../../state/settings/settingsRules";
 import { useSyncEnabled, useSyncView } from "../../state/sync/hooks";
 import { syncedEngineName } from "../../state/sync/syncRules";
 import { showOnboarding } from "../../state/onboarding/store";
-import { exportOpenTabs, setAppLinks, setArchiveInterval, setAutoOpenKeyboard, setSearchSuggestions, useEngines } from "../../state/settings/actions";
+import { exportOpenTabs, setAppLinks, setArchiveInterval, setAutoOpenKeyboard, setAutoPictureInPicture, setKeepsPlaying, setMediaSkipSeconds, setMiniPlayer, setMiniPlayerEverySpace, setSearchSuggestions, useEngines } from "../../state/settings/actions";
+import { MEDIA_SKIP_CHOICES, type MediaSkipSeconds } from "../../state/settings/preferences";
+import { PICTURE_IN_PICTURE_COPY } from "../../state/media/copy";
+import { pages } from "../../platform/pages";
+import { isSplit } from "../../state/tabs/spaces";
+import { useTabs } from "../../state/tabs/store";
 import { usePreferences } from "../../state/settings/hooks";
 import { settingsRouteKey, type SettingsRoute } from "../../state/settings/nav";
 import { AUTO_ARCHIVE_INTERVALS, autoArchiveTitle, type AutoArchiveInterval } from "../../state/tabs/tabModels";
@@ -183,6 +188,55 @@ export function ExpoExperimentalPane() {
           </Toggle>
         </Section>
       ) : null}
+    </PaneForm>
+  );
+}
+
+export function ExpoPictureInPicturePane() {
+  const automatic = usePreferences((p) => p.autoPictureInPicture);
+  const keepsPlaying = usePreferences((p) => p.keepsPlaying);
+  const miniPlayer = usePreferences((p) => p.miniPlayer);
+  const everySpace = usePreferences((p) => p.miniPlayerEverySpace);
+  const skip = usePreferences((p) => p.mediaSkipSeconds);
+  const spaces = useTabs((s) => isSplit(s.spaces));
+  const floats = pages.pictureInPictureSupported();
+  return (
+    <PaneForm title={PICTURE_IN_PICTURE_COPY.title}>
+      <Section footer={<Text>{floats ? PICTURE_IN_PICTURE_COPY.automaticFooter : `${PICTURE_IN_PICTURE_COPY.automaticFooter} ${PICTURE_IN_PICTURE_COPY.automaticUnsupported}`}</Text>}>
+        <Toggle isOn={automatic} onIsOnChange={setAutoPictureInPicture} modifiers={modifierList(settingsSwitchStyle())}>
+          <ExpoRowText title={PICTURE_IN_PICTURE_COPY.automatic} />
+        </Toggle>
+      </Section>
+      <Section footer={<Text>{PICTURE_IN_PICTURE_COPY.keepsPlayingFooter}</Text>}>
+        <Toggle isOn={keepsPlaying} onIsOnChange={setKeepsPlaying} modifiers={modifierList(settingsSwitchStyle())}>
+          <ExpoRowText title={PICTURE_IN_PICTURE_COPY.keepsPlaying} />
+        </Toggle>
+      </Section>
+      <Section title={PICTURE_IN_PICTURE_COPY.miniPlayerSection} footer={<Text>{spaces && miniPlayer ? `${PICTURE_IN_PICTURE_COPY.miniPlayerFooter} ${PICTURE_IN_PICTURE_COPY.everySpaceFooter}` : PICTURE_IN_PICTURE_COPY.miniPlayerFooter}</Text>}>
+        <Toggle isOn={miniPlayer} onIsOnChange={setMiniPlayer} modifiers={modifierList(settingsSwitchStyle())}>
+          <ExpoRowText title={PICTURE_IN_PICTURE_COPY.miniPlayer} />
+        </Toggle>
+        {spaces && miniPlayer ? (
+          <Toggle isOn={everySpace} onIsOnChange={setMiniPlayerEverySpace} modifiers={modifierList(settingsSwitchStyle())}>
+            <ExpoRowText title={PICTURE_IN_PICTURE_COPY.everySpace} />
+          </Toggle>
+        ) : null}
+        <Picker
+          label={<ExpoRowText title={PICTURE_IN_PICTURE_COPY.skipLength} />}
+          selection={String(skip)}
+          onSelectionChange={(next: string) => {
+            const chosen = MEDIA_SKIP_CHOICES.find((choice) => String(choice) === next);
+            if (chosen) setMediaSkipSeconds(chosen as MediaSkipSeconds);
+          }}
+          modifiers={[pickerStyle("menu"), tint("secondary")]}
+        >
+          {MEDIA_SKIP_CHOICES.map((choice) => (
+            <Text key={choice} modifiers={[tag(String(choice))]}>
+              {PICTURE_IN_PICTURE_COPY.seconds(choice)}
+            </Text>
+          ))}
+        </Picker>
+      </Section>
     </PaneForm>
   );
 }

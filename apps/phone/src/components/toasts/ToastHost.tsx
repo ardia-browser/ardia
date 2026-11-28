@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMiniPlayerRoom } from "../../state/media/store";
 import { AccessibilityInfo, Keyboard, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type AccessibilityActionEvent, type ViewInstance } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withSpring, type SharedValue } from "react-native-reanimated";
@@ -49,13 +50,14 @@ function ToastLayer() {
   const material = useDesign() === "material";
   const frame = useRef<ViewInstance>(null);
   const [hostBottom, setHostBottom] = useState(0);
+  const miniPlayer = useMiniPlayerRoom((s) => s.room);
   const spot: ToastSpot = {
     safeTop: insets.top,
     keyboardLift: null,
     safeBottom: insets.bottom,
-    barClearance: pageBarClearance(material ? materialBottomBar : null, toastLayout.barClearance, space.s),
+    barClearance: pageBarClearance(material ? materialBottomBar : null, toastLayout.barClearance, space.s) + miniPlayer,
     hostBottomY: hostBottom,
-    barTopY: surface === "browsing" ? null : barTop,
+    barTopY: surface === "browsing" || barTop === null ? null : barTop - miniPlayer,
     gap: space.s,
   };
   return (

@@ -18,7 +18,7 @@ import { clearArchivedTabs, currentTabs, setAutoArchiveInterval } from "../tabs/
 import type { AutoArchiveInterval } from "../tabs/tabModels";
 import { countUsage } from "../telemetry/telemetry";
 import { closeSettings } from "./nav";
-import { clampPageCornerRadius, type ColorChoice, type NightShadeMode, type Preferences, type SwipeNavigationMode } from "./preferences";
+import { clampPageCornerRadius, type ColorChoice, type MediaSkipSeconds, type NightShadeMode, type Preferences, type SwipeNavigationMode } from "./preferences";
 import { clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
 import { currentPreferences, setPreference } from "./store";
 
@@ -86,6 +86,11 @@ export function setMaterialYou(on: boolean) {
 export const setInterfaceStyle = (choice: InterfaceStyleChoice) => setPreference("interfaceStyle", choice);
 export const setSchemeChoice = (choice: SchemeChoice) => setPreference("schemeChoice", choice);
 export const setPageBorder = (on: boolean) => setPreference("pageBorder", on);
+export const setAutoPictureInPicture = (on: boolean) => setPreference("autoPictureInPicture", on);
+export const setKeepsPlaying = (on: boolean) => setPreference("keepsPlaying", on);
+export const setMiniPlayer = (on: boolean) => setPreference("miniPlayer", on);
+export const setMiniPlayerEverySpace = (on: boolean) => setPreference("miniPlayerEverySpace", on);
+export const setMediaSkipSeconds = (seconds: MediaSkipSeconds) => setPreference("mediaSkipSeconds", seconds);
 export const setPageCornerRadius = (radius: number) => setPreference("pageCornerRadius", clampPageCornerRadius(radius));
 export const setArchiveInterval = (interval: AutoArchiveInterval) => setAutoArchiveInterval(interval);
 

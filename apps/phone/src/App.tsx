@@ -1,4 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { MiniPlayer } from "./components/media/MiniPlayer";
 import { FrameProbe } from "./components/perf/FrameProbe";
 import { countRender, interactionPerfEnabled } from "./state/app/interactionPerf";
 import { AppState, BackHandler, Platform, StyleSheet, useWindowDimensions, View } from "react-native";
@@ -212,6 +213,7 @@ export function Surfaces() {
                   {backgroundMaterial ? <PersistentMaterialBar /> : null}
                 </FrostSource>
               </Shade>
+              <MiniPlayer />
               <SearchTray />
             </Layer>
           </MaterialBarProvider>

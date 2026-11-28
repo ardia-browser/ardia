@@ -3,6 +3,10 @@ export type {
   FindResult,
   NightShadeMode,
   PageEngineEvent,
+  PageMediaCommand,
+  PageMediaEvent,
+  PageMediaSettings,
+  PageMediaState,
   PageNavigationState,
   PageProcessOutcome,
   PageRequest,
@@ -17,4 +21,5 @@ export type {
   PressTarget,
   ReadableContent,
   VisitKind,
+  WebVideoOutcome,
 } from "@ardia/phone-native";

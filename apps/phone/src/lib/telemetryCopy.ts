@@ -38,6 +38,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["interface_style", "color_scheme"],
       },
       {
+        text: "With each launch, your Picture in Picture settings: whether Automatic Picture in Picture, Keep playing in the background, the mini player and showing it in every space are on, and the skip length you chose",
+        fields: ["auto_pip", "background_play", "mini_player", "mini_player_every_space", "media_skip_seconds"],
+      },
+      {
         text: "With each launch, whether your color matches your Mac, is one of Ardia’s colors, or is a custom theme. Never which colors",
         fields: ["color_choice"],
       },
@@ -184,6 +188,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
       {
         text: "In the same daily counts, on iPhone: how often you left Ardia while a web video was in Picture in Picture or full screen, and how often it was still playing 5 seconds later with Ardia in the background. Counts only, never which video or page, and never while browsing privately",
         fields: ["web_videos_floated", "web_videos_kept_playing"],
+      },
+      {
+        text: "In the same daily counts, on iPhone: how often the mini player appeared for a tab playing off screen (once each time something starts playing), how often you tapped it to go back to the tab, closed it or used its play, skip or Picture in Picture buttons, how often a video or song was still playing 5 seconds after you left Ardia, how often a page refused to keep playing, how often a video floated into Picture in Picture by itself as you left Ardia or iPhone refused to float it, and how often Picture in Picture’s return button brought you back to its tab. Counts only, never which video, song or page, and never while browsing privately",
+        fields: ["mini_player_shown", "mini_player_returned", "mini_player_closed", "mini_player_controls_used", "media_kept_playing_background", "media_resumes_refused", "auto_pip_started", "auto_pip_refused", "pip_returned_to_tab"],
       },
       {
         text: "In the same daily counts, on Android: how many glass buttons and bars found nothing under them to blur, so they drew a flat fill instead of glass. Counts only",

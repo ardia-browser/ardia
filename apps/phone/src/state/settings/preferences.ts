@@ -36,7 +36,16 @@ export type Preferences = {
   readerTheme: "light" | "sepia" | "dark" | null;
   pageBorder: boolean;
   pageCornerRadius: number;
+  autoPictureInPicture: boolean;
+  keepsPlaying: boolean;
+  miniPlayer: boolean;
+  miniPlayerEverySpace: boolean;
+  mediaSkipSeconds: MediaSkipSeconds;
 };
+
+export type MediaSkipSeconds = 10 | 15 | 30;
+
+export const MEDIA_SKIP_CHOICES: readonly MediaSkipSeconds[] = [10, 15, 30];
 
 export const PAGE_CORNER_RADIUS = Object.freeze({ min: 0, max: 24, standard: 16 });
 
@@ -67,6 +76,11 @@ export const DEFAULT_PREFERENCES: Preferences = {
   readerTheme: null,
   pageBorder: true,
   pageCornerRadius: PAGE_CORNER_RADIUS.standard,
+  autoPictureInPicture: true,
+  keepsPlaying: true,
+  miniPlayer: true,
+  miniPlayerEverySpace: false,
+  mediaSkipSeconds: 15,
 };
 
 export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
@@ -94,6 +108,11 @@ export const PREFERENCE_KEYS: Record<keyof Preferences, string> = {
   readerTheme: "reader.theme",
   pageBorder: "browsing.pageBorder",
   pageCornerRadius: "browsing.pageCornerRadius",
+  autoPictureInPicture: "media.autoPictureInPicture",
+  keepsPlaying: "media.keepsPlaying",
+  miniPlayer: "media.miniPlayer",
+  miniPlayerEverySpace: "media.miniPlayerEverySpace",
+  mediaSkipSeconds: "media.skipSeconds",
 };
 
 const oneOf =
@@ -151,6 +170,11 @@ const PARSERS: { [K in keyof Preferences]: (raw: string) => Preferences[K] | und
   readerTheme: oneOf<"light" | "sepia" | "dark">(["light", "sepia", "dark"]),
   pageBorder: flag,
   pageCornerRadius: (raw) => (/^-?\d{1,4}(\.\d+)?$/.test(raw) ? clampPageCornerRadius(Number(raw)) : undefined),
+  autoPictureInPicture: flag,
+  keepsPlaying: flag,
+  miniPlayer: flag,
+  miniPlayerEverySpace: flag,
+  mediaSkipSeconds: (raw) => MEDIA_SKIP_CHOICES.find((choice) => String(choice) === raw),
 };
 
 export const acceptsPreference = (name: keyof Preferences, raw: string) => PARSERS[name](raw) !== undefined;

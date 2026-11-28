@@ -2,7 +2,7 @@ import { createContext, use } from "react";
 import { opaqueThemeTint, PRESET_BACKDROP, resolveTheme, requestedDarkFor, shownLook, themeAccent, themeBackdrop, themePalette, type LookSource, type ProfileColor, type ProfileLookFields, type ProfileTheme } from "../../lib/profileLook";
 import type { ThemeBackdropProps } from "@ardia/core";
 import { backdropTint, opaqueTint, tintForHue, type BackdropTint } from "../../lib/windowTint";
-import { contrastRatio, isRgbFunction, luminance, mix, over, parseColor, rgbToHsl, toHex } from "../../lib/color";
+import { contrastRatio, hslToRgb, isRgbFunction, luminance, mix, over, parseColor, rgbToHsl, toHex } from "../../lib/color";
 import { CARD_INSET, DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
@@ -78,6 +78,35 @@ function arcSelectionRoles(base: ColorRoles, windowTint: readonly string[], adap
   };
 }
 
+const NEUTRAL_LOOK_CHROMA = 0.08;
+const GO_BUTTON_ROLES = ["goButton", "goButtonHover", "goButtonPressed"] as const;
+type GoButtonRoles = Pick<ColorRoles, (typeof GO_BUTTON_ROLES)[number]>;
+
+function chroma(color: string): number {
+  const [r, g, b] = parseColor(color);
+  return (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
+}
+
+function hslOf(color: string): [number, number, number] {
+  const [r, g, b] = parseColor(color);
+  return rgbToHsl(r / 255, g / 255, b / 255);
+}
+
+function lookGoButton(roles: ColorRoles, inks: readonly string[]): GoButtonRoles | null {
+  const stock = colorRoles[roles.dark ? "dark" : "light"];
+  if (!inks.length || GO_BUTTON_ROLES.some((role) => roles[role] !== stock[role])) return null;
+  const vivid = inks.reduce((best, color) => (chroma(color) > chroma(best) ? color : best));
+  const [hue] = hslOf(vivid);
+  const neutral = chroma(vivid) < NEUTRAL_LOOK_CHROMA;
+  const retint = (color: string) => {
+    const [, saturation, lightness] = hslOf(color);
+    return toHex(hslToRgb(hue, neutral ? 0 : saturation, lightness).map((v) => v * 255));
+  };
+  return { goButton: retint(stock.goButton), goButtonHover: retint(stock.goButtonHover), goButtonPressed: retint(stock.goButtonPressed) };
+}
+
+const lookInks = (theme: Pick<Theme, "powerUpColor" | "powerUpPalette">): string[] => [...(theme.powerUpColor ? [theme.powerUpColor] : []), ...(theme.powerUpPalette ?? [])];
+
 const tintThemes = new WeakMap<Theme, Theme>();
 const windowThemes = new WeakMap<Theme, Theme>();
 
@@ -87,7 +116,9 @@ export function tintTheme(theme: Theme): Theme {
   if (!tint) {
     const keepsOwnInk = inkOn(theme.windowTint, theme.dark) === (theme.dark ? ink.white : ink.black);
     const other = theme.dark ? theme.palettes.light : theme.palettes.dark;
-    tint = keepsOwnInk ? theme : { ...theme, ...other, tabSelected: theme.tabSelected, pinnedSelectedFill: theme.pinnedSelectedFill, rowSelectedText: theme.rowSelectedText };
+    tint = keepsOwnInk
+      ? theme
+      : { ...theme, ...other, ...(theme.custom ? lookGoButton(other, lookInks(theme)) : null), tabSelected: theme.tabSelected, pinnedSelectedFill: theme.pinnedSelectedFill, rowSelectedText: theme.rowSelectedText };
     tintThemes.set(theme, tint);
     if (tint !== theme) windowThemes.set(tint, theme);
   }
@@ -225,9 +256,11 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
     const accent = themeAccent(look);
     const palette = themePalette(look);
     const windowTint = opaqueThemeTint(look, dark);
+    const powerUpPalette = palette.length > 1 ? palette : [palette[0] ?? accent];
     theme = {
       ...preset,
       ...arcSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint, adaptiveInk),
+      ...lookGoButton(preset, lookInks({ powerUpColor: accent, powerUpPalette })),
       pinnedDivider: visibleLine(preset.divider, inkOn(windowTint, dark), windowTint),
       adaptiveInk,
       profileColor: nearestPreset(accent),
@@ -238,7 +271,7 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
       },
       windowTint,
       powerUpColor: accent,
-      powerUpPalette: palette.length > 1 ? palette : [palette[0] ?? accent],
+      powerUpPalette,
       custom,
     };
     byKey.set(key, theme);

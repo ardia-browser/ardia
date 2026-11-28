@@ -1,0 +1,40 @@
+Full Page screenshots on iPhone (#4706): evidence, round 2 (Codex R4)
+Device: simlock iPhone 18 Pro, iOS 27.0 simulator (udid 0F3BD5F5-8B95-427E-BD12-F82789E8129E on mini), leased via T3 device_open.
+Builds (Mac `mac`, apps/phone/scripts/build-sim-app, lab on, JS and native from c06f5f5b8 plus the working-tree FullPageScreenshots.swift):
+  fullpage-repro.app  c06f5f5b8 + only the lab probe's disturbance modes (pre-fix delegate)
+  fullpage-fix.app    c06f5f5b8 + the R4 fix (the file now in the corex tree)
+  fullpage-base.app   c9b033f5b, no Full Page code (from round 1)
+Everything comes from the lab probe: it posts the Darwin notification com.ardia.browser.ios.lab.fullPage and calls the scene's real
+screenshotService.delegate the way iOS does. The .navigate, .scroll and .sheet variants first call the delegate, then, in the next
+main-actor turn while WebKit renders the PDF, load https://en.wikipedia.org/wiki/Beacon, scroll the page 600 pt, or present a sheet.
+The real screenshot editor was not shown here (another task records it).
+
+Reproduction, pre-fix delegate (10-repro-before-fix-log.txt, two runs, same result both times):
+  .scroll    answered a PDF with the rect of the old offset (top 687, page now at 1287; and top 1287, page now at 1887).
+  .sheet     answered a PDF although a sheet now covered the page.
+  .navigate  answered the Lighthouse PDF although the page now showed Beacon:
+  11-repro-navigate-stale.pdf          the PDF that was given
+  11-repro-navigate-stale-top.png      its top: "Lighthouse"
+  11-repro-navigate-screen-after.png   the screen at that moment: "Beacon"
+
+Fixed delegate (09-probe-log.txt):
+  plain      PDF 402x2630, rect 0,108 402x874 (top 1648 = the scroll offset)
+  .scroll    PDF given, rect measured after the PDF: top 2248 (the new offset), clamped to the page end
+  .sheet     nil: "while the PDF rendered, a screen is presented over the page"
+  .navigate  nil: "while the PDF rendered, the page changed (navigated)"
+  private    nil: "private tab"
+  page top   PDF 402x2925, rect 0,2113 402x812 (top 0)
+  deck       nil: "no page at the centre"
+  settings   nil: "a screen is presented over the page"
+
+01-after-article-scrolled.png   Fixed build, Lighthouse article scrolled to 1648 pt: the screen at the plain probe.
+02-after-probe-wikipedia.pdf    The PDF given for 01 (1,582,069 bytes, one page 402x2630 pt).
+03-after-pdf-full.png           02 rendered with Ghostscript at 216 dpi (3x); 03-after-pdf-full-small.png at 25%.
+04-after-pdf-visible-rect.png   03 cropped to the returned rect.
+04b-screen-vs-pdf-rect.png      01 beside 04: the same lines at the same heights.
+05-after-private-tab.png        Fixed build, Incognito tab on the article: nil.
+06-after-deck.png               Fixed build, deck over the page: nil.
+07-after-settings.png           Fixed build, Settings sheet: nil.
+08-base-article.png             Round 1, base build c9b033f5b on the article: the probe produces no line (no delegate).
+09-probe-log.txt                Fixed build's PAGELAB fullpage and ARDIA build lines.
+10-repro-before-fix-log.txt     Pre-fix lines for the reproduction.

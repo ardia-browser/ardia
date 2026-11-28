@@ -1,0 +1,36 @@
+# Fixed build (FullPageScreenshots.swift R4 fix on c06f5f5b8)
+2026-11-28 07:17:29.091 Df Ardia[60807:2a21d1] (Foundation) ARDIA build c06f5f5b8e83d853a8df3c1a724995d772f6ece3 dirty: no from the export of the commit; native c06f5f5b8e83d853a8df3c1a724995d772f6ece3, dirty (packages/phone/ios/FullPageScreenshots.swift, apps/phone/ios/Ardia.xcworkspace/xcshareddata/swiftpm/Package.resolved)
+2026-11-28 07:17:30.650 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe listening for com.ardia.browser.ios.lab.fullPage and .navigate, .scroll, .sheet
+2026-11-28 07:17:48.565 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:17:48.573 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1648
+2026-11-28 07:17:48.686 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 1: delegate installed yes, answered 1582069 bytes, 1 pages of 402x2630, page 0 rect 0,108 402x874 (top 1648); page now https://en.wikipedia.org/wiki/Lighthouse offset 1648; written to <container>/Documents/FullPageProbe/probe-1.pdf
+2026-11-28 07:18:00.049 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:18:00.050 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1648
+2026-11-28 07:18:00.084 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 2: scroll while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 2248
+2026-11-28 07:18:00.205 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 2: delegate installed yes, answered 1582069 bytes, 1 pages of 402x2630, page 0 rect 0,0 402x382 (top 2248); page now https://en.wikipedia.org/wiki/Lighthouse offset 2248; written to <container>/Documents/FullPageProbe/probe-2.pdf
+2026-11-28 07:18:10.736 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:18:10.736 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 2248
+2026-11-28 07:18:10.947 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 3: sheet while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 2248
+2026-11-28 07:18:11.868 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage none: while the PDF rendered, a screen is presented over the page
+2026-11-28 07:18:11.870 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 3: delegate installed yes, answered nil; page now https://en.wikipedia.org/wiki/Lighthouse offset 2248
+2026-11-28 07:18:21.437 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:18:21.437 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 2248
+2026-11-28 07:18:21.557 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 4: navigate while the PDF renders, now https://en.wikipedia.org/wiki/Beacon offset 2248
+2026-11-28 07:18:21.862 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage none: while the PDF rendered, the page changed (navigated)
+2026-11-28 07:18:21.862 Df Ardia[60807:2a21d1] (Foundation) PAGELAB fullpage probe 4: delegate installed yes, answered nil; page now https://en.wikipedia.org/wiki/Beacon offset 2248
+2026-11-28 07:19:03.251 Df Ardia[63593:2a7396] (Foundation) ARDIA build c06f5f5b8e83d853a8df3c1a724995d772f6ece3 dirty: no from the export of the commit; native c06f5f5b8e83d853a8df3c1a724995d772f6ece3, dirty (packages/phone/ios/FullPageScreenshots.swift, apps/phone/ios/Ardia.xcworkspace/xcshareddata/swiftpm/Package.resolved)
+2026-11-28 07:19:04.752 Df Ardia[63593:2a7396] (Foundation) PAGELAB fullpage probe listening for com.ardia.browser.ios.lab.fullPage and .navigate, .scroll, .sheet
+2026-11-28 07:19:13.322 Df Ardia[63593:2a7396] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:19:13.322 Df Ardia[63593:2a7396] (Foundation) PAGELAB fullpage none: private tab
+2026-11-28 07:19:13.330 Df Ardia[63593:2a7396] (Foundation) PAGELAB fullpage probe 1: delegate installed yes, answered nil; page now - offset 0
+2026-11-28 07:19:21.531 Df Ardia[64375:2a856c] (Foundation) ARDIA build c06f5f5b8e83d853a8df3c1a724995d772f6ece3 dirty: no from the export of the commit; native c06f5f5b8e83d853a8df3c1a724995d772f6ece3, dirty (packages/phone/ios/FullPageScreenshots.swift, apps/phone/ios/Ardia.xcworkspace/xcshareddata/swiftpm/Package.resolved)
+2026-11-28 07:19:21.638 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage probe listening for com.ardia.browser.ios.lab.fullPage and .navigate, .scroll, .sheet
+2026-11-28 07:19:28.234 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:19:28.234 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset -62
+2026-11-28 07:19:28.267 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage probe 1: delegate installed yes, answered 1270760 bytes, 1 pages of 402x2925, page 0 rect 0,2113 402x812 (top 0); page now https://en.wikipedia.org/wiki/Lighthouse offset -62; written to <container>/Documents/FullPageProbe/probe-1.pdf
+2026-11-28 07:19:39.414 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:19:39.414 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage none: no page at the centre
+2026-11-28 07:19:39.414 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage probe 2: delegate installed yes, answered nil; page now - offset 0
+2026-11-28 07:19:54.703 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:19:54.703 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage none: a screen is presented over the page
+2026-11-28 07:19:54.703 Df Ardia[64375:2a856c] (Foundation) PAGELAB fullpage probe 3: delegate installed yes, answered nil; page now - offset 0

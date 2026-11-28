@@ -1,0 +1,38 @@
+# Run 1, pre-fix (repro build, pid 38360)
+2026-11-28 07:08:39.074 Df Ardia[38360:289b95] (Foundation) ARDIA build c06f5f5b8e83d853a8df3c1a724995d772f6ece3 dirty: no from the export of the commit; native c06f5f5b8e83d853a8df3c1a724995d772f6ece3, dirty (packages/phone/ios/FullPageScreenshots.swift)
+2026-11-28 07:08:39.586 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe listening for com.ardia.browser.ios.lab.fullPage and .navigate, .scroll, .sheet
+2026-11-28 07:09:49.618 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:09:49.618 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 687
+2026-11-28 07:09:49.618 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 1: scroll while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 1287
+2026-11-28 07:09:49.673 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 1: delegate installed yes, answered 1270764 bytes, 1 pages of 402x2925, page 0 rect 0,1364 402x874 (top 687); page now https://en.wikipedia.org/wiki/Lighthouse offset 1287; written to <container>/Documents/FullPageProbe/probe-1.pdf
+2026-11-28 07:10:07.333 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:10:07.334 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1287
+2026-11-28 07:10:09.937 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 2: sheet while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 1287
+2026-11-28 07:10:10.963 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 2: delegate installed yes, answered 1310237 bytes, 1 pages of 402x2925, page 0 rect 0,764 402x874 (top 1287); page now https://en.wikipedia.org/wiki/Lighthouse offset 1287; written to <container>/Documents/FullPageProbe/probe-2.pdf
+2026-11-28 07:10:24.082 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:10:24.084 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1287
+2026-11-28 07:10:24.123 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 3: scroll while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 1887
+2026-11-28 07:10:24.168 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 3: delegate installed yes, answered 1310233 bytes, 1 pages of 402x2925, page 0 rect 0,764 402x874 (top 1287); page now https://en.wikipedia.org/wiki/Lighthouse offset 1887; written to <container>/Documents/FullPageProbe/probe-3.pdf
+2026-11-28 07:10:56.214 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:10:56.216 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1887
+2026-11-28 07:10:56.910 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 4: navigate while the PDF renders, now https://en.wikipedia.org/wiki/Beacon offset 1887
+2026-11-28 07:10:57.648 Df Ardia[38360:289b95] (Foundation) PAGELAB fullpage probe 4: delegate installed yes, answered 1309598 bytes, 1 pages of 402x2925, page 0 rect 0,164 402x874 (top 1887); page now https://en.wikipedia.org/wiki/Beacon offset 1887; written to <container>/Documents/FullPageProbe/probe-4.pdf
+
+# Run 2, pre-fix again (pid 43886; this app was meant to be the fix but the fixed file never reached the Mac, so it is the same pre-fix code)
+2026-11-28 07:12:52.637 Df Ardia[43886:2937d5] (Foundation) ARDIA build c06f5f5b8e83d853a8df3c1a724995d772f6ece3 dirty: no from the export of the commit; native c06f5f5b8e83d853a8df3c1a724995d772f6ece3, dirty (packages/phone/ios/FullPageScreenshots.swift, apps/phone/ios/Ardia.xcworkspace/xcshareddata/swiftpm/Package.resolved)
+2026-11-28 07:12:53.434 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe listening for com.ardia.browser.ios.lab.fullPage and .navigate, .scroll, .sheet
+2026-11-28 07:13:07.157 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:13:07.157 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 645
+2026-11-28 07:13:07.199 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 1: delegate installed yes, answered 1290352 bytes, 1 pages of 402x2744, page 0 rect 0,1225 402x874 (top 645); page now https://en.wikipedia.org/wiki/Lighthouse offset 645; written to <container>/Documents/FullPageProbe/probe-1.pdf
+2026-11-28 07:13:18.015 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:13:18.015 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 645
+2026-11-28 07:13:18.028 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 2: scroll while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 1245
+2026-11-28 07:13:18.077 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 2: delegate installed yes, answered 1289740 bytes, 1 pages of 402x2744, page 0 rect 0,1225 402x874 (top 645); page now https://en.wikipedia.org/wiki/Lighthouse offset 1245; written to <container>/Documents/FullPageProbe/probe-2.pdf
+2026-11-28 07:13:28.901 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:13:28.902 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1245
+2026-11-28 07:13:28.976 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 3: sheet while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 1245
+2026-11-28 07:13:29.092 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 3: delegate installed yes, answered 1329830 bytes, 1 pages of 402x2744, page 0 rect 0,625 402x874 (top 1245); page now https://en.wikipedia.org/wiki/Lighthouse offset 1245; written to <container>/Documents/FullPageProbe/probe-3.pdf
+2026-11-28 07:13:39.733 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 07:13:39.734 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 1245
+2026-11-28 07:13:39.770 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 4: navigate while the PDF renders, now https://en.wikipedia.org/wiki/Beacon offset 1245
+2026-11-28 07:13:39.795 Df Ardia[43886:2937d5] (Foundation) PAGELAB fullpage probe 4: delegate installed yes, answered 1329819 bytes, 1 pages of 402x2744, page 0 rect 0,625 402x874 (top 1245); page now https://en.wikipedia.org/wiki/Beacon offset 1245; written to <container>/Documents/FullPageProbe/probe-4.pdf

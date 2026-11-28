@@ -12,6 +12,7 @@ export const CACHE_STAMP = "deps.json";
 export const USERS_DIR = ".users";
 const LINKED_DOT_ENTRIES = new Set([".bin"]);
 const WORKSPACE_SCOPE = "@ardia";
+export const NESTED_WORKSPACES = ["apps/phone"];
 const MARKER_VERSION = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -30,6 +31,8 @@ read-only dependency tree instead of an APFS clone (a clone writes 100k+ inodes 
 What it does to <worktree>:
   - node_modules (the root and every pnpm workspace project's) becomes a real folder of per-entry links into the
     dependency tree. @ardia/* links point at the worktree's own apps/* and packages/*.
+  - A folder with its own workspace and lockfile (${NESTED_WORKSPACES.join(", ")}) gets its own dependency tree the same way,
+    keyed by its own install inputs, and its projects' node_modules (apps/phone and packages/phone) link into it.
     Dot entries other than .bin stay local, so caches (.cache, .vite) land in the worktree.
   - The dependency tree is a pnpm install made once per set of install inputs (the lockfile, .npmrc,
     pnpm-workspace.yaml, every workspace package.json, patches/, and the platform, CPU and Node major version)
@@ -120,8 +123,9 @@ function checkedProject(root, project) {
   return relative.split(path.sep).join("/");
 }
 
-export function workspaceProjects(root, workspaceYaml) {
+export function workspaceProjects(root, workspaceYaml, base = "") {
   const patterns = workspacePatterns(workspaceYaml);
+  const within = (relative) => path.join(base, relative);
   const baseOf = (pattern) => {
     if (pattern.startsWith("!") && pattern.includes("*")) throw new Error(`unsupported workspace pattern "${pattern}" in pnpm-workspace.yaml; exclusions must be literal paths`);
     const plain = pattern.replace(/^!/, "").replace(/\/$/, "");
@@ -129,12 +133,12 @@ export function workspaceProjects(root, workspaceYaml) {
     if (/[*?[\]{}]/.test(base)) throw new Error(`unsupported workspace pattern "${pattern}" in pnpm-workspace.yaml; worktree-setup takes literal paths and dir/*`);
     return { base, children: plain.endsWith("/*") };
   };
-  const excluded = new Set(patterns.filter((p) => p.startsWith("!")).map((p) => checkedProject(root, baseOf(p).base)));
-  const projects = new Set([""]);
+  const excluded = new Set(patterns.filter((p) => p.startsWith("!")).map((p) => checkedProject(root, within(baseOf(p).base))));
+  const projects = new Set([base ? checkedProject(root, base) : ""]);
   for (const pattern of patterns.filter((p) => !p.startsWith("!"))) {
-    const { base, children } = baseOf(pattern);
-    checkedProject(root, base);
-    const candidates = children ? listDirs(path.join(root, base)).map((name) => `${base}/${name}`) : [base];
+    const { base: folder, children } = baseOf(pattern);
+    const start = checkedProject(root, within(folder));
+    const candidates = children ? listDirs(path.join(root, start)).map((name) => (start ? `${start}/${name}` : name)) : [start];
     for (const candidate of candidates) {
       const project = checkedProject(root, candidate);
       if (!excluded.has(project) && fs.existsSync(path.join(root, project, "package.json"))) projects.add(project);
@@ -169,23 +173,37 @@ function readBytes(file) {
   }
 }
 
-export function installInputs(root, runtime = runtimeOf()) {
-  const lockfile = readBytes(path.join(root, "pnpm-lock.yaml"));
-  if (lockfile === null) throw new Error(`${root} has no pnpm-lock.yaml`);
-  const workspace = readBytes(path.join(root, "pnpm-workspace.yaml"));
-  const projects = workspaceProjects(root, workspace?.toString("utf8") ?? "");
-  const snapshot = new Map([["pnpm-lock.yaml", lockfile], ["pnpm-workspace.yaml", workspace]]);
-  const names = [".npmrc", ...projects.map((p) => (p ? `${p}/package.json` : "package.json"))];
+export function installInputs(root, runtime = runtimeOf(), base = "") {
+  const at = (name) => (base ? `${base}/${name}` : name);
+  const lockfile = readBytes(path.join(root, at("pnpm-lock.yaml")));
+  if (lockfile === null) throw new Error(`${path.join(root, base)} has no pnpm-lock.yaml`);
+  const workspace = readBytes(path.join(root, at("pnpm-workspace.yaml")));
+  const projects = workspaceProjects(root, workspace?.toString("utf8") ?? "", base);
+  const snapshot = new Map([[at("pnpm-lock.yaml"), lockfile], [at("pnpm-workspace.yaml"), workspace]]);
+  const names = [at(".npmrc"), ...projects.map((p) => (p ? `${p}/package.json` : "package.json"))];
   let patches = [];
   try {
-    patches = fs.readdirSync(path.join(root, "patches"), { withFileTypes: true });
+    patches = fs.readdirSync(path.join(root, at("patches")), { withFileTypes: true });
   } catch (error) {
-    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw new Error(`can't read ${path.join(root, "patches")} (${error.code})`);
+    if (error.code !== "ENOENT" && error.code !== "ENOTDIR") throw new Error(`can't read ${path.join(root, at("patches"))} (${error.code})`);
   }
-  for (const entry of patches) if (entry.isFile()) names.push(`patches/${entry.name}`);
+  for (const entry of patches) if (entry.isFile()) names.push(at(`patches/${entry.name}`));
   for (const name of names) snapshot.set(name, readBytes(path.join(root, name)));
   const files = [...snapshot].filter(([, content]) => content !== null);
-  return { files, runtime, projects, lockfile: lockfile.toString("utf8") };
+  return { files, runtime, projects, lockfile: lockfile.toString("utf8"), base };
+}
+
+export function workspacesOf(root, runtime = runtimeOf(), nested = NESTED_WORKSPACES) {
+  const all = [installInputs(root, runtime)];
+  for (const base of nested) if (lstatOrNull(path.join(root, base, "pnpm-lock.yaml"))) all.push(installInputs(root, runtime, checkedProject(root, base)));
+  const owners = new Map();
+  for (const inputs of all) {
+    for (const project of inputs.projects) {
+      if (owners.has(project)) throw new Error(`${project || "the root"} belongs to two workspaces (${owners.get(project) || "the root"} and ${inputs.base || "the root"})`);
+      owners.set(project, inputs.base);
+    }
+  }
+  return all.map((inputs) => ({ ...inputs, key: dependencyKey(inputs) }));
 }
 
 function readEntries(dir) {
@@ -447,8 +465,8 @@ export function removeTree(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-export function buildCache({ worktree, cacheRoot, install = pnpmInstall, runtime = runtimeOf() }) {
-  const inputs = installInputs(worktree, runtime);
+export function buildCache({ worktree, cacheRoot, install = pnpmInstall, runtime = runtimeOf(), base = "" }) {
+  const inputs = installInputs(worktree, runtime, base);
   const key = dependencyKey(inputs);
   const final = path.join(cacheRoot, key);
   if (fs.existsSync(path.join(final, CACHE_STAMP))) return { dir: final, key, created: false };
@@ -460,12 +478,12 @@ export function buildCache({ worktree, cacheRoot, install = pnpmInstall, runtime
   fs.mkdirSync(staging, { recursive: true });
   try {
     stageInputs(staging, inputs.files);
-    install(staging);
-    fs.rmSync(path.join(staging, ".npmrc"), { force: true });
-    const installed = readIfExists(path.join(staging, "node_modules", ".pnpm", "lock.yaml"));
+    install(path.join(staging, base));
+    fs.rmSync(path.join(staging, base, ".npmrc"), { force: true });
+    const installed = readIfExists(path.join(staging, base, "node_modules", ".pnpm", "lock.yaml"));
     if (installed === null || normalizeLockfile(installed) !== normalizeLockfile(inputs.lockfile)) throw new Error("the cache install's lockfile doesn't match the worktree's");
     setWritable(inputs.projects.map((project) => path.join(staging, project, "node_modules")).filter((dir) => fs.existsSync(dir)), false);
-    const fingerprint = { key, runtime, files: Object.fromEntries(inputs.files.map(([name, content]) => [name, createHash("sha256").update(content).digest("hex")])) };
+    const fingerprint = { key, runtime, ...(base ? { workspace: base } : {}), files: Object.fromEntries(inputs.files.map(([name, content]) => [name, createHash("sha256").update(content).digest("hex")])) };
     writeJsonAtomic(path.join(staging, CACHE_STAMP), { ...fingerprint, created: new Date().toISOString(), from: worktree });
     removeTree(final);
     fs.renameSync(staging, final);
@@ -519,13 +537,13 @@ function planAll(worktree, sourceRoot, projects) {
   return plans;
 }
 
-function linkInto(worktree, sourceRoot, key, projects, plans, previous) {
+function linkInto(worktree, sourceRoot, key, projects, plans, previous, nested = []) {
   prepareTarget(worktree, projects, previous);
   const rootModules = path.join(worktree, "node_modules");
   fs.mkdirSync(rootModules, { recursive: true });
   const markerFile = path.join(rootModules, MARKER);
   const managed = [...new Set([...plans.map((p) => p.project), ...(previous?.projects ?? [])])].sort();
-  const marker = { version: MARKER_VERSION, key, root: sourceRoot, nodeModules: plans.map((p) => p.sourceDir), projects: managed, state: "linking", created: new Date().toISOString() };
+  const marker = { version: MARKER_VERSION, key, root: sourceRoot, nodeModules: plans.map((p) => p.sourceDir), projects: managed, ...(nested.length ? { workspaces: nested } : {}), state: "linking", created: new Date().toISOString() };
   writeJsonAtomic(markerFile, marker);
 
   let links = 0;
@@ -547,25 +565,35 @@ export function setupWorktree(worktreeArg, options = {}) {
   const cacheRoot = path.resolve(options.cacheRoot ?? defaultCacheRoot());
   const runtime = options.runtime ?? runtimeOf();
   checkGuardSlot(worktree);
-  const inputs = installInputs(worktree, runtime);
-  const key = dependencyKey(inputs);
+  const workspaces = workspacesOf(worktree, runtime, options.nested);
+  const key = workspaces[0].key;
+  const projects = workspaces.flatMap((inputs) => inputs.projects).sort();
   const previous = markerOf(worktree);
   const previouslyManaged = (previous?.projects ?? []).map((project) => checkedProject(worktree, project));
-  ownInstallDirs(worktree, inputs.projects.filter((project) => !previouslyManaged.includes(project)), options.replace ?? false);
+  ownInstallDirs(worktree, projects.filter((project) => !previouslyManaged.includes(project)), options.replace ?? false);
 
   fs.mkdirSync(cacheRoot, { recursive: true });
   dropNeverIndex(cacheRoot);
   const final = path.join(cacheRoot, key);
-  let createdCache = false;
-  if (!fs.existsSync(path.join(final, CACHE_STAMP))) {
-    log(`installing ${key} into ${cacheRoot} (once per set of install inputs, under scripts/agent/locked pod)`);
-    const build = options.build ?? (() => underPodLock(["--build-cache", worktree, "--cache", cacheRoot]));
-    build({ worktree, cacheRoot, runtime });
-    createdCache = true;
+  const created = new Set();
+  for (const inputs of workspaces) {
+    const tree = path.join(cacheRoot, inputs.key);
+    if (!fs.existsSync(path.join(tree, CACHE_STAMP))) {
+      log(`installing ${inputs.base || "the root workspace"} as ${inputs.key} into ${cacheRoot} (once per set of install inputs, under scripts/agent/locked pod)`);
+      const build = options.build ?? (() => underPodLock(["--build-cache", worktree, "--cache", cacheRoot, ...(inputs.base ? ["--workspace", inputs.base] : [])]));
+      build({ worktree, cacheRoot, runtime, base: inputs.base });
+      created.add(inputs.key);
+    }
+    if (!fs.existsSync(path.join(tree, CACHE_STAMP))) throw new Error(`building ${tree} didn't publish ${CACHE_STAMP}`);
+    fs.utimesSync(path.join(tree, CACHE_STAMP), new Date(), new Date());
   }
-  if (!fs.existsSync(path.join(final, CACHE_STAMP))) throw new Error(`building ${final} didn't publish ${CACHE_STAMP}`);
-  fs.utimesSync(path.join(final, CACHE_STAMP), new Date(), new Date());
-  const plans = planAll(worktree, fs.realpathSync(final), inputs.projects);
+  const treeOf = (inputs) => fs.realpathSync(path.join(cacheRoot, inputs.key));
+  const plans = workspaces.flatMap((inputs) => planAll(worktree, treeOf(inputs), inputs.projects));
+  const nested = workspaces.slice(1).map((inputs) => {
+    const root = treeOf(inputs);
+    return { dir: inputs.base, key: inputs.key, root, created: created.has(inputs.key), projects: inputs.projects, nodeModules: plans.filter((plan) => inputs.projects.includes(plan.project)).map((plan) => plan.sourceDir) };
+  });
+  const keys = workspaces.map((inputs) => inputs.key);
   const identity = identityOf(worktree);
   const guardPartial = path.join(worktree, `${GUARD_FILE}.${process.pid}.partial`);
   fs.writeFileSync(guardPartial, GUARD_SOURCE, { flag: "wx" });
@@ -580,18 +608,21 @@ export function setupWorktree(worktreeArg, options = {}) {
     }
   };
   const { record, sourceRoot, marker, markerFile, links, warnings } = linkUnderLock(() => {
-    const stamp = path.join(final, CACHE_STAMP);
-    if (!fs.existsSync(stamp)) throw new Error(`${final} isn't built (or was just pruned); run worktree-setup again`);
-    fs.utimesSync(stamp, new Date(), new Date());
-    fs.rmSync(path.join(final, ".npmrc"), { force: true });
+    for (const inputs of workspaces) {
+      const tree = path.join(cacheRoot, inputs.key);
+      const stamp = path.join(tree, CACHE_STAMP);
+      if (!fs.existsSync(stamp)) throw new Error(`${tree} isn't built (or was just pruned); run worktree-setup again`);
+      fs.utimesSync(stamp, new Date(), new Date());
+      fs.rmSync(path.join(tree, inputs.base, ".npmrc"), { force: true });
+    }
     const current = markerOf(worktree);
     const managedNow = (current?.projects ?? []).map((project) => checkedProject(worktree, project));
-    const ownNow = ownInstallDirs(worktree, inputs.projects.filter((project) => !managedNow.includes(project)), options.replace ?? false);
+    const ownNow = ownInstallDirs(worktree, projects.filter((project) => !managedNow.includes(project)), options.replace ?? false);
     for (const dir of ownNow) fs.rmSync(dir, { recursive: true, force: true });
     const claimed = readJson(recordFile(cacheRoot, identity))?.keys ?? [];
-    const record = writeClaim(cacheRoot, worktree, identity, [...new Set([...claimed, ...(current?.key ? [current.key] : []), key])]);
-    const linked = linkInto(worktree, fs.realpathSync(final), key, inputs.projects, plans, current);
-    writeClaim(cacheRoot, worktree, identity, [key]);
+    const record = writeClaim(cacheRoot, worktree, identity, [...new Set([...claimed, ...markerKeys(current), ...keys])]);
+    const linked = linkInto(worktree, fs.realpathSync(final), key, projects, plans, current, nested);
+    writeClaim(cacheRoot, worktree, identity, keys);
     return { record, ...linked };
   });
 
@@ -601,14 +632,21 @@ export function setupWorktree(worktreeArg, options = {}) {
 
   const ms = Date.now() - started;
   log(`worktree-setup: ${worktree}`);
-  log(`  dependencies: ${createdCache ? "a new cached install" : "the cached install"} ${sourceRoot} (key ${key})`);
+  const describe = (made) => (made ? "a new cached install" : "the cached install");
+  log(`  dependencies: ${describe(created.has(key))} ${sourceRoot} (key ${key})`);
+  for (const one of nested) log(`  ${one.dir}: ${describe(one.created)} ${one.root} (key ${one.key})`);
   log(`  linked ${links} entries in ${marker.projects.length} node_modules folders (${marker.projects.map((p) => p || ".").join(", ")}) in ${ms} ms`);
   log(`  pnpm install is blocked by ${GUARD_FILE}; marker ${markerFile}; recorded in ${record}`);
   if (neverIndexed.length) log(`  added ${NEVER_INDEX} to ${neverIndexed.join(", ")}`);
   if (exclude) log(`  ${GUARD_FILE} and ${NEVER_INDEX} are listed in ${exclude}`);
   for (const warning of warnings) log(`  warning: ${warning}`);
   log(`  undo: scripts/agent/worktree-setup --undo ${worktree}`);
-  return { worktree, key, sourceRoot, links, projects: marker.projects, warnings, ms, createdCache };
+  return { worktree, key, sourceRoot, links, projects: marker.projects, workspaces: nested, warnings, ms, createdCache: created.size > 0 };
+}
+
+function markerKeys(marker) {
+  if (!marker?.key) return [];
+  return [marker.key, ...(Array.isArray(marker.workspaces) ? marker.workspaces.map((one) => one.key) : [])];
 }
 
 export function undoWorktree(worktreeArg, { log = console.log } = {}) {
@@ -627,18 +665,32 @@ export function undoWorktree(worktreeArg, { log = console.log } = {}) {
   log(`worktree-setup: removed the links in ${worktree} (${[...projects].map((p) => p || ".").join(", ")}) and its pnpm guard; ${marker.root} is untouched`);
 }
 
-export function worktreeStatus(worktreeArg, { runtime = runtimeOf() } = {}) {
+export function worktreeStatus(worktreeArg, { runtime = runtimeOf(), nested = NESTED_WORKSPACES } = {}) {
   const worktree = fs.realpathSync(worktreeArg);
   const marker = markerOf(worktree);
   if (!marker) return { linked: false, worktree, problems: [`no node_modules/${MARKER}`] };
   const problems = [];
-  const key = dependencyKey(installInputs(worktree, runtime));
+  const [own, ...nestedNow] = workspacesOf(worktree, runtime, nested);
+  const key = own.key;
   if (key !== marker.key) problems.push(`the worktree's install inputs changed (key ${key}, linked ${marker.key}); run worktree-setup again`);
   if (!marker.root || !fs.existsSync(path.join(marker.root, CACHE_STAMP))) problems.push(`the cached install ${marker.root} is gone; run worktree-setup again`);
+  const linkedNested = Array.isArray(marker.workspaces) ? marker.workspaces : [];
+  const trees = [{ root: marker.root, projects: own.projects }];
+  for (const inputs of nestedNow) {
+    const linked = linkedNested.find((one) => one.dir === inputs.base);
+    if (!linked) {
+      problems.push(`${inputs.base} has its own workspace but isn't linked; run worktree-setup again`);
+      continue;
+    }
+    if (linked.key !== inputs.key) problems.push(`${inputs.base}'s install inputs changed (key ${inputs.key}, linked ${linked.key}); run worktree-setup again`);
+    if (!fs.existsSync(path.join(linked.root, CACHE_STAMP))) problems.push(`the cached install ${linked.root} for ${inputs.base} is gone; run worktree-setup again`);
+    else trees.push({ root: linked.root, projects: inputs.projects });
+  }
   if (marker.state !== "linked") problems.push("setup didn't finish; run worktree-setup again");
   if (readIfExists(path.join(worktree, GUARD_FILE)) !== GUARD_SOURCE) problems.push(`${GUARD_FILE} is missing or changed, so pnpm install isn't blocked`);
-  if (marker.root && fs.existsSync(marker.root) && Array.isArray(marker.projects)) {
-    for (const plan of planAll(worktree, marker.root, marker.projects.map((project) => checkedProject(worktree, project)))) {
+  const managed = Array.isArray(marker.projects) ? marker.projects.map((project) => checkedProject(worktree, project)) : [];
+  for (const tree of trees.filter((one) => one.root && fs.existsSync(one.root))) {
+    for (const plan of planAll(worktree, tree.root, tree.projects.filter((project) => managed.includes(project)))) {
       for (const op of plan.ops.filter((o) => o.type === "symlink")) {
         const name = path.relative(worktree, op.path);
         let actual = null;
@@ -686,8 +738,11 @@ export function markerState(dir) {
     path.isAbsolute(marker.root) &&
     path.basename(marker.root) === marker.key &&
     Array.isArray(marker.projects) &&
-    Array.isArray(marker.nodeModules);
-  return valid ? { key: marker.key } : { unknown: true };
+    Array.isArray(marker.nodeModules) &&
+    (marker.workspaces === undefined ||
+      (Array.isArray(marker.workspaces) &&
+        marker.workspaces.every((one) => one !== null && typeof one === "object" && typeof one.dir === "string" && typeof one.key === "string" && /^[0-9a-f]{16}$/.test(one.key) && typeof one.root === "string" && path.isAbsolute(one.root) && path.basename(one.root) === one.key)));
+  return valid ? { key: marker.key, keys: markerKeys(marker) } : { unknown: true };
 }
 
 export function liveKeys(cacheRoot) {
@@ -722,7 +777,7 @@ export function liveKeys(cacheRoot) {
       continue;
     }
     if (state.key && claims.includes(state.key)) {
-      live.add(state.key);
+      for (const key of state.keys) if (claims.includes(key)) live.add(key);
       continue;
     }
     fs.rmSync(file, { force: true });
@@ -783,6 +838,9 @@ export function parseArgs(argv) {
       case "--cache":
         options.cacheRoot = path.resolve(value());
         break;
+      case "--workspace":
+        options.workspace = value();
+        break;
       case "--older-than":
         options.olderThanDays = checkedAge(Number(value()));
         break;
@@ -815,7 +873,8 @@ export function main(argv) {
   }
   if (options.command === "build-cache") {
     if (!(process.env.AC_LOCKED_HELD ?? "").split("\n").some((line) => line.endsWith("/ac-pod.lockf"))) throw new Error("--build-cache runs only under scripts/agent/locked pod");
-    buildCache({ worktree: fs.realpathSync(worktree), cacheRoot });
+    const real = fs.realpathSync(worktree);
+    buildCache({ worktree: real, cacheRoot, base: options.workspace ? checkedProject(real, options.workspace) : "" });
     return 0;
   }
   if (options.command === "undo") {

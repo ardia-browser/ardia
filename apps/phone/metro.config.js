@@ -1,11 +1,22 @@
+const fs = require("node:fs");
 const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
 
 const projectRoot = __dirname;
 const repoRoot = path.resolve(projectRoot, "../..");
+const linkedDependencies = readLinkedDependencies(path.resolve(repoRoot, "node_modules/.ardia-linked-deps.json"));
+
+function readLinkedDependencies(marker) {
+  try {
+    const linked = JSON.parse(fs.readFileSync(marker, "utf8")).workspaces ?? [];
+    return linked.find((one) => one.dir === "apps/phone")?.nodeModules ?? [];
+  } catch {
+    return [];
+  }
+}
 
 const config = getDefaultConfig(projectRoot);
-config.watchFolders = [path.resolve(repoRoot, "packages/phone"), path.resolve(repoRoot, "packages/core")];
+config.watchFolders = [path.resolve(repoRoot, "packages/phone"), path.resolve(repoRoot, "packages/core"), ...linkedDependencies];
 config.resolver.nodeModulesPaths = [path.resolve(projectRoot, "node_modules")];
 config.resolver.disableHierarchicalLookup = true;
 config.transformer.getTransformOptions = async () => ({ transform: { experimentalImportSupport: true, inlineRequires: true } });

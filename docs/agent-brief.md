@@ -203,6 +203,12 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   (lockfile, `.npmrc`, workspace manifests, patches, platform and Node major) under `~/ardia-scratch/deps.noindex/<key>`.
   The first worktree on new inputs builds that install under `locked pod`: about 6 s, plus any wait for running app
   builds. `@ardia/*` links point at the worktree's own packages.
+  - `apps/phone` has its own workspace and lockfile (with `packages/phone`), so it gets its own cached install the
+    same way, keyed by its own inputs; the marker lists it under `workspaces`, and `apps/phone/metro.config.js`
+    watches it from there. A worktree set up before #4751 has no phone links: run the setup again (`--replace` if
+    `apps/phone/node_modules` is a real install). The phone's checks then run as
+    `node_modules/.bin/tsrs -p .`, `node --test …` and `node_modules/.bin/jest` from `apps/phone`, and
+    `apps/phone/scripts/build-sim-app` works unchanged.
   - In a linked worktree, never `pnpm install`: its `.pnpmfile.cjs` refuses, and the read-only tree stops a bypass.
     `pnpm run` and `pnpm exec` print the refusal and still run, but calling tools directly is quieter:
     `node_modules/.bin/tsrs -p .`, `node --import ./src/test-loader.mjs --test …` in `apps/browser`, or

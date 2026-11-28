@@ -3,17 +3,28 @@ import { Animated } from "react-native";
 import { clippedContinuousCorners, continuousCorners, Surface } from "../ui";
 import { useTheme } from "../ui/theme";
 import type { useEasedColor } from "../ui/toolbarColors";
+import { useDevicePixelsPerRootPoint } from "../../state/settings/interfaceScale";
+import { snappedToGrid } from "../../lib/interfaceScale";
 import { FloatingStrip } from "./context";
+import { selectedTabEdges } from "./selectedTabShape";
 import { CHIP_HAIRLINE, FLARE, ITEM_HEIGHT, ITEM_TOP, RIM_HEIGHT, RIM_WIDTH, STRIP_COLORS, tabRadius, TAB_TOP, TOP_STRIP_HEIGHT } from "./tokens";
 
 type Fill = string | ReturnType<typeof useEasedColor>;
 
-type Size = number | Animated.Value | Animated.AnimatedAddition<number>;
+type Size = number | Animated.Value | Animated.AnimatedAddition<number> | Animated.AnimatedSubtraction<number>;
 const plus = (size: Size, k: number): Size => (typeof size === "number" ? size + k : Animated.add<number>(size, k));
+
+function snapped(size: Size, pixelsPerPoint: number): Size {
+  if (typeof size === "number") return snappedToGrid(size, pixelsPerPoint);
+  const pixel = 1 / pixelsPerPoint;
+  const halfUp = Animated.add<number>(size, pixel / 2);
+  return Animated.subtract<number>(halfUp, Animated.modulo(halfUp, pixel));
+}
 
 export function SelectedTab({ width, band, opaque = false }: { width: Size; band: Fill | null; opaque?: boolean }) {
   const theme = useTheme();
   const floating = useContext(FloatingStrip);
+  const pixelsPerPoint = useDevicePixelsPerRootPoint();
   if (floating) {
     const card = {
       position: "absolute" as const,
@@ -38,20 +49,21 @@ export function SelectedTab({ width, band, opaque = false }: { width: Size; band
       </>
     );
   }
-  const body = plus(width, -1);
+  const { inset, flare } = selectedTabEdges(pixelsPerPoint);
+  const body = snapped(plus(width, -2 * inset), pixelsPerPoint);
   const fills: Fill[] = [...(opaque ? [theme.windowTint[0]] : []), theme.card, ...(band ? [band] : [])];
   const rim = STRIP_COLORS[theme.dark ? "dark" : "light"].selectedRim;
   return (
     <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height: TOP_STRIP_HEIGHT }}>
       {fills.map((fill, i) => (
         <Fragment key={i}>
-          <Animated.View style={{ position: "absolute", left: 0.5, top: TAB_TOP, width: body, height: TOP_STRIP_HEIGHT - TAB_TOP, overflow: "hidden" }}>
+          <Animated.View style={{ position: "absolute", left: inset, top: TAB_TOP, width: body, height: TOP_STRIP_HEIGHT - TAB_TOP, overflow: "hidden" }}>
             <Animated.View
               style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: -tabRadius() * 2, ...continuousCorners(tabRadius()), backgroundColor: fill }}
             />
           </Animated.View>
-          <Flare x={0.5 - FLARE} side="left" color={fill} />
-          <Flare x={plus(body, 0.5)} side="right" color={fill} />
+          <Flare x={inset - flare} width={flare} side="left" color={fill} />
+          <Flare x={plus(body, inset)} width={flare} side="right" color={fill} />
         </Fragment>
       ))}
       <Animated.View style={{ position: "absolute", left: 0, top: TAB_TOP - 0.5, width, height: RIM_HEIGHT * 2 }}>
@@ -61,14 +73,14 @@ export function SelectedTab({ width, band, opaque = false }: { width: Size; band
   );
 }
 
-function Flare({ x, side, color }: { x: Size; side: "left" | "right"; color: Fill }) {
+function Flare({ x, width, side, color }: { x: Size; width: number; side: "left" | "right"; color: Fill }) {
   const outer = FLARE * 2;
   return (
-    <Animated.View style={{ position: "absolute", left: x, top: TOP_STRIP_HEIGHT - FLARE, width: FLARE, height: FLARE, overflow: "hidden" }}>
+    <Animated.View style={{ position: "absolute", left: x, top: TOP_STRIP_HEIGHT - FLARE, width, height: FLARE, overflow: "hidden" }}>
       <Animated.View
         style={{
           position: "absolute",
-          left: side === "left" ? -outer : FLARE - outer,
+          ...(side === "left" ? { right: -FLARE } : { left: -FLARE }),
           top: -outer,
           width: outer * 2,
           height: outer * 2,

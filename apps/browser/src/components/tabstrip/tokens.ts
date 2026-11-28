@@ -10,6 +10,7 @@ export const TAB_TOP = 3;
 export const tabRadius = () => radius.chrome;
 export const tabCloseRadius = () => concentric(tabRadius(), (ITEM_HEIGHT - iconButton.xs.box) / 2);
 export const FLARE = 15;
+export const SELECTED_BODY_INSET = 0.5;
 export const RIM_HEIGHT = 27.5;
 export const RIM_WIDTH = 0.5;
 export const PEEK_PAD = space.m;

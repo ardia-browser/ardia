@@ -402,8 +402,8 @@ final class PhonePages {
     switch outcome {
     case .finished(let url):
       downloadSink?(["name": "downloads.finished", "id": id.uuidString, "fileName": url.lastPathComponent, "uri": url.absoluteString, "failure": nil])
-    case .failed(let fileName):
-      downloadSink?(["name": "downloads.finished", "id": id.uuidString, "fileName": fileName, "uri": nil, "failure": "network"])
+    case .failed(let fileName, let reason):
+      downloadSink?(["name": "downloads.finished", "id": id.uuidString, "fileName": fileName, "uri": nil, "failure": reason.rawValue])
     }
   }
 

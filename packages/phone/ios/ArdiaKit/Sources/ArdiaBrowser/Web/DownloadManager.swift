@@ -3,7 +3,64 @@ import WebKit
 
 public enum DownloadOutcome: Equatable, Sendable {
   case finished(URL)
-  case failed(fileName: String)
+  case failed(fileName: String, reason: DownloadFailure)
+}
+
+public enum DownloadFailure: String, Equatable, Sendable {
+  case network
+  case server
+  case tooManyRedirects
+  case unsupported
+  case storage
+  case noSpace
+
+  public static func of(_ error: any Error) -> DownloadFailure {
+    var current: NSError? = error as NSError
+    var found: DownloadFailure?
+    while let ns = current {
+      if let reason = reason(of: ns) {
+        if reason == .noSpace { return .noSpace }
+        found = found ?? reason
+      }
+      current = ns.userInfo[NSUnderlyingErrorKey] as? NSError
+    }
+    return found ?? .network
+  }
+
+  public static func of(status: Int) -> DownloadFailure? {
+    status >= 400 ? .server : nil
+  }
+
+  private static func reason(of error: NSError) -> DownloadFailure? {
+    switch error.domain {
+    case NSPOSIXErrorDomain:
+      return error.code == Int(ENOSPC) || error.code == Int(EDQUOT) ? .noSpace : nil
+    case NSCocoaErrorDomain:
+      if error.code == NSFileWriteOutOfSpaceError { return .noSpace }
+      if (NSFileWriteUnknownError...NSFileWriteVolumeReadOnlyError).contains(error.code) { return .storage }
+      return nil
+    case NSURLErrorDomain:
+      switch error.code {
+      case NSURLErrorHTTPTooManyRedirects:
+        return .tooManyRedirects
+      case NSURLErrorUnsupportedURL, NSURLErrorBadURL:
+        return .unsupported
+      case NSURLErrorBadServerResponse, NSURLErrorZeroByteResource, NSURLErrorCannotDecodeRawData, NSURLErrorCannotDecodeContentData,
+        NSURLErrorCannotParseResponse, NSURLErrorResourceUnavailable, NSURLErrorFileDoesNotExist, NSURLErrorNoPermissionsToReadFile,
+        NSURLErrorRedirectToNonExistentLocation, NSURLErrorUserAuthenticationRequired, NSURLErrorUserCancelledAuthentication:
+        return .server
+      case NSURLErrorCannotCreateFile, NSURLErrorCannotOpenFile, NSURLErrorCannotCloseFile, NSURLErrorCannotWriteToFile,
+        NSURLErrorCannotRemoveFile, NSURLErrorCannotMoveFile:
+        return .storage
+      case NSURLErrorDownloadDecodingFailedMidStream, NSURLErrorDownloadDecodingFailedToComplete:
+        return .server
+      default:
+        return .network
+      }
+    default:
+      return nil
+    }
+  }
 }
 
 public struct DownloadStart: Sendable {
@@ -59,7 +116,7 @@ public final class DownloadManager {
   public func cancel(_ id: UUID) {
     guard let entry = active.values.first(where: { $0.id == id }) else { return }
     entry.download.cancel { _ in }
-    failed(entry.download)
+    failed(entry.download, reason: .network)
   }
 
   func track(_ download: WKDownload) {
@@ -74,10 +131,15 @@ public final class DownloadManager {
   func destination(for download: WKDownload, response: URLResponse, suggestedFilename: String) -> URL? {
     let key = ObjectIdentifier(download)
     guard let entry = active[key] else { return nil }
+    if let status = (response as? HTTPURLResponse)?.statusCode, let refused = DownloadFailure.of(status: status) {
+      active[key]?.fileName = Self.uniqueURL(in: directory, for: suggestedFilename).lastPathComponent
+      failed(download, reason: refused)
+      return nil
+    }
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     } catch {
-      failed(download)
+      failed(download, reason: DownloadFailure.of(error))
       return nil
     }
     let url = Self.uniqueURL(in: directory, for: suggestedFilename)
@@ -100,13 +162,13 @@ public final class DownloadManager {
     if let destination = entry.destination {
       onOutcome?(.finished(destination), entry.id)
     } else {
-      onOutcome?(.failed(fileName: entry.fileName), entry.id)
+      onOutcome?(.failed(fileName: entry.fileName, reason: .network), entry.id)
     }
   }
 
-  func failed(_ download: WKDownload) {
+  func failed(_ download: WKDownload, reason: DownloadFailure) {
     guard let entry = remove(download) else { return }
-    onOutcome?(.failed(fileName: entry.fileName), entry.id)
+    onOutcome?(.failed(fileName: entry.fileName, reason: reason), entry.id)
   }
 
   private func remove(_ download: WKDownload) -> Active? {
@@ -158,6 +220,6 @@ final class DownloadDelegate: NSObject, WKDownloadDelegate {
   }
 
   func download(_ download: WKDownload, didFailWithError error: any Error, resumeData: Data?) {
-    manager?.failed(download)
+    manager?.failed(download, reason: DownloadFailure.of(error))
   }
 }

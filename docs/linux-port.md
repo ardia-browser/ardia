@@ -1035,6 +1035,10 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   no repository, AUR package or Flatpak remote to update from yet, and `ardia-update kind` says only `managed`, so the
   dialog can't tell an Arch install from an `.rpm` (#4078). When Check Now runs in Settings and no regular window is open to show the page, a dialog gives
   its link with Copy Link instead. A failed download or install falls back to the release page once and isn't retried automatically.
+  The exception is a `.deb` or tarball install whose automatic run ended in `polkit` or `timeout`, which means nobody answered
+  the password prompt (a disconnected remote desktop, a switched-away session). Ardia then offers the update toast with
+  Update, so the prompt only follows a click, and it remembers `askFirst` in `linux-updates.json`: later automatic runs on
+  that install offer Update instead of starting pkexec unasked (#3383).
 - **Self-update.** `ac_linux_self_update.cc` serves `ArdiaUpdates.installKind`, `update(version)`, `status()`,
   `claimOutcome(run)` and `restart`; the rules are in `ac_linux_self_update_policy.h`. The engine owns each run, so it
   carries on whatever window started it or closes.

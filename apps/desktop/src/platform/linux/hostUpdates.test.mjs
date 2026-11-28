@@ -38,7 +38,7 @@ test("only published releases with a Linux package and a GitHub release page cou
 });
 
 function fakeEngine({ kind = "deb", fail = null, failWhile = "downloading" } = {}) {
-  const engine = { phase: "idle", version: null, reason: null, kind, run: 0, claims: [], updates: [], restarts: 0, unansweredClaims: 0 };
+  const engine = { phase: "idle", version: null, reason: null, kind, fail, run: 0, claims: [], updates: [], restarts: 0, unansweredClaims: 0 };
   const status = () => ({ phase: engine.phase, version: engine.version, reason: engine.reason, kind: engine.kind, run: engine.run });
   engine.status = status;
   engine.update = (version) => {
@@ -49,7 +49,7 @@ function fakeEngine({ kind = "deb", fail = null, failWhile = "downloading" } = {
     return status();
   };
   engine.advance = () => {
-    if (fail && engine.phase === failWhile) Object.assign(engine, { phase: "failed", reason: fail });
+    if (engine.fail && engine.phase === failWhile) Object.assign(engine, { phase: "failed", reason: engine.fail });
     else if (engine.phase === "downloading") engine.phase = "installing";
     else if (engine.phase === "installing") engine.phase = "ready";
   };
@@ -464,7 +464,7 @@ test("a failed run falls back to the release page in the window that claims it, 
   assert.deepEqual(asking.seen.asked, [["0.2.46", "0.2.45", "failed"]]);
   assert.deepEqual(asking.seen.opened, [page("v0.2.46")]);
   assert.deepEqual((await asking.updater.methods.updaterState()).switchCheck, { phase: "found", channel: "stable", version: "0.2.46" });
-  const refused = fakeEngine({ kind: "tarball", fail: "polkit", failWhile: "installing" });
+  const refused = fakeEngine({ kind: "tarball", fail: "install", failWhile: "installing" });
   const automatic = harness({ engine: refused });
   await automatic.updater.check(false);
   await settled(() => automatic.seen.offered.length === 1);
@@ -479,9 +479,53 @@ test("a failed run falls back to the release page in the window that claims it, 
     update_downloads_started: 3,
     update_downloads_finished: 2,
     update_download_failures_network: 1,
-    update_install_failures_polkit: 1,
+    update_install_failures_install: 1,
     update_install_failures_busy: 1,
   });
+});
+
+test("an automatic run whose password prompt went unanswered offers Update, not the release page, and later automatic runs wait for a click", async () => {
+  takeUpdateCounts();
+  for (const reason of ["timeout", "polkit"]) {
+    const engine = fakeEngine({ kind: "tarball", fail: reason, failWhile: "installing" });
+    const { updater, seen, docs } = harness({ engine });
+    await updater.check(false);
+    await settled(() => seen.offeredInstalls.length === 1);
+    assert.deepEqual([seen.offered, seen.asked, seen.opened], [[], [], []], `${reason}: no release page`);
+    assert.deepEqual(seen.offeredInstalls.map((o) => o.version), ["0.2.46"]);
+    const saved = JSON.parse(docs.get(UPDATE_PREFERENCES));
+    assert.deepEqual([saved.failed, saved.askFirst], [null, true], `${reason}: the version stays installable and the next automatic run asks first`);
+    await updater.check(false);
+    assert.deepEqual(engine.updates, ["0.2.46"], `${reason}: no second password prompt nobody asked for`);
+    assert.equal(seen.offeredInstalls.length, 1, `${reason}: offered once`);
+    engine.fail = null;
+    seen.offeredInstalls[0].run();
+    await settled(() => seen.ready.length === 1);
+    assert.deepEqual(engine.updates, ["0.2.46", "0.2.46"]);
+  }
+  assert.deepEqual(SELF_UPDATE_COUNTS(takeUpdateCounts()), {
+    update_downloads_started: 4,
+    update_downloads_finished: 4,
+    update_install_failures_timeout: 1,
+    update_install_failures_polkit: 1,
+    update_installs_tarball: 2,
+  });
+
+  const askFirst = () => new Map([[UPDATE_PREFERENCES, JSON.stringify({ askFirst: true })]]);
+  const deb = harness({ engine: fakeEngine({ kind: "deb" }), disk: askFirst() });
+  await deb.updater.check(false);
+  assert.deepEqual([deb.seen.offeredInstalls.map((o) => o.version), deb.seen.offered], [["0.2.46"], []], "a pkexec install that had to ask before asks first");
+  const appimage = harness({ engine: fakeEngine({ kind: "appimage" }), disk: askFirst() });
+  await appimage.updater.check(false);
+  await settled(() => appimage.seen.ready.length === 1);
+  assert.equal(appimage.seen.offeredInstalls.length, 0, "an AppImage never needs a password, so it still updates by itself");
+
+  const asked = harness({ engine: fakeEngine({ kind: "deb", fail: "timeout", failWhile: "installing" }) });
+  await asked.updater.methods.checkForUpdates();
+  await settled(() => asked.seen.asked.length === 1);
+  assert.deepEqual(asked.seen.asked, [["0.2.46", "0.2.45", "failed"]], "Check Now still explains the failure and offers the page");
+  assert.equal(asked.seen.offeredInstalls.length, 0);
+  takeUpdateCounts();
 });
 
 test("self-update counts nothing while sharing is off", async () => {

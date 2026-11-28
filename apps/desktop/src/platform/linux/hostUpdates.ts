@@ -38,7 +38,7 @@ type InstallKind = UpdateInstallKind | "managed" | "unsupported";
 type PackageManager = "flatpak" | "package";
 type Phase = "idle" | "downloading" | "installing" | "ready" | "failed";
 type EngineStatus = { phase: Phase; version: string | null; reason: string | null; kind: InstallKind; run: number };
-type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null; readyNotified: string | null };
+type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null; readyNotified: string | null; askFirst: boolean };
 type Fetched = { status: number; body: string };
 type SwitchCheck = NonNullable<Extract<UpdaterState, { available: true }>["switchCheck"]>;
 type StartedFrom = "asked" | "automatic" | "accepted";
@@ -65,12 +65,15 @@ type UpdateDeps = {
   now?: () => number;
 };
 
-const DEFAULTS: Preferences = { automaticChecks: true, automaticDownloads: true, lastCheck: null, channel: null, notified: null, failed: null, readyNotified: null };
+const DEFAULTS: Preferences = { automaticChecks: true, automaticDownloads: true, lastCheck: null, channel: null, notified: null, failed: null, readyNotified: null, askFirst: false };
 const INSTALLABLE: ReadonlySet<string> = new Set<UpdateInstallKind>(["deb", "tarball", "appimage"]);
 const PHASES: ReadonlySet<string> = new Set<Phase>(["idle", "downloading", "installing", "ready", "failed"]);
 const ONLY_INSTALL_FAILURES: ReadonlySet<string> = new Set(UPDATE_INSTALL_FAILURES.filter((reason) => !(UPDATE_DOWNLOAD_FAILURES as readonly string[]).includes(reason)));
+const UNANSWERED_PASSWORD: ReadonlySet<string> = new Set(["polkit", "timeout"]);
 
 const installs = (kind: InstallKind | null | undefined): kind is UpdateInstallKind => !!kind && INSTALLABLE.has(kind);
+const installsThroughPkexec = (kind: InstallKind | null | undefined) => kind === "deb" || kind === "tarball";
+const passwordUnanswered = (status: EngineStatus) => installsThroughPkexec(status.kind) && UNANSWERED_PASSWORD.has(status.reason ?? "");
 const updateBusy = (status: EngineStatus | null | undefined) => status?.phase === "downloading" || status?.phase === "installing";
 const finished = (status: EngineStatus) => status.run > 0 && (status.phase === "ready" || status.phase === "failed");
 
@@ -103,6 +106,7 @@ function readPreferences(read: UpdateDeps["read"]): Preferences {
       notified: typeof saved.notified === "string" ? saved.notified : null,
       failed: isAppVersion(saved.failed) ? saved.failed : null,
       readyNotified: isAppVersion(saved.readyNotified) ? saved.readyNotified : null,
+      askFirst: saved.askFirst === true,
     };
   } catch {
     return { ...DEFAULTS };
@@ -195,9 +199,14 @@ export function linuxUpdater(deps: UpdateDeps) {
     }
   }
 
-  async function fallBack(release: Release, from: StartedFrom, consent: ConsentToken | null) {
+  async function fallBack(release: Release, from: StartedFrom, consent: ConsentToken | null, failure?: EngineStatus) {
     const current = version();
     switchCheck = { phase: "found", channel: switchCheck?.channel ?? channelOf(release.version), version: release.version };
+    if (from === "automatic" && failure && passwordUnanswered(failure)) {
+      await remember({ notified: release.version, askFirst: true });
+      deps.offerInstall(release, () => installOffered(release));
+      return;
+    }
     if (from === "asked" && current) {
       if (await deps.ask(release, current, true)) {
         if (deps.open(release.url)) noteUpdatePageOpened(consent);
@@ -218,7 +227,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     if (!target) return;
     if (status.phase === "ready") return (await preferences()).readyNotified === target ? undefined : deps.ready(target, restartToUpdate);
     console.info(`[ardia linux] the update to ${target} failed: ${status.reason ?? "unknown"}`);
-    await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent);
+    await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent, status);
   }
 
   async function followRun(started: EngineStatus, own: OwnRun, consent: ConsentToken | null) {
@@ -255,8 +264,10 @@ export function linuxUpdater(deps: UpdateDeps) {
         if (asked && status.version) await noticeReady(status, status.version, consent);
         return;
       }
-      if (!asked && saved.failed === release.version) return;
-      if (asked || (await preferences()).automaticDownloads) return startRun(release, asked ? "asked" : "automatic", consent);
+      if (asked) return startRun(release, "asked", consent);
+      if (saved.failed === release.version) return;
+      const latest = await preferences();
+      if (latest.automaticDownloads && !(latest.askFirst && installsThroughPkexec(status.kind))) return startRun(release, "automatic", consent);
       if (await offeredOnce(release)) deps.offerInstall(release, () => installOffered(release));
       return;
     }

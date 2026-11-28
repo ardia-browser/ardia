@@ -18,7 +18,7 @@ import { GLYPH, HISTORY_BUTTON_MOTION, NAV_GLYPH, RELOAD_BUTTON_MOTION, SYMBOL_B
 import { showReloadMenu } from "../../state/site/reloadMenu";
 import { useStableHandler } from "./useStableHandler";
 
-const ICON_CENTER = { width: GLYPH, height: GLYPH, alignItems: "center" as const, justifyContent: "center" as const };
+const ICON_CENTER = { width: SYMBOL_BOX, height: SYMBOL_BOX, alignItems: "center" as const, justifyContent: "center" as const };
 const ICON_LAYER = { ...ICON_CENTER, position: "absolute" as const };
 const SYMBOL_FRAME = { width: SYMBOL_BOX, height: SYMBOL_BOX };
 

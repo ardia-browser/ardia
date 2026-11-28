@@ -375,17 +375,25 @@ PY
 hook "$src/chrome/browser/policy/chrome_browser_policy_connector.cc" "ChromeBrowserPolicyConnector's platform provider (embedder)" <<'PY'
 old = """ChromeBrowserPolicyConnector::CreatePlatformProvider() {
 """
-new = """ChromeBrowserPolicyConnector::CreatePlatformProvider() {
-  // Ardia: ArdiaCore reads no platform policy (as CEF's build, which made none without a policy id).
+guard = """#if BUILDFLAG(IS_MAC)
+  if (g_ardia_embedder && !base::CommandLine::ForCurrentProcess()->HasSwitch(
+                               "enable-macos-platform-policy")) {
+#else
   if (g_ardia_embedder) {
+#endif
     return nullptr;
   }
 """
+loader = "  auto loader = std::make_unique<PolicyLoaderMac>(\n"
+domain = """  if (g_ardia_embedder) {
+    bundle_id = CFSTR("com.ardia.browser");
+  }
+"""
 def edit(s):
-    assert s.count(old) == 1
-    return s.replace(old, new)
-hook(["  // Ardia: ArdiaCore reads no platform policy (as CEF's build, which made none without a policy id).\n"],
-     edit, HOOKS)
+    assert s.count(old) == 1 and s.count(loader) == 1
+    return with_include(s.replace(old, old + guard).replace(loader, domain + loader),
+                        '#include "base/command_line.h"\n')
+hook([guard, domain], edit, HOOKS)
 PY
 
 hook "$src/chrome/browser/ui/views/permissions/permission_prompt_factory.cc" "the permission prompt factory" <<'PY'

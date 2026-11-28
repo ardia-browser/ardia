@@ -1,25 +1,31 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-export type Resource<A extends unknown[], T> = { name: string; fetch: (...args: A) => Promise<T> };
+export type ResourceHooks<T> = { keep?: (value: T) => boolean; reused?: (value: T) => void; accepted?: (value: T) => void };
+export type Resource<A extends unknown[], T> = { name: string; fetch: (...args: A) => Promise<T> } & ResourceHooks<T>;
 
-export const resource = <A extends unknown[], T>(name: string, fetch: (...args: A) => Promise<T>): Resource<A, T> => ({ name, fetch });
+export const resource = <A extends unknown[], T>(name: string, fetch: (...args: A) => Promise<T>, hooks: ResourceHooks<T> = {}): Resource<A, T> => ({ name, fetch, ...hooks });
 
 const keyOf = (name: string, args: unknown[]) => JSON.stringify([name, ...args]);
 
 const useCache = create<Record<string, unknown>>()(() => ({}));
 const running = new Map<string, Promise<unknown>>();
 const generations = new Map<string, number>();
+const outdated = new Set<string>();
 
 export function load<A extends unknown[], T>(r: Resource<A, T>, args: A, { fresh = false } = {}): Promise<T> {
   const key = keyOf(r.name, args);
   const current = running.get(key);
   if (current && !fresh) return current as Promise<T>;
+  outdated.delete(key);
   const generation = (generations.get(key) ?? 0) + 1;
   generations.set(key, generation);
   const job = r.fetch(...args).then(
     (value) => {
-      if (generations.get(key) === generation) useCache.setState({ [key]: value });
+      if (generations.get(key) === generation) {
+        r.accepted?.(value);
+        useCache.setState({ [key]: value });
+      }
       return value;
     },
   );
@@ -33,14 +39,23 @@ export const cached = <A extends unknown[], T>(r: Resource<A, T>, args: A): T | 
 export function store<A extends unknown[], T>(r: Resource<A, T>, args: A, value: T) {
   const key = keyOf(r.name, args);
   generations.set(key, (generations.get(key) ?? 0) + 1);
+  outdated.delete(key);
   useCache.setState({ [key]: value });
 }
+
+export const markOutdated = <A extends unknown[], T>(r: Resource<A, T>, args: A) => void outdated.add(keyOf(r.name, args));
 
 export function useResource<A extends unknown[], T>(r: Resource<A, T>, ...args: A): [T | undefined, () => Promise<T | undefined>] {
   const key = keyOf(r.name, args);
   const value = useCache((s) => s[key]) as T | undefined;
   useEffect(() => {
-    load(r, args).catch(() => {});
+    const held = useCache.getState();
+    const behind = outdated.has(key);
+    if (key in held && !behind && r.keep?.(held[key] as T)) {
+      r.reused?.(held[key] as T);
+      return;
+    }
+    load(r, args, { fresh: behind }).catch(() => {});
   }, [key]);
   return [value, () => load(r, args, { fresh: true }).catch(() => undefined)];
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const model = await import("../browser/model.ts");
-const { liveReachesMenu, menuInputsChanged, menuLiveKey, menuState, pagesChangeMenu, trackedMenuState, HIDDEN_TAB_FIELDS_IN_MENU } = await import("./menuState.ts");
+const { liveReachesMenu, menuInputsChanged, menuLiveKey, menuState, pagesChangeMenu, shortcutListKey, trackedMenuState, HIDDEN_TAB_FIELDS_IN_MENU } = await import("./menuState.ts");
 const { patchPage, usePages } = await import("../tabs/pageState.ts");
 const { noRecordReads, trackedRecord } = await import("../browser/recordReads.ts");
 const { liveOf, onLiveChange, shownLiveOf } = await import("../tabs/tabLive.ts");
@@ -226,6 +226,31 @@ test("History › Recently Closed lists only what the window's shown profile clo
   const before = titles().filter((t) => t.startsWith("Window")).length;
   S().deleteProfile(work);
   assert.equal(titles().filter((t) => t.startsWith("Window")).length, before + 1, "a closed window whose profile was deleted reopens in the default profile, so it lists there");
+});
+
+test("the Shortcuts list is read again when a profile or extension is renamed, and not when only the shown profile changes", () => {
+  S().hydrate({});
+  const w = S().createWindow({ url: "https://home.example/" });
+  const work = S().createProfile({ name: "Work" });
+  const key = () => shortcutListKey(menuState(S()));
+  const before = key();
+
+  S().switchProfile(w, work);
+  assert.equal(key(), before, "which profile a window shows is not part of any command's title");
+  S().switchProfile(w, "default");
+
+  S().updateProfile(work, { name: "Job" });
+  const renamed = key();
+  assert.notEqual(renamed, before, "a rename keeps the profile's id but changes its command's title");
+  S().updateProfile(work, { icon: "briefcase.fill" });
+  assert.equal(key(), renamed, "a profile's icon is not in the list");
+
+  const extensions = [{ id: "openExtension:x", title: "Reader", icon: "a.png", enabled: true }];
+  const withExtension = shortcutListKey({ profiles: [], extensions });
+  assert.notEqual(shortcutListKey({ profiles: [], extensions: [{ ...extensions[0], title: "Reader 2" }] }), withExtension);
+  assert.notEqual(shortcutListKey({ profiles: [], extensions: [] }), withExtension);
+  assert.equal(shortcutListKey({ profiles: [], extensions: [{ ...extensions[0], icon: "b.png" }] }), withExtension, "an extension's icon is not in the list");
+  assert.equal(shortcutListKey({ profiles: [] }), shortcutListKey({ profiles: [], extensions: [] }));
 });
 
 test("the shown Peek's page rebuilds the menu like a shown tab; a Peek hidden behind another tab doesn't", () => {

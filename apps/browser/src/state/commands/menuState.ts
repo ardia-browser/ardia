@@ -180,6 +180,9 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     extensions: extensionMenu(s, windowId) };
 }
 
+export const shortcutListKey = ({ profiles, extensions }: Pick<MenuState, "profiles" | "extensions">): string =>
+  JSON.stringify([profiles.map((p) => [p.id, p.title]), (extensions ?? []).map((e) => [e.id, e.title])]);
+
 export type MenuReads = { keys: ReadonlySet<keyof BrowserState>; tabs: RecordReads };
 
 export function trackedMenuState(s: BrowserState): { state: MenuState; reads: MenuReads } {

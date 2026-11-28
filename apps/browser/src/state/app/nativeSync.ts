@@ -9,7 +9,7 @@ import { setTrafficLightsCenter } from "../windows/nativeWindow";
 import { isDarkAppearance, onAppEvent, onOpenURLs, replyToTerminate } from "../../platform/app";
 import { startNativeSettings } from "../settings/nativeSettings";
 import { startInterfaceScaleRefresh } from "./interfaceScaleRefresh";
-import { menuShortcuts, onCommand, setMenuStateParts } from "../../platform/commands";
+import { onCommand, setMenuStateParts } from "../../platform/commands";
 import { Appearance } from "react-native";
 import { useBrowser } from "../browser/store";
 import { setLastTabKeepsWindow } from "../omnibox/newTabBarPolicy";
@@ -18,11 +18,12 @@ import { INTRO_WINDOW_ID } from "../onboarding/introWindow";
 import { openingLightsCenter } from "../windows/layout";
 import { createWindowSync, type WindowPort } from "../windows/windowSync";
 import { closeLittleArdiaForAppLink, openExternalUrls } from "../littleArdia/actions";
+import { consentToken } from "../telemetry/client";
 import { noteIncomingLinksRefused } from "../telemetry/externalAppCounts";
 import { startUnclaimedEscape } from "../windows/unclaimedEscape";
 import { SMALL_LIGHTS_CENTER } from "../windows/small";
 import { runCommand } from "../commands/commands";
-import { setMenuBarShortcuts } from "../commands/commandShortcuts";
+import { readMenuShortcuts } from "../settings/paneData";
 import { finishAnimatedCloses } from "../windows/closeAnimated";
 import { followHandedBack, startKeyboardFollows } from "../focus/keyboardFollows";
 import { cancelAbandonedFocusMoves, settlingCommandFocus } from "../focus/focusHandoff";
@@ -39,7 +40,7 @@ import { startExtensionsBridge } from "../extensions/bridge";
 import { useExtensions } from "../extensions/actions";
 import { useReader } from "../reader/reader";
 import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
-import { extensionsChangeMenu, liveReachesMenu, menuInputsChanged, menuLiveKey, pagesChangeMenu, readerChangesMenu, trackedMenuState, type MenuReads } from "../commands/menuState";
+import { extensionsChangeMenu, liveReachesMenu, menuInputsChanged, menuLiveKey, pagesChangeMenu, readerChangesMenu, shortcutListKey, trackedMenuState, type MenuReads } from "../commands/menuState";
 import { onLiveChange } from "../tabs/tabLive";
 import { usePages } from "../tabs/pageState";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
@@ -131,6 +132,7 @@ export function startNativeSync() {
   let menuTimer: ReturnType<typeof setTimeout> | undefined;
   let menuReads: MenuReads | null = null;
   let menuLive = "";
+  let menuConsent = consentToken();
   const syncMenu = () => {
     menuTimer = undefined;
     const now = store.getState();
@@ -148,13 +150,18 @@ export function startNativeSync() {
     lastMenu = json;
     lastBookmarkMenus = bookmarkMenus;
     const sent = setMenuStateParts(state, bookmarksChanged);
-    const menuItems = JSON.stringify([state.profiles.map((p) => p.id), (state.extensions ?? []).map((e) => e.id)]);
+    const menuItems = shortcutListKey(state);
     if (menuItems === lastMenuItems) return void sent;
     lastMenuItems = menuItems;
-    void sent.then(menuShortcuts).then((items) => {
-      setMenuBarShortcuts(items);
-      menuTimer ??= setTimeout(syncMenu, 120);
-    }, () => {});
+    const consent = menuConsent;
+    void readMenuShortcuts(sent, consent).then((read) => {
+      if (read) menuTimer ??= setTimeout(syncMenu, 120);
+    });
+  };
+
+  const syncMenuLater = () => {
+    menuConsent = consentToken();
+    menuTimer ??= setTimeout(syncMenu, 120);
   };
 
   windows.sync(store.getState());
@@ -162,7 +169,7 @@ export function startNativeSync() {
   windows.restoreFullScreen(store.getState());
   store.subscribe((s, prev) => {
     windows.sync(s, prev);
-    if (!menuReads || menuInputsChanged(menuReads, s, prev)) menuTimer ??= setTimeout(syncMenu, 120);
+    if (!menuReads || menuInputsChanged(menuReads, s, prev)) syncMenuLater();
   });
   onLiveChange((tabId) => {
     if (menuTimer !== undefined) return;
@@ -173,7 +180,7 @@ export function startNativeSync() {
     if (menuTimer === undefined && pagesChangeMenu(store.getState(), p.pages, prev.pages)) menuTimer = setTimeout(syncMenu, 120);
   });
   useExtensions.subscribe((e, prev) => {
-    if (e.lists !== prev.lists && extensionsChangeMenu(e.lists, prev.lists)) menuTimer ??= setTimeout(syncMenu, 120);
+    if (e.lists !== prev.lists && extensionsChangeMenu(e.lists, prev.lists)) syncMenuLater();
   });
   useReader.subscribe((r, prev) => {
     if (readerChangesMenu(r, prev)) menuTimer ??= setTimeout(syncMenu, 120);

@@ -27,8 +27,11 @@ export function setMenuBarShortcuts(offered: readonly MenuShortcut[]) {
     item.remappable ? [] : [{ id: item.id, fixed: true, keys: [{ key: item.key, modifiers: item.modifiers }] }],
   );
   const bar = { listed: new Set(items.map((item) => item.id)), fixed };
-  useMenuBar.setState((m) => ({ bar, revision: m.revision + 1 }));
+  useMenuBar.setState((m) => (m.bar && sameMenuBar(m.bar, bar) ? m : { bar, revision: m.revision + 1 }));
 }
+
+const sameMenuBar = (a: MenuBar, b: MenuBar) =>
+  a.listed.size === b.listed.size && [...a.listed].every((id) => b.listed.has(id)) && JSON.stringify(a.fixed) === JSON.stringify(b.fixed);
 
 export const menuBarRevision = () => useMenuBar.getState().revision;
 export const useMenuBarRevision = () => useMenuBar((m) => m.revision);

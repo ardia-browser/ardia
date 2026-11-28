@@ -199,6 +199,7 @@ public final class FilterLists {
   @ObservationIgnored private(set) var compiled: [CompiledFilterList] = []
   @ObservationIgnored private(set) var blockedDomains: Set<String> = []
   @ObservationIgnored private(set) var scriptlets: [String: ScriptletTable] = [:]
+  @ObservationIgnored private var hasScriptlets = false
   @ObservationIgnored var onCompiledChange: (@MainActor () -> Void)?
   @ObservationIgnored public private(set) var isDemo = false
   @ObservationIgnored private(set) var lastBuildStats = (reused: 0, compiled: 0, convertSeconds: 0.0, compileSeconds: 0.0)
@@ -260,7 +261,6 @@ public final class FilterLists {
 
   var recordURL: URL { directory.appending(path: "filters.json") }
   var scriptletsURL: URL { directory.appending(path: "scriptlets.json") }
-  private var hasScriptlets: Bool { FileManager.default.fileExists(atPath: scriptletsURL.path(percentEncoded: false)) }
   func fileURL(_ id: String) -> URL { directory.appending(path: "Lists", directoryHint: .isDirectory).appending(path: "\(id).txt") }
 
   public var enabledRuleCount: Int { lists.filter(\.isEnabled).reduce(0) { $0 + $1.ruleCount } + myFiltersResult.ruleCount }
@@ -394,7 +394,10 @@ public final class FilterLists {
     }
     compiled = loaded
     blockedDomains = await Self.readDomains(directory.appending(path: "domains.txt"))
-    scriptlets = await Self.readScriptlets(scriptletsURL)
+    if let saved = await Self.readScriptlets(scriptletsURL) {
+      scriptlets = saved
+      hasScriptlets = true
+    }
     if !myFilters.isEmpty {
       let parsed = await Self.parse(myFilters, id: Self.myFiltersID)
       myFiltersResult = MyFiltersResult(ruleCount: parsed.convertedLines, skippedCount: parsed.skippedLines)
@@ -472,9 +475,12 @@ public final class FilterLists {
     }
     if let mine = output.counts[Self.myFiltersID] { myFiltersResult = MyFiltersResult(ruleCount: mine.converted, skippedCount: mine.skipped) }
     lastBuildStats = (reused, output.chunks.count - reused, compileStart.timeIntervalSince(convertStart), Date.now.timeIntervalSince(compileStart))
+    var nextScriptlets = output.scriptlets
+    for id in failed { nextScriptlets[id] = scriptlets[id] }
+    let wroteScriptlets = (try? await Self.writeScriptlets(nextScriptlets, to: scriptletsURL)) != nil
     record.chunkHashes = hashes
     record.chunkCategories = categories
-    record.signature = failed.isEmpty ? signature : nil
+    record.signature = failed.isEmpty && wroteScriptlets ? signature : nil
     record.builtAt = .now
     saveRecord()
     for id in ids {
@@ -483,9 +489,9 @@ public final class FilterLists {
     buildError = failed.isEmpty ? nil : String(localized: "Some lists couldn’t be applied. Ardia keeps the last version that worked.")
     compiled = next
     blockedDomains = output.domains
-    scriptlets = output.scriptlets
+    scriptlets = nextScriptlets
+    hasScriptlets = wroteScriptlets
     try? await Self.write(output.domains.sorted().joined(separator: "\n"), to: directory.appending(path: "domains.txt"))
-    try? await Self.writeScriptlets(output.scriptlets, to: scriptletsURL)
     refreshLists()
     onCompiledChange?()
   }
@@ -672,9 +678,9 @@ public final class FilterLists {
   }
 
   @concurrent
-  static func readScriptlets(_ url: URL) async -> [String: ScriptletTable] {
-    guard let data = try? Data(contentsOf: url) else { return [:] }
-    return (try? JSONDecoder().decode([String: ScriptletTable].self, from: data)) ?? [:]
+  static func readScriptlets(_ url: URL) async -> [String: ScriptletTable]? {
+    guard let data = try? Data(contentsOf: url) else { return nil }
+    return try? JSONDecoder().decode([String: ScriptletTable].self, from: data)
   }
 
   @concurrent

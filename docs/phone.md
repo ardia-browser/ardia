@@ -66,9 +66,12 @@ forward.
 content rules (`FilterListConverter`); their `##+js()` scriptlets run from `ScriptletTable` as one page-world script at
 document start, in every frame, as uBO's do. Only scriptlets Ardia implements itself run (`ScriptletTable.supported`,
 written in `BlockingScripts.scriptlets`; nothing of uBO's GPL code ships in the app), and `trusted-*` ones are taken
-only from uBO's own lists (`ublock-*`), never from added lists or My Filters, as uBO decides trust. A list's
-scriptlets follow its category's switch, a site's `#@#+js()` exceptions apply across lists, and a trusted site runs
-none (`ContentBlocker.apply`). The first is `trusted-replace-argument`: allrecipes.com and the other People Inc sites
+only from uBO's own lists (`ublock-*`), never from added lists or My Filters, as uBO decides trust; a filter the
+runtime can't carry out exactly (a `this` position, a `repl:` value) is skipped, not guessed at. A list's scriptlets
+follow its category's switch; `#@#+js()` exceptions, `~site` exclusions and `@@||site^$document` exceptions apply
+across lists; a trusted site runs none (`ContentBlocker.apply`). uBO's `!#if` blocks are honoured for every rule, as
+a Safari-like uBlock (`ext_ublock`, `env_safari`, `env_mobile`, `cap_user_stylesheet`), so a Chromium-only hook like
+dobreprogramy.pl's `RegExp.prototype.test` one never runs here. The first is `trusted-replace-argument`: allrecipes.com and the other People Inc sites
 run an ad-recovery script that sees the blocked ads and serves them again through its own rotating hosts
 (`*.stg.bend.owllotus.org` on 2026-11-28), showing the inline and sticky ads EasyList hides. uBlock Origin's lists stop
 it with that scriptlet on `Element.prototype.setAttribute`, and with it the recovery never starts. Android still skips

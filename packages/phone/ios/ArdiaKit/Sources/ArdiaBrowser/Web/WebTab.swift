@@ -504,7 +504,6 @@ public final class WebTab: DiscardablePage, Identifiable {
       let targetHost = BrowserURL.host(of: target.absoluteString)
       if let controller = webView?.configuration.userContentController {
         engine?.blocker.prepareNavigation(of: controller, toHost: targetHost, isPrivate: isPrivate)
-        engine?.blocker.countScriptletPage(toHost: targetHost, isPrivate: isPrivate)
         engine?.prepareNightShade(of: controller, toHost: targetHost, isPrivate: isPrivate)
       }
       let zoom = engine?.preferences.settings(for: targetHost, isPrivate: isPrivate).pageZoom ?? 1
@@ -545,6 +544,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     processRecovery.pageCommitted(host: PageHost.key(webView?.url))
     hasCommittedLoad = true
     committedDocuments += 1
+    engine?.blocker.countScriptletPage(toHost: webView?.url.flatMap { BrowserURL.host(of: $0.absoluteString) }, isPrivate: isPrivate)
     capturingOrigins = [:]
     blockedResources.reset()
     scrollTracker.reset()

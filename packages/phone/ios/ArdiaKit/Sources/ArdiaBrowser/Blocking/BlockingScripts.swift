@@ -200,9 +200,16 @@ enum BlockingScripts {
   ((table) => {
     const hostname = location.hostname;
     if (!hostname) return;
+    const regexpTest = RegExp.prototype.test;
+    const reflectApply = Reflect.apply;
+    const arrayFrom = Array.from;
+    const ProxyType = Proxy;
+    const parseJSON = JSON.parse;
+    const matches = (pattern, text) => reflectApply(regexpTest, pattern, [text]);
+    const wholeNumber = /^-?\d+$/;
     const suffixes = [];
     for (let rest = hostname; rest.includes("."); rest = rest.slice(rest.indexOf(".") + 1)) suffixes.push(rest);
-    const pick = (map) => suffixes.flatMap((host) => map[host] || []);
+    const pick = (map) => suffixes.flatMap((host) => map[host] || []).map((at) => table.bodies[at]).filter(Array.isArray);
     const excepted = new Set(pick(table.exceptions || {}).map((body) => JSON.stringify(body)));
     if (excepted.has("[]")) return;
     const chosen = new Map();
@@ -214,7 +221,7 @@ enum BlockingScripts {
 
     const toRegExp = (pattern) => {
       const literal = /^\/(.+)\/([dgimsuvy]*)$/.exec(pattern);
-      if (literal) return new RegExp(literal[1], literal[2]);
+      if (literal) return new RegExp(literal[1], literal[2].replace(/[gy]/g, ""));
       return new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     };
     const options = (list) => {
@@ -235,10 +242,14 @@ enum BlockingScripts {
         case "trueFunc": return { value: function () { return true; } };
         case "falseFunc": return { value: function () { return false; } };
       }
-      if (/^-?\d+$/.test(raw)) return { value: parseInt(raw, 10) };
-      if (raw.startsWith("{") && raw.endsWith("}")) {
-        try { return { value: JSON.parse(raw).value }; } catch (e) { return null; }
+      if (matches(wholeNumber, raw)) return { value: parseInt(raw, 10) };
+      if (raw.startsWith("json:")) {
+        try { return { value: parseJSON(raw.slice(5)) }; } catch (e) { return null; }
       }
+      if (raw.startsWith("{") && raw.endsWith("}")) {
+        try { return { value: parseJSON(raw).value }; } catch (e) { return null; }
+      }
+      if (raw.startsWith("repl:") || raw.startsWith("add:")) return null;
       return { value: raw };
     };
     const owner = (chain) => {
@@ -254,27 +265,29 @@ enum BlockingScripts {
 
     const scriptlets = {
       "trusted-replace-argument": (chain = "", position = "", raw = "", ...rest) => {
-        if (!chain || position === "" || raw.startsWith("repl:") || raw.startsWith("add:")) return;
+        if (!chain || !matches(wholeNumber, position)) return;
         const found = owner(chain);
         const replacement = constant(raw);
         if (!found || !replacement) return;
-        const index = parseInt(position, 10) || 0;
+        const index = parseInt(position, 10);
         const extra = options(rest);
         const condition = extra.condition === undefined ? null : toRegExp(extra.condition);
         const original = found.target[found.prop];
-        found.target[found.prop] = new Proxy(original, {
+        found.target[found.prop] = new ProxyType(original, {
           apply(fn, self, args) {
             const at = index >= 0 ? index : args.length + index;
-            if (at >= 0 && at < args.length && (condition === null || condition.test(String(args[at])))) {
-              args = Array.from(args);
-              args[at] = replacement.value;
+            if (at >= 0 && at < args.length) {
+              const value = args[at];
+              if (condition === null || (typeof value === "string" && matches(condition, value))) {
+                args = arrayFrom(args);
+                args[at] = replacement.value;
+              }
             }
-            return Reflect.apply(fn, self, args);
+            return reflectApply(fn, self, args);
           },
         });
       },
     };
-    scriptlets["trusted-ra"] = scriptlets["trusted-replace-argument"];
 
     for (const [name, ...args] of chosen.values()) {
       const run = scriptlets[name];

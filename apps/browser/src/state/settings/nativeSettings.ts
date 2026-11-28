@@ -1,5 +1,5 @@
 import { setAppearance, setThinScrollBars } from "../../platform/app";
-import { setAutoPictureInPicture, setVideoUpscaling } from "../../platform/media";
+import { setAutoPictureInPicture, setPictureInPictureButton, setVideoUpscaling } from "../../platform/media";
 import { setCommandScrollZoom } from "../../platform/siteSettings";
 import { setWebKitFraudWarnings } from "../../platform/webkit";
 import { setPopupsOpenAsTabs } from "../../platform/pageOptions";
@@ -18,6 +18,7 @@ const NATIVE_SETTINGS: Mirror[] = [
   mirror("appearance", setAppearance),
   mirror("pageScrollBars", (bars) => setThinScrollBars(bars === "thin")),
   mirror("autoPictureInPicture", setAutoPictureInPicture),
+  ...(PLATFORM_FEATURES.pictureInPictureButton ? [mirror("pictureInPictureButton", setPictureInPictureButton)] : []),
   mirror("videoUpscaling", setVideoUpscaling),
   ...(PLATFORM_FEATURES.webKit ? [mirror("webKitFraudWarnings", setWebKitFraudWarnings)] : []),
   mirror("popupsOpenAsTabs", setPopupsOpenAsTabs),

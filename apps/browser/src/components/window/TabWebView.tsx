@@ -60,7 +60,7 @@ import { defaultTarget, languageName, releaseTranslation, revertPage, translateC
 import { translatePageMenuItems } from "../../state/site/translateMenu";
 import { notePagePress, notePagePressRefused } from "../../state/telemetry/tabPresses";
 import { noteWebKitFocusRestore } from "../../state/telemetry/pageFocusReturns";
-import { noteAutoPictureInPictureKept, notePageOverlay, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
+import { noteAutoPictureInPictureKept, notePageOverlay, notePictureInPictureButtonPress, noteReopenedPage, noteSiteControls, noteWebKitPageKeptHidden } from "../../state/telemetry/usage";
 import { noteWebKitMediaFault } from "../../state/telemetry/webkitMediaFaults";
 import { isAdoptKind } from "../../state/tabs/adoptIds";
 import { firstPagePending, isBlankAddress, noteFirstPagePending, reportedAddress, reportedTitle } from "../../state/tabs/pendingAddress";
@@ -371,7 +371,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine, 
         if (engine === "chromium") noteProtectedVideoRefusal(request, consentToken(), refusedVideoSiteOf(tabId));
         offerWebKit(tabId, request);
       }}
-      onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}
+      onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)} onPictureInPictureButtonPress={notePictureInPictureButtonPress}
       onFieldProviderOpened={(opened: FieldProviderOpened) => fieldProviderOpened(tabId, opened)}
       onFieldProviderHint={(hint: FieldProviderHint) => fieldProviderHint(tabId, hint)}
       onVerificationCodeFound={(found: VerificationCodeFound) => verificationCodeFound(tabId, found)}

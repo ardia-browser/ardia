@@ -103,7 +103,7 @@ export const SETTING_SPECS = {
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
   developerModeSites: shaped<Record<string, boolean>>({}, (v) => isRecordOf(v, (on) => typeof on === "boolean"), recordOf({ type: "boolean" }), SYNCED),
-  autoPictureInPicture: flag(true, SYNCED),
+  autoPictureInPicture: flag(true, SYNCED), pictureInPictureButton: flag(false, SYNCED),
   playingNowAcrossProfiles: flag(false, SYNCED),
   sidebarMediaControls: flag(true, SYNCED),
   commandScrollZoom: flag(true, SYNCED),

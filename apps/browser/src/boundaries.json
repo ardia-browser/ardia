@@ -228,6 +228,14 @@
    ]
   },
   {
+   "id": "chromium-page-message:pipButtonPress",
+   "source": "frame",
+   "guard": "Empty payload; only adds one to a usage count, and native opens nothing for it",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageMessages.mm"
+   ]
+  },
+  {
    "id": "chromium-page-message:pipTrace",
    "source": "frame",
    "guard": "Trace text for test instances only",
@@ -282,7 +290,7 @@
    "id": "page-script-message-count:page_script.js",
    "source": "page",
    "guard": "Every send or post call in the page script, including those with a kind computed at run time; each literal kind has its own row and native receiver. The count changes when a send is added, so a new one gets reviewed",
-   "count": 34,
+   "count": 35,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]
@@ -368,6 +376,11 @@
    "guard": "isTrusted checked; hover state only"
   },
   {
+   "id": "page-script-listener:mouseout",
+   "source": "page",
+   "guard": "Only while the on-video Picture in Picture button is on; hides that button, sends nothing"
+  },
+  {
    "id": "page-script-listener:mouseup",
    "source": "page",
    "guard": "isTrusted and primary button checked before Peek; the selection listener only schedules a selection report"
@@ -391,6 +404,11 @@
    "id": "page-script-listener:pointerlockchange",
    "source": "page",
    "guard": "enum state only"
+  },
+  {
+   "id": "page-script-listener:pointermove",
+   "source": "page",
+   "guard": "Only while the on-video Picture in Picture button is on; places that button over the video under the pointer, sends nothing"
   },
   {
    "id": "page-script-listener:prerenderingchange",
@@ -426,7 +444,7 @@
    "id": "page-script-listener-count:page_script.js",
    "source": "page",
    "guard": "Every listener in the page script; each event type has its own row. The count changes when a listener is added, so a new one gets reviewed",
-   "count": 68,
+   "count": 76,
    "checks": [
     "packages/ardiacore/ios/page_script.js"
    ]

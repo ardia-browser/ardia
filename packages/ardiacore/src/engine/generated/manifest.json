@@ -1387,6 +1387,11 @@
           "desktop": "custom",
           "windows": "absent"
         },
+        "setPictureInPictureButton": {
+          "mac": "custom",
+          "desktop": "absent",
+          "windows": "absent"
+        },
         "setVideoUpscaling": {
           "mac": "custom",
           "desktop": "absent",

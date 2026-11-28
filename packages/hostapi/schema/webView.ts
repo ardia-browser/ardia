@@ -74,6 +74,13 @@ export const webView = defineDomain({
       mac: "custom",
       windows: "absent",
     },
+    setPictureInPictureButton: {
+      args: "{ enabled: boolean }",
+      result: "null",
+      desktop: "absent",
+      mac: "custom",
+      windows: "absent",
+    },
     setVideoUpscaling: {
       args: "{ enabled: boolean }",
       result: "null",

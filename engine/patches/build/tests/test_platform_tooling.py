@@ -235,7 +235,7 @@ cp "$here/../external.h" "$src/shared/external.h"
         result = subprocess.run([sys.executable, str(self.here / 'series.py'), command, '--platform', platform, '--cpu', 'x64', *map(str, args)], env=self.env, capture_output=True, text=True)
         if success:
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        else:
+        elif success is not None:
             self.assertNotEqual(result.returncode, 0)
         return result
 
@@ -285,6 +285,185 @@ cp "$here/../external.h" "$src/shared/external.h"
         self.run_command('check')
         again = self.run_command('apply')
         self.assertIn('already applied third.patch', again.stdout)
+
+    def test_a_delete_only_patch_whose_reverse_fits_with_fuzz_is_applied(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'delete.patch').write_text('--- a/value\n+++ b/value\n@@ -2,8 +2,5 @@\n b\n c\n \n-x1\n-x2\n-\n d\n e\n f\n')
+        (self.here / 'series').write_text('chromium delete.patch\n')
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                (self.tree / 'value').write_text('a\nb\nc\n\nx1\nx2\n\nd\ne\nf\n')
+                fuzzy = subprocess.run(['patch', '-p1', '--dry-run', '-R', '-s', '-f', '-i', str(self.here / 'delete.patch')], cwd=self.tree, capture_output=True)
+                self.assertEqual(fuzzy.returncode, 0)
+                self.run_command('capture-base', platform=platform)
+                first = self.run_command('apply', platform=platform)
+                self.assertIn('applied chromium delete.patch', first.stdout)
+                self.assertNotIn('already applied', first.stdout)
+                self.assertEqual((self.tree / 'value').read_text(), 'a\nb\nc\n\nd\ne\nf\n')
+                again = self.run_command('apply', platform=platform)
+                self.assertIn('already applied delete.patch', again.stdout)
+                self.run_command('check', platform=platform)
+
+    def test_an_insertion_whose_context_a_later_patch_changed_is_not_inserted_again(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'insert.patch').write_text('--- a/value\n+++ b/value\n@@ -2,6 +2,7 @@\n a\n b\n c\n+inserted\n d\n e\n f\n')
+        (self.here / 'context.patch').write_text('--- a/value\n+++ b/value\n@@ -1,11 +1,11 @@\n head\n-a\n-b\n+A\n+B\n c\n inserted\n d\n-e\n-f\n+E\n+F\n spacer\n a\n b\n')
+        (self.here / 'series').write_text('chromium insert.patch\nchromium context.patch\n')
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                (self.tree / 'value').write_text('head\na\nb\nc\nd\ne\nf\nspacer\na\nb\nc\nd\ne\nf\nend\n')
+                self.run_command('capture-base', platform=platform)
+                self.run_command('apply', platform=platform)
+                patched = (self.tree / 'value').read_text()
+                self.assertEqual(patched.count('inserted'), 1)
+                strict_forward = subprocess.run(['git', 'apply', '--check', str(self.here / 'insert.patch')], cwd=self.tree, capture_output=True)
+                self.assertEqual(strict_forward.returncode, 0)
+                again = self.run_command('apply', platform=platform)
+                self.assertIn('already applied insert.patch', again.stdout)
+                self.assertIn('already applied context.patch', again.stdout)
+                self.assertEqual((self.tree / 'value').read_text(), patched)
+                self.run_command('check', platform=platform)
+
+    def test_a_patch_a_later_patch_undoes_still_applies_to_a_fresh_tree(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'edit.patch').write_text('--- a/value\n+++ b/value\n@@ -1 +1 @@\n-base\n+edited\n')
+        (self.here / 'undo.patch').write_text('--- a/value\n+++ b/value\n@@ -1 +1 @@\n-edited\n+base\n--- a/other\n+++ b/other\n@@ -1 +1 @@\n-other\n+other edited\n')
+        (self.here / 'series').write_text('chromium edit.patch\nchromium undo.patch\n')
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                (self.tree / 'value').write_text('base\n')
+                (self.tree / 'other').write_text('other\n')
+                self.run_command('capture-base', platform=platform)
+                first = self.run_command('apply', platform=platform)
+                self.assertIn('applied chromium edit.patch', first.stdout)
+                self.assertIn('applied chromium undo.patch', first.stdout)
+                self.assertEqual((self.tree / 'value').read_text(), 'base\n')
+                self.assertEqual((self.tree / 'other').read_text(), 'other edited\n')
+                self.run_command('check', platform=platform)
+
+    def test_a_base_captured_from_a_patched_tree_does_not_reapply_the_series(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'insert.patch').write_text('--- a/value\n+++ b/value\n@@ -2,6 +2,7 @@\n a\n b\n c\n+inserted\n d\n e\n f\n')
+        (self.here / 'context.patch').write_text('--- a/value\n+++ b/value\n@@ -1,11 +1,11 @@\n head\n-a\n-b\n+A\n+B\n c\n inserted\n d\n-e\n-f\n+E\n+F\n spacer\n a\n b\n')
+        (self.here / 'series').write_text('chromium insert.patch\nchromium context.patch\n')
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                (self.tree / 'value').write_text('head\na\nb\nc\nd\ne\nf\nspacer\na\nb\nc\nd\ne\nf\nend\n')
+                self.run_command('capture-base', platform=platform)
+                self.run_command('apply', platform=platform)
+                patched = (self.tree / 'value').read_text()
+                shutil.rmtree(self.base)
+                self.run_command('capture-base', platform=platform)
+                again = self.run_command('apply', platform=platform, success=None)
+                self.assertNotIn('the series applies to it strictly', again.stdout)
+                self.assertEqual((self.tree / 'value').read_text(), patched)
+
+    def test_a_base_captured_after_the_layers_ran_is_never_fresh(self):
+        (self.here / 'linux.patch').write_text('--- a/value\n+++ b/value\n@@ -2,6 +2,7 @@\n a\n b\n c\n+inserted\n d\n e\n f\n')
+        (self.here / 'mac.patch').write_text('--- a/value\n+++ b/value\n@@ -2,6 +2,7 @@\n a\n b\n c\n+inserted\n d\n e\n f\n')
+        for platform in ('mac', 'linux'):
+            script = self.repo / f'engine/{platform}/apply.sh'
+            script.write_text(script.read_text().replace('set -euo pipefail\n', 'set -euo pipefail\nowned=(owned)\n', 1))
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                shutil.rmtree(self.tree / 'owned', ignore_errors=True)
+                (self.tree / 'value').write_text('head\na\nb\nc\nd\ne\nf\nspacer\na\nb\nc\nd\ne\nf\nend\n')
+                (self.tree / 'shared/external.h').write_text('original header\n')
+                self.run_command('capture-base', platform=platform)
+                self.run_command('apply', platform=platform)
+                patched = (self.tree / 'value').read_text()
+                self.assertEqual(patched.count('inserted'), 1)
+                (self.tree / 'value').write_text(patched.replace('head\na\nb\nc\ninserted', 'head\nA\nB\nc\ninserted'))
+                patched = (self.tree / 'value').read_text()
+                shutil.rmtree(self.base)
+                self.run_command('capture-base', platform=platform)
+                again = self.run_command('apply', platform=platform, success=None)
+                self.assertNotIn('the series applies to it strictly', again.stdout)
+                self.assertEqual((self.tree / 'value').read_text().count('inserted'), 1)
+
+    def test_a_fresh_tree_ends_as_the_strict_replay_when_an_earlier_patch_makes_a_later_reverse_match(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'edit.patch').write_text('--- a/value\n+++ b/value\n@@ -2,7 +2,7 @@\n a\n b\n c\n-orig\n+edited\n d\n e\n f\n@@ -9,3 +9,9 @@\n spacer\n-x\n+a\n+b\n+c\n+base\n+d\n+e\n+f\n end\n')
+        (self.here / 'undo.patch').write_text('--- a/value\n+++ b/value\n@@ -2,7 +2,7 @@\n a\n b\n c\n-edited\n+base\n d\n e\n f\n')
+        (self.here / 'series').write_text('chromium edit.patch\nchromium undo.patch\n')
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                (self.tree / 'value').write_text('top\na\nb\nc\norig\nd\ne\nf\nspacer\nx\nend\n')
+                self.run_command('capture-base', platform=platform)
+                first = self.run_command('apply', platform=platform)
+                self.assertIn('applied chromium undo.patch', first.stdout)
+                self.assertEqual((self.tree / 'value').read_text(), 'top\na\nb\nc\nbase\nd\ne\nf\nspacer\na\nb\nc\nbase\nd\ne\nf\nend\n')
+                self.run_command('check', platform=platform)
+
+    def test_a_fresh_linux_tree_is_untouched_when_a_later_patch_does_not_apply(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'edit.patch').write_text('--- a/value\n+++ b/value\n@@ -1 +1 @@\n-base\n+edited\n')
+        (self.here / 'broken.patch').write_text('--- a/value\n+++ b/value\n@@ -1 +1 @@\n-something else\n+broken\n')
+        (self.here / 'series').write_text('chromium edit.patch\nchromium broken.patch\n')
+        self.run_command('capture-base')
+        failed = self.run_command('apply', success=False)
+        self.assertNotIn('the series applies to it strictly', failed.stdout)
+        self.assertEqual((self.tree / 'value').read_text(), 'base\n')
+
+    def test_a_patch_that_only_deletes_a_file_is_already_applied_on_a_rerun(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.tree / 'gone').write_text('gone\n')
+        (self.here / 'delete-file.patch').write_text('--- a/gone\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone\n')
+        (self.here / 'series').write_text('chromium delete-file.patch\n')
+        self.run_command('capture-base', platform='mac')
+        first = self.run_command('apply', platform='mac')
+        self.assertIn('applied chromium delete-file.patch', first.stdout)
+        self.assertFalse((self.tree / 'gone').exists())
+        again = self.run_command('apply', platform='mac')
+        self.assertIn('already applied delete-file.patch', again.stdout)
+
+    def test_a_lost_base_captured_again_from_a_patched_tree_keeps_one_insertion(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'insert.patch').write_text('--- a/value\n+++ b/value\n@@ -2,6 +2,7 @@\n a\n b\n c\n+inserted\n d\n e\n f\n')
+        (self.here / 'series').write_text('chromium insert.patch\n')
+        for platform in ('mac', 'linux'):
+            with self.subTest(platform=platform):
+                shutil.rmtree(self.base, ignore_errors=True)
+                (self.tree / 'value').write_text('head\na\nb\nc\nd\ne\nf\nspacer\na\nb\nc\nd\ne\nf\nend\n')
+                self.run_command('capture-base', platform=platform)
+                self.run_command('apply', platform=platform)
+                patched = (self.tree / 'value').read_text()
+                self.assertEqual(patched.count('inserted'), 1)
+                shutil.rmtree(self.base)
+                self.run_command('capture-base', platform=platform)
+                again = self.run_command('apply', platform=platform)
+                self.assertIn('already applied insert.patch', again.stdout)
+                self.assertEqual((self.tree / 'value').read_text(), patched)
+
+    def test_a_symlink_the_series_retargets_is_already_applied(self):
+        for unused in ('mac.patch', 'linux.patch'):
+            (self.here / unused).unlink()
+        (self.here / 'retarget.patch').write_text('diff --git a/value b/value\n--- a/value\n+++ b/value\n@@ -1 +1 @@\n-one\n\\ No newline at end of file\n+two\n\\ No newline at end of file\n')
+        (self.here / 'series').write_text('chromium retarget.patch\n')
+        for root in (self.tree, self.base):
+            root.mkdir(exist_ok=True)
+            for name in ('one', 'two'):
+                (root / name).write_text('same contents\n')
+            (root / 'value').unlink(missing_ok=True)
+        (self.base / 'value').symlink_to('one')
+        (self.tree / 'value').symlink_to('two')
+        result = self.run_command('apply', platform='mac')
+        self.assertIn('already applied retarget.patch', result.stdout)
+        self.assertEqual(os.readlink(self.tree / 'value'), 'two')
 
     def test_a_file_a_patch_edits_and_a_later_layer_replaces_reapplies(self):
         (self.here / 'mac.patch').unlink()

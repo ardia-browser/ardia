@@ -429,7 +429,14 @@ so writing them moves no key.
 `engine/patches/series.py` does everything with it:
 
 - `apply`: applies the series to the tree, skipping what is applied (step 4 runs it, through
-  `apply-chromium-patches.sh`).
+  `apply-chromium-patches.sh`, then runs `check` and fails when it does). A fresh tree is applied step by step with no
+  question asked: every file the series touches is in the tree as it is in the base, none of them a symlink, no
+  directory a layer owns (`chrome/browser/ardia`) is in the tree, no patch's reverse applies to it (`git apply --check
+  -R`), and the whole series applies strictly to a scratch copy of the base. Step 4 captures the base just before, so a
+  fresh tree passes, and the result is what `check` replays. Asking each patch went wrong there: a delete-only patch's
+  reverse can fit the unpatched file with `patch`'s fuzz. Any other tree is handled as before: a patch is skipped when
+  its reverse applies (`git apply --check -R`, else `patch -R` with fuzz, for a patch whose context a later one
+  changed), and on Linux the series is first replayed on the base to find what the tree already holds.
 - `capture-base`: records every file the series touches as it is before the series (the base). Step 4 runs it
   just before it applies the series, so a fresh or rebased checkout records its own. When the checkout moves to
   another Chromium version, `01-sync.sh` sets the old one aside as `<base>.<old version>`

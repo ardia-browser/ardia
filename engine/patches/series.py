@@ -174,12 +174,16 @@ def apply_step(step, tree, strict=True):
     return None if p.returncode == 0 else (p.stdout + p.stderr).strip()
 
 
+def reverse_applies_strictly(step, tree):
+    return run(["git", "apply", "--check", "-R", step.patch], tree).returncode == 0
+
+
 def is_applied(step, tree):
     if step.kind == "layer":
         p = run([os.path.join(REPO, step.name, "apply.sh"), "--check"], REPO, dict(os.environ, CHROMIUM_SRC=tree))
         return p.returncode == 0
     cwd = tree
-    return run(["git", "apply", "--check", "-R", step.patch], cwd).returncode == 0 or \
+    return reverse_applies_strictly(step, cwd) or \
         run(["patch", "-p1", "--dry-run", "-R", "-s", "-f", "-i", step.patch], cwd).returncode == 0
 
 
@@ -233,10 +237,32 @@ def reached_after(states, index, live):
     return any(at >= index and state == content for at, state in states)
 
 
+def fresh_tree(steps):
+    files = [path for path, is_dir in touched(steps) if not is_dir]
+    if not files or not os.path.isdir(BASE):
+        return False
+    if any(os.path.lexists(os.path.join(SRC, path)) for path, is_dir in touched(steps) if is_dir):
+        return False
+    for path in files:
+        live, base = os.path.join(SRC, path), os.path.join(BASE, path)
+        if os.path.lexists(live) != os.path.lexists(base) or os.path.islink(live) or os.path.islink(base):
+            return False
+        if os.path.lexists(live) and not (os.path.isfile(live) and os.path.isfile(base) and filecmp.cmp(live, base, shallow=False)):
+            return False
+    if any(step.kind == "chromium" and reverse_applies_strictly(step, SRC) for step in steps):
+        return False
+    with tempfile.TemporaryDirectory(prefix="ac-series-fresh-") as scratch:
+        return not materialize(steps, scratch)
+
+
 def cmd_apply(args):
     steps = read_series()
+    fresh = fresh_tree(steps)
+    if fresh:
+        print(f"the tree's touched files are the series base ({BASE}) and the series applies to it strictly: "
+              "applying every step in order")
     final_applied = set()
-    if TARGET_OS == "linux" and os.path.isfile(os.path.join(BASE, '.ardia-series-target')):
+    if not fresh and TARGET_OS == "linux" and os.path.isfile(os.path.join(BASE, '.ardia-series-target')):
         with tempfile.TemporaryDirectory(prefix="ac-linux-applied-") as scratch:
             states = {}
 
@@ -263,7 +289,7 @@ def cmd_apply(args):
                 if paths and all(reached_after(states.get(path, []), index, os.path.join(SRC, path)) for path in paths):
                     final_applied.add(step.name)
     for step in steps:
-        if step.kind != "layer" and (step.name in final_applied or is_applied(step, SRC)):
+        if step.kind != "layer" and not fresh and (step.name in final_applied or is_applied(step, SRC)):
             print(f"already applied {step.name}")
             continue
         error = apply_step(step, SRC, strict=False)

@@ -19,6 +19,7 @@ export type MenuInput = {
   canOfferDefaultBrowser?: boolean;
   translationLanguageName?: string | null;
   siteKnown?: boolean;
+  isPrivate?: boolean;
 };
 
 export type MenuModel = {
@@ -30,6 +31,7 @@ export type MenuModel = {
   tiles: boolean;
   find: boolean;
   print: boolean;
+  longScreenshotShown: boolean;
   summarize: boolean;
   pageRows: boolean;
   translate: boolean;
@@ -68,6 +70,7 @@ export function menuModel(input: MenuInput): MenuModel {
     tiles: isWebPage,
     find: isWebPage,
     print: web,
+    longScreenshotShown: !input.isPrivate,
     summarize: web && !input.isLoading,
     pageRows: input.hasPage,
     translate: web,

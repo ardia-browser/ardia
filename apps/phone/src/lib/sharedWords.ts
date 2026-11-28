@@ -22,6 +22,7 @@ export const actionWords = {
   update: "Update",
   openSettings: "Open Settings",
   color: "Color",
+  longScreenshot: "Long Screenshot",
 } as const;
 
 export const copiedLinkWords = (trackersRemoved: boolean) => (trackersRemoved ? actionWords.copiedLinkWithoutTrackers : actionWords.copiedLink);

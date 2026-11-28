@@ -65,7 +65,7 @@ export function useMenuModel(id: string, live = true): MenuModel {
   );
   held.current = state;
   const tabUrl = useTabs((s) => s.open.find((t) => t.id === id)?.url ?? s.privates.find((t) => t.id === id)?.url ?? "");
-  const isPrivate = useTabs((s) => s.privates.some((t) => t.id === id));
+  const isPrivate = useTabs((s) => s.privates.some((t) => t.id === id) || s.open.some((t) => t.id === id && t.isPrivate));
   const site = usePageUi((s) => s.menuSite);
   const levels = usePageUi((s) => s.zoomLevels);
   const translationLanguageName = usePageUi((s) => s.menuTranslation?.languageName ?? null);
@@ -89,6 +89,7 @@ export function useMenuModel(id: string, live = true): MenuModel {
     isDefaultBrowser: isDefault,
     canOfferDefaultBrowser: offersDefaultBrowser(browserStatus),
     translationLanguageName,
+    isPrivate,
   });
 }
 

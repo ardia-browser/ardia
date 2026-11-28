@@ -5,6 +5,8 @@ import { copy } from "../../lib/platformCopy";
 import { actionWords, blockingWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
+  canTakeLongScreenshots,
+  longScreenshotCurrentPage,
   canSummarizePages,
   summarizeCurrentPage,
   copyCurrentLink,
@@ -98,6 +100,7 @@ export function PageMenuWords({ tabId, model, onTranslate, systemSheet = false, 
       <Group>
         {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}
         {canPrintPages() && !shareOffersPrint() ? <Row icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
+        {canTakeLongScreenshots() && model.longScreenshotShown ? <Row icon="camera" title={actionWords.longScreenshot} enabled={model.print} onPress={longScreenshotCurrentPage} /> : null}
         <Row icon="gearshape" title="Site Settings" enabled onPress={systemSheet ? openSiteSettingsSheet : openSiteSettings} />
       </Group>
       {model.pageRows && model.offersDefaultBrowser ? (

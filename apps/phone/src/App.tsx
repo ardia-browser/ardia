@@ -23,6 +23,7 @@ import { closeLibrary, useLibrary } from "./state/library/store";
 import { SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
+import { LongScreenshotHost } from "./components/browsing/LongScreenshotView";
 import { DesignProvider, followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuActionChosen, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
 import { useLook } from "./state/sync/hooks";
 import { startSettingsSources } from "./state/settings/actions";
@@ -34,6 +35,7 @@ import { offerBrowseForMePage, offerPageSummaryPage, offerSyncPages } from "./st
 import { useOnboarding } from "./state/onboarding/hooks";
 import { bootApp, useBoot } from "./state/app/boot";
 import { startLinks } from "./state/links/links";
+import { startFullPageCapture } from "./platform/fullPageCapture";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
 import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
@@ -80,6 +82,7 @@ export default function App() {
       startTelemetry();
       startBrowser(applyLaunchSettings);
       startPageUi();
+      startFullPageCapture();
       startSettingsSources();
       if (syncOffered()) startSync();
       startLinks();
@@ -230,6 +233,7 @@ export function Surfaces() {
       {material ? <MaterialLibrary /> : null}
       <Layer covered={onboarding}>{voiceSeen ? <VoiceSearchView /> : null}</Layer>
       {onboardingSeen ? <OnboardingView /> : null}
+      <LongScreenshotHost />
       <ToastHost />
       {lightIcons !== null ? <LayerInk key={layer} light={lightIcons} /> : null}
     </>

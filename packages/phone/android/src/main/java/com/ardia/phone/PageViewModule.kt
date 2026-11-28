@@ -195,6 +195,19 @@ class PageViewModule : Module() {
             PagePrinting.print(activity, page).also { shown -> if (PhoneLab.isOn) android.util.Log.i("PAGELAB", "PAGELAB print ${if (shown) "sheet shown" else "refused"} for page $pageId") }
         }.runOnQueue(Queues.MAIN)
 
+        AsyncFunction("takeLongScreenshot") Coroutine { pageId: String ->
+            withContext(Dispatchers.Main) { LongScreenshots.capture(context, PhonePages.require(pageId)) }
+        }
+
+        AsyncFunction("saveLongScreenshot") Coroutine { id: String, top: Double, bottom: Double -> LongScreenshots.save(context, id, top, bottom) }
+
+        AsyncFunction("shareLongScreenshot") { uri: String ->
+            val activity = PhonePages.hostActivity() ?: return@AsyncFunction false
+            LongScreenshots.share(activity, uri)
+        }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("discardLongScreenshot") { id: String -> LongScreenshots.discard(context, id) }
+
         AsyncFunction("summarizePage") { pageId: String -> PhonePages.summarize(pageId) }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("dismissPageSummaries") { -> PhonePages.dismissSummaries() }.runOnQueue(Queues.MAIN)

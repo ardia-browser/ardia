@@ -28,6 +28,11 @@ function fixture(list = [], capabilities = []) {
   };
   const state = {
     downloads: [],
+    upsertDownload(next) {
+      const idx = state.downloads.findIndex((d) => d.id === next.id);
+      if (idx >= 0) state.downloads[idx] = next;
+      else state.downloads = [next, ...state.downloads];
+    },
     removeDownload(id) { state.downloads = state.downloads.filter((d) => d.id !== id); },
     clearDownloads() { state.downloads = state.downloads.filter((d) => d.state === "downloading"); },
   };
@@ -263,5 +268,20 @@ test("a download that finishes, or arrives finished in the startup list, never r
   assert.equal(files.fileExists(download(5).path), true);
   f.emit("ArdiaDownloads", "downloads", { name: "downloads.changed", data: download(6, { state: "downloading", received: 1 }) });
   assert.equal(files.fileExists(download(6).path), false);
+  started.stop();
+});
+
+test("clearing or removing a download ignores non-downloading Chromium update echoes before downloads.removed", async () => {
+  const f = fixture([download(1), download(2, { state: "cancelled" })]);
+  const started = startHostDownloads(f.host, f.store);
+  await started.ready;
+  f.state.clearDownloads("main");
+  assert.deepEqual(f.state.downloads, []);
+  f.state.upsertDownload(download(1));
+  f.state.upsertDownload(download(2, { state: "cancelled" }));
+  assert.deepEqual(f.state.downloads, []);
+  f.emit("ArdiaDownloads", "downloads", { name: "downloads.removed", data: { id: ID(1) } });
+  f.state.upsertDownload(download(1, { state: "downloading", received: 1 }));
+  assert.equal(f.state.downloads.length, 1);
   started.stop();
 });

@@ -46,6 +46,7 @@ export const mergeDownloadSnapshot = (current: Download[], snapshot: unknown, li
 
 type DownloadState = {
   downloads: Download[];
+  upsertDownload?(download: Download): void;
   removeDownload(id: string): void;
   clearDownloads(windowId?: string): void;
 };
@@ -60,8 +61,10 @@ const removable = (d: Download) => nativeDownloadId(d.id) && d.state !== "downlo
 const privateOriginal = (pageProfile: string) =>
   pageProfile.startsWith("incognito:") && pageProfile.includes("@") ? pageProfile.slice(pageProfile.indexOf("@") + 1) : null;
 
+const PENDING_REMOVED_TTL_MS = 5000;
+
 export function startHostDownloads(host: ArdiaHost, store: DownloadStore) {
-  const { removeDownload, clearDownloads } = store.getState();
+  const { upsertDownload, removeDownload, clearDownloads } = store.getState();
   const pageProfile = host.bootstrap.pageProfile ?? "";
   const original = privateOriginal(pageProfile);
   const listedProfile = original ?? pageProfile;
@@ -70,10 +73,33 @@ export function startHostDownloads(host: ArdiaHost, store: DownloadStore) {
   const clearNative = () => void call("clear", { keep: kept(), before: Date.now() }).catch(reportHostError);
   let listing = true;
   const removedWhileListing = new Set<string>();
+  const pendingRemoved = new Map<string, number>();
+  const isPendingRemoved = (id: string) => {
+    const until = pendingRemoved.get(id);
+    if (until === undefined) return false;
+    if (until > Date.now()) return true;
+    pendingRemoved.delete(id);
+    return false;
+  };
   const removedLocally = (gone: Download[]) => {
-    if (listing) for (const d of gone) removedWhileListing.add(d.id);
+    const until = Date.now() + PENDING_REMOVED_TTL_MS;
+    for (const d of gone) {
+      if (listing) removedWhileListing.add(d.id);
+      if (removable(d)) pendingRemoved.set(d.id, until);
+    }
   };
   store.setState({
+    ...(upsertDownload
+      ? {
+          upsertDownload(download) {
+            if (isPendingRemoved(download.id)) {
+              if (download.state !== "downloading") return;
+              pendingRemoved.delete(download.id);
+            }
+            upsertDownload(download);
+          },
+        }
+      : {}),
     removeDownload(id) {
       const gone = store.getState().downloads.filter((d) => d.id === id);
       removeDownload(id);
@@ -100,6 +126,7 @@ export function startHostDownloads(host: ArdiaHost, store: DownloadStore) {
     if (name === "downloads.changed") return expectFinished(data);
     const id = data?.id;
     if (name !== "downloads.removed" || !nativeDownloadId(id)) return;
+    pendingRemoved.delete(id);
     if (listing) removedWhileListing.add(id);
     if (store.getState().downloads.some((d) => d.id === id)) removeDownload(id);
   });
@@ -125,7 +152,7 @@ export function startHostDownloads(host: ArdiaHost, store: DownloadStore) {
     stop() {
       stop();
       stopFiles();
-      store.setState({ removeDownload, clearDownloads });
+      store.setState({ removeDownload, clearDownloads, ...(upsertDownload ? { upsertDownload } : {}) });
     },
   };
 }

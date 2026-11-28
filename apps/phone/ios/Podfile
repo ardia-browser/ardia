@@ -1,3 +1,12 @@
+phone_root = File.expand_path('..', __dir__)
+unless File.identical?(Dir.pwd, __dir__)
+  abort("Run pod install from apps/phone/ios, not with --project-directory: Expo's autolinking resolves packages from the working directory and would read the repo root's node_modules.")
+end
+missing_packages = %w[expo react-native].reject { |name| File.exist?(File.join(phone_root, 'node_modules', name, 'package.json')) }
+unless missing_packages.empty?
+  abort("apps/phone/node_modules has no #{missing_packages.join(' or ')}. Run `pnpm install --frozen-lockfile` in apps/phone first: without it this Podfile resolves the repo root's node_modules, a different Expo and React Native, and rewrites Podfile.lock and the project with them.")
+end
+
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 

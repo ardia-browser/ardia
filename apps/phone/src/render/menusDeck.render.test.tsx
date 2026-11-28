@@ -150,7 +150,7 @@ nativeTest("a pinned tab reads Pinned to Mac, disabled, and a tab that can't be 
   unmount(root);
 });
 
-nativeTest("the ··· menu is a tap menu in fixed order: Spaces, then History, Bookmarks and Downloads, then Settings, with no tab actions", () => {
+nativeTest("the ··· menu is one tap menu with no lines between its rows, in fixed order: Spaces, History, Bookmarks, Downloads and Settings, with no tab actions", () => {
   withSpaces([WORK]);
   jest.spyOn(tabHooks, "useCanReopen").mockReturnValue(true);
   const settings = jest.spyOn(settingsNav, "openSettings").mockImplementation(() => undefined);
@@ -158,7 +158,7 @@ nativeTest("the ··· menu is a tap menu in fixed order: Spaces, then History, 
   const more = menuAround(root, "More");
   expect(more.props.trigger).toBe("tap");
   expect(more.props.fixedOrder).toBe(true);
-  expect(titles(items(more))).toEqual(["Spaces", { "": ["History", "Bookmarks", "Downloads"] }, { "": ["Settings"] }]);
+  expect(titles(items(more))).toEqual(["Spaces", "History", "Bookmarks", "Downloads", "Settings"]);
   expect(["History", "Bookmarks", "Downloads"].map((title) => itemOf(items(more), title)!.systemImage)).toEqual(["clock.arrow.circlepath", "star", "arrow.down.circle"]);
   choose(more, "Settings");
   expect(settings).toHaveBeenCalledTimes(1);

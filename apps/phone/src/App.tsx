@@ -34,6 +34,7 @@ import { offerBrowseForMePage, offerPageSummaryPage, offerSyncPages } from "./st
 import { useOnboarding } from "./state/onboarding/hooks";
 import { bootApp, useBoot } from "./state/app/boot";
 import { startLinks } from "./state/links/links";
+import { startFullPageCapture } from "./platform/fullPageCapture";
 import { useBaseSystemBars, useSystemBars } from "./state/app/systemBars";
 import { useSearchFromDockedMenu, useSearchOpen } from "./state/search/hooks";
 import { useLeavingTab, useOpeningTab, useSheet, useSurface } from "./state/browse/hooks";
@@ -83,6 +84,7 @@ export default function App() {
       startBrowser(applyLaunchSettings);
       startShownPage();
       startPageUi();
+      startFullPageCapture();
       startSettingsSources();
       if (syncOffered()) startSync();
       startLinks();

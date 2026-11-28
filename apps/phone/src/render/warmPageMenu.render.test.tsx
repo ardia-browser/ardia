@@ -6,7 +6,7 @@ import { pages } from "../platform/pages";
 import { blocking } from "../platform/blocking";
 import { WarmPageMenuHost } from "../components/browsing/PageMenu";
 import { DesignProvider, Sheet } from "../components/ui";
-import { closePageMenu, handleSystemBack, openPageMenu, openSiteSettings, openSiteSettingsSheet } from "../state/page/actions";
+import { closePageMenu, handleSystemBack, openPageMenu, openSiteSettings } from "../state/page/actions";
 import { usePageUi } from "../state/page/store";
 import { usePages } from "../state/pages/store";
 import { useSettingsNav } from "../state/settings/nav";
@@ -204,8 +204,7 @@ test("a Site Settings press that lands after the menu has closed opens nothing a
   await open();
   closeAndSettle();
   act(() => openSiteSettings());
-  act(() => openSiteSettingsSheet());
-  expect(usePageUi.getState()).toMatchObject({ menuOpen: false, menuPage: "main", menuSettings: null });
+  expect(usePageUi.getState()).toMatchObject({ menuOpen: false, menuPage: "main" });
   expect(useSettingsNav.getState().open).toBe(false);
   expect(counted.mock.calls.map(([field]) => field)).not.toContain("page_menu_site_settings_opened");
   unmount(root);

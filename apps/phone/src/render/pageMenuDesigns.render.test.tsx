@@ -423,14 +423,10 @@ test("Copy Link in the redesign says Copied Link in the title, and Copied Link W
   unmount(tracked);
 });
 
-test("off a web page the redesign's Site Settings has no group for a site, since there is no site to zoom, shade or ask for its desktop page", async () => {
+test("off a web page the redesign's menu offers no Site Settings, since there is no site to zoom, shade or ask for its desktop page", async () => {
   page("about:blank");
   const root = await openMenu("redesigned");
-  await pressButton(root, "Site Settings");
-  expect(usePageUi.getState().menuPage).toBe("siteSettings");
-  expect(textOf(root)).toContain("Block Cookie Banners");
-  expect(host(root, "siteSettingsZoom")).toBeUndefined();
-  for (const gone of ["Page Zoom", "Desktop Site", "Desktop Site applies to this tab."]) expect(textOf(root)).not.toContain(gone);
+  expect(textOf(root)).not.toContain("Site Settings");
   unmount(root);
 });
 

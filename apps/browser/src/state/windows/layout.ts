@@ -9,6 +9,7 @@ import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
 import { onFullScreenExit } from "./fullScreenExits";
+import { menuBarShownIn } from "./fullScreenMenuBar";
 import { captionClearTop, captionRoom, WINDOW_CHROME, WINDOW_CONTROLS, windowControlsWidth, type WindowChrome } from "../../lib/windowChrome";
 import { toolbarRowOf } from "../../lib/toolbarRow";
 import { SMALL_BAR_HEIGHT } from "./small";
@@ -60,28 +61,9 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
   const open = tabsShownIn(s, windowId);
   if (tabLayoutOf(s, w.id) === "top") return open ? [...TOP_STRIP_LIGHTS_CENTER] : lightsCenter(DEFAULT_SIDEBAR_WIDTH);
   const width = sidebarWidthIn(s, windowId);
-  const frame = pageFrameInsetOf(s.settings.pageFrame, {
-    borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
-    zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
-    fullScreen: !!w.fullScreen,
-    zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
-    tabsHidden: autoHidesTabsIn(s, windowId),
-  });
+  const frame = pageFrameIn(s, windowId);
   const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
   return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
-}
-
-export function usePageFrameInset(): number {
-  const windowId = useWindowId();
-  return useWindowSettings(windowId, (s) =>
-    pageFrameInsetOf(s.settings.pageFrame, {
-      borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
-      zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
-      fullScreen: !!s.windows[windowId]?.fullScreen,
-      zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
-      tabsHidden: autoHidesTabsIn(s, windowId),
-    }),
-  );
 }
 
 export const pageFrameIn = (s: BrowserState, windowId: string): number =>
@@ -89,9 +71,15 @@ export const pageFrameIn = (s: BrowserState, windowId: string): number =>
     borderlessMode: s.settings.borderlessMode || minimalismIn(s, windowId),
     zeroInFullScreen: s.settings.pageFrameZeroInFullScreen,
     fullScreen: !!s.windows[windowId]?.fullScreen,
+    menuBarShown: menuBarShownIn(windowId),
     zeroWhenTabsHidden: s.settings.pageFrameZeroWhenTabsHidden,
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
+
+export function usePageFrameInset(): number {
+  const windowId = useWindowId();
+  return useWindowSettings(windowId, (s) => pageFrameIn(s, windowId));
+}
 
 const toolbarless = (s: BrowserState, windowId: string): boolean => addressBarInSidebar(s, windowId) || minimalismIn(s, windowId);
 

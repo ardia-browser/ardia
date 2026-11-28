@@ -15,6 +15,13 @@ test("full screen with Zero in full screen on is edge to edge", () => {
   assert.equal(pageFrameInsetOf(5, { ...off, zeroInFullScreen: true, fullScreen: true }), 0);
 });
 
+test("Remove keeps the frame while the menu bar is shown in full screen (#4778)", () => {
+  const remove = { ...off, zeroInFullScreen: true, zeroWhenTabsHidden: true, fullScreen: true, tabsHidden: true };
+  assert.equal(pageFrameInsetOf(4, remove), 0);
+  assert.equal(pageFrameInsetOf(4, { ...remove, menuBarShown: true }), 4);
+  assert.equal(pageFrameInsetOf(4, { ...off, zeroWhenTabsHidden: true, fullScreen: true, tabsHidden: true, menuBarShown: true }), 0);
+});
+
 test("full screen with Zero in full screen off keeps the slider", () => {
   assert.equal(pageFrameInsetOf(PAGE_FRAME.default, { ...off, fullScreen: true }), PAGE_FRAME.default);
   assert.equal(pageFrameInsetOf(5, { ...off, fullScreen: true }), 5);

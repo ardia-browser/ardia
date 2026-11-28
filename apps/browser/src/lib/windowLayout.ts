@@ -27,12 +27,13 @@ export function pageFrameInsetOf(
     borderlessMode?: boolean;
     zeroInFullScreen: boolean;
     fullScreen: boolean;
+    menuBarShown?: boolean;
     zeroWhenTabsHidden: boolean;
     tabsHidden: boolean;
   },
 ): number {
   if (opts.borderlessMode) return 0;
-  if (opts.fullScreen && opts.zeroInFullScreen) return 0;
+  if (opts.fullScreen && opts.zeroInFullScreen) return opts.menuBarShown ? inset : 0;
   if (opts.fullScreen && opts.tabsHidden && opts.zeroWhenTabsHidden) return 0;
   return inset;
 }

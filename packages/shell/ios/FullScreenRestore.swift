@@ -16,6 +16,7 @@ final class FullScreenRestore {
   }
 
   func restore(ids: [String], focus: String?) {
+    for id in ids where windows.isFullScreen(id) { windows.reportMenuBarAgain(id) }
     queue = ids.filter { !windows.isFullScreen($0) }
     entering = nil
     self.focus = focus

@@ -4,6 +4,8 @@
 using namespace ardia_web_view;
 using namespace ardia_runtime;
 
+static const NSTimeInterval kPagePictureTimeout = 1.0;
+
 @implementation ArdiaWebView (PageCommands)
 
 - (void)emitMedia {
@@ -141,6 +143,11 @@ using namespace ardia_runtime;
   };
   [_tab devToolsCall:@"Page.captureScreenshot" params:params timeout:1.0 completion:done];
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{ answer(nil); });
+}
+
+- (void)copyPagePicture:(void (^)(CGImageRef _Nullable picture))completion {
+  if (!_tab || !self.window || self.isHiddenOrHasHiddenAncestor || self.awaitsFirstDocument) return completion(NULL);
+  [_tab copyPicture:kPagePictureTimeout completion:completion];
 }
 
 - (void)navigationEntries:(void (^)(NSArray<NSDictionary<NSString *, id> *> *))completion {

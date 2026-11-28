@@ -19,6 +19,7 @@ export const COMMAND_INTERACTION: Readonly<Record<BrowserCommand, CommandInterac
   print: "interactive",
   copyUrl: "quiet",
   copyUrlAsMarkdown: "quiet",
+  copyScreenshot: "quiet",
   findInPage: "quiet",
   findNext: "quiet",
   findPrevious: "quiet",

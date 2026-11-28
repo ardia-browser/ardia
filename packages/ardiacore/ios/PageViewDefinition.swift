@@ -57,6 +57,9 @@ enum PageViewDefinition {
       AsyncFunction("capturePicture") { (view: V, scale: Double, promise: Promise) in
         view.page.capturePicture(scale) { promise.resolve($0) }
       }.runOnQueue(.main)
+      AsyncFunction("copyScreenshot") { (view: V, promise: Promise) in
+        view.page.copyScreenshot { promise.resolve($0) }
+      }.runOnQueue(.main)
       AsyncFunction("downloadFavicon") { (view: V, url: String, promise: Promise) in
         view.page.downloadFavicon(url) { promise.resolve($0) }
       }.runOnQueue(.main)

@@ -286,6 +286,7 @@ export type WebViewHandle = {
   evaluate<T = unknown>(code: string): Promise<T | null>;
   navigationEntries(): Promise<NavigationEntry[]>;
   capturePicture(scale: number): Promise<{ data: string; frame: [number, number, number, number] } | null>;
+  copyScreenshot(): Promise<ScreenshotCopy>;
   downloadFavicon(url: string): Promise<FaviconImage | null>;
   downloadImage(url: string, maxPixels: number): Promise<FaviconImage | null>;
 
@@ -340,6 +341,8 @@ export type WebViewNativeHandle = Omit<
   resolvePasswordPrompt(answer: string, username: string | null, password: string | null): Promise<void>;
   discard(unload: boolean): Promise<DiscardOutcome>;
 };
+
+export type ScreenshotCopy = { ok: true; width: number; height: number } | { ok: false; reason: "noPage" | "noPicture" | "unencodable" };
 
 export type DiscardOutcome = "discarded" | "already" | "refused" | "unsupported";
 export type DiscardRefusal = number;

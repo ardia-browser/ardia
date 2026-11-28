@@ -6,6 +6,8 @@ let selectedTabs = 0;
 let trackersRemoved = 0;
 let fromWebKitMenu = 0;
 let uncleaned = 0;
+let screenshots = 0;
+let screenshotFailures = 0;
 
 export function noteSelectedTabUrlsCopied(cleaned = 0) {
   copies++;
@@ -28,6 +30,10 @@ export function noteWebKitMenuLinkCopied(removedTracker: boolean, consent?: Cons
 
 export const noteUncleanedUrlCopied = (consent: ConsentToken | null) => countFor(consent, () => void uncleaned++);
 
+export function noteScreenshotCopied(copied: boolean, consent?: ConsentToken | null) {
+  countFor(consentOrNow(consent), () => void (copied ? screenshots++ : screenshotFailures++));
+}
+
 export function takeUrlCopyCounts() {
   const taken = {
     url_copies: copies,
@@ -36,6 +42,8 @@ export function takeUrlCopyCounts() {
     url_copies_cleaned: trackersRemoved,
     url_copies_from_webkit_menu: fromWebKitMenu,
     url_copies_uncleaned: uncleaned,
+    screenshot_copies: screenshots,
+    screenshot_copy_failures: screenshotFailures,
   };
   copies = 0;
   whilePending = 0;
@@ -43,5 +51,7 @@ export function takeUrlCopyCounts() {
   trackersRemoved = 0;
   fromWebKitMenu = 0;
   uncleaned = 0;
+  screenshots = 0;
+  screenshotFailures = 0;
   return taken;
 }

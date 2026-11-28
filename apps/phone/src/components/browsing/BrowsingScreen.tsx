@@ -1,4 +1,5 @@
 import { probes } from "../../state/app/launchFlags";
+import { useMiniPlayerRoom } from "../../state/media/store";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { countRender } from "../../state/app/interactionPerf";
 import { Platform, StyleSheet, useWindowDimensions, View, type StyleProp, type ViewInstance, type ViewStyle } from "react-native";
@@ -306,7 +307,8 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   const layout = underBar ? { pageBottom: 0, toneBottom: design === "material" ? 0 : barSlotHeight } : pageInsets(collapse.collapses, barSlotHeight, browseLayout.pageOverlap);
   const fullscreen = usePages((s) => s.fullscreen[tab.id] ?? false);
   const coveredBottom = obscuredBottom({ insetsScroll: Platform.OS === "ios", bar: barSlotHeight, collapses: collapse.collapses, cleared: fullscreen || finding || searching });
-  const obscured = underBar ? { top: insets.top, bottom: coveredBottom } : undefined;
+  const miniPlayerRoom = useMiniPlayerRoom((room) => room.room);
+  const obscured = underBar ? { top: insets.top, bottom: coveredBottom + (fullscreen || finding || searching ? 0 : miniPlayerRoom) } : undefined;
   const materialSummaryBottom = fullscreen || searching ? insets.bottom : collapse.collapsed ? insets.bottom + materialBottomBar.inset + materialBarPill.height : barSlotHeight;
   const summaryBottomInset = design === "material" ? materialSummaryBottom : undefined;
   const painted = useSharedValue(false);

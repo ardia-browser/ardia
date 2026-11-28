@@ -11,6 +11,8 @@ import { closeMiniPlayer, floatMedia, noteMiniPlayerShown, openMiniPlayerTab, se
 import { useTabs } from "../../state/tabs/store";
 import { chromeInk, chromeLayout, ChromeSurface, Favicon, floatingBarLayout, font, PressInPlace, useReduceMotion, useTheme } from "../ui";
 import { NativeGlyph } from "../ui/Symbol";
+import { GlassSource, PAGE_FROST, START_FROST, SURFACES_FROST } from "../ui/LookViews";
+import { useBrowse } from "../../state/browse/store";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 
 export const MINI_PLAYER = { height: 56, radius: 28, art: 40, artRadius: 10, button: 38, close: 34, gap: 10, maxWidth: 480, inMs: 180, outMs: 150, travel: 8 } as const;
@@ -46,12 +48,15 @@ export function MiniPlayer() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { span } = useBottomBarLayout(width, chromeLayout.barSideInset);
+  const surface = useBrowse((s) => s.surface);
   const showing = kept.current;
   if (!present || !showing) return null;
   return (
     <View testID="miniPlayerPlace" pointerEvents="box-none" style={[styles.place, { left: span.left, right: span.right, bottom: miniPlayerBottom(insets.bottom) }]}>
       <Animated.View testID="miniPlayer" collapsable={false} pointerEvents={shows ? "box-none" : "none"} accessibilityElementsHidden={!shows} importantForAccessibility={shows ? "auto" : "no-hide-descendants"} style={[styles.motion, motion]}>
-        <MiniPlayerCard media={showing} skipSeconds={skipSeconds} />
+        <GlassSource name={surface === "browsing" ? PAGE_FROST : surface === "start" ? START_FROST : SURFACES_FROST}>
+          <MiniPlayerCard media={showing} skipSeconds={skipSeconds} />
+        </GlassSource>
       </Animated.View>
     </View>
   );

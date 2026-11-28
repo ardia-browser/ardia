@@ -1,0 +1,45 @@
+Android Capture more (issue #4706), 2026-11-28. Pixel 9 emulator (Android 15, WebView 124, simlock pool) and POCO F4 (MIUI, Android 14).
+Test page: a sticky header, a fixed "FIXED BADGE" and 60 numbered bands, served from the mini as http://10.0.2.2:18765/sticky.html.
+
+BEFORE (PR build fullpage-11974bb, WebView's own scroll capture):
+- before-pixel9-ardia-capture-more.mp4: Wikipedia Lisbon, screenshot, Capture more offered, editor, Save; the page comes back to the same position.
+- before-pixel9-ardia-builtin-wikipedia.png: that editor. No floating bar, but the WebView scrollbar thumb repeats down the right edge in every tile.
+- before-pixel9-ardia-builtin-sticky-dropped-scrollbar-repeated.png: sticky page. The sticky header and fixed badge are missing everywhere, even in the screen that was taken; the scrollbar thumb repeats.
+- before-pixel9-ardia-private-tab-capture-more.png: an Incognito tab is offered Capture more and captured (no FLAG_SECURE on Android 13+).
+- reference-pixel9-chrome-capture-more-sticky.png: Chrome 124 on the same page shows the header and badge once, in the start screen, and no scrollbar.
+
+AFTER (this change, PageScrollCapture):
+- after-pixel9-sticky-page-before-screenshot.png: the sticky page as it was when the screenshot was taken.
+- after-pixel9-ardia-capture-more-sticky.mp4: screenshot, Capture more, editor, selection extended, Save (build 9e4a1fc; 3.85 s session, ended complete).
+- after-pixel9-ardia-capture-more-sticky-editor.png: the editor with the selection extended: header and badge once, in the start screen; bands continuous; no scrollbar; no floating bar.
+- after-pixel9-ardia-capture-more-sticky-saved.png: the saved 1080x6052 PNG: the same, at full size.
+- after-pixel9-ardia-capture-more-wikipedia.mp4: final build 694e011 on Wikipedia Lisbon: screenshot, Capture more, editor, selection extended, Save, then back on the page at the same paragraph as before. The emulator lease ended during the save, so the saved PNG itself was not pulled.
+- after-pixel9-ardia-capture-more-wikipedia-editor.png: final build 694e011, Wikipedia Lisbon, selection extended over the whole capture (2.4 s session, 8 tiles plus 7 repeats, ended complete, scroll restored to 10552). The blank band above the footer is where Wikipedia's lazily loaded Related Articles go.
+- after-pixel9-private-tab-screenshot-ui-no-capture-more.png and after-pixel9-private-tab-no-capture-more.mp4: an Incognito tab gets Share and Edit only; SystemUI logs "No scrollable targets found".
+- fixed-crash-pixel9-wikipedia-null-request-argument-9e4a1fc.mp4: build 9e4a1fc crashing mid-capture (a null argument reached a Kotlin non-null parameter); fixed in 1ffe82e and later with the Java adapter.
+- superseded-pixel9-wikipedia-timed-out-1ffe82e.mp4: build 1ffe82e taking 7.3 s on Wikipedia, past SystemUI's ~6 s limit, so no editor; fixed in 694e011 by presenting repeated tile requests from the last rows.
+- Saving a selection 8260 px tall gave a fully transparent PNG on the emulator. A 6052 px selection saved correctly, which suggests SystemUI's export hit the emulator GPU's 8192 px texture limit (unproven).
+
+F4 (MIUI ignores the scroll capture API):
+- after-f4-page-menu-print-no-capture-row.jpg: page menu with Translate, Print, Site Settings; no capture row.
+- after-f4-miui-scroll-works.mp4: build e8aaf87, Control Center > Screenshot > Scroll on Wikipedia Lisbon; MIUI stitched the whole article (1080x14834), with its own seams and the host pill in the last screen.
+- before-f4-miui-scroll-old-build-also-works-today.mp4: the PR build fullpage-11974bb does the same today, so the earlier one-screen failure (../android/miui-scroll-fails-ardia-and-chrome.mp4) did not reproduce on either build.
+- after-f4-regression-scroll-pull-find-deck-private.mp4: pull to refresh, scrolling, the page menu, Find on Page ("Tagus", 1 of 28), the tab deck, a new Incognito tab, and MIUI offering Scroll on the private page.
+Test screenshots were deleted from the F4. The emulator leases were wiped by simlock.
+
+ROUND 1 (Codex 6.1 Sol findings on 331600af1, final build scrollcap-r1-0e399b609 from 0e399b609):
+Tall save:
+- r1-pixel9-chrome-tall-save-sticky.mp4, -editor.png, -saved.png: Chrome on the sticky page, selection extended to its whole capture: 1080x6894, fully opaque. Chrome never captures more than that here.
+- r1-pixel9-ardia-tall-save-sticky.mp4, -editor.png, -8260-transparent.png: Ardia (694e011) with an 8260 px selection: the editor shows every tile; the saved PNG is fully transparent. SystemUI's process logged "HWUI: Unable to generate GPU buffer in a format compatible with the provided bitmap" during its export. That is SystemUI's export limit on this GPU (8192 px); Ardia's 6052 px and 6055 px saves are fine.
+Related Articles:
+- r1-pixel9-chrome-wikipedia-live-related-articles-blank.png: Chrome's live page at the end of Lisbon: the Related Articles box is blank on the page itself on this emulator.
+- r1-pixel9-chrome-wikipedia-related-articles-editor.png: Chrome's Capture more shows the same blank band. Ardia matches Chrome; on the F4 the box loads and both MIUI captures include it.
+Found while verifying, fixed (watchdog):
+- found-pixel9-framework-race-page-left-scrolled-e290abb.png: build e290abb after SystemUI got "NullPointerException: CancellationSignal.cancel() on a null object reference" back from ScrollCaptureConnection.requestImage and quit without calling end: the page is left scrolled (12113 instead of 9753). Fixed in 0e399b6 by the idle watchdog. The recording of that run was lost when its record stop aborted.
+Final build 0e399b6:
+- r1-pixel9-ardia-0e399b6-wikipedia-loaded-host-cancelled.mp4 (+ .part-002): first try while the mini's load average was 40: the session took 7.6 s, SystemUI dismissed, the session ended cancelled and the page and styles were restored.
+- r1-pixel9-ardia-0e399b6-wikipedia-editor.png and r1-pixel9-ardia-0e399b6-wikipedia-saved.png: retry (load about 12): ended complete after 8 tiles in 4.9 s; saved 1080x6055, opaque, continuous, no scrollbar or floating bar; the page came back exactly (0 differing pixels).
+- r1-pixel9-ardia-0e399b6-wikipedia-save-and-shadow-page.mp4: the save, then a page whose fixed badge sits in an open shadow root: Capture more and the editor.
+- r1-pixel9-ardia-0e399b6-shadow-page.png and -shadow-editor.png: the shadow-root fixed badge shows once, in the screen that was taken, and in no other tile (4.4 s, ended complete).
+- r1-f4-0e399b6-smoke-scroll-pull-menu-find-deck-private-miui.mp4: F4 on the final build: scrolling, pull, page menu (Print, no capture row), Find ("Tagus"), the tab deck, a new Incognito tab, the MIUI screenshot and MIUI Scroll stitching the whole private page.
+Test pictures were deleted from both devices.

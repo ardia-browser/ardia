@@ -96,7 +96,7 @@ export const DOCK_SLIDE = { duration: 200, easing: Easing.bezier(...DOCK_SLIDE_C
 
 export const PEEK_IN_MS = duration.base;
 export const ARC_PEEK_OUT_MS = 150;
-export const ARC_HIDE_MS = duration.fast;
+export const ARC_DOCK_MS = duration.fast;
 
 
 export const WINDOW_BUTTONS = {

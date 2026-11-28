@@ -118,9 +118,9 @@ export const edgeWatchWidth = (peeking: boolean, draggingTab: boolean, holdWidth
 
 export const edgeStripOverPage = (inset: number) => inset < PEEK_EDGE_STRIP;
 
-type DockMove = "jump" | "arcHide" | "slide";
+type DockMove = "jump" | "arcDock" | "slide";
 
 export function dockMove(o: { open: boolean; animated: boolean; arc: boolean; peekOut: boolean }): DockMove {
   if (!o.animated || (o.arc && o.open && o.peekOut)) return "jump";
-  return o.arc && !o.open ? "arcHide" : "slide";
+  return o.arc ? "arcDock" : "slide";
 }

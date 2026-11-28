@@ -43,14 +43,14 @@ test("What’s Sent says in its own words that menu and confirmation opens are c
   assert.match(usage.text, /never while browsing privately/);
 });
 
-test("What’s Sent says in its own words that long screenshots and full-page PDFs are counted, and never while browsing privately", () => {
+test("What’s Sent says in its own words that Capture more and full-page PDFs are counted, and never while browsing privately", () => {
   const items = PHONE_WHATS_SENT.flatMap((section) => section.items);
   const pdf = items.find((item) => item.fields.includes("full_page_pdf_provided"))!;
-  const shots = items.find((item) => item.fields.includes("long_screenshot_saved"))!;
+  const shots = items.find((item) => item.fields.includes("scroll_capture_started"))!;
   assert.deepEqual(pdf.fields, ["full_page_pdf_provided"]);
-  assert.deepEqual(shots.fields, ["long_screenshot_saved", "long_screenshot_shared", "long_screenshot_cancelled", "long_screenshot_failed"]);
+  assert.deepEqual(shots.fields, ["scroll_capture_started", "scroll_capture_ended_complete", "scroll_capture_ended_cancelled", "scroll_capture_failed"]);
   assert.match(pdf.text, /on iPhone: how often a screenshot’s Full Page tab got the page as a PDF/);
-  assert.match(shots.text, /on Android: how often you saved a long screenshot/);
+  assert.match(shots.text, /on Android: how often a system screenshot’s Capture more scrolled a page/);
   for (const item of [pdf, shots]) assert.match(item.text, /never while browsing privately/);
 });
 

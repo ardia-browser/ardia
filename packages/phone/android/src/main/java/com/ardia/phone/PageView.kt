@@ -3,6 +3,8 @@ package com.ardia.phone
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
+import android.os.Build
 import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -12,6 +14,7 @@ import android.view.ViewTreeObserver
 import android.webkit.WebView
 import android.widget.FrameLayout
 import com.ardia.browser.BrowserUrl
+import com.ardia.browser.PageCapture
 import com.ardia.browser.Page
 import com.ardia.browser.PageColors
 import com.ardia.browser.PageState
@@ -36,7 +39,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class PageView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
+class PageView(context: Context, appContext: AppContext) : ExpoView(context, appContext), PageScrollCapture.Host {
     private val onPageEvent by EventDispatcher()
     private val host = FrameLayout(context)
     private var scope: CoroutineScope? = null
@@ -225,6 +228,26 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
         setWillNotDraw(false)
         addView(host, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         gestures.install()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            scrollCaptureHint = View.SCROLL_CAPTURE_HINT_INCLUDE or View.SCROLL_CAPTURE_HINT_EXCLUDE_DESCENDANTS
+            setScrollCaptureCallback(PageScrollCallback(PageScrollCapture(this)))
+        }
+    }
+
+    override fun capturableWebView(): WebView? {
+        val opened = page ?: return null
+        if (opened.isPrivate || isPrivate || summaryPresenter.shown) return null
+        if (!PagePrinting.printable(opened.state.value.url)) return null
+        val web = PageDrawnWatch.webViewIn(host) ?: return null
+        if (!PageCapture.isVisible(web) || PageDrawnWatch.shownAlpha(this) < PageFront.OPAQUE) return null
+        return web.takeIf { PageFront.isFrontmost(this, host) }
+    }
+
+    override fun scrollBounds(): Rect {
+        val visible = Rect()
+        if (!getLocalVisibleRect(visible)) return Rect()
+        val bounds = Rect(host.left, host.top, host.right, host.bottom)
+        return if (bounds.intersect(visible)) bounds else Rect()
     }
 
     override fun requestDisallowInterceptTouchEvent(disallow: Boolean) {
@@ -615,4 +638,31 @@ class PageView(context: Context, appContext: AppContext) : ExpoView(context, app
 
 internal object PageToneGate {
     fun reports(themeColor: Int?, failed: Boolean, sampledSinceBind: Boolean): Boolean = sampledSinceBind || themeColor != null || failed
+}
+
+internal object PageFront {
+    const val OPAQUE = 0.99f
+    private const val LEAST_WINDOW_SHARE = 0.5f
+    private const val SCALE_TOLERANCE = 0.01f
+
+    fun isFrontmost(page: View, content: View): Boolean {
+        var root: View = page
+        var parent = page.parent
+        while (parent is View) {
+            if (kotlin.math.abs(parent.scaleX - 1f) > SCALE_TOLERANCE || kotlin.math.abs(parent.scaleY - 1f) > SCALE_TOLERANCE) return false
+            root = parent
+            if (parent is com.facebook.react.uimanager.RootView) break
+            parent = parent.parent
+        }
+        if (root !is com.facebook.react.uimanager.RootView || root !is ViewGroup || root.height <= 0) return false
+        if (kotlin.math.abs(page.scaleX - 1f) > SCALE_TOLERANCE || kotlin.math.abs(page.scaleY - 1f) > SCALE_TOLERANCE) return false
+        val shown = android.graphics.Rect()
+        if (!content.getGlobalVisibleRect(shown) || shown.height() < root.height * LEAST_WINDOW_SHARE) return false
+        val rootAt = IntArray(2).also(root::getLocationInWindow)
+        val contentAt = IntArray(2).also(content::getLocationInWindow)
+        val x = (contentAt[0] - rootAt[0] + content.width / 2).toFloat()
+        val y = (contentAt[1] - rootAt[1] + content.height / 2).toFloat()
+        val hit = com.facebook.react.uimanager.TouchTargetHelper.findTargetTagForTouch(x, y, root)
+        return hit == page.id
+    }
 }

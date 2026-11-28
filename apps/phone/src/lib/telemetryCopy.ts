@@ -174,8 +174,8 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["full_page_pdf_provided"],
       },
       {
-        text: "In the same daily counts, on Android: how often you saved a long screenshot of a page, shared one after saving it, cancelled one from its preview, or one couldn’t be made, never while browsing privately. Counts only, never which page or what it showed",
-        fields: ["long_screenshot_saved", "long_screenshot_shared", "long_screenshot_cancelled", "long_screenshot_failed"],
+        text: "In the same daily counts, on Android: how often a system screenshot’s Capture more scrolled a page for a longer picture, and whether that ended with every part drawn, was cut short, or couldn’t draw the page, never while browsing privately. Counts only, never which page or what it showed",
+        fields: ["scroll_capture_started", "scroll_capture_ended_complete", "scroll_capture_ended_cancelled", "scroll_capture_failed"],
       },
       {
         text: "In the same daily counts: how often you opened one of the Settings panes, such as General or Tabs. Counts only, never which pane or what you changed",

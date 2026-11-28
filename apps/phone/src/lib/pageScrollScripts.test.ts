@@ -4,16 +4,16 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 
-const kotlin = readFileSync(fileURLToPath(new URL("../../../../packages/phone/android/src/main/java/com/ardia/phone/LongScreenshots.kt", import.meta.url)), "utf8");
+const kotlin = readFileSync(fileURLToPath(new URL("../../../../packages/phone/android/src/main/java/com/ardia/phone/PageScrollScripts.kt", import.meta.url)), "utf8");
 
 const shipped = (name: string) => {
   const found = new RegExp(`const val ${name} = """([\\s\\S]*?)"""`).exec(kotlin);
-  assert.ok(found, `${name} is in LongScreenshots.kt`);
+  assert.ok(found, `${name} is in PageScrollScripts.kt`);
   return found[1]!;
 };
 
-const KEY_A = "ardia-long-shot-6f1c2d3e-0a4b-4c5d-8e9f-a0b1c2d3e4f5";
-const KEY_B = "ardia-long-shot-11111111-2222-4333-8444-555555555555";
+const KEY_A = "ardia-scroll-capture-6f1c2d3e-0a4b-4c5d-8e9f-a0b1c2d3e4f5";
+const KEY_B = "ardia-scroll-capture-11111111-2222-4333-8444-555555555555";
 
 const scriptFor = (name: string) => (key: string, y: number | null = null) => shipped(name).replaceAll("ARDIA_CAPTURE_KEY", key).replaceAll("ARDIA_SCROLL_Y", y === null ? "null" : String(y));
 const mark = scriptFor("MARK");
@@ -22,6 +22,7 @@ const owns = (key: string) => `(${scroll(key, 0)}) >= 0 ? 1 : 0`;
 const hide = scriptFor("HIDE_FIXED");
 const show = scriptFor("SHOW_FIXED");
 const drop = scriptFor("DROP");
+const zoomed = shipped("ZOOMED");
 
 function page(body: string) {
   const dom = new JSDOM(`<!doctype html><html><head><style>.bar{position:fixed;top:0}.head{position:sticky;top:0}</style></head><body>${body}</body></html>`, { runScripts: "outside-only", url: "https://example.com/a" });
@@ -30,14 +31,15 @@ function page(body: string) {
   return { dom, run, byId };
 }
 
-test("a capture marks the document, hides fixed elements, unsticks sticky ones, and puts back each element's own style attribute exactly", () => {
+test("a capture marks the document, fades fixed and sticky elements out, and puts back each element's own style attribute exactly", () => {
   const { run, byId } = page('<div id="bar" class="bar" style="color: red">bar</div><h2 id="head" class="head">head</h2><p id="plain" style="margin: 1px">text</p>');
   assert.equal(run(owns(KEY_A)), 0);
   assert.equal(run(mark(KEY_A)), 1);
   assert.equal(run(owns(KEY_A)), 1);
   assert.equal(run(hide(KEY_A)), 2);
   assert.equal(byId("bar").style.getPropertyValue("opacity"), "0");
-  assert.equal(byId("head").style.getPropertyValue("position"), "relative");
+  assert.equal(byId("head").style.getPropertyValue("opacity"), "0");
+  assert.equal(byId("head").style.getPropertyValue("position"), "", "a sticky element keeps its place in the layout, so nothing below it moves");
   assert.equal(byId("plain").getAttribute("style"), "margin: 1px");
   assert.equal(run(show(KEY_A)), 2);
   assert.equal(byId("bar").getAttribute("style"), "color: red");
@@ -151,4 +153,14 @@ test("a pinch-zoomed page is refused before it is marked, so nothing is scrolled
   assert.equal(run(drop(KEY_A)), 0);
   Object.defineProperty(dom.window, "visualViewport", { value: { scale: 1 }, configurable: true });
   assert.equal(run(mark(KEY_A)), 1);
+});
+
+test("the search's zoom probe reads the visual viewport and changes nothing", () => {
+  const { run, dom } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  const symbols = Object.getOwnPropertySymbols(dom.window).length;
+  assert.equal(run(zoomed), 0);
+  Object.defineProperty(dom.window, "visualViewport", { value: { scale: 2 }, configurable: true });
+  assert.equal(run(zoomed), 1);
+  assert.equal(Object.getOwnPropertySymbols(dom.window).length, symbols);
+  assert.equal(dom.window.document.getElementById("bar")!.getAttribute("style"), "color: red");
 });

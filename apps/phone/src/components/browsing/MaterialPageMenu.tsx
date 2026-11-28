@@ -7,8 +7,6 @@ import { copy } from "../../lib/platformCopy";
 import { actionWords, blockingWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
-  canTakeLongScreenshots,
-  longScreenshotCurrentPage,
   canSummarizePages,
   closeMenuSubpage,
   copyCurrentLink,
@@ -119,7 +117,6 @@ export function MaterialPageMenuItems({ tabId, model, onTranslate, onFind = show
           {offersSummary ? <ListRow icon="sparkles" title="Summarize Page" enabled={model.summarize} onPress={summarizeCurrentPage} /> : null}
           {model.isWebPage && devices.length ? <SendRow devices={devices} /> : null}
           {canPrintPages() ? <ListRow icon="printer" title="Print" enabled={model.print} onPress={printCurrentPage} /> : null}
-          {canTakeLongScreenshots() && model.longScreenshotShown ? <ListRow icon="camera" title={actionWords.longScreenshot} enabled={model.print} onPress={longScreenshotCurrentPage} /> : null}
         </Group>
         <Group>
           {model.pageRows ? <ListRow icon="translate" title={model.translateTitle} enabled={model.translate} onPress={onTranslate} /> : null}

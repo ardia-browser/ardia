@@ -30,7 +30,7 @@ test("where sync is offered, What's Sent keeps its Mac lines, and only iPhone li
   assert.ok(!shownWhatsSent("ios", true).some((section) => section.items.some((item) => item.fields.includes("start_logo_taps"))));
   const listed = (os: string, field: string) => shownWhatsSent(os, true).some((section) => section.items.some((item) => item.fields.includes(field)));
   assert.ok(listed("ios", "full_page_pdf_provided") && !listed("android", "full_page_pdf_provided"));
-  assert.ok(listed("android", "long_screenshot_failed") && !listed("ios", "long_screenshot_failed"));
+  assert.ok(listed("android", "scroll_capture_failed") && !listed("ios", "scroll_capture_failed"));
 });
 
 test("where sync isn't offered, Clear Browsing Data, About and the licences drop the Mac and the sync folder", () => {

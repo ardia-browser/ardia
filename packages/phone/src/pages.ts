@@ -37,12 +37,6 @@ export type AppRelease = { releaseVersion: string; build: string; receiptName: s
 
 export type OffscreenCapture = { fileName: string; path: string; title: string | null; themeColorHex: string | null };
 
-export type LongScreenshotTile = { uri: string; top: number; height: number };
-
-export type LongScreenshot = { id: string; uri: string; path: string; width: number; height: number; screens: number; complete: boolean; capped: boolean; tiles: LongScreenshotTile[] };
-
-export type SavedLongScreenshot = { uri: string; width: number; height: number };
-
 
 export type SitePermissionKind = "camera" | "microphone" | "location";
 
@@ -79,11 +73,6 @@ type PagesNative = {
   download(pageId: string, url: string): Promise<void>;
   readableContent(pageId: string): Promise<ReadableContent | null>;
   print?(pageId: string): Promise<boolean>;
-  takeLongScreenshot?(pageId: string): Promise<unknown>;
-  saveLongScreenshot?(id: string, top: number, bottom: number): Promise<unknown>;
-  shareLongScreenshot?(uri: string): Promise<boolean>;
-  discardLongScreenshot?(id: string): Promise<void>;
-  cancelLongScreenshot?(): Promise<void>;
   sharePage?(pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null>;
   summarizePage?(pageId: string): Promise<boolean>;
   dismissPageSummaries?(): Promise<void>;
@@ -185,12 +174,6 @@ export const pages = {
     native().revokeSitePermission?.(origin, permission ?? null) ?? Promise.resolve(false),
   print: (pageId: string): Promise<boolean> => native().print?.(pageId) ?? Promise.resolve(false),
   canPrint: (): boolean => typeof native().print === "function",
-  canTakeLongScreenshot: (): boolean => typeof native().takeLongScreenshot === "function",
-  takeLongScreenshot: (pageId: string): Promise<unknown> => native().takeLongScreenshot?.(pageId) ?? Promise.resolve(null),
-  saveLongScreenshot: (id: string, top: number, bottom: number): Promise<unknown> => native().saveLongScreenshot?.(id, top, bottom) ?? Promise.resolve(null),
-  shareLongScreenshot: (uri: string): Promise<boolean> => native().shareLongScreenshot?.(uri) ?? Promise.resolve(false),
-  discardLongScreenshot: (id: string): Promise<void> => native().discardLongScreenshot?.(id) ?? Promise.resolve(),
-  cancelLongScreenshot: (): Promise<void> => native().cancelLongScreenshot?.() ?? Promise.resolve(),
   sharePage: (pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null> => native().sharePage?.(pageId, url, title) ?? Promise.resolve(null),
   sharesWithPrint: (): boolean => typeof native().sharePage === "function",
   summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),

@@ -23,7 +23,6 @@ import { closeLibrary, useLibrary } from "./state/library/store";
 import { SettingsView } from "./components/settings/SettingsView";
 import { SpacesView } from "./components/sync/SpacesView";
 import { ToastHost } from "./components/toasts/ToastHost";
-import { LongScreenshotHost } from "./components/browsing/LongScreenshotView";
 import { DesignProvider, followDesign, tabsMotion, useDesign, useTheme, DEFAULT_PROFILE_COLOR, FrostSource, FullSheet, OverlayHost, PROFILE_PRESETS, onDrawnMenuActionChosen, onDrawnMenuOpened, onNativeMenuOpened, ProfileLookContext, Shade, SheetBackground, SURFACES_FROST } from "./components/ui";
 import { useLook } from "./state/sync/hooks";
 import { startSettingsSources } from "./state/settings/actions";
@@ -232,7 +231,6 @@ export function Surfaces() {
       {material ? <MaterialLibrary /> : null}
       <Layer covered={onboarding}>{voiceSeen ? <VoiceSearchView /> : null}</Layer>
       {onboardingSeen ? <OnboardingView /> : null}
-      <LongScreenshotHost />
       <ToastHost />
       {lightIcons !== null ? <LayerInk key={layer} light={lightIcons} /> : null}
     </>

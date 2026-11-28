@@ -31,15 +31,6 @@ test("Done has one owner: Settings, Archive, Library and Spaces take it from the
   }
 });
 
-test("Long Screenshot has one owner, which every Android page menu and the preview read", () => {
-  assert.equal(actionWords.longScreenshot, "Long Screenshot");
-  for (const path of ["components/browsing/PageMenuWords.tsx", "components/browsing/PageMenu.tsx", "components/browsing/MaterialPageMenu.tsx", "components/browsing/LongScreenshotView.tsx"]) {
-    const text = source(path);
-    assert.doesNotMatch(text, literal("Long Screenshot"), path);
-    assert.match(text, /actionWords\.longScreenshot/, path);
-  }
-});
-
 test("the blocking label has one owner, which the Trusted Sites explanation and all three page menus read", () => {
   assert.equal(blockingWords.blockAdsAndTrackers, "Block Ads and Trackers");
   for (const path of ["components/settings/ExpoBlockingPages.tsx", "components/browsing/PageMenuWords.tsx", "components/browsing/PageMenu.tsx", "components/browsing/MaterialPageMenu.tsx"]) {

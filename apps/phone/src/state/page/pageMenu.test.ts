@@ -81,12 +81,6 @@ test("Print needs a live web page, as main's menu enables it", () => {
   assert.equal(menuModel(input({ url: "http://example.com/" })).print, true);
 });
 
-test("Long Screenshot is enabled with Print and never shown in a private tab", () => {
-  assert.equal(menuModel(input()).longScreenshotShown, true);
-  assert.equal(menuModel(input({ isPrivate: true })).longScreenshotShown, false);
-  assert.equal(menuModel(input({ isPrivate: true })).print, true);
-});
-
 test("Translate names the remembered language, and asks about Google until answered once; a private tab always asks", () => {
   assert.equal(menuModel(input()).translateTitle, "Translate");
   assert.equal(menuModel(input({ translationLanguageName: null })).translateTitle, "Translate");

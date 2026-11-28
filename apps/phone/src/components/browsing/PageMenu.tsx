@@ -10,8 +10,6 @@ import type { MaterialScheme } from "../../lib/material/schemes";
 import type { Design } from "../../lib/design";
 import {
   canPrintPages,
-  canTakeLongScreenshots,
-  longScreenshotCurrentPage,
   canSummarizePages,
   printCurrentPage,
   closeMenuSubpage,
@@ -288,7 +286,6 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
   const { fontScale } = useWindowDimensions();
   const large = fontScale >= copy().menuLargeTextScale;
   const offersSummary = usePageSummariesEnabled() && canSummarizePages();
-  const offersLongScreenshot = model.pageRows && model.longScreenshotShown && canTakeLongScreenshots();
   return (
     <ScrollView contentContainerStyle={styles.column} bounces={false}>
       <NavigationCapsule tabId={tabId} />
@@ -309,9 +306,8 @@ function MenuMain({ tabId, model, onTranslate }: { tabId: string; model: MenuMod
         <Row icon="textMagnifyingglass" title="Find on Page" enabled={model.find} divider={offersSummary || model.pageRows} onPress={showFind} />
         {offersSummary ? <Row icon="sparkles" title="Summarize Page" enabled={model.summarize} divider={model.pageRows} onPress={summarizeCurrentPage} /> : null}
         {model.pageRows ? <SendRow tabId={tabId} enabled={model.isWebPage} /> : null}
-        {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} divider={canPrintPages() || offersLongScreenshot} onPress={onTranslate} /> : null}
-        {model.pageRows && canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} divider={offersLongScreenshot} onPress={printCurrentPage} /> : null}
-        {offersLongScreenshot ? <Row icon="camera" title={actionWords.longScreenshot} enabled={model.print} divider={false} onPress={longScreenshotCurrentPage} /> : null}
+        {model.pageRows ? <Row icon="translate" title={model.translateTitle} enabled={model.translate} divider={canPrintPages()} onPress={onTranslate} /> : null}
+        {model.pageRows && canPrintPages() ? <Row icon="printer" title="Print" enabled={model.print} divider={false} onPress={printCurrentPage} /> : null}
       </Group>
       {model.pageRows ? (
         <>

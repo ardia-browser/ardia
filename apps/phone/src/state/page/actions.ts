@@ -38,7 +38,6 @@ import { launchValues } from "../../platform/launch";
 import { actionWords } from "../../lib/sharedWords";
 import { syncData } from "../sync/store";
 import { libraryBack } from "../library/store";
-import { longScreenshotBack, takeLongScreenshot } from "../longScreenshot/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
 import { syncOffered } from "../../platform/system";
 
@@ -321,15 +320,6 @@ export function printCurrentPage() {
       if ((await pages.print(tab.id)) && !tab.isPrivate) countUsage("pages_printed");
     }),
   );
-}
-
-export { canTakeLongScreenshots } from "../longScreenshot/store";
-
-export function longScreenshotCurrentPage() {
-  const tab = selectedTab();
-  const url = tab ? tabUrl(tab) : null;
-  if (!tab || tab.isPrivate || !url || !isSyncableUrl(url)) return;
-  afterPageMenu(() => void takeLongScreenshot(tab.id, tab.isPrivate));
 }
 
 export function canSummarizePages(): boolean {
@@ -831,7 +821,6 @@ export const openInOtherApp = (url: string) => quietly(() => openExternal(url));
 
 export function handleSystemBack(): boolean {
   if (onboardingBack()) return true;
-  if (longScreenshotBack()) return true;
   if (useVoice.getState().presented) {
     closeVoiceSearch();
     return true;

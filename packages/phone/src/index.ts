@@ -20,7 +20,7 @@ export {
   type LegacyVisitPage,
 } from "./legacy";
 export { closePage, pageObscuresInsets, pageReportsDrawn, PageView } from "./PageView";
-export { pages, type AppRelease, type LongScreenshot, type LongScreenshotTile, type SavedLongScreenshot, type OffscreenCapture, type LaunchArgumentValue, type LaunchOptions, type SitePermissionGrant, type SitePermissionKind } from "./pages";
+export { pages, type AppRelease, type OffscreenCapture, type LaunchArgumentValue, type LaunchOptions, type SitePermissionGrant, type SitePermissionKind } from "./pages";
 export { keyboard, type KeyboardDidChange, type KeyboardWillChange } from "./keyboard";
 export { CompletingField, completingFieldIsNative, type CompletingFieldHandle, type CompletingFieldProps, type CompletionOffer } from "./completingField";
 export { announceNatively, focusViewNatively, handOverFocusNatively, screenReaderFocusIsNative, screenReaderHandOverIsNative, ScrollActions, type ScrollActionDirection, type ScrollActionsProps } from "./accessibility";

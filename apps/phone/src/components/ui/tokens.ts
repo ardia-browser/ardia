@@ -158,10 +158,6 @@ export const readerInk = {
   dark: { background: "#121214", ink: "#E3E3E6", secondary: "rgba(227,227,230,0.6)" },
 } as const;
 
-export const longScreenshotLayout = { bar: 52, side: 32, handleHit: 44, handleLine: 4, grip: { width: 48, height: 14 }, leastCrop: 48, panelGap: 12, nudgeShare: 0.05 } as const;
-
-export const longScreenshotInk = { shade: "rgba(0,0,0,0.5)", handleEdge: ink.white, frame: "rgba(0,0,0,0.12)" } as const;
-
 export const readerLayout = { minLeadAspect: 0.75, maxWidth: 680, topBar: 52, chromeBand: 46, chromeSide: 16, chromeButton: 44, chromeCapsulePadding: 16, leadRadius: 12, lineHeight: 1.52, titleScale: 1.55, titleLine: 1.2, paragraphGap: 0.9, headerGap: 1.2 } as const;
 
 export const dialogLayout = { width: 312, radius: shape.panel, fieldHeight: 48 } as const;

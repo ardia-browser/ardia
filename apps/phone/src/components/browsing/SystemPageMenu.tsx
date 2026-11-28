@@ -100,7 +100,7 @@ const SiteCardOverMenu = memo(function SiteCardOverMenu() {
     <View testID="menuSiteLayer" style={StyleSheet.absoluteFill} onLayout={(event) => {
         layerHeight.value = event.nativeEvent.layout.height;
         setRoom(Math.max(0, event.nativeEvent.layout.height - SITE_CARD_TOP - pageMenuCards.padding));
-      }} pointerEvents={shown ? "auto" : "none"} accessibilityElementsHidden={!shown} importantForAccessibility={shown ? "auto" : "no-hide-descendants"}>
+      }} pointerEvents={shown ? "auto" : "none"} accessibilityViewIsModal={shown} accessibilityElementsHidden={!shown} importantForAccessibility={shown ? "auto" : "no-hide-descendants"}>
       <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: dim }, dimStyle]}>
         <Pressable testID="menuSiteDim" accessibilityRole="button" accessibilityLabel="Back" style={styles.fill} onPress={closeMenuSubpage} />
       </Animated.View>

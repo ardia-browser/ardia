@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, typ
 import Animated, { FadeIn, FadeOut, LayoutAnimationConfig } from "react-native-reanimated";
 import { copy } from "../../lib/platformCopy";
 import { PERMISSION_NAMES, sortedPermissions, type PermissionKind } from "../../lib/sitePermissionNames";
+import { siteOrigin } from "../../lib/siteOrigin";
 import { actionWords, blockingWords } from "../../lib/sharedWords";
 import {
   canPrintPages,
@@ -144,7 +145,7 @@ export function MenuSiteWords({ onContentHeight, preMounted = false, headed = tr
   const site = useThisSite({ whileClosed: preMounted });
   const large = useAccessibilityText();
   const isPrivate = useTab(site?.tabId ?? "")?.isPrivate ?? false;
-  const grant = useSitePermissions((s) => (site && !isPrivate ? s.grants.find((one) => one.host === site.host) : undefined));
+  const grant = useSitePermissions((s) => (site?.origin && !isPrivate ? s.grants.find((one) => siteOrigin(one.origin) === site.origin) : undefined));
   if (!site) return null;
   const { host, model } = site;
   const kinds = grant ? sortedPermissions(grant.permissions) : [];

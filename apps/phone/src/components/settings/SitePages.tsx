@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { bottomBarCollapses } from "../../lib/barCollapse";
+import { siteOrigin } from "../../lib/siteOrigin";
 import { permissionSummary, PERMISSION_NAMES, sortedPermissions } from "../../lib/sitePermissionNames";
 import type { SitePermissionGrant } from "../../platform/pages";
 import { refreshSitePermissions, revokeSiteAccess, useSitePermissions } from "../../state/settings/sitePermissions";
@@ -76,10 +77,10 @@ export function SiteSettingsPage() {
   );
 }
 
-export function AllowedSites({ host }: { host?: string } = {}) {
+export function AllowedSites({ origin }: { origin?: string } = {}) {
   const listed = useSitePermissions((s) => s.listed);
   const every = useSitePermissions((s) => s.grants);
-  const grants = host === undefined ? every : every.filter((grant) => grant.host === host);
+  const grants = origin === undefined ? every : every.filter((grant) => siteOrigin(grant.origin) === origin);
   useEffect(() => {
     void refreshSitePermissions();
   }, []);

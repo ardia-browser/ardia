@@ -4328,7 +4328,9 @@ trace glass visibility and the search stage during a close.
 Both phones, every look (the iPhone's system sheet and its drawn fallback, Android's default and Material You, the
 docked Material menu, Duo):
 - Site Settings in the page menu (owner, 2026-11-28) starts with the site: its host, Night Shade, Page Zoom, Desktop
-  Site and, outside private tabs, a switch for each of camera, microphone and location the site holds (off revokes it).
+  Site and, outside private tabs, a switch for each of camera, microphone and location the site holds (off revokes it). A grant belongs to the
+  page when their origins match (`siteOrigin` in `lib/siteOrigin.ts`: scheme, host and non-default port, so
+  `www.` and ports count, two ports on one host stay apart, and Android's `https://host/` form matches).
   Below it is the whole Site settings list: Content blocking (Block Ads, Block Trackers, Block Cookie Banners, Filter
   Lists, Trusted Sites) and Browsing (the Night Shade default, Swipe to Navigate, Collapse Bottom Bar), the same
   settings as Settings › Site settings. Filter Lists and Trusted Sites close the menu for Settings on that page over Site

@@ -202,6 +202,7 @@ onIos("Site Settings rises as a card inside the page menu's own sheet, over the 
   await act(async () => void (await openPageMenu()));
   expect(siteLayer(root).props.pointerEvents).toBe("none");
   expect(siteLayer(root).props.accessibilityElementsHidden).toBe(true);
+  expect(siteLayer(root).props.accessibilityViewIsModal).toBe(false);
   act(() => usePageUi.setState({ zoomLevels: ZOOM_LEVELS }));
   await pressButton(root, "Site Settings");
   await flush();
@@ -211,6 +212,7 @@ onIos("Site Settings rises as a card inside the page menu's own sheet, over the 
   expect(hosts(menuSheet(root)!, (props) => typeof props.isPresented === "boolean" && "presentationToken" in props && props !== menuSheet(root)!.props)).toHaveLength(0);
   expect(siteLayer(root).props.pointerEvents).toBe("auto");
   expect(siteLayer(root).props.accessibilityElementsHidden).toBe(false);
+  expect(siteLayer(root).props.accessibilityViewIsModal).toBe(true);
   expect(settingsSheet(root).props.isPresented).toBe(false);
   expect(siteGroup(root, "site0.example")).toBeDefined();
   expect(hosts(root.root, (props) => props.testID === "menuSiteScroll")).toHaveLength(1);
@@ -286,9 +288,10 @@ onIos("closing the page menu over Site Settings takes the card with it, and the 
   unmount(root);
 });
 
-onIos("a site holding camera or microphone access lists each kind under its switches, and turning one off revokes only that kind; another site's access and a private tab show none", async () => {
+onIos("a site holding camera or microphone access lists each kind under its switches, matched by the page's origin, and turning one off revokes only that kind for that origin; another port on the same host, another site and a private tab show none", async () => {
   const grants = [
-    { origin: "https://site0.example", host: "site0.example", permissions: ["microphone", "camera"] as ("camera" | "microphone" | "location")[], grantedAt: 1 },
+    { origin: "https://site0.example:8443", host: "site0.example", permissions: ["location"] as ("camera" | "microphone" | "location")[], grantedAt: 1 },
+    { origin: "https://site0.example/", host: "site0.example", permissions: ["microphone", "camera"] as ("camera" | "microphone" | "location")[], grantedAt: 1 },
     { origin: "https://other.example", host: "other.example", permissions: ["location"] as ("camera" | "microphone" | "location")[], grantedAt: 1 },
   ];
   jest.spyOn(pages, "listsSitePermissions").mockReturnValue(true);
@@ -303,7 +306,7 @@ onIos("a site holding camera or microphone access lists each kind under its swit
   expect(linesOf(group)).not.toContain("Location");
   act(() => pressable(group, "switch", "Camera").props.onPress());
   await flush();
-  expect(revoke).toHaveBeenCalledWith("https://site0.example", "camera");
+  expect(revoke).toHaveBeenCalledWith("https://site0.example/", "camera");
   unmount(root);
   act(() => useTabs.setState((state) => ({ ...state, privates: [{ ...state.open[0]!, id: "p0", isPrivate: true }], selectedId: "p0", incognito: true })));
   act(() => usePages.setState((state) => ({ ...state, navigation: { p0: navigation("https://site0.example/", false) } })));

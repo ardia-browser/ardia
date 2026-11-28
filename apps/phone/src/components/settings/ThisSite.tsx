@@ -13,10 +13,11 @@ import { materialShape, materialSize, materialType } from "../ui/materialTokens"
 import { MaterialSettingsLeading } from "./MaterialSettingsKit";
 import { Divider, Group, IconTile, ToggleRow } from "./SettingsKit";
 import { AllowedSites, SiteSettingsGroups } from "./SitePages";
+import { siteOrigin } from "../../lib/siteOrigin";
 
 export const THIS_SITE_FALLBACK = "This Site";
 
-export function useThisSite({ whileClosed = false }: { whileClosed?: boolean } = {}): { tabId: string; host: string; model: MenuModel } | null {
+export function useThisSite({ whileClosed = false }: { whileClosed?: boolean } = {}): { tabId: string; host: string; origin: string | null; model: MenuModel } | null {
   const tabId = useSelectedTabId() ?? "";
   const model = useMenuModel(tabId);
   const url = usePages((s) => s.navigation[tabId]?.url) ?? null;
@@ -24,7 +25,7 @@ export function useThisSite({ whileClosed = false }: { whileClosed?: boolean } =
   const inMenu = usePageUi(siteSettingsInMenu);
   if ((!inMenu && !whileClosed) || !tabId || !model.pageRows || !model.isWebPage) return null;
   const shown = url ?? tabUrl;
-  return { tabId, host: (shown && display(shown).host) || THIS_SITE_FALLBACK, model };
+  return { tabId, host: (shown && display(shown).host) || THIS_SITE_FALLBACK, origin: siteOrigin(shown), model };
 }
 
 export function ThisSiteGroup() {
@@ -47,7 +48,7 @@ export function ThisSiteSections() {
   return (
     <>
       <ThisSiteGroup />
-      {isPrivate ? null : <AllowedSites host={site.host} />}
+      {isPrivate || !site.origin ? null : <AllowedSites origin={site.origin} />}
       <SiteSettingsGroups openRoute={openSiteSettingsRoute} />
     </>
   );

@@ -59,6 +59,7 @@ const NONE = {
   plugin_adoptions: 0,
   plugin_adoptions_waiting: 0,
   plugin_removals: 0,
+  plugin_removal_failures: 0,
   plugin_removals_cancelled: 0,
   plugin_activations: 0,
   plugin_activation_failures: 0,

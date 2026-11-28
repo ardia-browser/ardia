@@ -160,20 +160,33 @@ struct PluginFolders {
     return entries
   }
 
+  private static func presence(_ path: String) -> (there: Bool, problem: String?) {
+    var info = stat()
+    if lstat(path, &info) == 0 { return (true, nil) }
+    let code = errno
+    if code == ENOENT { return (false, nil) }
+    return (false, String(cString: strerror(code)))
+  }
+
   func remove(_ name: String, official: Bool, folderId: String?) -> String? {
     guard Self.isName(name) else { return "That isn't a plugin's name." }
     let link = (pluginsLexical as NSString).appendingPathComponent(name)
-    var info = stat()
     if official {
       return officialStore().remove(name) ? nil : "Its downloaded copy couldn't be removed."
     }
-    if let folderId, lstat(link, &info) == 0, PluginFiles.openFolder(link).map({ folder -> String in
-      defer { folder.close() }
-      return folder.id
-    }) != folderId {
-      return "Another folder took its place while it was being removed, so nothing was deleted. Try again."
+    if let folderId {
+      let before = Self.presence(link)
+      if let problem = before.problem { return "Its folder couldn't be read (\(problem)), so nothing was deleted." }
+      if before.there, PluginFiles.openFolder(link).map({ folder -> String in
+        defer { folder.close() }
+        return folder.id
+      }) != folderId {
+        return "Another folder took its place while it was being removed, so nothing was deleted. Try again."
+      }
     }
-    if lstat(link, &info) == 0 {
+    let linked = Self.presence(link)
+    if let problem = linked.problem { return "Its folder couldn't be read (\(problem)), so nothing was deleted." }
+    if linked.there {
       do {
         if LaunchConfig.shared.dataDirectory != nil {
           try FileManager.default.removeItem(atPath: link)
@@ -185,11 +198,13 @@ struct PluginFolders {
       }
     }
     let data = (dataRoot() as NSString).appendingPathComponent(name)
-    guard lstat(data, &info) == 0 else { return nil }
+    let kept = Self.presence(data)
+    if let problem = kept.problem { return "Its folder is gone, but its data couldn't be read (\(problem)); `ardia plugins remove \(name)` finishes that." }
+    guard kept.there else { return nil }
     do {
       try FileManager.default.removeItem(atPath: data)
     } catch {
-      return "Its folder is gone, but its data couldn't be deleted (\(error.localizedDescription)); removing it again finishes that."
+      return "Its folder is gone, but its data couldn't be deleted (\(error.localizedDescription)); `ardia plugins remove \(name)` finishes that."
     }
     return nil
   }

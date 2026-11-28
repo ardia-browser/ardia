@@ -1,4 +1,4 @@
-import { confirm } from "../../platform/dialogs";
+import { choose, confirm } from "../../platform/dialogs";
 import { PLATFORM_TERMS } from "../../lib/platformTerms";
 import { consentToken } from "../telemetry/choice";
 import { notePlugin } from "../telemetry/pluginCounts";
@@ -23,5 +23,7 @@ export async function removePluginAfterConfirm(name: string, title: string, wind
   }
   const removed = await removePlugin(name, undefined, identity);
   if (removed.ok || removed.removed) notePlugin("plugin_removals", consent);
+  else notePlugin("plugin_removal_failures", consent);
+  if (!removed.ok) await choose({ title: `Couldn't finish removing ${title}`, message: removed.reason ?? "Ardia couldn't remove it.", choices: ["OK"], windowId });
   return removed.ok || removed.removed === true;
 }

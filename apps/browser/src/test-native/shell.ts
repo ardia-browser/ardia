@@ -49,6 +49,7 @@ export const refusedSyncs = { on: false };
 export const linkedButUnsynced = { on: false };
 export const heldCopies = { on: false, queue: [] as (() => void)[] };
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
+export const heldSaved = { on: false, queue: [] as (() => void)[] };
 export const refusedSaves = { on: false, of: new Set<string>() };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
@@ -287,7 +288,10 @@ const documents: Modules["ArdiaDocuments"] = {
       if (heldSaves.on) heldSaves.queue.push(land);
       else land();
     }),
-  documentSaved: () => (refusedWrites.on || refusedWrites.landingFails ? Promise.reject(new Error("save refused")) : Promise.resolve()),
+  documentSaved: () => {
+    if (refusedWrites.on || refusedWrites.landingFails) return Promise.reject(new Error("save refused"));
+    return heldSaved.on ? new Promise<void>((resolve) => heldSaved.queue.push(resolve)) : Promise.resolve();
+  },
   removeDocument: (name) => void (docs.delete(name), stagedDocs.delete(name), unreadableDocs.delete(name)),
   listDocuments: (prefix) => [...new Set([...docs.keys(), ...unreadableDocs])].filter((name) => name.startsWith(prefix)),
   syncDocument: (name) => {

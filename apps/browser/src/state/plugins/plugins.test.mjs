@@ -895,6 +895,32 @@ test("a disable reported to the ardia command, and a removal, wait until plugins
   assert.deepEqual(await pluginSocketMethod("plugins.disable", { name: "example" }), { result: { ok: true } });
 });
 
+test("a disable waiting for plugins.json isn't answered ok by a newer snapshot that turned the plugin back on", async () => {
+  await enabled();
+  stub.heldSaved.on = true;
+  try {
+    const disabling = pluginSocketMethod("plugins.disable", { name: "example" });
+    await settle();
+    assert.equal(P().records.example.enabled, false, "it is off in memory while the disable waits for the disk");
+    assert.ok(lifecycle.requestPluginConsent("example"));
+    assert.ok(lifecycle.enablePlugin("example", P().consent.hash));
+    await settle();
+    assert.equal(P().records.example.enabled, true, "the person approved it again before the disable landed");
+    stub.heldSaved.on = false;
+    for (const release of stub.heldSaved.queue.splice(0)) release();
+    const reply = await disabling;
+    assert.equal(reply.error?.code, "failed", "the command isn't told it's off while it's on");
+    assert.match(reply.error.message, /turned back on/);
+    assert.equal(P().records.example.enabled, true);
+  } finally {
+    stub.heldSaved.on = false;
+    stub.heldSaved.queue.length = 0;
+  }
+  await settle();
+  assert.deepEqual(await pluginSocketMethod("plugins.disable", { name: "example" }), { result: { ok: true } }, "a disable nobody undoes is still answered ok");
+  assert.equal(P().records.example.enabled, false);
+});
+
 test("when a helper that called another plugin's tools stops, its waiting calls are released and cancelled", async () => {
   await enabled();
   const second = JSON.parse(FIXTURE);

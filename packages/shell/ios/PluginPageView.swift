@@ -112,8 +112,8 @@ final class PluginPageView: ExpoView, WKNavigationDelegate, WKUIDelegate {
     return bytes.withUnsafeBufferPointer { NSUUID(uuidBytes: $0.baseAddress!) as UUID }
   }
 
-  static func removeData(_ plugin: String, done: @escaping () -> Void) {
-    PluginPageData.remove(storeIdentifier(plugin)) { _ in done() }
+  static func removeData(_ plugin: String, done: @escaping (Error?) -> Void) {
+    PluginPageData.remove(storeIdentifier(plugin), done: done)
   }
 
   private func rebuild() {

@@ -1275,7 +1275,9 @@ in the local copy. Hourly `usage_counts`:
   `program_link_failures` (a link refused, a name taken or the copy failed), each refused program also counted once by
   why in `program_link_cause_<cause>` (`bin_folder`, `bin_shared`, `taken`, `other_plugin`, `shadowed`, `busy`, `io`,
   `name`, or `other` for a whole-call failure), `program_unlinks`, `program_adoptions`
-  (an old `ardia` install's home taken over), `plugin_adoptions`, `plugin_adoptions_waiting`,
+  (an old `ardia` install's home taken over), `plugin_adoptions`, `plugin_adoptions_waiting`, `plugin_removals`
+  (a removal from Settings whose files went), `plugin_removal_failures` (one that ended with its files, or its page
+  data, not removed; Settings tells the person why), `plugin_removals_cancelled` (the Remove dialog answered Cancel),
   `program_after_update_quit_exits` and `program_after_update_quit_kills` (a built-in plugin's `afterUpdate` command
   still running at quit whose whole process group left on TERM, or was killed after the 1 s grace; tallied natively
   at quit, only while sharing is on and tagged with that sharing period, and counted at the next launch only in the

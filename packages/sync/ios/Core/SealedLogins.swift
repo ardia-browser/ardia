@@ -6,21 +6,36 @@ public enum SealedLogins {
       NSLog("[sync] reading passwords: \(reply?["error"] ?? "no reply")")
       return nil
     }
-    var sealed: [[String: Any]] = []
-    var seen = Set<String>()
+    var copies: [(realm: String, username: String, password: String, created: Double, modified: Double)] = []
     for login in logins {
       guard let realm = login["realm"] as? String, let username = login["username"] as? String,
             let password = login["password"] as? String, let created = login["created"] as? Double else {
         NSLog("[sync] reading passwords: a malformed login; not syncing passwords now")
         return nil
       }
-      guard seen.insert("\(realm)\u{0}\(username)").inserted, let origin = loginOrigin(realm) else { continue }
-      guard let box = try? seal(password, origin, username) else {
-        NSLog("[sync] reading passwords: one login couldn't be sealed; listing it as passwordless so sync leaves it alone")
-        sealed.append(["origin": origin, "username": username, "passwordless": true, "created": created])
+      copies.append((realm, username, password, created, login["modified"] as? Double ?? 0))
+    }
+    var newest: [String: Int] = [:]
+    var order: [String] = []
+    for (index, copy) in copies.enumerated() {
+      let key = "\(copy.realm)\u{0}\(copy.username)"
+      guard let current = newest[key] else {
+        newest[key] = index
+        order.append(key)
         continue
       }
-      sealed.append(["origin": origin, "username": username, "sealed": box, "created": created])
+      if copy.modified > copies[current].modified { newest[key] = index }
+    }
+    var sealed: [[String: Any]] = []
+    for key in order {
+      let copy = copies[newest[key]!]
+      guard let origin = loginOrigin(copy.realm) else { continue }
+      guard let box = try? seal(copy.password, origin, copy.username) else {
+        NSLog("[sync] reading passwords: one login couldn't be sealed; listing it as passwordless so sync leaves it alone")
+        sealed.append(["origin": origin, "username": copy.username, "passwordless": true, "created": copy.created])
+        continue
+      }
+      sealed.append(["origin": origin, "username": copy.username, "sealed": box, "created": copy.created])
     }
     return sealed
   }

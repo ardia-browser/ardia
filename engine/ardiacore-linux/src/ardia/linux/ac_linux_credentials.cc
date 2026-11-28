@@ -826,7 +826,7 @@ Plan PlanSyncedLogin(std::string_view profile, std::string_view origin, std::str
   if (!expected || !save.ok()) {
     return save;
   }
-  if (expected->empty() || !PlainText(*expected, kMaxSecretBytes)) {
+  if (expected->empty() || !PlainText(*expected, kMaxSavedSecretBytes)) {
     return Invalid("ERR_CREDENTIAL_REQUEST", "A non-empty password of bounded length is required");
   }
   Json json;

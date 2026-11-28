@@ -8,7 +8,7 @@ import { useProfiles, useSettings, useTabLayout } from "../../state/browser/hook
 import { currentSettings } from "../../state/browser/current";
 import type { SettingsPane } from "../../state/settings/settingsWindows";
 import { curve } from "../ui/motion";
-import { Group as PlainGroup, Row as PlainRow } from "../ui/Row";
+import { Group as PlainGroup, GroupRows as PlainGroupRows, Row as PlainRow } from "../ui/Row";
 import { useTheme } from "../ui/theme";
 import { lineHeight, proseLineHeight, radius as radii, space, perLook } from "../ui/tokens";
 import { findSetting, sectionEntries, setting, unshownSettings, type SettingEntry, type SettingId } from "./settingsIndex";
@@ -52,14 +52,23 @@ function useHiddenSection(pane: SettingsPane | null | undefined, section: string
   return entries.length > 0 && entries.every(hidden);
 }
 
-export function Group({ children, of }: { children: ReactNode; of?: SettingId }) {
+function useShownRows(children: ReactNode) {
   const hidden = useHiddenSetting();
-  if (of && hidden(findSetting(of))) return null;
-  const rows = Children.toArray(children).filter(
+  return Children.toArray(children).filter(
     (child) => !(isValidElement<{ anchor?: unknown }>(child) && typeof child.props.anchor === "string" && hidden(findSetting(child.props.anchor))),
   );
+}
+
+export function Group({ children, of }: { children: ReactNode; of?: SettingId }) {
+  const hidden = useHiddenSetting();
+  const rows = useShownRows(children);
+  if (of && hidden(findSetting(of))) return null;
   if (!rows.length) return null;
   return <PlainGroup>{rows}</PlainGroup>;
+}
+
+export function GroupRows({ children }: { children: ReactNode }) {
+  return <PlainGroupRows>{useShownRows(children)}</PlainGroupRows>;
 }
 
 type AnchorShape = "row" | "card";

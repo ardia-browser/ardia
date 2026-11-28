@@ -219,6 +219,8 @@ export const Easing = {
 
 export const AppState = { currentState: "active", addEventListener: () => ({ remove() {} }) };
 
+export const Linking = { openURL: async (_url: string) => {} };
+
 export const AccessibilityInfo = {
   isHighContrastEnabled: async () => false,
   isReduceMotionEnabled: async () => false,

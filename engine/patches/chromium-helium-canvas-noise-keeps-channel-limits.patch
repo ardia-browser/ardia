@@ -1,0 +1,100 @@
+SPDX-License-Identifier: GPL-3.0-only
+Changes code from Helium's helium/core/noise/canvas.patch (GPL-3.0, The Helium Authors).
+
+Helium's canvas noise moves every channel of a pixel it noises by up to 2, including channels at exactly 0 or 255
+(it only held alpha there). Pages read those exact values back as data. Google Maps' vector map draws its road
+shields from 9-patch PNGs (shield-*.9.png) and finds their stretch areas by reading back the 1px border, where every
+marker is opaque pure black. With noise on, about one marker pixel in seven came back as (2,0,1) or (0,0,2), the
+9-patch didn't parse, and the whole shield was scaled up as one bitmap: blurry, twice the size, with the number
+squeezed into its top. Colour keys, masks and QR or barcode readers that compare against 0 and 255 fail the same way,
+and flat white or black fills picked up visible speckle.
+
+A channel at 0 or 255 now keeps its exact value, and noise never moves another channel onto 0 or 255, so a page can
+trust an exact 0 or 255 it reads back. Every other channel gets the same noise as before, from the same hash
+sequence. That's where readback fingerprints come from: anti-aliased text and shape edges, gradients and blending.
+The float readbacks (RGBA_F16, RGBA_F32) follow the same rule for channels that quantize to 0 or 255.
+
+--- a/third_party/blink/renderer/core/helium_noise/canvas_noising_helper.cc
++++ b/third_party/blink/renderer/core/helium_noise/canvas_noising_helper.cc
+@@ -13,7 +13,6 @@
+ #include <cmath>
+ #include <cstddef>
+ #include <cstdint>
+-#include <limits>
+ #include <optional>
+ #include <vector>
+ 
+@@ -58,7 +57,13 @@
+ constexpr RgbBytes kMinRgbInitialValue = {255u, 255u, 255u};
+ constexpr RgbBytes kMaxRgbInitialValue = {0u, 0u, 0u};
+ constexpr float kFloatChannelScale = 1.0f / 255.0f;
++constexpr int kLowestNoisedChannelValue = 1;
++constexpr int kHighestNoisedChannelValue = 254;
+ 
++bool IsChannelAtLimit(int channel_value) {
++  return channel_value == 0 || channel_value == 255;
++}
++
+ int GetSignedNoiseValue(HeliumNoiseHash& token_hash, int max_abs_noise) {
+   if (max_abs_noise <= 0) {
+     return 0;
+@@ -134,9 +139,7 @@
+ 
+     const bool is_alpha = i == kChannelsPerPixel - 1;
+ 
+-    // Keep alpha limits stable.
+-    if (is_alpha && (channel_value == 0 || channel_value == 255)) {
+-      pixel[i] = base::checked_cast<uint8_t>(channel_value);
++    if (IsChannelAtLimit(channel_value)) {
+       continue;
+     }
+ 
+@@ -144,11 +147,10 @@
+         is_alpha ? kMaxAlphaNoise
+                  : kMaxSharedRgbNoise + kMaxIndependentRgbNoise;
+ 
+-    // Clamp min- and maxNoisedVal to [0, 255] and [1, 255] for the alpha
+-    // channel if it was non-zero before.
+-    const int lowerLimit = (is_alpha && channel_value > 0) ? 1 : 0;
+-    int minNoisedVal = std::max(lowerLimit, channel_value - maxNoisePerChannel);
+-    int maxNoisedVal = std::min(255, channel_value + maxNoisePerChannel);
++    int minNoisedVal =
++        std::max(kLowestNoisedChannelValue, channel_value - maxNoisePerChannel);
++    int maxNoisedVal = std::min(kHighestNoisedChannelValue,
++                                channel_value + maxNoisePerChannel);
+ 
+     int noise = 0;
+     if (is_alpha) {
+@@ -196,12 +198,15 @@
+ 
+     const bool is_alpha = i == kChannelsPerPixel - 1;
+ 
+-    // Keep alpha limits stable.
+     if (is_alpha && (channel_value <= 0.0f || channel_value >= 1.0f)) {
+       pixel[i] = std::clamp(channel_value, 0.0f, 1.0f);
+       continue;
+     }
+ 
++    if (IsChannelAtLimit(QuantizeFloatChannel(channel_value))) {
++      continue;
++    }
++
+     int noise = 0;
+     if (is_alpha) {
+       noise = GetSignedNoiseValue(coordinate_hash, kMaxAlphaNoise);
+@@ -209,12 +214,9 @@
+       noise = rgb_noise[i];
+     }
+ 
+-    const float lower_limit =
+-        is_alpha && channel_value > 0.0f ? kFloatChannelScale : 0.0f;
+-    const float upper_limit =
+-        is_alpha ? 1.0f : std::numeric_limits<float>::max();
+-    pixel[i] = std::clamp(channel_value + noise * kFloatChannelScale,
+-                          lower_limit, upper_limit);
++    pixel[i] = std::clamp(channel_value + noise * kFloatChannelScale,
++                          kLowestNoisedChannelValue * kFloatChannelScale,
++                          kHighestNoisedChannelValue * kFloatChannelScale);
+   }
+ }
+ 

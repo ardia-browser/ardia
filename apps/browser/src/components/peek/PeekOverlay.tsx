@@ -11,7 +11,7 @@ import type { Peek } from "../../state/peek/peek";
 import { PEEK_SCRIM } from "./tokens";
 import { PageLabel, SMALL_BAR_BUTTON, SMALL_INSET, SMALL_WINDOW_FRAME, SmallBar, smallWindowRadius, type SmallBarButton } from "../littleArdia/SmallChrome";
 import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, promotePeekNow, registerPeekMotion } from "../../state/peek/actions";
-import { keyText } from "../../state/commands/keyText";
+import { useShortcutHint, withShortcut } from "../../state/commands/commandShortcuts";
 import { splitViewAvailable } from "../../state/splits/splits";
 import { notePinch } from "../../state/telemetry/usage";
 import { notePeekCloseAsked, notePeekDone, notePeekEntrance, notePeekInterrupt } from "../../state/telemetry/peekMotion";
@@ -34,10 +34,10 @@ let generations = 0;
 
 const sideRoomFor = (buttons: PeekButtons) => ({ left: buttons === "left" ? SIDE_ROOM : 0, right: buttons === "right" ? SIDE_ROOM : 0 });
 
-function peekButtonList(windowId: string, splitFull: boolean, surface: PeekButtonSurface): SmallBarButton[] {
+function peekButtonList(windowId: string, splitFull: boolean, surface: PeekButtonSurface, openHint: string | undefined): SmallBarButton[] {
   return [
     ...(splitViewAvailable ? [{ icon: "rectangle.split.2x1", disabled: splitFull, tooltip: "Open in Split View", onPress: () => pressPeekChrome(windowId, surface, () => openPeekInSplit(windowId)) }] : []),
-    { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open as Tab (${keyText("⌘O")})`, onPress: () => pressPeekChrome(windowId, surface, () => openPeekAsTab(windowId)) },
+    { icon: "arrow.up.left.and.arrow.down.right", tooltip: withShortcut("Open as Tab", openHint), onPress: () => pressPeekChrome(windowId, surface, () => openPeekAsTab(windowId)) },
     { icon: "xmark", tooltip: "Close (Esc)", onPress: () => pressPeekChrome(windowId, surface, () => dismissPeek(windowId)) },
   ];
 }
@@ -333,7 +333,8 @@ function PeekPageLayer({ rect, background, browserRadius, zoom, children }: { re
 
 function PeekSideButtons({ windowId }: { windowId: string }) {
   const splitFull = usePeekSplitFull(windowId);
-  return peekButtonList(windowId, splitFull, "side")
+  const openHint = useShortcutHint("openFile");
+  return peekButtonList(windowId, splitFull, "side", openHint)
     .reverse()
     .map((b) => (
       <View key={b.tooltip} style={{ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON }}>
@@ -346,7 +347,8 @@ function PeekSideButtons({ windowId }: { windowId: string }) {
 function PeekBar({ windowId, tabId, withButtons }: { windowId: string; tabId: string; withButtons: boolean }) {
   const tab = useTab(tabId);
   const splitFull = usePeekSplitFull(windowId);
+  const openHint = useShortcutHint("openFile");
   if (!tab) return null;
   const host = tab.url ? breadcrumb(tab.url).host : "";
-  return <SmallBar fieldLeft={SMALL_INSET} field={<PageLabel tab={tab} label={host ? `Peek: ${host}` : "Peek"} />} buttons={withButtons ? peekButtonList(windowId, splitFull, "bar") : []} />;
+  return <SmallBar fieldLeft={SMALL_INSET} field={<PageLabel tab={tab} label={host ? `Peek: ${host}` : "Peek"} />} buttons={withButtons ? peekButtonList(windowId, splitFull, "bar", openHint) : []} />;
 }

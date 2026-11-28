@@ -29,12 +29,11 @@ import { SMALL_LIGHTS_CENTER } from "../../state/windows/small";
 import { littleArdiaBarLayout, type LittleArdiaBarLayout } from "./barLayout";
 import { useWindowChromeVersion } from "../../state/windows/windowButtons";
 import { HistoryButton } from "../toolbar/NavButtons";
-import { NAV_HINTS, useShortcutHints } from "../../state/commands/commandShortcuts";
+import { NAV_HINTS, useShortcutHint, useShortcutHints, withShortcut } from "../../state/commands/commandShortcuts";
 import { toolbarPalette } from "../ui/toolbarColors";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { LITTLE_ARDIA_PINCH, LITTLE_ARDIA_SWIPE_CLOSE, smallBarRow } from "./tokens";
 import { perLook } from "../ui/tokens";
-import { keyText } from "../../state/commands/keyText";
 
 const NAV_HIT = perLook(() => ({ width: SMALL_BAR_BUTTON, height: SMALL_BAR_BUTTON, plateX: 0, plateY: 0, box: smallBarRow().button, radius: smallBarRow().buttonRadius }));
 const navPlace = (bar: LittleArdiaBarLayout, slot: number, hit: ReturnType<typeof NAV_HIT>) => ({ style: { position: "absolute" as const, top: bar.buttonTop, left: bar.navLeft + slot * bar.navPitch }, hit });
@@ -168,6 +167,8 @@ function LittleArdiaBar() {
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const bar = useBarLayout();
+  const copyHint = useShortcutHint("copyUrl");
+  const openHint = useShortcutHint("openFile");
   useEffect(() => {
     void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
   }, [windowId]);
@@ -188,8 +189,8 @@ function LittleArdiaBar() {
       fieldLeft={bar.fieldLeft}
       field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
       buttons={[
-        { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: `Copy Link (${keyText("⇧⌘C")})`, onPress: copy },
-        { icon: "arrow.up.left.and.arrow.down.right", tooltip: `Open in Ardia (${keyText("⌘O")})`, onPress: () => openInMainWindow(windowId) },
+        { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: withShortcut("Copy Link", copyHint), onPress: copy },
+        { icon: "arrow.up.left.and.arrow.down.right", tooltip: withShortcut("Open in Ardia", openHint), onPress: () => openInMainWindow(windowId) },
       ]}
       trailing={[
         ...(switcherShown ? [<ProfileButton key="profile" windowId={windowId} />] : []),

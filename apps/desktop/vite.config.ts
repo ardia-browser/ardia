@@ -72,6 +72,7 @@ const importerReplacements = new Map([
   [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/sidebar/Sidebar.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
   [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/downloads/Downloads.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
   [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/sidebar/AddressBar.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
+  [`${here("../browser/src/state/windows/layout.ts")}\0${here("../browser/src/components/sidebar/SidebarPage.tsx")}`, here("./src/sidebarHeaderLayout.ts")],
   [`${here("../browser/src/components/sidebar/SidebarPages.tsx")}\0${here("../browser/src/components/sidebar/Sidebar.tsx")}`, here("./src/SidebarPagerTrack.tsx")],
   [`${here("../browser/src/state/windows/profilePager.ts")}\0${here("../browser/src/components/sidebar/SidebarPage.tsx")}`, here("./src/sidebarPageStyle.ts")],
   [`${here("../browser/src/components/window/ProfileSwipe.tsx")}\0${here("../browser/src/App.tsx")}`, here("./src/ProfileTintTimeline.tsx")],

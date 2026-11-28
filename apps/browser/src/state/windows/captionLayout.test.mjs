@@ -45,8 +45,8 @@ test("on the Mac no layout gives the card, the toolbar or the sidebar any captio
     assert.equal(sidebarCaptionRoom(s, "w"), 0);
     assert.equal(windowControlsPlace(s, "w", 9), null);
     assert.deepEqual(captionRegions(s, "w"), []);
-    assert.equal(sidebarHeaderCollapsed(s, "w"), false);
-    assert.equal(downloadsInSidebarFooter(s, "w"), settings.addressBar === "sidebar");
+    assert.equal(sidebarHeaderCollapsed(s, "w"), !!window.fullScreen);
+    assert.equal(downloadsInSidebarFooter(s, "w"), settings.addressBar === "sidebar" || !!window.fullScreen);
   }
   assert.equal(SMALL_WINDOW_BAR_HEIGHT, SMALL_BAR_HEIGHT);
   assert.equal(SMALL_BAR_HEIGHT, 38);

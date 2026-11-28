@@ -5,7 +5,7 @@ import { ContextMenuArea, space, WindowDragRegion } from "../ui";
 import { layout } from "../ui/theme";
 import { SidebarInk } from "./SidebarTextScope";
 import { ThemeScope } from "../window/ThemeScope";
-import { PageProfileContext, useSettings, useWindowId } from "../../state/browser/hooks";
+import { PageProfileContext, useSettings, useWindowFullScreen, useWindowId } from "../../state/browser/hooks";
 import { newTab } from "../../state/tabs/actions";
 import { sidebarListLengthNow, useSidebarCells } from "../../state/sidebar/hooks";
 import { useNewTabAtTop, useSidebarField, useSidebarPart } from "../../state/sidebar/chrome";
@@ -20,7 +20,7 @@ import { PinnedGrid } from "./PinnedGrid";
 import { pinGridHeight } from "./pinZone";
 import { SCROLL_EDGE, ScrollEdgeLine, useScrollEdge, useScrollEdgeBelow } from "./ScrollEdge";
 import { listTopGap, sidebarHeaderOf, toolbarEdgeLift } from "./geometry";
-import { useAddressBarInSidebar, usePageFrameInset, useToolbarLightsCenter } from "../../state/windows/layout";
+import { collapsedSidebarHeader, useAddressBarInSidebar, usePageFrameInset, useSidebarHeaderCollapsed, useToolbarLightsCenter } from "../../state/windows/layout";
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { startsOffScreen } from "../../state/sidebar/geometry";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
@@ -284,5 +284,8 @@ function useToolbarEdgeLift(besideToolbar: boolean): number {
   const lightsY = useToolbarLightsCenter()[1];
   const frame = usePageFrameInset();
   const row = useToolbarRow();
-  return besideToolbar && !addressInSidebar ? toolbarEdgeLift(sidebarHeaderOf(false, lightsY), frame, row) : 0;
+  const fullScreen = useWindowFullScreen(useWindowId());
+  const collapsed = useSidebarHeaderCollapsed();
+  const header = fullScreen && collapsed ? collapsedSidebarHeader(frame) : sidebarHeaderOf(false, lightsY);
+  return besideToolbar && !addressInSidebar ? toolbarEdgeLift(header, frame, row) : 0;
 }

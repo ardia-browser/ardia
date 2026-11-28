@@ -6,6 +6,7 @@ import { frameCornerRadius, windowFrame, type LightsPlace } from "../../platform
 import { rootSizeOfFrame } from "../settings/interfaceScale";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
 import { useBrowser, type BrowserState } from "../browser/store";
+import type { BrowserWindow } from "../browser/types";
 import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
 import { onFullScreenExit } from "./fullScreenExits";
@@ -182,9 +183,12 @@ export function captionRegions(s: BrowserState, windowId: string, overlaid = fal
   return regions;
 }
 
+const headerKeepsNoWindowButtons = (w: BrowserWindow, chrome: WindowChrome): boolean =>
+  chrome.trailingWidth ? !chrome.leadingWidth : !!chrome.leadingWidth && !!w.fullScreen && w.kind !== "small";
+
 export function sidebarHeaderCollapsed(s: BrowserState, windowId: string, chrome: WindowChrome = WINDOW_CHROME): boolean {
   const w = s.windows[windowId];
-  if (chrome.leadingWidth || !chrome.trailingWidth || !w) return false;
+  if (!w || !headerKeepsNoWindowButtons(w, chrome)) return false;
   if (tabLayoutOf(s, windowId) !== "sidebar" || addressBarInSidebar(s, windowId) || sidebarSideOf(s, windowId) === "right") return false;
   return w.kind !== "private" && s.profileOrder.length < 2;
 }

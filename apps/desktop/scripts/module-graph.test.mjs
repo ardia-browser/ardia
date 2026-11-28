@@ -148,7 +148,7 @@ test("production graph uses current Linux adapters and one canonical shared stat
   assert.ok(graph.get(`${desktop}platform/buttonLayout.linux.ts`).importedIds.includes(`${desktop}platform/linux/desktopButtonLayout.ts`), "the button layout comes from GTK's setting on Linux");
   const controls = graph.get(`${browser}components/window/BrowserWindowControls.tsx`).importedIds;
   assert.ok(controls.includes(`${desktop}clusterAppMenu.ts`) && !controls.includes(`${browser}state/app/appMenu.ts`), "the … beside the window buttons opens Linux's full app menu");
-  for (const importer of ["components/sidebar/Sidebar.tsx", "components/downloads/Downloads.tsx", "components/sidebar/AddressBar.tsx"]) {
+  for (const importer of ["components/sidebar/Sidebar.tsx", "components/sidebar/SidebarPage.tsx", "components/downloads/Downloads.tsx", "components/sidebar/AddressBar.tsx"]) {
     const imported = graph.get(`${browser}${importer}`).importedIds;
     assert.ok(imported.includes(`${desktop}sidebarHeaderLayout.ts`) && !imported.includes(`${browser}state/windows/layout.ts`), `${importer} keeps the header, and its menu, whenever the window buttons are hidden`);
   }

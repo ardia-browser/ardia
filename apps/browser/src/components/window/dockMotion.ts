@@ -113,8 +113,10 @@ export const peekHoldWidth = (sidebarWidth: number, peekLeft: number) => peekLef
 export const peekSpan = (sidebarWidth: number, right: boolean, windowWidth: number, peekLeft: number): readonly [number, number] =>
   right ? [windowWidth - peekLeft - sidebarWidth, Infinity] : [-Infinity, peekLeft + sidebarWidth];
 
+export const peekRevealBand = (inset: number, draggingTab = false) => Math.max(draggingTab ? TAB_DRAG_EDGE_STRIP : PEEK_EDGE_STRIP, inset);
+
 export const edgeWatchWidth = (peeking: boolean, draggingTab: boolean, holdWidth: number, inset: number) =>
-  peeking ? holdWidth : draggingTab ? TAB_DRAG_EDGE_STRIP : edgeStripOverPage(inset) ? PEEK_EDGE_STRIP : 0;
+  peeking ? holdWidth : draggingTab ? peekRevealBand(inset, true) : edgeStripOverPage(inset) ? PEEK_EDGE_STRIP : 0;
 
 export const edgeStripOverPage = (inset: number) => inset < PEEK_EDGE_STRIP;
 

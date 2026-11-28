@@ -31,8 +31,6 @@ import { ARC_HIDE_MS, DOCK_SLIDE, SHADOWS } from "./tokens";
 import {
   EDGE_ARMED,
   EDGE_DISARMED,
-  PEEK_EDGE_STRIP,
-  TAB_DRAG_EDGE_STRIP,
   dockMove,
   dockState,
   dockedCardInset,
@@ -42,6 +40,7 @@ import {
   edgeStripOverPage,
   edgeWatchWidth,
   peekBleed,
+  peekRevealBand,
   peekHoldWidth,
   peekOnScreen,
   peekSpan,
@@ -251,10 +250,10 @@ function SidebarDock({
   }, [open, fullscreen]);
   useEffect(() => (peek.live ? watchHolds("peek", () => latestPeek.current.recheck()) : undefined), [peek.live]);
   const state = dockState({ open, fullscreen, moving, peekLive: peek.live, peekLeaving: peek.leaving });
-  const band = draggingTab ? TAB_DRAG_EDGE_STRIP : PEEK_EDGE_STRIP;
+  const frame = useCardFrame();
+  const band = peekRevealBand(fullscreen ? 0 : frame.inset, draggingTab);
   const latestReveal = useRef({ state, right, windowWidth, band, reveal });
   latestReveal.current = { state, right, windowWidth, band, reveal };
-  const frame = useCardFrame();
   const peekAt = frame.peek;
   const holdWidth = peekHoldWidth(width, peekAt.left);
   const peeking = peekOnScreen(state);
@@ -348,7 +347,7 @@ function SidebarDock({
             [edgeSide]: 0,
             top: 0,
             bottom: frame.inset,
-            width: !open && !fullscreen ? PEEK_EDGE_STRIP : 0,
+            width: !open && !fullscreen ? peekRevealBand(frame.inset) : 0,
           }}
         />
       )}

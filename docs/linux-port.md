@@ -1327,6 +1327,10 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   itself (`LINUX_APP_COMMANDS` in `appServices.ts`) are kept from the shared handler so they run once. Mac-only entries
   (Services, Hide, Spelling, Substitutions, Speech, Transformations, the WebKit page engine, JavaScript from Apple
   Events, Keep on Top, Delete and the spelling selectors) are left out.
+  - **Focus.** A press on the hamburger or the header's space button leaves focus where it was, as the `…` and the
+    traffic lights do. Chromium rings a button the pointer focused as soon as any key reaches the shell, so a button
+    that kept focus after its menu closed lit up on the next Ctrl+Tab (#4468). Tab still reaches both buttons, and a
+    menu opened from the keyboard leaves its button focused and ringed.
   - **View › Enter Full Screen** (`std:toggleFullScreen:`, F11, remappable in Keyboard Shortcuts) sits where the Mac
     has it, reads Exit Full Screen while the window is full screen and calls `ArdiaShell.toggleFullScreen`. The
     entry, its shortcut and its Keyboard Shortcuts row exist only when the host advertises that call; until then F11

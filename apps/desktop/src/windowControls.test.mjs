@@ -553,6 +553,15 @@ test("a primary press on a traffic light leaves keyboard focus where it was, and
   assert.match(lights, /onMouseDown=\{\(e\) => \{\n\s*if \(lightPressKeepsFocusWhereItWas\(e\)\) e\.preventDefault\(\);/);
 });
 
+test("pressing a header menu button leaves focus where it was, so a later key press never rings the button the pointer opened", async () => {
+  const { readFileSync } = await import("node:fs");
+  const menuButton = readFileSync(new URL("./AppMenuButton.tsx", import.meta.url), "utf8");
+  const indicator = readFileSync(new URL("./ProfileIndicator.tsx", import.meta.url), "utf8");
+  assert.match(menuButton, /className="ardia-header-button ardia-app-menu-button"[\s\S]*onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
+  assert.match(indicator, /className="ardia-header-button ardia-current-space"[^\n]*onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
+  assert.doesNotMatch(menuButton + indicator, /\.blur\(\)/, "no button is blurred after its menu closes: a pointer never focused it, and a keyboard user keeps their place");
+});
+
 test("a right or middle press on the … neither anchors nor toggles its menu", async () => {
   const h = clusterHarness();
   await h.load();

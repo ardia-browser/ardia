@@ -28,9 +28,7 @@ export async function openAppMenu(windowId: string, button: HTMLElement) {
   if (!mayPublishAppMenu(current, button)) return;
   const items = appMenuItems(menuState({ ...state, ui: { ...state.ui, focusOrder } }), shortcuts, hiddenAppMenuCommands(), { fullScreen: !!state.windows[windowId]?.fullScreen, edit: currentEditMenu(windowId, editTarget), updates });
   const { left, bottom } = button.getBoundingClientRect();
-  const openedByPointer = !button.matches(":focus-visible");
   const id = await showMenu(items, undefined, { x: left, y: bottom + 4 });
-  if (openedByPointer && document.activeElement === button) button.blur();
   return runAppMenuChoice(windowId, id ? appMenuChoice(id) : null, editTarget);
 }
 
@@ -49,6 +47,7 @@ export function AppMenuButton({ windowId, size }: { windowId: string; size?: num
       aria-haspopup="menu"
       title="Menu"
       style={size ? { width: size, height: size, flex: `0 0 ${size}px` } : undefined}
+      onMouseDown={(event) => event.preventDefault()}
       onPointerDown={presses.pointerDown}
       onClick={presses.click}
     >

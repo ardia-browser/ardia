@@ -747,7 +747,7 @@ Chrome; n/t = not pressed there by the test (clipboard and window-level AppKit i
 | Copy URL / as Markdown | ⇧⌘C / ⌥⇧⌘C | ⇧⌘C inspects | Dia's; with the focus inside a tab's docked DevTools ⇧⌘C stays DevTools' Select an Element (it turns the picker on and off, issue #598) and copies nothing (only ⇧⌘C is kept there: a Copy URL rebound to another key still wins in DevTools); each ⇧⌘C passed to DevTools is counted in `usage_counts.devtools_keys_kept` (a number, once an hour), so watch that it shows up for people who open DevTools and that Copy URL's own use doesn't drop | ✓ ✓ ✓ ✓ (– in DevTools) | ✅ |
 | Find / Next / Previous | ⌘F / ⌘G / ⇧⌘G | same | same | ✓ ✓ ✓ ✓ | ✅ |
 | Use Selection for Find | — (⌘E is Chat) | ⌘E | ⌘E (no Chat here) | ✓ ✓ ✓ ✓ | ✅ new |
-| Hide Element… / Hidden Elements on This Site… | — (Search: ⇧⌘H / ⇧⌘U) | ⇧⌘H is Home | ⇧⌘H / ⇧⌘U (View menu; an Ardia extra, § 17) | page ✓ (dev harness) | ✅ new |
+| Hide Element… / Hidden Elements on This Site… | — (Search: ⇧⌘H / ⇧⌘U) | ⇧⌘H is Home | ⇧⌘H / ⇧⌘U (View menu; an Ardia extra, § 17). Linux has no default for Hidden Elements, since Ctrl+Shift+U types Unicode characters there, as in Chrome (`apps/desktop/src/engineCapabilities.test.mjs`) | page ✓ (dev harness) | ✅ new |
 | Jump to Selection / Find and Replace | ⌘J / ⌥⌘F | ⌘J / ⌥⌘F searches the web | Dia's | ✓ ✓ ✓ ✓ | ✅ |
 | Spelling / Check Now | ⌘: / ⌘; | same | same | n/t ✓ n/t n/t (they'd open AppKit panels) | ✅ |
 | Stop | — | ⌘. (and Esc) | ⌘. (View menu), Esc on a loading page | ○ ○ ○ ○ (nothing loading) | ✅ new |

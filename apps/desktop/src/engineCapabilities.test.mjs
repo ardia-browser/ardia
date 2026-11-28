@@ -52,7 +52,7 @@ globalThis.window = { __ardiaHost: host };
 const settings = await import("./settingsIndex.ts");
 const shim = await import("./shims/expo-modules-core.ts");
 const { linuxCapabilities, unavailableCommands, unavailableSettingIds, FULL_SCREEN_ITEM } = await import("./hostCapabilities.ts");
-const { linuxMenuShortcuts } = await import("./shortcuts.ts");
+const { linuxBindings, linuxMenuShortcuts, linuxNativeBindings } = await import("./shortcuts.ts");
 const { staticShortcutSources } = await import("./commandCatalog.ts");
 const { sendsFromSheet } = await import("./reportProblem.ts");
 delete globalThis.window;
@@ -125,6 +125,23 @@ test("with every new capability on, each command, menu entry and shortcut row ap
   assert.equal(find(bareItems, FULL_SCREEN_ITEM), undefined, FULL_SCREEN_ITEM);
   assert.ok(linuxMenuShortcuts().some((row) => row.id === FULL_SCREEN_ITEM));
   assert.ok(staticShortcutSources().some((source) => source.id === FULL_SCREEN_ITEM));
+});
+
+const MODE = process.env.ARDIA_DESKTOP_MODE ?? "linux";
+
+test(`with Hide Element on, Ctrl+Shift+U stays with the Linux input method for Unicode entry, as in Chrome, while Windows and the Mac keep Hidden Elements on it (${MODE})`, () => {
+  const controlShiftU = MODE === "mac" ? 18 : 6;
+  const nativeAt = (overrides) => linuxNativeBindings(linuxBindings(overrides)).find((binding) => binding.keyCode === 85 && binding.modifiers === controlShiftU);
+  const row = linuxMenuShortcuts().find((item) => item.id === "showHiddenElements");
+  assert.ok(row, "Settings lists Hidden Elements on This Site");
+  if (MODE === "linux") {
+    assert.equal(row.key, "");
+    for (const overrides of [{}, { showHiddenElements: [""] }, { showHiddenElements: ["h", "command", "option"] }]) assert.equal(nativeAt(overrides), undefined, JSON.stringify(overrides));
+    assert.equal(nativeAt({ showHiddenElements: ["u", "command", "shift"] })?.command, "showHiddenElements", "a user who wants Ctrl+Shift+U can still choose it");
+  } else {
+    assert.equal(row.key, "u");
+    assert.equal(nativeAt({})?.command, "showHiddenElements");
+  }
 });
 
 test("with every new capability on, the module calls reach the engine instead of a local answer", async () => {

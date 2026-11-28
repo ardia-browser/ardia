@@ -15,7 +15,7 @@ let fallback = "";
 
 function currentLaunchLook(): SavedLaunchLook | null {
   const { loaded, status, view, pickedProfileId } = syncData();
-  const { colorChoice, customTheme, schemeChoice } = currentPreferences();
+  const { colorChoice, customTheme, presetThemes, materialYou, schemeChoice } = currentPreferences();
   const design = useAppearanceDesign.getState().design;
   const needsSync = launchLookNeedsSync({ colorChoice, schemeChoice, design });
   if (!launchLookSourcesLoaded({ ready: useBoot.getState().ready, syncOffered: syncOffered(), syncLoaded: loaded, needsSync })) return null;
@@ -25,6 +25,8 @@ function currentLaunchLook(): SavedLaunchLook | null {
       schemeChoice,
       colorChoice,
       customTheme,
+      presetThemes,
+      materialYou,
       syncEnabled: status.isEnabled,
       macLook: macLookOf(status.isEnabled, view.look),
       space: launchSpace(view, status, pickedProfileId),

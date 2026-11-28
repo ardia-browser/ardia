@@ -4365,6 +4365,12 @@ Whole stack (`SettingsView.swift`):
 - Presentation: main uses a plain `.sheet(item:)` from `RootView`, with no presentation modifiers. On iPhone ours is
   Expo UI's `BottomSheet` with none either (`ExpoSettingsSheet`): system detent, corners, drag to dismiss and
   scaled-back page; Done and a drag both close Settings through `onIsPresentedChange`.
+- Every page a screen links to is drawn whole before the tap, so a push slides in with its title and rows from the
+  first frame (#4066; a title-only placeholder slid in empty for about 380 ms). A page drawn early touches no
+  network and no site data: its mount work (refreshes, `settings_panes_opened`) runs through `useWhenOpened` each
+  time it is on the path, and Site settings mounts its allowed sites, with their favicons, only once opened. Sync,
+  Connect, the recovery phrase, Clear Data, Trusted Sites and My Filters read or show such data as they draw, so
+  they stay title-only until pushed (`HELD_UNTIL_PUSHED` in `ExpoSettingsStack.tsx`).
 - Rule: a toolkit screen is hosted in a container the system positions, never inside a view we animate by
   transform, because SwiftUI records its accessibility frames at layout time and never updates them after our slide.
 - Every toolkit screen's simulator pass reads three elements' frames from the accessibility tree (`snapshot --json`)
@@ -4413,10 +4419,25 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
 - Settings › Appearance has a Custom swatch after the presets on iPhone and in the hand-built Settings Android keeps.
   With Material You on, Android's Material Settings and its Appearance page offer the presets only. Custom themes apply to Glass and Classic. The swatch shows the saved theme's colours, or a hue wheel before there is one. Choosing it sets
   `colorChoice` to `custom`. If no theme is saved yet, it saves one first: the Mac's full theme when Match My Mac was
-  showing one, otherwise the Mac's `startingTheme` seeded from the current look's swatch. Then it opens the Theme
-  page. While Custom is chosen, an "Edit Theme" row under the swatches opens the page again. Choosing a preset keeps
+  showing one, otherwise the Mac's `startingTheme` seeded from the current look's swatch. Choosing a preset keeps
   the saved theme, so Custom brings it back. Turning Match My Mac off while the Mac shows a full theme copies that
   theme into Custom.
+- Picking a theme behaves as the Mac's theme picker does (#4066, `ThemePicker` in `apps/browser/.../ThemeEditor.tsx`):
+  a swatch, Custom included, applies in place and never opens a page. "Edit theme" sits under the swatches for
+  whatever is picked, as the Mac's editor sits under its swatches. Edits belong to the swatch they were made on: a
+  preset's edits are kept per preset (`settings.presetThemes`, each sanitized on read like `customTheme`), its swatch
+  shows them and is read as "Blue, edited", and "Reset to Blue" returns it, as the Mac's `presetThemes` and Reset do.
+  With no colour chosen and sync off, an edit edits the preset Appearance shows (Plum by default). With Match My Mac
+  on, the Theme page shows the Mac's current look locked, under "Following your Mac's theme.", drawn with the app's
+  own resolver in the app's current light or dark, and nothing on it writes; "Stop matching to edit" turns Match My
+  Mac off and opens the editor: on the phone's own Custom when one is saved (never overwritten), else on what was
+  showing, copying the Mac's full theme into Custom only when there is no saved Custom (`stopMatchingToEdit`). Every save and Reset checks the lock when
+  it commits (`themeLockedNow`), so a release still queued when sync turns on saves nothing; a page that has
+  started leaving (a pop, or Settings closing) takes no more changes either. The launch look resolves the chosen
+  colour's own theme with the app's rule (`ownThemeOf`), so a selected preset never launches as the saved Custom. A swatch is selected only
+  when it draws the look in use (`selectedSwatch`, both apps), so a phone-edited Green isn't selected while the Mac
+  shows stock Green, and under Material You it is the seed the palette uses (`materialPresetFor`). A drag the system cancels saves nothing. Material You
+  ignores preset edits. `theme_edits` counts finished edits to Custom and to presets alike.
 - The Theme page (`components/settings/ThemePage.tsx`, `ThemeControls.tsx`, route `theme`) follows the Mac's
   `ThemeEditor.tsx` and the native port on d3fc4c02c. It has a preview of the shown look, the colour pad (hue around,
   saturation outward, 1 to 3 knobs, tap a knob to select it, tap elsewhere to move the selected one), a brightness
@@ -4892,6 +4913,17 @@ This was `docs/ios.md`'s, for main's SwiftUI app; since the clean-up the workflo
   CryptoKit; everything else is Apple's own (HTTPS, CryptoKit hashes). `ITSAppUsesNonExemptEncryption` is still false,
   which assumed Apple's encryption only: the owner decides whether the Rust core changes that answer before the next
   TestFlight upload.
+
+#### Scroll bounce (#4066)
+
+One rule, set where each scroll view is made. Menus, panels, pagers, sheets of fixed content and Settings' forms
+never bounce (`neverBounces()` on SwiftUI, `bounces={false}` with `overScrollMode="never"` in React Native). Long
+lists of the user's own things bounce only when they are longer than their view, which is UIKit's own rule with
+`alwaysBounceVertical` off (`bouncesWhenLong()`, or `bounces alwaysBounceVertical={false} overScrollMode="auto"`):
+Library (History, Bookmarks, Downloads, folders), Archive, Trusted Sites, Open Source Licenses, the tab grid and the
+Theme page. The web page and anything that pulls to refresh keep their bounce; a list inside a sheet that drags down
+to close keeps none, since the sheet's pull is its top end. `scrollBounce.test.ts` holds both lists, and lab builds
+log each guarded scroll view as `PAGELAB scroll never|whenLong …` (`-ArdiaScrollProbe <seconds>` dumps them all).
 
 #### The App Store
 

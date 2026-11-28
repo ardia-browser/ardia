@@ -1412,6 +1412,8 @@ const TrayRows = memo(function TrayRows({ dismissDrag }: { dismissDrag: GestureT
         </GestureDetector>
       ) : (
         <ScrollView
+          bounces={false}
+          overScrollMode="never"
           testID={arc ? "searchPanelRowsScroll" : undefined}
           style={arc || shown === null ? styles.rows : { height: shown, flexGrow: 0 }}
           contentContainerStyle={arc ? styles.searchPanelRowsContent : styles.rowsContent}

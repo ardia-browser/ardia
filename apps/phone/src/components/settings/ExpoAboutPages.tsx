@@ -4,7 +4,7 @@ import { accessibilityAddTraits, accessibilityHidden, accessibilityHint, font, f
 import { copy } from "../../lib/platformCopy";
 import { appVersion, openFromSettings } from "../../state/settings/actions";
 import { settingsRouteKey } from "../../state/settings/nav";
-import { AppIconPreview, modifierList, neverBounces, settingsChrome, settingsUIAvailable, useTheme } from "../ui";
+import { AppIconPreview, bouncesWhenLong, modifierList, neverBounces, settingsChrome, settingsUIAvailable, useTheme } from "../ui";
 import { dataCredits, LIBRARY_CREDITS } from "./DataPages";
 
 const FILL = Number.MAX_SAFE_INTEGER;
@@ -17,6 +17,8 @@ const LINKS = [
 ] as const;
 
 const page = (title: string) => modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome(), neverBounces());
+
+const longPage = (title: string) => modifierList(navigationTitle(title), navigationBarTitleDisplayMode("inline"), tint(BLUE), settingsChrome(), bouncesWhenLong());
 
 export function ExpoAboutPage() {
   const theme = useTheme();
@@ -53,7 +55,7 @@ export function ExpoAboutPage() {
 
 export function ExpoLicensesPage() {
   return (
-    <Form modifiers={page("Open Source Licenses")}>
+    <Form modifiers={longPage("Open Source Licenses")}>
       {dataCredits().map((credit) => (
         <Section key={credit.name}>
           <VStack alignment="leading" spacing={4} modifiers={[padding({ vertical: 2 }), frame({ maxWidth: FILL, alignment: "leading" })]}>

@@ -142,7 +142,7 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["page_covers_capped"],
       },
       {
-        text: "In the same daily counts: how often you chose Custom in Settings › Appearance, and how many changes you made on its Theme page. Counts only, never the colors or settings you picked",
+        text: "In the same daily counts: how often you chose Custom in Settings › Appearance, and how many changes you made on the Theme page, to Custom or to a color. Counts only, never the colors or settings you picked",
         fields: ["custom_theme_chosen", "theme_edits"],
       },
       {

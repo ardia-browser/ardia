@@ -385,6 +385,7 @@ final class WindowManager: NSObject, NSWindowDelegate {
     landingFits.removeValue(forKey: entry.id)?.stop()
     entry.stopWatchingContent()
     lightsCenters[entry.id] = nil
+    menuBarShown[entry.id] = nil
     entry.takeReveal()?.then.forEach { $0() }
     entry.takeExit()?.forEach { $0() }
   }
@@ -447,7 +448,6 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard let window = notification.object as? NSWindow, let id = id(of: window), let entry = managed[id] else { return }
     SavedKeyResponders.shared.windowClosed(window, id: id)
     let closedByJS = entry.closingFromJS
-    menuBarShown[id] = nil
     flushFrameReport(window)
     managed[id] = nil
     NotificationCenter.default.removeObserver(self, name: nil, object: window)
@@ -499,6 +499,12 @@ final class WindowManager: NSObject, NSWindowDelegate {
     guard isMainWindow(window), !ArdiaChromeWindowHost.windowFullScreenIs(forPage: window) else { return }
     FullScreenMenuBar.shared.watch { [weak self] in self?.reportMenuBars() }
     reportMenuBar(window, id: id)
+  }
+
+  func reportMenuBarAgain(_ id: String) {
+    guard let window = window(id), managed[id]?.isFullScreen == true else { return }
+    menuBarShown[id] = nil
+    watchMenuBar(window, id: id)
   }
 
   private func reportMenuBars() {

@@ -397,8 +397,9 @@ final class PageSummaryStage: UIView, UIScrollViewDelegate {
     var items: [Any] = [session.sharedText]
     if let address = session.address { items.append(address) }
     let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
-    controller.completionWithItemsHandler = { [weak self] _, completed, _, _ in
-      if completed { self?.onShared?() }
+    let shared = onShared
+    controller.completionWithItemsHandler = { _, completed, _, _ in
+      if completed { shared?() }
     }
     if let popover = controller.popoverPresentationController {
       popover.sourceView = footer.view

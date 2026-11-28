@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Image, Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import Animated, { cancelAnimation, Easing, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { floatingBarCenter } from "../../lib/deckGeometry";
 import { display } from "../../state/search/omnibox";
@@ -20,8 +20,8 @@ export const MINI_PLAYER = { height: 56, radius: 28, art: 40, artRadius: 10, but
 
 export const miniPlayerBottom = (safeBottom: number) => floatingBarCenter(safeBottom, Platform.OS) + floatingBarLayout.control / 2 + MINI_PLAYER.gap;
 
-const entering = Easing.bezier(0.2, 0, 0, 1);
-const leaving = Easing.bezier(0.4, 0, 1, 1);
+const entering = Easing.bezier(0, 0, 0.58, 1);
+const leaving = Easing.bezier(0.42, 0, 1, 1);
 
 export function MiniPlayer() {
   const { media, shows, skipSeconds } = useMiniPlayer();
@@ -60,7 +60,7 @@ export function MiniPlayer() {
     if (shows && media) noteMiniPlayerShown(media);
   }, [shows, media?.pageId, media?.startedAt]);
   useEffect(() => () => setMiniPlayerRoom(0), []);
-  const motion = useAnimatedStyle(() => ({ opacity: shown.value, transform: [{ translateY: reduceMotion ? 0 : (1 - shown.value) * MINI_PLAYER.travel }] }), [reduceMotion]);
+  const motion = useAnimatedStyle(() => ({ transform: [{ translateY: reduceMotion ? 0 : (1 - shown.value) * MINI_PLAYER.travel }] }), [reduceMotion]);
   const insets = useSafeAreaInsets();
   const { width, fontScale } = useWindowDimensions();
   const { span } = useBottomBarLayout(width, chromeLayout.barSideInset);
@@ -72,7 +72,7 @@ export function MiniPlayer() {
     <View testID="miniPlayerPlace" pointerEvents="box-none" style={[styles.place, { left: span.left, right: span.right, bottom: miniPlayerBottom(insets.bottom) }]}>
       <Animated.View testID="miniPlayer" collapsable={false} pointerEvents={shows ? "box-none" : "none"} accessibilityElementsHidden={!shows} importantForAccessibility={shows ? "auto" : "no-hide-descendants"} style={[styles.motion, motion]}>
         <GlassSource name={surface === "browsing" ? PAGE_FROST : surface === "start" ? START_FROST : SURFACES_FROST}>
-          <MiniPlayerCard media={showing} skipSeconds={skipSeconds} plateWidth={plateWidth} fontScale={fontScale} shows={shows} />
+          <MiniPlayerCard media={showing} skipSeconds={skipSeconds} plateWidth={plateWidth} fontScale={fontScale} shows={shows} shown={shown} />
         </GlassSource>
       </Animated.View>
     </View>
@@ -87,7 +87,8 @@ function skipWords(control: SkipControl) {
   return { label, glyph, backwards };
 }
 
-function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale, shows }: { media: PlayingMedia; skipSeconds: number; plateWidth: number; fontScale: number; shows: boolean }) {
+function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale, shows, shown }: { media: PlayingMedia; skipSeconds: number; plateWidth: number; fontScale: number; shows: boolean; shown: SharedValue<number> }) {
+  const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
   const theme = useTheme();
   const dark = theme.dark || media.isPrivate;
   const ink = dark ? chromeInk.dark : chromeInk.light;
@@ -105,24 +106,26 @@ function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale, shows }: { 
   const playing = media.state === "playing";
   return (
     <ChromeSurface testID="miniPlayerPlate" shape="capsule" cornerRadius={MINI_PLAYER.radius} incognito={media.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={shows} shownMs={shows ? MINI_PLAYER.inMs : MINI_PLAYER.outMs} fadesWithReduceMotion style={styles.plate}>
-      <PressInPlace grow label={MINI_PLAYER_WORDS.open(lines.title)} hint={MINI_PLAYER_WORDS.openHint} actions={spokenExtras.length ? spokenExtras : undefined} onPress={() => openMiniPlayerTab(media)} onPressIn={haptics.barPress} style={styles.lead}>
-        <Artwork media={media} faviconUrl={tab?.faviconUrl ?? null} pageUrl={tab?.url ?? null} fill={ink.edge} />
-        <View style={styles.lines}>
-          <Text testID="miniPlayerTitle" numberOfLines={1} maxFontSizeMultiplier={MINI_PLAYER.textScale} style={[font.subheadline, styles.title, { color: ink.foreground }]}>
-            {lines.title}
-          </Text>
-          <Text testID="miniPlayerDetail" numberOfLines={1} maxFontSizeMultiplier={MINI_PLAYER.textScale} style={[font.footnote, { color: ink.secondary }]}>
-            {lines.detail}
-          </Text>
-        </View>
-      </PressInPlace>
-      {back && fit.back ? <SkipButton media={media} control={back} color={ink.foreground} /> : null}
-      <ControlButton testID="miniPlayerPlayPause" label={playing ? MINI_PLAYER_WORDS.pause : MINI_PLAYER_WORDS.play} glyph={playing ? "pause.fill" : "play.fill"} size={21} color={ink.foreground} onPress={() => toggleMediaPlayback(media)} />
-      {forward && fit.forward ? <SkipButton media={media} control={forward} color={ink.foreground} /> : null}
-      {floats && fit.pictureInPicture ? (
-        <ControlButton testID="miniPlayerPictureInPicture" label={media.inPictureInPicture ? MINI_PLAYER_WORDS.leavePictureInPicture : MINI_PLAYER_WORDS.pictureInPicture} glyph={media.inPictureInPicture ? "pip.exit" : "pip.enter"} size={19} color={ink.foreground} onPress={() => floatMedia(media)} />
-      ) : null}
-      <ControlButton testID="miniPlayerClose" label={MINI_PLAYER_WORDS.close} glyph="xmark" size={13} weight="semibold" color={ink.secondary} onPress={() => closeMiniPlayer(media)} />
+      <Animated.View testID="miniPlayerContent" style={[styles.content, fade]}>
+        <PressInPlace grow label={MINI_PLAYER_WORDS.open(lines.title)} hint={MINI_PLAYER_WORDS.openHint} actions={spokenExtras.length ? spokenExtras : undefined} onPress={() => openMiniPlayerTab(media)} onPressIn={haptics.barPress} style={styles.lead}>
+          <Artwork media={media} faviconUrl={tab?.faviconUrl ?? null} pageUrl={tab?.url ?? null} fill={ink.edge} />
+          <View style={styles.lines}>
+            <Text testID="miniPlayerTitle" numberOfLines={1} maxFontSizeMultiplier={MINI_PLAYER.textScale} style={[font.subheadline, styles.title, { color: ink.foreground }]}>
+              {lines.title}
+            </Text>
+            <Text testID="miniPlayerDetail" numberOfLines={1} maxFontSizeMultiplier={MINI_PLAYER.textScale} style={[font.footnote, { color: ink.secondary }]}>
+              {lines.detail}
+            </Text>
+          </View>
+        </PressInPlace>
+        {back && fit.back ? <SkipButton media={media} control={back} color={ink.foreground} /> : null}
+        <ControlButton testID="miniPlayerPlayPause" label={playing ? MINI_PLAYER_WORDS.pause : MINI_PLAYER_WORDS.play} glyph={playing ? "pause.fill" : "play.fill"} size={21} color={ink.foreground} onPress={() => toggleMediaPlayback(media)} />
+        {forward && fit.forward ? <SkipButton media={media} control={forward} color={ink.foreground} /> : null}
+        {floats && fit.pictureInPicture ? (
+          <ControlButton testID="miniPlayerPictureInPicture" label={media.inPictureInPicture ? MINI_PLAYER_WORDS.leavePictureInPicture : MINI_PLAYER_WORDS.pictureInPicture} glyph={media.inPictureInPicture ? "pip.exit" : "pip.enter"} size={19} color={ink.foreground} onPress={() => floatMedia(media)} />
+        ) : null}
+        <ControlButton testID="miniPlayerClose" label={MINI_PLAYER_WORDS.close} glyph="xmark" size={13} weight="semibold" color={ink.secondary} onPress={() => closeMiniPlayer(media)} />
+      </Animated.View>
     </ChromeSurface>
   );
 }
@@ -156,6 +159,7 @@ const styles = StyleSheet.create({
   place: { position: "absolute", height: MINI_PLAYER.height, alignItems: "center" },
   motion: { width: "100%", maxWidth: MINI_PLAYER.maxWidth, height: MINI_PLAYER.height },
   plate: { flex: 1, flexDirection: "row", alignItems: "center", paddingLeft: 8, paddingRight: 6 },
+  content: { flex: 1, flexDirection: "row", alignItems: "center" },
   lead: { flex: 1, minWidth: 0, height: MINI_PLAYER.height, flexDirection: "row", alignItems: "center" },
   art: { width: MINI_PLAYER.art, height: MINI_PLAYER.art, borderRadius: MINI_PLAYER.artRadius, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   artImage: { width: MINI_PLAYER.art, height: MINI_PLAYER.art },

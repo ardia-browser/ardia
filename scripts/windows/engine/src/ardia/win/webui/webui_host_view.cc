@@ -40,6 +40,8 @@
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "base/timer/timer.h"
+#include "chrome/browser/devtools/devtools_contents_resizing_strategy.h"
+#include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/create_browser_window.h"
@@ -50,6 +52,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/unload_controller.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "chrome/browser/ui/views/frame/contents_container_view.h"
 #include "components/input/native_web_keyboard_event.h"
 #include "components/sessions/content/session_tab_helper.h"
 #include "components/version_info/version_info.h"
@@ -75,6 +78,7 @@
 #include "ui/views/controls/native/native_view_host.h"
 #include "ui/views/controls/webview/webview.h"
 #include "ui/views/focus/focus_manager.h"
+#include "ui/views/view_constants_aura.h"
 #include "ui/views/view_targeter.h"
 #include "ui/views/widget/widget.h"
 #include "ui/views/win/hwnd_util.h"
@@ -145,6 +149,19 @@ class ViewportView : public views::WebView {
 
 BEGIN_METADATA(ViewportView)
 END_METADATA
+
+bool HoldsNativeView(views::WebView* view, content::WebContents* contents) {
+  views::NativeViewHost* holder = view->holder();
+  gfx::NativeView native = contents->GetNativeView();
+  if (!native || holder->native_view() != native) {
+    return false;
+  }
+  if (holder->layer_managed_by_views()) {
+    return holder->layer() && native->layer()->parent() == holder->layer();
+  }
+  return native->GetProperty(views::kHostViewKey) == holder;
+}
+
 
 }
 
@@ -443,6 +460,11 @@ PageBinding::~PageBinding() {
     owner_->RemoveChildViewT(viewport.get());
   }
   viewport = nullptr;
+  if (devtools_viewport && owner_) {
+    devtools_viewport->SetWebContents(nullptr);
+    owner_->RemoveChildViewT(devtools_viewport.get());
+  }
+  devtools_viewport = nullptr;
 }
 
 webui_page::PageEvaluationTicket PageBinding::EvaluationTicket() const {
@@ -464,6 +486,14 @@ void PageBinding::MoveTo(ShellHostView* owner) {
     owner_->RemoveChildViewT(viewport.get());
   }
   viewport = nullptr;
+  if (devtools_viewport && owner_) {
+    devtools_viewport->SetWebContents(nullptr);
+    owner_->RemoveChildViewT(devtools_viewport.get());
+  }
+  devtools_viewport = nullptr;
+  devtools_watch.reset();
+  devtools_had_focus = false;
+  bounds = gfx::Rect();
   owner_ = owner;
   visible = false;
   presented = false;
@@ -589,8 +619,52 @@ void PageBinding::Rebind(content::WebContents* contents) {
   if (viewport) {
     viewport->SetWebContents(nullptr);
   }
+  ForgetDevTools();
   Observe(contents);
   id_ = TabId(contents);
+}
+
+DevToolsFrontendWatch::DevToolsFrontendWatch(content::WebContents* frontend,
+                                             base::OnceClosure destroyed)
+    : content::WebContentsObserver(frontend),
+      destroyed_(std::move(destroyed)) {}
+
+DevToolsFrontendWatch::~DevToolsFrontendWatch() = default;
+
+void DevToolsFrontendWatch::WebContentsDestroyed() {
+  Observe(nullptr);
+  if (destroyed_) {
+    std::move(destroyed_).Run();
+  }
+}
+
+bool PageBinding::DevToolsHoldFocus() const {
+  if (!devtools_viewport || !devtools_viewport->GetVisible()) {
+    return false;
+  }
+  views::FocusManager* focus = devtools_viewport->GetFocusManager();
+  return focus && devtools_viewport->Contains(focus->GetFocusedView());
+}
+
+void PageBinding::NoteDevToolsFocus() {
+  if (devtools_viewport && devtools_viewport->GetVisible()) {
+    devtools_had_focus = DevToolsHoldFocus();
+  }
+}
+
+void PageBinding::HideDevTools() {
+  if (!devtools_viewport) {
+    return;
+  }
+  devtools_had_focus = devtools_had_focus || DevToolsHoldFocus();
+  devtools_viewport->SetVisible(false);
+  devtools_viewport->SetWebContents(nullptr);
+}
+
+void PageBinding::ForgetDevTools() {
+  HideDevTools();
+  devtools_watch.reset();
+  devtools_had_focus = false;
 }
 
 void PageBinding::DidFinishNavigation(content::NavigationHandle* handle) {
@@ -625,6 +699,7 @@ void PageBinding::WebContentsDestroyed() {
   if (viewport) {
     viewport->SetWebContents(nullptr);
   }
+  ForgetDevTools();
   Observe(nullptr);
   if (owner_) {
     owner_->BindingGone(this);
@@ -728,6 +803,7 @@ void ShellHostView::DetachBrowser() {
     if (binding->viewport) {
       binding->viewport->SetWebContents(nullptr);
     }
+    binding->HideDevTools();
   }
   bindings_.clear();
   caption_->Detach();
@@ -1027,7 +1103,9 @@ aura::Window* ShellHostView::ChildWindowOf(views::WebView* view) const {
 
 bool ShellHostView::IsPageChildWindow(aura::Window* window) const {
   for (const auto& [id, binding] : bindings_) {
-    if (binding->viewport && ChildWindowOf(binding->viewport) == window) {
+    if ((binding->viewport && ChildWindowOf(binding->viewport) == window) ||
+        (binding->devtools_viewport &&
+         ChildWindowOf(binding->devtools_viewport) == window)) {
       return true;
     }
   }
@@ -1142,9 +1220,129 @@ void ShellHostView::ReattachViewports() {
         contents->Focus();
       }
     }
+    LayoutPage(binding.get());
   }
   Restack();
   ApplyShellInput();
+}
+
+void ShellHostView::LayoutPage(PageBinding* binding) {
+  views::WebView* page = binding->viewport;
+  content::WebContents* contents = binding->contents();
+  if (!page || !contents || !binding->visible) {
+    binding->HideDevTools();
+    return;
+  }
+  DevToolsContentsResizingStrategy strategy;
+  content::WebContents* devtools =
+      DevToolsWindow::GetInTabWebContents(contents, &strategy);
+  if (!devtools) {
+    page->SetBoundsRect(binding->bounds);
+    binding->ForgetDevTools();
+    return;
+  }
+  gfx::Rect tools_bounds;
+  gfx::Rect page_bounds;
+  ApplyDevToolsContentsResizingStrategy(strategy,
+                                        gfx::Rect(binding->bounds.size()),
+                                        &tools_bounds, &page_bounds);
+  const gfx::Vector2d origin = binding->bounds.OffsetFromOrigin();
+  page->SetBoundsRect(page_bounds + origin);
+  ReleaseChromeDevToolsView(contents, devtools);
+  if (!binding->devtools_viewport) {
+    binding->devtools_viewport =
+        AddChildViewAt(MakeViewport(devtools->GetBrowserContext()), 0);
+  }
+  views::WebView* tools = binding->devtools_viewport;
+  const bool fresh = !binding->devtools_watch ||
+                     binding->devtools_watch->web_contents() != devtools;
+  if (fresh) {
+    binding->devtools_watch = std::make_unique<DevToolsFrontendWatch>(
+        devtools, base::BindOnce(&ShellHostView::LayoutPageSoon,
+                                 GetWeakPtr(), contents->GetWeakPtr()));
+  }
+  const bool was_hidden = !tools->GetVisible();
+  const bool restore_focus =
+      !fresh && was_hidden && binding->devtools_had_focus;
+  if (was_hidden) {
+    binding->devtools_had_focus = false;
+  }
+  tools->SetBoundsRect(tools_bounds + origin);
+  tools->SetVisible(true);
+  views::FocusManager* focus = GetFocusManager();
+  const bool reattach =
+      tools->web_contents() == devtools && !HoldsNativeView(tools, devtools);
+  const bool reattach_focused =
+      reattach && focus && tools->Contains(focus->GetFocusedView());
+  if (reattach_focused) {
+    focus->ClearFocus();
+  }
+  if (reattach) {
+    tools->SetWebContents(nullptr);
+  }
+  tools->SetWebContents(devtools);
+  if (gfx::NativeView native = devtools->GetNativeView();
+      native && !native->IsVisible()) {
+    native->Show();
+  }
+  const size_t page_index = GetIndexOf(page).value();
+  const size_t tools_index = GetIndexOf(tools).value();
+  if (strategy.hide_inspected_contents() ? tools_index < page_index
+                                         : tools_index > page_index) {
+    ReorderChildView(tools, page_index);
+  }
+  Restack();
+  if ((fresh && DevToolsWindow::AsDevToolsWindow(devtools)) ||
+      restore_focus || reattach_focused) {
+    tools->RequestFocus();
+    devtools->Focus();
+  }
+}
+
+void ShellHostView::LayoutPageSoon(
+    base::WeakPtr<content::WebContents> inspected) {
+  if (!inspected) {
+    return;
+  }
+  base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          [](base::WeakPtr<ShellHostView> host,
+             base::WeakPtr<content::WebContents> contents) {
+            if (!host || !contents) {
+              return;
+            }
+            if (PageBinding* binding = host->BindingForContents(contents.get())) {
+              host->LayoutPage(binding);
+            }
+          },
+          GetWeakPtr(), inspected));
+}
+
+void ShellHostView::ReleaseChromeDevToolsView(content::WebContents* inspected,
+                                              content::WebContents* devtools) {
+  for (BrowserWindowInterface* member : Members()) {
+    BrowserView* view = BrowserView::GetBrowserViewForBrowser(member);
+    ContentsContainerView* container =
+        view ? view->GetContentsContainerViewFor(inspected) : nullptr;
+    if (container && container->devtools_web_view()->web_contents() == devtools) {
+      container->devtools_web_view()->SetWebContents(nullptr);
+      container->devtools_web_view()->SetVisible(false);
+    }
+  }
+}
+
+void ShellHostView::DevToolsDockChanged(content::WebContents* inspected,
+                                        content::WebContents* devtools) {
+  PageBinding* binding = BindingForContents(inspected);
+  if (!binding) {
+    return;
+  }
+  if (views::WebView* tools = binding->devtools_viewport;
+      tools && tools->web_contents() && tools->web_contents() != devtools) {
+    binding->ForgetDevTools();
+  }
+  LayoutPageSoon(inspected->GetWeakPtr());
 }
 
 void ShellHostView::OnViewBoundsChanged(views::View* observed_view) {
@@ -1254,6 +1452,7 @@ void ShellHostView::RetireRenderer() {
       binding->viewport->SetVisible(false);
       binding->viewport->SetWebContents(nullptr);
     }
+    binding->HideDevTools();
   }
   pass_.clear();
   ApplyShellInput();

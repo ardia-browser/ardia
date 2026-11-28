@@ -95,6 +95,20 @@ struct WindowConfig {
   int opener = 0;
 };
 
+class DevToolsFrontendWatch : public content::WebContentsObserver {
+ public:
+  DevToolsFrontendWatch(content::WebContents* frontend,
+                        base::OnceClosure destroyed);
+  DevToolsFrontendWatch(const DevToolsFrontendWatch&) = delete;
+  DevToolsFrontendWatch& operator=(const DevToolsFrontendWatch&) = delete;
+  ~DevToolsFrontendWatch() override;
+
+ private:
+  void WebContentsDestroyed() override;
+
+  base::OnceClosure destroyed_;
+};
+
 class PageBinding : public content::WebContentsObserver {
  public:
   PageBinding(ShellHostView* owner,
@@ -121,11 +135,19 @@ class PageBinding : public content::WebContentsObserver {
   uint64_t sequence = 1;
   uint64_t binding_generation = 1;
   raw_ptr<views::WebView> viewport = nullptr;
+  raw_ptr<views::WebView> devtools_viewport = nullptr;
+  std::unique_ptr<DevToolsFrontendWatch> devtools_watch;
+  bool devtools_had_focus = false;
+  gfx::Rect bounds;
   bool visible = false;
   bool presented = false;
   bool transferable = false;
 
   void Rebind(content::WebContents* contents);
+  bool DevToolsHoldFocus() const;
+  void NoteDevToolsFocus();
+  void HideDevTools();
+  void ForgetDevTools();
   bool ReportOpenPrivateWindow(const GURL& url, const std::string& profile);
   base::DictValue NavigationEvent() const;
   base::DictValue Envelope(std::string_view type);
@@ -235,6 +257,8 @@ class ShellHostView : public views::View,
   void Note(const std::string& line) const;
 
   void BindingGone(PageBinding* binding);
+  void DevToolsDockChanged(content::WebContents* inspected,
+                           content::WebContents* devtools);
   void FocusWindow();
   void BroadcastProfileLoaded(const std::string& profile);
   void PrivateWindowsChanged();
@@ -296,6 +320,10 @@ class ShellHostView : public views::View,
   void ApplyShellInput();
   void Restack();
   void ReattachViewports();
+  void LayoutPage(PageBinding* binding);
+  void ReleaseChromeDevToolsView(content::WebContents* inspected,
+                                 content::WebContents* devtools);
+  void LayoutPageSoon(base::WeakPtr<content::WebContents> inspected);
   void FocusShell();
   void RetireRenderer();
   void Decorate();

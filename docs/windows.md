@@ -967,7 +967,7 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
 - Host calls served there: `tab.create` (with `adoptId`, `previousClaim` and transfers between windows after
   `ArdiaTabs.prepareTransfer`), `tab.viewport`, `tab.presentations`, `tab.command` (`loadUrl`, `goBack`,
   `goForward`, `goToOffset`, `reload`, `forceReload`, `stopLoading`, `focus`, `blur`, `zoomStep`, `setMuted`,
-  `close`, `navigationEntries`, `find`, `stopFinding`, `evaluate`), `tab.release`, `tab.close`, `ArdiaTabs.unclaimedTabs` and the `unclaimed` event,
+  `close`, `navigationEntries`, `find`, `stopFinding`, `evaluate`, `showDevTools`), `tab.release`, `tab.close`, `ArdiaTabs.unclaimedTabs` and the `unclaimed` event,
   `ArdiaTabs.claimLaunchTab`, `ArdiaShell.setActiveProfile`, `openWindow`, `focusWindow`, `windowIdentity`,
   `windowIds`, `privateWindows`, `toggleFullScreen`, `pickFolder`, `pickFiles`, `copyText`, `readText`,
   `listenForOpenURLs` with `onOpenURLs` (a second launch's URLs), `documents.watch`/`unwatch`/`commit`/`flush` with
@@ -985,6 +985,13 @@ in `webui_frame.cc`: top-edge resize, `HTMAXBUTTON` over the shell's maximize bu
   `apps/browser/src/boundaries.json`). A page's find lives in its claim (`ClaimBound` in `webui_window_policy.h`): a
   release, a reclaim, a renderer exit, a move to another window, a rebind or a close drops it, so an earlier search never
   reports under a new claim.
+- `showDevTools` (no panel, `toggle`, `inspect` or `console`; F12, Ctrl+Shift+I, Ctrl+Shift+J and the app menu) opens
+  Chromium's DevTools for the page, refused with `ERR_PAGE_POLICY` where policy turns DevTools off, and `toggle` closes a
+  docked one. Docked DevTools, from there or from the context menu's Inspect, would land in the hidden Chromium contents
+  view under the shell, so `InstallWebUIShellHooks` sets `g_ardia_devtools_dock_changed` and the page's binding shows
+  them in a viewport of its own: `LayoutPage` splits the page's `tab.viewport` rect with Chromium's
+  `DevToolsContentsResizingStrategy` and takes the DevTools contents off Chromium's `devtools_web_view`. Undocked
+  DevTools stay Chromium's own window.
 - #4107's widened hooks are set in WebUI mode only (`InstallWebUIShellHooks`; the RNW host leaves them null):
   `g_ardia_linux_is_companion`, `g_ardia_linux_companion_owner` (a companion's tab-modal dialogs and permission
   prompts show in the visible window), `g_ardia_linux_present_companion` (a companion's `Show`/`Activate` focuses

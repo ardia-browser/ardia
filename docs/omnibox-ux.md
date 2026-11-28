@@ -65,7 +65,7 @@ Status: ✅ compliant, ❌ gap, ⚠️ unsure or a deliberate Dia/Ardia choice.
 | Input | Chrome (`AutocompleteInput::Parse`) | Ours | |
 |---|---|---|---|
 | `localhost`, `localhost:3000`, `192.168.1.1`, `[::1]:80`, `foo.local`, `a.b.c`/`1.2.3` | URL (http for local), URL, URL, URL, URL, query | same (http for local); `a.b`, `1.2.3` search | ✅ |
-| `foo/bar` | UNKNOWN: search is default | search | ✅ |
+| `foo/bar`, `go/server` | UNKNOWN: search is default, but what-you-typed wins (1403 > 1300) once the single-label host is a typed host in history (`HistoryURLProvider::AsKnownIntranetURL`), and the accidental-search infobar offers `http://foo/bar` | search, unless the host is `go` (go links, always `http://go/…`, #2204) or a page with that host is in history, bookmarks or open tabs (`omnibox.ts` `intranetUrl`, `suggest.ts`); `and/or`, `1/2`, `wiki/a b` stay searches. No infobar | ✅ |
 | `foo/`, `x.y/`, `foo/bar?x=1` | path ends in `/`, or two of path/query/fragment → URL | fixed 2026-10-08: `http://foo/` (single label: intranet, http), `https://x.y/`, `http://foo/bar?x=1`; `foo/bar` stays a search | ✅ |
 | `foo:8080`, `myserver:8080/x` | has port → URL | fixed: `http://foo:8080` (single label), `https://foo.zzzz:8080`; `10:30`, `3:2`, `8080` stay searches (Chrome: all-digit host → IPv4 → query) | ✅ |
 | `münchen.de`, `яндекс.рф`, `例え.jp` | URL (IDN host, known TLD) | fixed: labels take any non-ASCII character (`omnibox.ts` `HOST`), typed text goes to the engine as typed (it punycodes); `münchen.zzzz`, `café` stay searches | ✅ |

@@ -2,7 +2,7 @@ import { findBang, type BangMatch, type BangTable } from "./bangs.ts";
 import { calculate } from "./calculator.ts";
 import { BUILT_IN_ENGINES, searchUrl, type SearchEngine } from "./engines.ts";
 import { matchActions, type ActionCandidate } from "./fuzzy.reference.ts";
-import { fixupUrl, hostOf, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
+import { fixupUrl, hostOf, intranetUrl, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
 import { matchQuickCreate } from "./quickCreate.ts";
 import { scopedSearchUrl, type SearchScope } from "./siteSearch.ts";
 
@@ -454,7 +454,7 @@ export function buildSuggestions(raw: string, source: SuggestionSource, options:
   }
 
   const search: Suggestion = { kind: "search", query, url: searchUrl(engine, query), engine: engine.name };
-  const typedUrl = fixupUrl(query);
+  const typedUrl = fixupUrl(query) ?? intranetUrl(query, (host) => pool.list.some((c) => hostOf(c.url) === host) || source.tabs.some((t) => !!t.url && hostOf(t.url) === host));
   const guessedUrl = typedUrl ? null : spacedAddressGuess(query);
   const calc = calculate(query);
   const creates = matchQuickCreate(raw.trimStart());

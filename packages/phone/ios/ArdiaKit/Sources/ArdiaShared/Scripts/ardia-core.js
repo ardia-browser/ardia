@@ -1301,6 +1301,8 @@ __define("packages/core/src/omnibox.ts", function (exports, __require) {
   __export(exports, "fixupUrl", () => fixupUrl);
   __export(exports, "sameAddress", () => sameAddress);
   __export(exports, "spacedAddressGuess", () => spacedAddressGuess);
+  __export(exports, "intranetLinkHost", () => intranetLinkHost);
+  __export(exports, "intranetUrl", () => intranetUrl);
   __export(exports, "searchUrlFor", () => searchUrlFor);
   __export(exports, "resolveInput", () => resolveInput);
   __export(exports, "classifyPaste", () => classifyPaste);
@@ -1472,7 +1474,24 @@ function fixup(raw        )                {
   const query = /\?[^#]*/.exec(rest)?.[0] ?? "";
   const fragment = /#.*/.exec(rest)?.[0] ?? "";
   const parts = (host.port ? 1 : 0) + (path ? 1 : 0) + (query.length > 1 ? 1 : 0) + (fragment.length > 1 ? 1 : 0);
-  return host.port || path.endsWith("/") || parts > 1 ? `${proto}://${input}` : null;
+  if (host.port || path.endsWith("/") || parts > 1) return `${proto}://${input}`;
+  return path && !dotted && name === GO_LINK_HOST ? `http://${input}` : null;
+}
+
+const GO_LINK_HOST = "go";
+
+function intranetLinkHost(raw        )                {
+  const input = raw.trim();
+  if (/\s/.test(input) || !/^[^.:/?#[]+\/[^/?#]/.test(input)) return null;
+  const host = matchHost(input);
+  if (!host || host.port) return null;
+  const name = host.name.toLowerCase();
+  return /^\d+$/.test(name) || name === "localhost" ? null : name;
+}
+
+function intranetUrl(raw        , knownHost                           )                {
+  const host = intranetLinkHost(raw);
+  return host && knownHost(host) ? fixupUrl(`http://${raw.trim()}`) : null;
 }
 
 const SURROGATE_PAIR_OR_LONE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;
@@ -3054,7 +3073,7 @@ const { NO_BOOKMARKS, poolFor, savedBookmark, savedVisit, tabsOver } = __require
 const { extensionSuggestions } = __require("packages/core/src/extensionRows.ts");
 const { BUILT_IN_ENGINES, searchUrl } = __require("packages/core/src/engines.ts");
 const { matchActions } = __require("packages/core/src/fuzzy.ts");
-const { fixupUrl, hostOf, sameAddress, searchUrlFor, spacedAddressGuess } = __require("packages/core/src/omnibox.ts");
+const { fixupUrl, hostOf, intranetLinkHost, intranetUrl, sameAddress, searchUrlFor, spacedAddressGuess } = __require("packages/core/src/omnibox.ts");
 const { leadingRows, matchScore, matchScoreWord, narrowing, parseQuery, remember, TabList, TopList } = __require("packages/core/src/pageMatch.ts");
 const { documentKey, hostLowerOfPage, hostOfPage, hostPart, originOfPage, pageKey, routeOf, withRootSlash } = __require("packages/core/src/pageText.ts");
 const { globalProviderRows, providerUrl, safeProviderRows } = __require("packages/core/src/providerRows.ts");
@@ -3158,7 +3177,8 @@ function buildSuggestions(raw        , source                  , options        
   let found = 0;
   const top = new TopList(limit + 1);
   const tabTop = new TabList();
-  const typedUrl = scope ? null : fixupUrl(query);
+  const typedUrl = scope ? null : fixupUrl(query) ?? intranetUrl(query, (host) => hasHost(pool.list, host) || source.tabs.some((t) => !!t.url && hostOf(t.url) === host));
+  const intranetLink = typedUrl !== null && intranetLinkHost(query) !== null;
   const guessedUrl = scope || typedUrl ? null : spacedAddressGuess(query);
   const tabUrls = guessedUrl ? new Map(source.tabs.map((t) => [t.id, t.url])) : null;
   const tabUrl = (tabId                    ) => (tabUrls && tabId ? tabUrls.get(tabId) : undefined);
@@ -3243,7 +3263,7 @@ function buildSuggestions(raw        , source                  , options        
   if (creates.length && /^\S+\s+\S/.test(query)) first = createRow(creates[0] );
   else if (actionMatches[0]?.exact) first = actionRow(actionMatches[0].action);
   else if (target && completion) first = openTabAt(target.url) ?? tag(known(target.url) ?? { kind: "page", url: target.url, title: "", favicon: target.favicon }, !websiteFirst && "search_first_inline");
-  else if (typedUrl) first = openTabAt(typedUrl) ?? known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null };
+  else if (typedUrl) first = openTabAt(typedUrl) ?? tag(known(typedUrl) ?? { kind: "page", url: typedUrl, title: "", favicon: null }, intranetLink && "intranet_link");
   else if (extensionMatches.exact) first = extensionMatches.rows[0] ;
   else if (!guessedUrl && websiteFirst && best && best.m >= 40 && (!noInline || typedIsPage(best.c.text, q))) first = tag(pageSuggestion(best.c, best.tabId), best.c.renamed && "renamed_tab");
   else first = search;
@@ -3289,6 +3309,8 @@ function providerScopeSuggestions(query        , scope             , sections   
   if (section) for (const row of safeProviderRows({ id, title: scope.name }, section.rows, limit)) if (!seen.has(row.url) && items.length < limit) items.push(row);
   return { items, completion: "" };
 }
+
+const hasHost = (list                      , host        ) => list.some((c) => hostOfPage(c.text) === host);
 
 function viaOf(items                       , via                                        )                                            {
   let shown                                           ;

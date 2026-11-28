@@ -4,7 +4,7 @@ import { PSL_TLDS } from "./tlds.ts";
 import { domainToASCII } from "node:url";
 import { cleanLinkTitle, cleanUrl, cleanUrlReport, linkLines, markdownLink } from "./cleanUrl.ts";
 import { displayHost, hostSpoofReason, punycodeEncode } from "./idn.ts";
-import { breadcrumb, classifyPaste, fixupUrl, resolveInput, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
+import { breadcrumb, classifyPaste, fixupUrl, intranetLinkHost, intranetUrl, resolveInput, sameAddress, spacedAddressGuess, urlForDisplay } from "./omnibox.ts";
 import { displayUrl } from "./suggest.ts";
 
 const GOOGLE = "https://www.google.com/search?q=";
@@ -261,6 +261,33 @@ test("an unknown TLD searches unless a port, a trailing slash or two of path, qu
   assert.equal(fixupUrl("wiki/Main?x=1"), "http://wiki/Main?x=1");
   assert.equal(fixupUrl("react"), null);
   assert.equal(fixupUrl("and/or"), null);
+});
+
+test("go/<link> opens http://go/<link>: go is the go-link host, other single labels with a path stay searches", () => {
+  assert.equal(resolveInput("go/server", GOOGLE), "http://go/server");
+  assert.equal(fixupUrl("go/server"), "http://go/server");
+  assert.equal(fixupUrl("GO/Team-Wiki"), "http://GO/Team-Wiki");
+  assert.equal(fixupUrl("go/a/b"), "http://go/a/b");
+  assert.equal(fixupUrl("go/"), "http://go/");
+  assert.equal(fixupUrl("go/x?y=1"), "http://go/x?y=1");
+  assert.equal(classifyPaste("go/server")?.kind, "go");
+  for (const text of ["go", "go server", "go/ server", "go/x y", "go.zzzz/x", "and/or", "foo/bar", "w/o", "tcp/ip", "1/2", "24/7", "c++/x"]) {
+    assert.equal(fixupUrl(text), null, text);
+  }
+  assert.equal(resolveInput("go server", GOOGLE), "https://www.google.com/search?q=go%20server");
+  assert.equal(resolveInput("1/2", GOOGLE), "https://www.google.com/search?q=1%2F2");
+});
+
+test("a single-label host with a path is an intranet link: it opens when the host is known, as Chrome's typed intranet hosts do", () => {
+  assert.equal(intranetLinkHost("wiki/Main"), "wiki");
+  assert.equal(intranetLinkHost(" Wiki/Main "), "wiki");
+  for (const text of ["wiki", "wiki/", "wiki//x", "wiki:8080/x", "wiki.zzzz/x", "a b/c", "wiki/a b", "localhost/x", "1/2", "/etc/hosts", "https://wiki/x", "c++/x"]) {
+    assert.equal(intranetLinkHost(text), null, text);
+  }
+  const known = (host: string) => host === "wiki";
+  assert.equal(intranetUrl("wiki/Main", known), "http://wiki/Main");
+  assert.equal(intranetUrl("and/or", known), null);
+  assert.equal(intranetUrl("wiki/a b", known), null);
 });
 
 test("a known registry navigates with or without a path (Chrome's public suffix list)", () => {

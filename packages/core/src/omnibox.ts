@@ -163,7 +163,24 @@ function fixup(raw: string): string | null {
   const query = /\?[^#]*/.exec(rest)?.[0] ?? "";
   const fragment = /#.*/.exec(rest)?.[0] ?? "";
   const parts = (host.port ? 1 : 0) + (path ? 1 : 0) + (query.length > 1 ? 1 : 0) + (fragment.length > 1 ? 1 : 0);
-  return host.port || path.endsWith("/") || parts > 1 ? `${proto}://${input}` : null;
+  if (host.port || path.endsWith("/") || parts > 1) return `${proto}://${input}`;
+  return path && !dotted && name === GO_LINK_HOST ? `http://${input}` : null;
+}
+
+const GO_LINK_HOST = "go";
+
+export function intranetLinkHost(raw: string): string | null {
+  const input = raw.trim();
+  if (/\s/.test(input) || !/^[^.:/?#[]+\/[^/?#]/.test(input)) return null;
+  const host = matchHost(input);
+  if (!host || host.port) return null;
+  const name = host.name.toLowerCase();
+  return /^\d+$/.test(name) || name === "localhost" ? null : name;
+}
+
+export function intranetUrl(raw: string, knownHost: (host: string) => boolean): string | null {
+  const host = intranetLinkHost(raw);
+  return host && knownHost(host) ? fixupUrl(`http://${raw.trim()}`) : null;
 }
 
 const SURROGATE_PAIR_OR_LONE = /[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g;

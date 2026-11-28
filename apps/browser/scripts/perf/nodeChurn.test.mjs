@@ -48,7 +48,7 @@ test("one leaking run among clean ones fails the check: nodes left behind are ju
 const benchSource = readFileSync(new URL("./bench-app.js", import.meta.url), "utf8");
 const ratchetSource = readFileSync(new URL("./ratchet-app.js", import.meta.url), "utf8");
 
-function churnApp({ leakPerOpen = 0, leakAfterLastSwitchMs = null } = {}) {
+function churnApp({ leakPerOpen = 0, leakAfterLastSwitchMs = null, firstOpenNodes = 0 } = {}) {
   const nodes = { created: 578, dropped: 0 };
   let next = 0;
   let lateTimer = null;
@@ -59,7 +59,8 @@ function churnApp({ leakPerOpen = 0, leakAfterLastSwitchMs = null } = {}) {
     tabs: {},
     newTab() {
       const id = `n${next++}`;
-      setTimeout(() => (nodes.created += 13 + leakPerOpen), 12);
+      const once = next === 1 ? firstOpenNodes : 0;
+      setTimeout(() => (nodes.created += 13 + leakPerOpen + once), 12);
       return id;
     },
     closeTab() {
@@ -87,6 +88,10 @@ test("a churn that leaves nothing behind reports zero", { timeout: 20_000 }, asy
 
 test("a node leaked on every open is counted once per open", { timeout: 20_000 }, async () => {
   assert.equal((await churnApp({ leakPerOpen: 1 }).run("nodeChurn", churn)).left, churn.opens);
+});
+
+test("long-lived nodes the first tab open allocates land before the start reading", { timeout: 20_000 }, async () => {
+  assert.equal((await churnApp({ firstOpenNodes: 3 }).run("nodeChurn", churn)).left, 0);
 });
 
 test("a node leaked half a second after the last switch is still caught: the tail waits for the counter to go quiet", { timeout: 20_000 }, async () => {

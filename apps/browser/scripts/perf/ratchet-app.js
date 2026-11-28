@@ -20,6 +20,11 @@ const extra = {
     const w = S().ui.focusOrder?.[0] ?? S().ui.focusedWindowId;
     const ids = S().windows[w].tabIds.slice(0, 20);
     const visit = (n, gap) => Array.from({ length: n }).reduce((p, _, i) => p.then(() => S().activate(ids[(i * 7) % ids.length])).then(() => sleep(gap)), Promise.resolve());
+    const warm = S().newTab(w, { url: `${origin}/p/churn-warmup-${Date.now()}` });
+    const warmId = typeof warm === "string" ? warm : warm?.id;
+    await sleep(CHURN_OPEN_MS);
+    if (warmId) S().closeTab(warmId);
+    await sleep(CHURN_CLOSE_MS);
     await visit(ids.length, 60);
     S().activate(ids[0]);
     await sleep(NODES_SETTLE_BEFORE_MS);

@@ -1507,6 +1507,7 @@ const { pinnedAdapter: shippedPinnedAdapter } = await import("./fixtures/pinned-
 
 class OldMac extends Device {
   async sync() {
+    useEditClock(this.clock);
     stub.current.device = this.id;
     useBrowser.setState(this.browser, true);
     try {
@@ -1632,6 +1633,7 @@ const preInterleave = await import("./fixtures/pinned-v0.2.40.ts");
 
 class PreInterleaveMac extends Device {
   async sync() {
+    useEditClock(this.clock);
     stub.current.device = this.id;
     useBrowser.setState(this.browser, true);
     try {
@@ -2226,6 +2228,7 @@ class NightlyFourMac extends Device {
     };
   }
   async sync() {
+    useEditClock(this.clock);
     stub.current.device = this.id;
     useBrowser.setState(this.browser, true);
     try {

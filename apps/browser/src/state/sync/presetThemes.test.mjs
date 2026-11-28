@@ -5,6 +5,7 @@ globalThis.__DEV__ = false;
 
 const { useBrowser } = await import("../browser/store.ts");
 const { Clock, emptyScope, syncScope } = await import("@ardia/sync");
+const { useEditClock } = await import("./editClock.ts");
 const adapters = await import("./profileAdapters.ts");
 const v0247 = await import("./fixtures/profileAdapters-v0.2.47.ts");
 const { pairTheme, settleThemeAdoption } = await import("./syncThemes.ts");
@@ -65,6 +66,7 @@ class Mac {
     this.adapters = this.currentAdapters();
   }
   with(fn) {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     try {
       return fn();
@@ -85,6 +87,7 @@ class Mac {
     this.with(() => setProfileTheme("default", theme, () => {}));
   }
   async sync(duringRead = null) {
+    useEditClock(this.clock);
     useBrowser.setState(this.browser, true);
     this.folder.duringRead = duringRead;
     try {

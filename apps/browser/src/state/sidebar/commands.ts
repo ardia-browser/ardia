@@ -98,7 +98,7 @@ export function sidebarMenuState(s: BrowserState, windowId: string | undefined) 
   const tab = windowId ? s.tabs[activeTabId(s, windowId) ?? ""] : undefined;
   if (windowId) {
     if (!tab || !awayFromPin(tab)) disabled.push("returnToPinnedUrl");
-    titles.togglePinnedRow = movePinnedTitle(s, tab);
+    titles.togglePinnedRow = movePinnedTitle(s, windowId);
     const selected = selectedTabIds(s, windowId);
     const forGroup = selected.filter((id) => pinSection(s.tabs[id]) !== "tile");
     if (!forGroup.length) disabled.push("newGroupWithTabs");

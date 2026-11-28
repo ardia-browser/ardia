@@ -798,6 +798,9 @@ function pageEvent(event: PageEngineEvent) {
     case "pages.webVideo":
       if (!event.isPrivate) countUsage(event.outcome === "floated" ? "web_videos_floated" : "web_videos_kept_playing");
       return;
+    case "pages.scriptlets":
+      if (!event.isPrivate) countUsage("scriptlet_pages");
+      return;
     default:
       return;
   }

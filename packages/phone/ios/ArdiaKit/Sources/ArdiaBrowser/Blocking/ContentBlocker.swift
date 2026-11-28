@@ -27,6 +27,9 @@ public final class ContentBlocker {
   @ObservationIgnored private var applied: [ObjectIdentifier: AppliedLists] = [:]
   @ObservationIgnored private var preparing: Task<Void, Never>?
   @ObservationIgnored private let userScripts: [WKUserScript]
+  @ObservationIgnored private var scriptlets = ScriptletTable()
+  @ObservationIgnored private var scriptletScript: WKUserScript?
+  @ObservationIgnored public var onScriptletPage: (@MainActor (_ isPrivate: Bool) -> Void)?
   static let world = WKContentWorld.world(name: "ArdiaBlocking")
 
   struct AppliedLists: Equatable {
@@ -146,10 +149,16 @@ public final class ContentBlocker {
   func restoreUserScripts(on controller: WKUserContentController) {
     guard controllers.contains(controller) else { return }
     for script in userScripts { controller.addUserScript(script) }
+    if applied[ObjectIdentifier(controller)]?.exempt == false, let scriptletScript { controller.addUserScript(scriptletScript) }
   }
 
   public func prepareNavigation(of controller: WKUserContentController, toHost host: String?, isPrivate: Bool = false) {
     apply(to: controller, exempt: settings.isExempt(host, isPrivate: isPrivate))
+  }
+
+  public func countScriptletPage(toHost host: String?, isPrivate: Bool = false) {
+    guard !settings.isExempt(host, isPrivate: isPrivate), !scriptlets.bodies(forHost: host).isEmpty else { return }
+    onScriptletPage?(isPrivate)
   }
 
   public func blocksRequest(toHost host: String) -> Bool {
@@ -175,6 +184,11 @@ public final class ContentBlocker {
 
   private func listsChanged() {
     revision += 1
+    let active = filterLists.activeScriptlets(settings.isEnabled)
+    if active != scriptlets {
+      scriptlets = active
+      scriptletScript = active.script.map { WKUserScript(source: $0, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page) }
+    }
     pushToControllers()
   }
 
@@ -193,8 +207,10 @@ public final class ContentBlocker {
     guard applied[key] != target else { return }
     applied[key] = target
     controller.removeAllContentRuleLists()
+    controller.removeAllUserScripts(from: .page)
     guard !exempt else { return }
     for list in activeLists() { controller.add(list) }
+    if let scriptletScript { controller.addUserScript(scriptletScript) }
   }
 
   func activeLists() -> [WKContentRuleList] {

@@ -23,6 +23,7 @@ public struct ParsedFilterList: Sendable {
   var scopedExceptions: [String: [String]] = [:]
   var badfilters: Set<String> = []
   var blockedDomains: [String] = []
+  var scriptlets = ScriptletTable()
 }
 
 public struct FilterChunk: Sendable, Equatable {
@@ -122,6 +123,7 @@ public enum FilterListConverter {
 
   public static func parse(_ text: String, id: String) -> ParsedFilterList {
     var list = ParsedFilterList(id: id, convertedLines: 0, skippedLines: 0)
+    let trustsScriptlets = ScriptletTable.trusts(listID: id)
     var seenBlocks: Set<String> = []
     var seenGeneric: Set<String> = []
     text.enumerateLines { raw, _ in
@@ -136,6 +138,19 @@ public enum FilterListConverter {
         if seenBlocks.insert(filter).inserted {
           list.blocks.append(KeyedRule(key: filter, rule: Rule(trigger: Trigger(urlFilter: hostPrefix(host) + "[:/]"), action: Action(type: "block")), host: host))
           list.blockedDomains.append(host)
+        }
+        return
+      }
+      if line.utf8.contains(0x23), let scriptlet = ScriptletTable.parse(line, trusted: trustsScriptlets) {
+        switch scriptlet {
+        case .skip:
+          list.skippedLines += 1
+        case .run(let hosts, let body):
+          list.convertedLines += 1
+          list.scriptlets.add(body, on: hosts)
+        case .exception(let hosts, let body):
+          list.convertedLines += 1
+          list.scriptlets.except(body, on: hosts)
         }
         return
       }

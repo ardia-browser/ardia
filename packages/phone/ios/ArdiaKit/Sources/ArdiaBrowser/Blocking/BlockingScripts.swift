@@ -195,4 +195,92 @@ enum BlockingScripts {
     }, true);
   })();
   """#
+
+  static let scriptlets = #"""
+  ((table) => {
+    const hostname = location.hostname;
+    if (!hostname) return;
+    const suffixes = [];
+    for (let rest = hostname; rest.includes("."); rest = rest.slice(rest.indexOf(".") + 1)) suffixes.push(rest);
+    const pick = (map) => suffixes.flatMap((host) => map[host] || []);
+    const excepted = new Set(pick(table.exceptions || {}).map((body) => JSON.stringify(body)));
+    if (excepted.has("[]")) return;
+    const chosen = new Map();
+    for (const body of pick(table.hosts || {})) {
+      const key = JSON.stringify(body);
+      if (!excepted.has(key)) chosen.set(key, body);
+    }
+    if (!chosen.size) return;
+
+    const toRegExp = (pattern) => {
+      const literal = /^\/(.+)\/([dgimsuvy]*)$/.exec(pattern);
+      if (literal) return new RegExp(literal[1], literal[2]);
+      return new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    };
+    const options = (list) => {
+      const out = {};
+      for (let i = 0; i + 1 < list.length; i += 2) out[list[i]] = list[i + 1];
+      return out;
+    };
+    const constant = (raw) => {
+      switch (raw) {
+        case "undefined": return { value: undefined };
+        case "false": return { value: false };
+        case "true": return { value: true };
+        case "null": return { value: null };
+        case "''": case "emptyStr": return { value: "" };
+        case "[]": case "emptyArr": return { value: [] };
+        case "{}": case "emptyObj": return { value: {} };
+        case "noopFunc": return { value: function () {} };
+        case "trueFunc": return { value: function () { return true; } };
+        case "falseFunc": return { value: function () { return false; } };
+      }
+      if (/^-?\d+$/.test(raw)) return { value: parseInt(raw, 10) };
+      if (raw.startsWith("{") && raw.endsWith("}")) {
+        try { return { value: JSON.parse(raw).value }; } catch (e) { return null; }
+      }
+      return { value: raw };
+    };
+    const owner = (chain) => {
+      const parts = chain.split(".");
+      const prop = parts.pop();
+      let target = globalThis;
+      for (const part of parts) {
+        target = target == null ? undefined : target[part];
+        if (target == null) return null;
+      }
+      return typeof target[prop] === "function" ? { target, prop } : null;
+    };
+
+    const scriptlets = {
+      "trusted-replace-argument": (chain = "", position = "", raw = "", ...rest) => {
+        if (!chain || position === "" || raw.startsWith("repl:") || raw.startsWith("add:")) return;
+        const found = owner(chain);
+        const replacement = constant(raw);
+        if (!found || !replacement) return;
+        const index = parseInt(position, 10) || 0;
+        const extra = options(rest);
+        const condition = extra.condition === undefined ? null : toRegExp(extra.condition);
+        const original = found.target[found.prop];
+        found.target[found.prop] = new Proxy(original, {
+          apply(fn, self, args) {
+            const at = index >= 0 ? index : args.length + index;
+            if (at >= 0 && at < args.length && (condition === null || condition.test(String(args[at])))) {
+              args = Array.from(args);
+              args[at] = replacement.value;
+            }
+            return Reflect.apply(fn, self, args);
+          },
+        });
+      },
+    };
+    scriptlets["trusted-ra"] = scriptlets["trusted-replace-argument"];
+
+    for (const [name, ...args] of chosen.values()) {
+      const run = scriptlets[name];
+      if (!run) continue;
+      try { run(...args); } catch (e) {}
+    }
+  })
+  """#
 }

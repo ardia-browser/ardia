@@ -504,6 +504,7 @@ public final class WebTab: DiscardablePage, Identifiable {
       let targetHost = BrowserURL.host(of: target.absoluteString)
       if let controller = webView?.configuration.userContentController {
         engine?.blocker.prepareNavigation(of: controller, toHost: targetHost, isPrivate: isPrivate)
+        engine?.blocker.countScriptletPage(toHost: targetHost, isPrivate: isPrivate)
         engine?.prepareNightShade(of: controller, toHost: targetHost, isPrivate: isPrivate)
       }
       let zoom = engine?.preferences.settings(for: targetHost, isPrivate: isPrivate).pageZoom ?? 1

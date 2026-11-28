@@ -93,6 +93,18 @@ extension WebKitTab: PageTab {
     }
   }
 
+  func copyScreenshot(_ completion: @escaping ([String: Any]) -> Void) {
+    guard let view = webView, let window, !view.isHidden else { return completion(PageScreenshot.noPage) }
+    let backingScale = window.backingScaleFactor
+    view.takeSnapshot(with: nil) { image, _ in
+      let transform = NSAffineTransform()
+      transform.scale(by: backingScale)
+      var rect = NSRect(origin: .zero, size: image?.size ?? .zero)
+      let picture = image?.cgImage(forProposedRect: &rect, context: nil, hints: [.ctm: transform])
+      completion(PageScreenshot.copy(picture, backingScale: backingScale))
+    }
+  }
+
   func closePage() {
     if Thread.isMainThread { return close() }
     DispatchQueue.main.async { self.close() }

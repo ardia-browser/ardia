@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useRef } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { deliverPageEvent, isPageEventProp, pageEventOf, type NativeProps, type PageEvent } from "./pageEvents";
-import type { DiscardOutcome, DiscardRefusal, WebViewHandle, WebViewNativeHandle, WebViewProps } from "./pageTypes";
+import type { DiscardOutcome, DiscardRefusal, ScreenshotCopy, WebViewHandle, WebViewNativeHandle, WebViewProps } from "./pageTypes";
 import type { ChromiumSiteDataReply, PageCookie } from "./webkit";
 
 const NativeWebView = requireNativeViewManager<NativeProps>("ArdiaWebView");
@@ -63,6 +63,7 @@ export function webViewHandle(native: { readonly current: WebViewNativeHandle | 
     },
     navigationEntries: async () => (await call([], (n) => n.navigationEntries())).map((e) => ({ ...e, url: toAppUrl(e.url) })),
     capturePicture: (scale) => call(null, (n) => n.capturePicture(scale)),
+    copyScreenshot: () => call<ScreenshotCopy>({ ok: false, reason: "noPage" }, (n) => n.copyScreenshot()),
     downloadImage: (url, maxPixels) => call(null, (n) => n.downloadImage(url, maxPixels)),
     downloadFavicon: (url) => call(null, (n) => n.downloadFavicon(url)),
     mediaCommand: (action, seconds) => call(undefined, (n) => n.mediaCommand(action, seconds)),

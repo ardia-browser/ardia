@@ -2197,6 +2197,17 @@
    "detected": false
   },
   {
+   "id": "page-pixels:copyScreenshot",
+   "source": "page",
+   "guard": "Copy Screenshot copies only pixels: the page's own compositor frame from ArdiaCoreTab copyPicture (a WebKit tab: WKWebView takeSnapshot) of the tab view the user is looking at, refused for a Chromium tab when the view has no tab, no window, is hidden or still awaits its first document, and for a WebKit tab when it has no web view or window or is hidden; nothing the page returns, no markup and no script result reaches the pasteboard. The image is redrawn into sRGB by NSBitmapImageRep and written as PNG and TIFF only, and a write the pasteboard refuses is reported as a failure",
+   "checks": [
+    "packages/ardiacore/ios/ArdiaWebView+PageCommands.mm#copyPagePicture",
+    "packages/ardiacore/ios/WebKitTab+PageTab.swift#copyScreenshot",
+    "packages/ardiacore/ios/PageScreenshot.swift#copy"
+   ],
+   "detected": false
+  },
+  {
    "id": "windows-webui-documents:liveDocuments",
    "source": "frame",
    "guard": "Windows WebUI host (--ardia-shell=webui): documents.watch, unwatch, commit and flush arrive as engine.call from the live trusted chrome://ardia/ shell document only, for the app profile name \"default\" only, with JSON text of at most 8 MiB (DocumentEngineRequestAllowed) parsed in RFC mode to depth 48 as an object (ParseDocumentVerb picks the verb; anything else is ERR_DOCUMENT_REQUEST); a subscription names exactly {document: \"live.json\"}; a private window gets ERR_DOCUMENT_AUTH; the client id is scoped to the authority, the window and the renderer generation (EnsureDocumentClient) and is retired with the renderer; change events reach the shell only while the subscription sequence that asked for them is current (DocumentSubscription) and the authority scope still matches; the shared LinuxDocumentService from engine/ardiacore-linux validates every operation and reads and writes its envelope through ReadCanonicalDocument and WriteCanonicalEnvelope, capped at kLinuxLiveMaxBytes; scripts/windows/engine/tests/webui_window_policy_test.cc unit-tests the verb parser and the subscription sequence",

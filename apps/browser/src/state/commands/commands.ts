@@ -52,6 +52,7 @@ import { toggleCastPicker } from "../media/cast";
 import { openManageExtensions, openPinDialog, openWebStore } from "../extensions/actions";
 import { requestAutofill } from "../site/autofill";
 import { copyPageUrl, copySelectedTabUrls, jumpToSelection } from "../site/selection";
+import { copyPageScreenshot } from "../site/pageScreenshot";
 import { shareTab } from "../site/share";
 import { groupOf } from "../pins/tabGrouping";
 import { noteUrlCopied } from "../telemetry/urlCopies";
@@ -228,6 +229,8 @@ export function runCommand({ command, arg, windowId: given }: CommandEvent, { st
       if ((!targeted && copySelectedTabUrls(s, windowId, true)) || !page) return;
       noteUrlCopied(awaitsFirstPage(page.id), cleanUrlReport(page.url).removedTracker);
       return copyLink(markdownLink(page.customTitle || page.title, page.url));
+    case "copyScreenshot":
+      return page ? void copyPageScreenshot(page.id, user?.consent) : undefined;
     case "findInPage":
       if (page) expectFocus(windowId, findFocus(page.id));
       return page ? openFind(page.id, { replace: false }) : undefined;

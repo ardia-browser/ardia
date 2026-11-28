@@ -139,6 +139,7 @@ enum MainMenu {
       edits[1],
       cmd(.copyUrl),
       cmd(.copyUrlAsMarkdown),
+      cmd(.copyScreenshot),
       edits[2],
       paste,
       std("Delete", #selector(NSText.delete(_:))),

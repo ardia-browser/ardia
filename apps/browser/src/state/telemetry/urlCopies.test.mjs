@@ -10,6 +10,8 @@ const NONE = {
   url_copies_cleaned: 0,
   url_copies_from_webkit_menu: 0,
   url_copies_uncleaned: 0,
+  screenshot_copies: 0,
+  screenshot_copy_failures: 0,
 };
 
 test("address copies are counted, those taken before the first page apart, and taking them starts over", () => {

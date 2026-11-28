@@ -82,7 +82,7 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
       const parts = await readJournal();
       const doc = current();
       if (doc !== owner) return false;
-      const sealedHere = checkpoint.device === undefined || checkpoint.device === doc.deviceId;
+      const sealedHere = checkpoint.device === doc.deviceId || (checkpoint.device === undefined && !doc.deviceCheckpoints);
       const { scopes, covers, clock: savedClock } = sealedHere ? checkpoint : readCheckpoint(null);
       const live = new Set([APP_SCOPE, ...Object.values(doc.profiles).map((link) => profileScope(link.syncId))]);
       const clock = new Clock(doc.deviceId ?? "", doc.clock);
@@ -212,7 +212,7 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
   }
 
   let markOwed = false;
-  let resetOwed = false;
+  let resetOwed: { landed?: () => Promise<void> } | null = null;
 
   async function markBeforeDurable(scopes: (ScopeState | undefined)[], consent: ConsentToken | null) {
     if (marks.moved(scopes.filter((scoped): scoped is ScopeState => !!scoped))) markOwed = true;
@@ -236,17 +236,21 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
   }
 
   async function settleReset(consent: ConsentToken | null) {
-    if (!resetOwed) return;
-    try {
-      await saveDocDurably();
-      await saveDocument(STATE, "");
-    } catch (error) {
-      noteStartOverRefused(consent);
-      throw error;
+    while (resetOwed) {
+      const owed = resetOwed;
+      try {
+        await saveDocDurably();
+        await saveDocument(STATE, "");
+      } catch (error) {
+        noteStartOverRefused(consent);
+        throw error;
+      }
+      clearJournal();
+      Object.assign(state, { json: "", onDisk: false, wanted: current().enabled });
+      if (resetOwed !== owed) continue;
+      resetOwed = null;
+      await owed.landed?.();
     }
-    resetOwed = false;
-    clearJournal();
-    Object.assign(state, { json: "", onDisk: false, wanted: current().enabled });
   }
 
   function docJson() {
@@ -324,8 +328,8 @@ export function syncFiles(current: () => SyncDoc, marks: SessionMarkHooks = NO_M
     await documentSaved(DOC);
   }
 
-  function startOver(consent: ConsentToken | null) {
-    resetOwed = true;
+  function startOver(consent: ConsentToken | null, landed?: () => Promise<void>) {
+    resetOwed = { landed };
     return serial(async () => {
       await settleReset(consent);
       await saveState();

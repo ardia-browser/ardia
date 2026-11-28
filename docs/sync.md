@@ -210,10 +210,13 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   or moved to a newer mark. Starting over (turning sync on, Stop Syncing) saves `sync.json` first and waits for
   it, then clears the sealed checkpoint (awaited) and the journal. Until that lands the start-over stays owed:
   nothing else writes `sync.json`, and every journal, apply or checkpoint write tries it first and refuses to
-  write without it, so a `sync.json` that didn't save reopens with all its recorded data. Stop Syncing forgets
-  the sync key only after `sync.json` records sync as off, and a new setup that can't save shows as stalled with
-  the error. Each checkpoint names the device that sealed it (`device`), and a setup never loads another
-  device's checkpoint, so one left behind by a reset that stopped part-way can't leak into the next setup.
+  write without it, so a `sync.json` that didn't save reopens with all its recorded data. A newer start-over
+  replaces an older one still waiting, and only the newer one's follow-up runs. Stop Syncing forgets the sync key
+  only once its start-over has landed, and turning sync on or joining waits for any Stop still saving. Turning
+  sync on or joining waits for its own save too, and if that fails it puts sync back off, forgets the new key
+  and says so. Each checkpoint names the device that sealed it (`device`), and a setup never loads another
+  device's checkpoint; a setup made since then (`deviceCheckpoints` in `sync.json`) takes no checkpoint without
+  a name either, so one left behind by a reset that stopped part-way can't leak into the next setup.
   Telemetry: `sync_mark_saves_refused` and `sync_start_overs_refused`. Equal marks therefore always mean the session on disk covers the sync state on disk; a
   crash anywhere in between leaves them apart. While quitting, `sync.json` still moves on but the store doesn't (the
   session has saved for the quit), so a write that lands during the quit leaves the marks apart and the next launch

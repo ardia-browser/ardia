@@ -302,6 +302,7 @@ test("a checkpoint read from a superseded sync session is dropped: stopping /old
     await stopping;
     assert.deepEqual(grouping(), { on: false, retired: true }, "stopping settles the waiting on");
     await recovering;
+    assert.equal(engine.appScopeRecords()[GROUPING], undefined, "the stopped setup holds nothing from /old");
     assert.ok("ok" in (await engine.turnOnSync("/new")));
     await settle();
     assert.equal(engine.appScopeRecords()[GROUPING], undefined, "/new's state holds nothing from /old");

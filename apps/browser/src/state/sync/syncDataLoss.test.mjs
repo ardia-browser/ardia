@@ -909,10 +909,9 @@ test("#4759: Stop Syncing keeps the journal, the saved state and the key when sy
       await engineA1.stopSync();
       engineA1.setTypeSynced("history", true);
       await settle();
-      assert.ok("ok" in (await engineA1.turnOnSync("/new")));
-      await settle();
-      assert.equal(engineA1.useSync.getState().status, "stalled", "a new setup that can't save says so");
-      assert.match(engineA1.useSync.getState().error ?? "", /couldn’t save/);
+      const turnedOn = await engineA1.turnOnSync("/new");
+      assert.match(turnedOn.error ?? "", /couldn’t save its settings/, "a new setup that can't save says so");
+      assert.equal(engineA1.useSync.getState().enabled, false, "and sync stays off");
       await engineA1.syncNow();
       await settle();
     });

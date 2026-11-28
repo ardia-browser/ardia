@@ -126,6 +126,8 @@ const phraseError = (r: Awaited<ReturnType<typeof enterRecoveryPhrase>>): string
       return `Couldn’t save the sync key in ${PLATFORM_TERMS.secretStore}.`;
     case "unavailable":
       return "Sync isn’t available in this build.";
+    case "notSaved":
+      return r.message;
   }
 };
 

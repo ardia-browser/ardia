@@ -35,6 +35,7 @@ function page({ origin, fields }) {
     window,
     document,
     location: { origin },
+    crypto: globalThis.crypto,
     addEventListener: (name, listener) => (listeners[name] = listener),
     Node: { DOCUMENT_POSITION_FOLLOWING: 4 },
     HTMLInputElement: { prototype: {} },

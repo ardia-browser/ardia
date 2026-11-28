@@ -24,7 +24,7 @@ import { useAddressBarInSidebar, usePageFrameInset, useToolbarLightsCenter } fro
 import { useToolbarRow } from "../toolbar/useToolbarRow";
 import { startsOffScreen } from "../../state/sidebar/geometry";
 import { toggleNewTabBar } from "../../state/omnibox/newTabBar";
-import { clearlyOverflows, DOCK_SHARE, DOCKED_ROW_PAD, dockedAfter, GLOW_ROOM, listOverflows, pageLayout, tilesFitDock, type PageSpot, type SidebarGeometry } from "./pageLayout";
+import { clearlyOverflows, DOCK_SHARE, DOCKED_ROW_PAD, dockedAfter, GLOW_ROOM, pageLayout, tilesFitDock, type PageSpot, type SidebarGeometry } from "./pageLayout";
 import { noteNewTabDocked } from "../../state/telemetry/sidebarScrollCounts";
 import { noteSidebarPlayerStayedAcrossPages } from "../../state/telemetry/mediaCardCounts";
 import { PageRows } from "./PageRows";
@@ -139,9 +139,6 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
       page.owns = false;
     };
   }, [spots, profileId, page, onScrollView]);
-  const listContent = useRef(0);
-  const [overflows, setOverflows] = useState(false);
-  const judgeOverflow = () => setOverflows(listOverflows(listContent.current, page.viewport));
   const [listViewport] = useState<ListViewport>(() => ({
     band: () => (page.viewport ? withOverscan(page.scrollY - LIST_PAD - page.regions.list, page.viewport) : null),
   }));
@@ -219,7 +216,6 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           ref={scrollView}
                           onLayout={(e) => {
                             page.viewport = e.nativeEvent.layout.height;
-                            judgeOverflow();
                             scrollEdgeBelow.measure({ viewport: page.viewport });
                             if (page.owns) sharedGeometry.current.viewport = page.viewport;
                             selectedRow.relocate();
@@ -229,10 +225,8 @@ export const SidebarPage = memo(function SidebarPage({ profileId, slot, paging, 
                           showsVerticalScrollIndicator={false}
                           scrollEventThrottle={16}
                           onScroll={onScroll}
-                          alwaysBounceVertical={overflows}
+                          alwaysBounceVertical={false}
                           onContentSizeChange={(_, content) => {
-                            listContent.current = content;
-                            judgeOverflow();
                             scrollEdgeBelow.measure({ content });
                             selectedRow.relocate();
                           }}

@@ -98,7 +98,7 @@ function SearchPanel({ windowId, windowWidth }: { windowId: string; windowWidth:
           />
         </View>
         <Divider />
-        <ScrollView ref={scroll} style={{ maxHeight: ROW * MAX_ROWS + 60 }} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scroll} style={{ maxHeight: ROW * MAX_ROWS + 60 }} showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
           {rows.length === 0 ? (
             <Text tone="textTertiary" style={NO_MATCH}>
               No tabs match “{query.trim()}”

@@ -1343,6 +1343,14 @@
       "created_at": "2026-11-27T20:44:40Z",
       "repoId": 1274703665,
       "pullRequestNo": 4661
+    },
+    {
+      "name": "sh-ayu",
+      "id": 174009190,
+      "comment_id": 7231448718,
+      "created_at": "2026-11-28T01:08:22Z",
+      "repoId": 1274703665,
+      "pullRequestNo": 4639
     }
   ]
 }

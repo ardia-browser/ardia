@@ -71,7 +71,15 @@ test("the dock reads its free space from the filler's child, whose frame moves o
 test("a free-space reading that arrives before the sidebar has a height is kept and applied once it does", () => {
   const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
   assert.match(page, /slack\.current = e\.nativeEvent\.layout\.height;\n\s*applySlack\(\);/);
-  assert.match(page, /useEffect\(applySlack, \[height > 0, canDock, resting\]\);/);
+  assert.match(page, /useEffect\(applySlack, \[height > 0, canDock, resting/);
+});
+
+test("rows leaving under the pointer don't shorten the list or undock the New Tab row until the pointer leaves", () => {
+  const page = readFileSync(new URL("./SidebarPage.tsx", import.meta.url), "utf8");
+  assert.match(page, /minHeight: hold\.minHeight/);
+  assert.match(page, /if \(next \|\| !hold\.holding\(\)\) dock\(next\);/);
+  assert.match(page, /active: current && !resting/);
+  assert.match(page, /showsHorizontalScrollIndicator=\{false\}/, "no legacy horizontal scroller margin under the list, so the list fills the scroll view");
 });
 
 test("no sidebar page mounts past its warm first screen while it isn't the shown one, during a hold included", () => {

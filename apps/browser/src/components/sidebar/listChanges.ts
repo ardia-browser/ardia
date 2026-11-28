@@ -1,22 +1,13 @@
 import type { BrowserState } from "../../state/browser/store";
-import { groupEntries } from "../../state/sidebar/entries";
-import { parseEntry } from "../../state/sidebar/entryKey";
-import { splitTabIdsOf } from "../../state/splits/splits";
-
-const tabsOf = (s: BrowserState, entry: string): string[] => {
-  const { kind, id } = parseEntry(entry);
-  if (kind === "group") return s.groups[id]?.tabIds ?? [];
-  if (kind === "split") return splitTabIdsOf(s.splits[id]) ?? [];
-  return [id];
-};
+import { entryTabIds, groupEntries } from "../../state/sidebar/entries";
 
 export const closedIn = (before: BrowserState, after: BrowserState) => (entry: string) => {
-  const ids = tabsOf(before, entry);
+  const ids = entryTabIds(before, entry);
   return ids.length > 0 && ids.every((id) => !after.tabs[id]);
 };
 
 export const openedIn = (before: BrowserState, after: BrowserState) => (entry: string) => {
-  const ids = tabsOf(after, entry);
+  const ids = entryTabIds(after, entry);
   return ids.length > 0 && ids.every((id) => !before.tabs[id]);
 };
 

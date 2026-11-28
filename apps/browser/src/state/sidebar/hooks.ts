@@ -1,5 +1,5 @@
 import { useShallow } from "zustand/react/shallow";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId, isPinnedRow, tabTitle } from "../browser/model";
 import { liveTabOpen, stackMembers } from "../live/rows";
 import { useLive } from "../live/store";
@@ -114,3 +114,27 @@ export const useTabAwayFromPin = (tabId: string | null) => useBrowser((s) => { c
 
 
 export const sidebarListLengthNow = (windowId: string, profileId: string) => sidebarEntries(useBrowser.getState(), windowId, profileId).list.length;
+
+export type SidebarSnapshot = BrowserState;
+
+export const sidebarNow = (): SidebarSnapshot => useBrowser.getState();
+
+function rowShown(s: BrowserState, tabId: string, windowId: string, profileId: string): boolean {
+  const active = activeTabId(s, windowId, profileId);
+  let group = Object.values(s.groups).find((g) => g.tabIds.includes(tabId));
+  while (group) {
+    if (group.collapsed && tabId !== active && !group.shownTabIds?.includes(tabId)) return false;
+    group = group.parentId ? s.groups[group.parentId] : undefined;
+  }
+  return true;
+}
+
+export function sidebarTabClosedSince(before: SidebarSnapshot, windowId: string, profileId: string): boolean {
+  const tabs = useBrowser.getState().tabs;
+  if (tabs === before.tabs) return false;
+  for (const id in before.tabs) {
+    const tab = before.tabs[id]!;
+    if (!tabs[id] && tab.windowId === windowId && tab.profileId === profileId && rowShown(before, id, windowId, profileId)) return true;
+  }
+  return false;
+}

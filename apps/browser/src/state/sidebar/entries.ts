@@ -174,7 +174,7 @@ export function showsExtraTabs(s: BrowserState, windowId: string, profileId: str
   });
 }
 
-function entryTabIds(s: BrowserState, entry: string): string[] {
+export function entryTabIds(s: BrowserState, entry: string): string[] {
   const { kind, id } = parseEntry(entry);
   if (kind === "group") return s.groups[id]?.tabIds ?? [];
   if (kind === "split") return splitTabIdsOf(s.splits[id]) ?? [];

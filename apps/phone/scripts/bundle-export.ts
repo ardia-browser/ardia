@@ -86,6 +86,6 @@ function main(argv: string[]): number {
   return command === "--help" || command === "-h" ? 0 : 64;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
   process.exit(main(process.argv.slice(2)));
 }

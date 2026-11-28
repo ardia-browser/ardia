@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
@@ -302,7 +302,7 @@ function report(result) {
   return problems.length ? 1 : 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   if (process.argv.includes("--help") || process.argv.includes("-h")) console.log(HELP);
   else if (process.argv.includes("--write")) writeBaseline(analyze());
   else process.exitCode = report(analyze());

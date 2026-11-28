@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -163,7 +163,7 @@ function verify(dir) {
   console.log(`reference verified ${manifest.files.length} Linux files and ${manifest.passwords.length} passwords`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [command, dir, wordlistSource] = process.argv.slice(2);
   if (command === "generate") generate(dir, wordlistSource);
   else if (command === "verify") verify(dir);

@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 let seed = 42;
 const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
@@ -158,7 +159,7 @@ export function writeSeed(dir, origin, appVersion, options) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [dir, origin = "http://127.0.0.1:47817", version = ""] = process.argv.slice(2);
   if (!dir) throw new Error("usage: node seed.mjs <data dir> [server origin] [app version]");
   writeSeed(dir, origin, version);

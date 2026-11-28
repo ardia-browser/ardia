@@ -56,7 +56,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { appEnv, binaryOf, isAlive, sleep } from "../../../../scripts/lib/instance.mjs";
 import { trySignal } from "../../../../scripts/lib/pid.mjs";
@@ -543,7 +543,7 @@ function compare(a, b) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   if (command === "help" || command === "--help" || command === "-h" || "help" in flags) {
     const lines = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
     console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));

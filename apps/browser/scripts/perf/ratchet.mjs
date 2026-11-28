@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { isHarnessTimer } from "./js-bench.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -576,7 +576,7 @@ export function replayArgs({ files, retryFiles = [], microFile = null, instr = n
   return [...files, ...retryFiles.flatMap((f) => ["--retry", f]), ...(microFile ? ["--micro", microFile] : []), ...(instr !== null ? ["--instr", String(instr)] : [])];
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [command, ...rest] = process.argv.slice(2);
   const { positional, flags } = parseArgs(rest);
   try {

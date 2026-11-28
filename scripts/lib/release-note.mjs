@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const KEYS = new Set(["date", "headline", "video"]);
 
@@ -41,7 +42,7 @@ export function releaseNote(path) {
   return { date: meta.date, headline: meta.headline, video: meta.video ?? "", body: text.slice(block[0].length).replace(/^\n+/, "") };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [path, field] = process.argv.slice(2);
   if (!path || !["date", "headline", "video", "body"].includes(field)) {
     console.error("usage: release-note.mjs <notes.md> date|headline|video|body");

@@ -5,13 +5,15 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
   static let shared = MenuTarget()
   var swallowsCommands = false
 
-  func dispatch(_ command: String, _ arg: String?, windowId: String?, mouseButton: String? = nil) {
+  func dispatch(_ command: String, _ arg: String?, windowId: String?, mouseButton: String? = nil, mouseGesture: String? = nil) {
     guard !swallowsCommands else { return }
-    if mouseButton == nil, command == "closeTab", WindowManager.shared.closeForeignKeyWindow() { return }
-    let body: [String: Any] = [
+    if mouseButton == nil, mouseGesture == nil, command == "closeTab", WindowManager.shared.closeForeignKeyWindow() { return }
+    var body: [String: Any] = [
       "command": command, "arg": arg as Any, "windowId": windowId as Any, "focusGeneration": FocusHandoff.shared.takeBegun() as Any,
     ]
-    ShellEvents.send(.command, ArdiaConsentStamp.begin().onto(mouseButton.map { body.merging(["mouseButton": $0]) { $1 } } ?? body))
+    if let mouseButton { body["mouseButton"] = mouseButton }
+    if let mouseGesture { body["mouseGesture"] = mouseGesture }
+    ShellEvents.send(.command, ArdiaConsentStamp.begin().onto(body))
   }
 
   private static let focusMovingCommands: Set<String> = ["newTab", "focusCommandBar", "findInPage", "showHistory"]
@@ -22,12 +24,12 @@ final class MenuTarget: NSObject, NSMenuItemValidation {
     perform(item, in: NSApp.keyWindow, windowId: WindowManager.shared.keyWindowId)
   }
 
-  func perform(_ item: CommandItem, in window: NSWindow?, windowId: String?, mouseButton: String? = nil) {
+  func perform(_ item: CommandItem, in window: NSWindow?, windowId: String?, mouseButton: String? = nil, mouseGesture: String? = nil) {
     _ = FocusHandoff.shared.takeBegun()
     if Self.focusMovingCommands.contains(item.command) || FocusHandoff.shared.gatesKeyWindow, let window {
       FocusHandoff.shared.begin(in: window)
     }
-    dispatch(item.command, item.arg, windowId: item.windowless ? nil : windowId, mouseButton: mouseButton)
+    dispatch(item.command, item.arg, windowId: item.windowless ? nil : windowId, mouseButton: mouseButton, mouseGesture: mouseGesture)
     if item.command == "tabSwitcher", mouseButton == nil { SwitcherHold.opened(by: item) }
   }
 

@@ -11,6 +11,7 @@ public class MenusModule: Module, MenusNative {
     MenuState.current = MenuState(state)
     MainMenu.refresh()
     MouseShortcuts.shared.update(MenuState.current.mouseShortcuts)
+    MouseGestures.shared.update(MenuState.current.mouseGestures)
     if MenuState.current.littleArdiaShortcutFromAnyApp != shortcutWasGlobal { LittleArdiaHotKey.shared.shortcutsChanged() }
   }
 

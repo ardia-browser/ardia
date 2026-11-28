@@ -18,4 +18,5 @@ struct MenuStateUpdate: Record {
   @Field var extensions: [MenuExtension] = []
   @Field var shortcuts: [String: [[String]]] = [:]
   @Field var mouseShortcuts: [String: [String]] = [:]
+  @Field var mouseGestures: Bool = false
 }

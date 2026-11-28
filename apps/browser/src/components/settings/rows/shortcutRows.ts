@@ -2,6 +2,7 @@ import { type SettingSection } from "./types";
 import type { SettingsPane } from "../../../state/settings/settingsWindows";
 import { keyText } from "../../../state/commands/keyText";
 import { splitViewAvailable } from "../../../state/splits/splits";
+import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 
 export const shortcutRows = {
   shortcuts: [
@@ -44,6 +45,13 @@ export const shortcutRows = {
           explained: true,
           description: "Puts the link's background tab in a tab group with the page you clicked it on.",
           keywords: ["command click", "cmd click", "control click", "ctrl click", "tab group", "auto group", "automatic grouping", "group tabs", "nested tabs", "background tab"],
+        },
+        mouseGestures: {
+          title: "Mouse gestures",
+          explained: true,
+          description: "Hold the right button and draw on a page: ← Back, → Forward, ↑↓ Reload, ↓→ Close Tab, ←↑ Reopen Closed Tab, →↑ New Tab, ↑← and ↑→ switch tabs. A right-click without drawing still opens the menu.",
+          keywords: ["mouse gesture", "gestures", "right click drag", "right drag", "draw", "edge", "vivaldi", "opera"],
+          shown: () => PLATFORM_FEATURES.mouseGestures,
         },
         optShiftClickOpensInGroup: {
           title: `${keyText("⌥⇧")}-click opens tab in group`,

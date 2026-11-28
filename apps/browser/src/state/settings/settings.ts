@@ -166,6 +166,7 @@ export const SETTING_SPECS = {
   showProfileDots: flag(true, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   mouseShortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
+  mouseGestures: flag(false, SYNCED),
   openLinksInLittleArdia: flag(true),
   littleArdiaOpensNewTabLinks: flag(true, SYNCED),
   littleArdiaShortcutFromAnyApp: flag(false),

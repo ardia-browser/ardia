@@ -184,6 +184,10 @@ NSWindow *AppWindowAt(NSPoint screen) {
   }];
 }
 
++ (BOOL)hasPageAt:(NSPoint)locationInWindow window:(NSWindow *)window {
+  return window && EnginePageViewAt(window, locationInWindow) != nil;
+}
+
 + (void)setCommandScrollZoomEnabled:(BOOL)enabled {
   gCommandScrollZoom = enabled;
   if (!enabled) [ArdiaWebView disarmCommandWheels];

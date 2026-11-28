@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "06503bc68a8671906f150d0d1be7518834ce298287002970a5db2ae16b4eb4f3",
-        "swift": "1b0f1f7827a5f96df5bb21b9bb6725cc0e33419e7e003532f1c8d4492be92645"
+        "types": "6be6ef6bf747ac7d6393a95c5c83f08fc6ea2d259c6447c2b9958b36d4eed3cf",
+        "swift": "cd9fd0f8459bdd7fc25672d7bb9370ccf419ad503b8d4acaee921d1cd5a2e839"
       },
       "modules": {
         "ArdiaShell": {
@@ -3008,6 +3008,17 @@
               "args": [
                 "windowId",
                 "click"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
+            },
+            "devMouseGesture": {
+              "args": [
+                "windowId",
+                "points",
+                "release"
               ],
               "async": true,
               "mac": "custom",

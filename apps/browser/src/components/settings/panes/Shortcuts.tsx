@@ -241,6 +241,7 @@ function ClicksSection() {
         </Row>
         <SettingToggle anchor="shortcuts.cmdClickCreatesTabGroup" />
         <SettingToggle anchor="shortcuts.optShiftClickOpensInGroup" />
+        <SettingToggle anchor="shortcuts.mouseGestures" />
       </Group>
     </>
   );

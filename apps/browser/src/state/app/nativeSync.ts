@@ -1,5 +1,6 @@
 import { lastTabClosesWindow, onWindowRequest } from "../../platform/tabs";
 import { noteMouseShortcutRun } from "../telemetry/mouseShortcutCounts";
+import { noteMouseGestureRun } from "../telemetry/mouseGestureCounts";
 import { menuSyncTotals } from "./menuSyncTotals";
 import { nativeConsent } from "../telemetry/nativeConsent";
 import { onDownload } from "../../platform/downloads";
@@ -68,6 +69,7 @@ export function startNativeSync() {
   cancelAbandonedFocusMoves();
   onCommand((e) => {
     if (e.mouseButton) noteMouseShortcutRun(e.mouseButton, nativeConsent(e));
+    if (e.mouseGesture) noteMouseGestureRun(e.mouseGesture, nativeConsent(e));
     const user = { consent: nativeConsent(e) };
     settlingCommandFocus(e, (event) => runCommand(event, { user }));
   });

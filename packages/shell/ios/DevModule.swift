@@ -334,6 +334,10 @@ public class DevModule: Module, DevNative {
 
   static func devFocusHandoffTrace() -> [String] { return FocusHandoff.shared.trace }
 
+  static func devMouseGesture(_ windowId: String, _ points: [[Double]], _ release: Bool) -> [String: Any] {
+    MouseGestures.shared.devDrive(windowId: windowId, points: points, release: release)
+  }
+
   static func devClick(_ windowId: String, _ click: [String: Any], _ promise: Promise) { KeyEquivalents.click(windowId: windowId, click) { promise.resolve($0) } }
 
   static func devRunAppleScript(_ source: String, _ promise: Promise) {
@@ -424,6 +428,8 @@ public class DevModule: Module, DevNative {
     Self.devFocusHandoffTraceFunction
 
     Self.devClickFunction
+
+    Self.devMouseGestureFunction
 
     Self.devRunAppleScriptFunction
   }

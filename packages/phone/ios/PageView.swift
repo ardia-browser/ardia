@@ -47,7 +47,6 @@ final class PageView: ExpoView {
   private var toneTask: Task<Void, Never>?
   private var scrollObservation: NSKeyValueObservation?
   private var contentSizeObservation: NSKeyValueObservation?
-  private let sideMargins = UIView()
   private var lastScroll: TimeInterval = 0
   private var scrollRestTask: Task<Void, Never>?
   var drawnTask: Task<Void, Never>?
@@ -145,9 +144,6 @@ final class PageView: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     clipsToBounds = true
-    sideMargins.isUserInteractionEnabled = false
-    sideMargins.isHidden = true
-    addSubview(sideMargins)
     pinchGround.isUserInteractionEnabled = false
     pinchGround.isHidden = true
     pinchGround.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -307,7 +303,6 @@ final class PageView: ExpoView {
     reportDrawnSoon()
     wasLoading = page.isLoading
     sendTone(theme: page.themeColor, underPage: page.underPageBackgroundColor)
-    paintSideMargins()
   }
 
   @MainActor
@@ -450,7 +445,8 @@ final class PageView: ExpoView {
 
   var effectiveObscuredInsets: UIEdgeInsets {
     let top = (obscuresSafeTop ? safeAreaInsets.top : obscuredInsets.top) + topClearance
-    return UIEdgeInsets(top: top, left: 0, bottom: obscuredInsets.bottom, right: 0)
+    let sides = pinnedSides
+    return UIEdgeInsets(top: top, left: sides.left, bottom: obscuredInsets.bottom, right: sides.right)
   }
 
   private var heldSafeArea = UIEdgeInsets.zero
@@ -467,17 +463,7 @@ final class PageView: ExpoView {
     return UIEdgeInsets(top: 0, left: pinned.left, bottom: 0, right: pinned.right)
   }
 
-  var webViewFrame: CGRect { bounds.inset(by: pinnedSides) }
-
-  private func paintSideMargins() {
-    let shown = pinnedSides.left > 0 || pinnedSides.right > 0
-    if sideMargins.isHidden == shown { sideMargins.isHidden = !shown }
-    guard shown else { return }
-    if sideMargins.frame != bounds { sideMargins.frame = bounds }
-    if sideMargins.superview === self, subviews.first !== sideMargins { sendSubviewToBack(sideMargins) }
-    let color = page?.underPageBackgroundColor ?? hostedWebView?.underPageBackgroundColor ?? .black
-    if sideMargins.backgroundColor != color { sideMargins.backgroundColor = color }
-  }
+  var webViewFrame: CGRect { bounds }
 
   private func keepOffsetWithinContent() {
     guard let scrollView = hostedWebView?.scrollView, !scrollView.isDragging, !scrollView.isDecelerating, !scrollView.isZooming else { return }
@@ -491,19 +477,21 @@ final class PageView: ExpoView {
     let pins = pinsSafeArea && window != nil
     let pinned = pins ? pinnedSafeArea() : .zero
     place(hostedWebView, in: webViewFrame)
-    paintSideMargins()
     let insets = effectiveObscuredInsets
     if hostedWebView.obscuredContentInsets != insets { hostedWebView.obscuredContentInsets = insets }
     let scrollView = hostedWebView.scrollView
     let adjustment: UIScrollView.ContentInsetAdjustmentBehavior = pins ? .never : .always
     let top = topClearance + pinned.top
-    if scrollView.contentInset.top != top || scrollView.contentInset.bottom != pinned.bottom || scrollView.contentInsetAdjustmentBehavior != adjustment {
+    if scrollView.contentInset.top != top || scrollView.contentInset.bottom != pinned.bottom || scrollView.contentInset.left != pinned.left || scrollView.contentInsetAdjustmentBehavior != adjustment {
       let restsAtTop = scrollView.contentOffset.y <= -scrollView.adjustedContentInset.top + 0.5
+      let restsAtLeft = scrollView.contentOffset.x <= -scrollView.adjustedContentInset.left + 0.5
       scrollView.contentInsetAdjustmentBehavior = adjustment
       scrollView.contentInset.top = top
       scrollView.contentInset.bottom = pinned.bottom
+      scrollView.contentInset.left = pinned.left
       scrollView.verticalScrollIndicatorInsets.top = topClearance
       if restsAtTop { scrollView.contentOffset.y = -scrollView.adjustedContentInset.top }
+      if restsAtLeft { scrollView.contentOffset.x = -scrollView.adjustedContentInset.left }
     }
   }
 

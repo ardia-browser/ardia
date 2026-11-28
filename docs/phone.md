@@ -3961,11 +3961,22 @@ titles and phrases that post links instead.
   `WKWebViewConfiguration` or `WKPreferences` setting covers it, and setting the app's audio session to playback before
   anything plays left it unchanged (#4751 round 2), so the gap is a platform pause, not silence-free playback; and when the document goes hidden while its media plays, the script keeps
   `visibilityState`, `hidden` and their `webkit` forms at visible and stops that `visibilitychange` from reaching the
-  page. A page paused by the person stays held for up to 10 minutes, so a site such as YouTube keeps its media loaded
-  for the mini player (released 1 s after each pause, YouTube unloaded its video and the mini player lost its skip
-  buttons); it is released then, 1 s after the media ends, or at once when the setting is turned off. Every frame posts `hello`
-  with its token when the script starts (and `gone` on pagehide), so turning the setting on or off reaches a loaded page
-  that hasn't played yet, not only pages with media. Brave and Orion keep background play the same way.
+  page. One rule bounds every hold (#4751 round 3): whenever the reported media isn't playing while the page is held,
+  the hold ends 10 minutes later if it is paused, or 1 s later if it ended or went away, and a play cancels that. So a
+  site such as YouTube keeps its media loaded for the mini player through a pause (released 1 s after each pause, YouTube
+  unloaded its video and the mini player lost its skip buttons), and a pause right after the script undid WebKit's
+  pause can't hold a page visible for good; turning the setting off releases at once. Only the first pause after leaving
+  is taken for WebKit's, and the script marks its own restart, so it isn't counted as a new start.
+  Every frame posts `hello` with its token and the Keep playing value it holds when the script starts and when it comes
+  back from the back-forward cache (and `gone` on pagehide); every report carries that value too. `WebMedia` sends the
+  current setting to any frame whose value differs, so a page restored by Back or Forward after the setting changed, or
+  a frame that fell out of the 16 known frames, catches up the first time it speaks. Checked through real back-forward
+  cache restores in a hidden macOS `WKWebView`, both ways, and on the simulator.
+  Which element a page reports: the newest of its last 8 heard elements that is playing and long enough (an endless
+  stream, more than 5 s, or of unknown length while the site runs a media session), else the last one reported. A
+  one-second notification sound over a stream no longer replaces the stream, and when a newer long sound pauses while an
+  older one still plays, the page reports the one still playing and stays held. Brave and Orion keep background play the
+  same way.
 - **Automatic Picture in Picture.** With the setting on, iPhone able to float video and the playing video's tab on
   screen, `WebMedia` asks that video to float at `willResignActive` (Home, the app switcher, locking), through
   `webkitSetPresentationMode("picture-in-picture")` evaluated by the app, which WebKit runs as a user gesture. WebKit has
@@ -3998,21 +4009,25 @@ titles and phrases that post links instead.
   the page about two lines each time it came or went. It fades and rises 8 pt in 180 ms and leaves in 150 ms, all on the UI
   thread; play/pause flips at once and the page's report confirms it. Under Reduce Motion it fades in place with the
   same timings (`ReduceMotion.Never` on the opacity: Reanimated otherwise jumps to the end, which made it pop), and
-  only the glass's own frost, which `GlassView` doesn't fade under Reduce Motion, goes at once on the way out. The card
+  its glass fades with it (`fadesWithReduceMotion` on the glass: `GlassView` otherwise skips its own fade under Reduce
+  Motion, which dropped the plate in the first frame while the text was still fading out, #4751 round 3). The card
   stays mounted while its side has media, hidden at opacity 0, so coming back doesn't build its glass mid-fade; the
   glass is hidden with the bar's `shown` flag while the card is. Measured on the final #4751 head over a moving page at
   60 fps: out 8 frames (133 ms), in 9 frames (to 0.97 at 117 ms, at rest by about 150 ms), both monotonic with no
-  overshoot, resting 10 pt above the bar; under Reduce Motion in about 10 frames with no rise, out 8 frames after the
-  frost drops in the first. Over a still page `simctl recordVideo` skips frames and the fade reads as a pop (see the
-  frames step below). A close lasts until the media starts again: its
-  start time is fixed per start, and the play that undoes WebKit's pause on leaving keeps the old one. Every button is a
+  overshoot, resting 10 pt above the bar; under Reduce Motion in about 10 frames with no rise, and out with the plate
+  and the text fading together (round 3 numbers in the #4751 output's `round3/timings.md`). Over a still page `simctl recordVideo` skips frames and the fade reads as a pop (see the
+  frames step below). A close belongs to that page's playing session (#4751 round 3): closing another page's player, on
+  the other side or in another space, leaves it closed, and it ends when that page's media starts again (a start the
+  page counts in `plays`: a new element or a play after a reported pause, never the script's own restart after WebKit's
+  pause), reports none or loses its tab. `mini_player_shown` is counted once per page session the same way. Every button is a
   44 pt target; when the title would get under 96 pt (more at large text, which stops growing at 1.35x here), skip back
   goes first, then skip forward, then Picture in Picture, and what is hidden stays as a VoiceOver action on the card.
   Play/pause flips on the press as a pending state that the page's next report replaces (native forwards the page's
   report for 3 s after a command even when unchanged), that a refused command drops, and that lapses after 2 s. When
   the Incognito side changes and the new side has no media, the old side's card is dropped at once instead of fading.
-  Media pages are kept live by `PageMediaRetention`: playing and Picture in Picture pages first, newest first, firmly;
-  paused ones only for 10 minutes and only in the slots left, and memory pressure discards those. The simulator has no
+  Media pages are kept live by `PageMediaRetention`: every playing and Picture in Picture page, firmly, past the page
+  limit and through memory pressure; the two most recently paused ones for 10 minutes, and memory pressure discards
+  those. The simulator has no
   Picture in Picture, so its button doesn't show there; `-ArdiaShowPictureInPictureButton YES` lays it out in lab
   builds. Android shows neither the mini player nor the settings page:
   `pages.reportsMedia()` is false there.
@@ -4051,7 +4066,8 @@ Watch your own frames before you hand a change on. The loop, for any agent:
    `xcrun simctl --set ~/.simlock/devices/ios spawn <udid> log show --last 2m --style compact --predicate 'eventMessage CONTAINS "ARDIA build"'`.
 4. **Record.** Start `xcrun simctl --set ~/.simlock/devices/ios io <udid> recordVideo --codec h264 --force run.mp4` in
    the background, act through `agent-device`, then `kill -INT` the recorder; `agent-device record` comes back empty
-   under load. A still at device resolution: `<agent-device> screenshot shot.png --pixel-density 3` (3 px = 1 pt).
+   under load, and on a simulator it records at 30 fps (33 ms frames, #4751 round 3), too coarse for motion timings:
+   use it for scenario films and `recordVideo` for anything measured. A still at device resolution: `<agent-device> screenshot shot.png --pixel-density 3` (3 px = 1 pt).
 5. **Frames.**
    - Find the event by frame difference: `ffmpeg -i run.mp4 -vf "fps=60,scale=201:437,signalstats,metadata=print:key=lavfi.signalstats.YDIF" -f null - 2>&1 | grep YDIF`.
    - Pull 60 fps frames: `ffmpeg -i run.mp4 -vf fps=60 frames/f%04d.png`.

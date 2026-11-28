@@ -113,9 +113,14 @@ public final class DownloadManager {
     }
   }
 
+  public var writing: Set<String> {
+    Set(active.values.compactMap { $0.destination.map(Self.path) })
+  }
+
   public func cancel(_ id: UUID) {
     guard let entry = active.values.first(where: { $0.id == id }) else { return }
-    entry.download.cancel { _ in }
+    let destination = entry.destination
+    entry.download.cancel { _ in Self.discard(destination) }
     failed(entry.download, reason: .network)
   }
 
@@ -176,7 +181,17 @@ public final class DownloadManager {
 
   func failed(_ download: WKDownload, reason: DownloadFailure) {
     guard let entry = remove(download) else { return }
+    Self.discard(entry.destination)
     onOutcome?(.failed(fileName: entry.fileName, reason: reason), entry.id)
+  }
+
+  public nonisolated static func path(_ url: URL) -> String {
+    url.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
+  }
+
+  nonisolated static func discard(_ partial: URL?) {
+    guard let partial else { return }
+    try? FileManager.default.removeItem(at: partial)
   }
 
   private func remove(_ download: WKDownload) -> Active? {

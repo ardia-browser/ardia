@@ -31,6 +31,8 @@ public final class WebEngine {
   @ObservationIgnored public var onPageProcess: (@MainActor (_ tab: UUID, _ outcome: PageProcessOutcome, _ isPrivate: Bool) -> Void)?
   @ObservationIgnored public var omnibox: Omnibox?
   @ObservationIgnored private let pageScriptControllers = NSHashTable<WKUserContentController>.weakObjects()
+  @ObservationIgnored private var extraPageScripts: [WKUserScript] = []
+  @ObservationIgnored public var onPageScriptController: (@MainActor (WKUserContentController) -> Void)?
   @ObservationIgnored private var sharedPrivateDataStore: WKWebsiteDataStore?
   @ObservationIgnored private var nightShadeBakes: [ObjectIdentifier: BakedNightShade] = [:]
   @ObservationIgnored private var systemStyleWatches: [ObjectIdentifier: any UITraitChangeRegistration] = [:]
@@ -203,8 +205,29 @@ public final class WebEngine {
       pageScriptControllers.add(controller)
       nightShadeBakes[ObjectIdentifier(controller)] = nil
       controller.addScriptMessageHandler(PageMessageProxy(engine: self), contentWorld: ReadableContent.world, name: PageScripts.handlerName)
+      onPageScriptController?(controller)
     }
     bakeNightShade(into: controller, host: host, isPrivate: isPrivate)
+  }
+
+  public var keepsLive: Set<UUID> {
+    get { roster.kept }
+    set { roster.kept = newValue }
+  }
+
+  public func setExtraPageScripts(_ scripts: [WKUserScript]) {
+    extraPageScripts = scripts
+    for controller in pageScriptControllers.allObjects {
+      guard let baked = nightShadeBakes[ObjectIdentifier(controller)] else { continue }
+      rebuildUserScripts(of: controller, state: baked.state)
+    }
+  }
+
+  private func rebuildUserScripts(of controller: WKUserContentController, state: NightShadeBake) {
+    controller.removeAllUserScripts()
+    blocker.restoreUserScripts(on: controller)
+    controller.addUserScript(WKUserScript(source: PageScripts.nightShade(state), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: ReadableContent.world))
+    for script in extraPageScripts { controller.addUserScript(script) }
   }
 
   func prepareNightShade(of controller: WKUserContentController, toHost host: String?, isPrivate: Bool) {
@@ -229,9 +252,7 @@ public final class WebEngine {
     let previous = nightShadeBakes[key]
     nightShadeBakes[key] = BakedNightShade(host: host, isPrivate: isPrivate, state: state)
     guard previous?.state != state else { return }
-    controller.removeAllUserScripts()
-    blocker.restoreUserScripts(on: controller)
-    controller.addUserScript(WKUserScript(source: PageScripts.nightShade(state), injectionTime: .atDocumentStart, forMainFrameOnly: true, in: ReadableContent.world))
+    rebuildUserScripts(of: controller, state: state)
     let live = Set(pageScriptControllers.allObjects.map(ObjectIdentifier.init))
     nightShadeBakes = nightShadeBakes.filter { live.contains($0.key) }
   }

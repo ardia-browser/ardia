@@ -12,6 +12,7 @@ final class LivePageRoster<Page: DiscardablePage> {
   let limit: Int
   private(set) var recency: [UUID] = []
   private var pages: [UUID: Page] = [:]
+  var kept: Set<UUID> = []
 
   init(limit: Int) {
     self.limit = max(1, limit)
@@ -38,16 +39,17 @@ final class LivePageRoster<Page: DiscardablePage> {
     if let page = pages.removeValue(forKey: id), page.isLive { page.discard() }
   }
 
-  func discardAll(keeping kept: Set<UUID>) {
-    for id in recency where !kept.contains(id) {
+  func discardAll(keeping shown: Set<UUID>) {
+    let keeping = shown.union(kept)
+    for id in recency where !keeping.contains(id) {
       if let page = pages[id], page.isLive { page.discard() }
     }
-    recency = recency.filter { kept.contains($0) && pages[$0]?.isLive == true }
+    recency = recency.filter { keeping.contains($0) && pages[$0]?.isLive == true }
   }
 
   private func trim(keeping kept: UUID) {
     var live = liveIDs
-    while live.count > limit, let oldest = live.first(where: { $0 != kept }) {
+    while live.count > limit, let oldest = live.first(where: { $0 != kept && !self.kept.contains($0) }) {
       pages[oldest]?.discard()
       recency.removeAll { $0 == oldest }
       live.removeAll { $0 == oldest }

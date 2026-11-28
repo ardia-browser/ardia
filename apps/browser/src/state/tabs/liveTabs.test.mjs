@@ -20,8 +20,12 @@ class FakeChrome {
   }
   refusing = new Set();
   refuseOnce = 0;
+  owner = null;
+  attempts = [];
   command(command, id) {
+    this.attempts.push(command.strip);
     if (this.refusing.has(command.strip)) throw new Error("The strip is not owned by this window");
+    if (this.owner !== null && this.strips.get(command.strip)?.appWindow !== this.owner) throw new Error("The strip is not owned by this window");
     if (this.refuseOnce > 0 && this.refuseOnce--) return new Promise((_, reject) => setTimeout(() => reject(new Error("The strip is not owned by this window")), 20));
     this.sent++;
     this.commands.push({ id, command });
@@ -404,6 +408,44 @@ test("a command Chrome refuses is counted while sharing is on, and doesn't hold 
   await settle(win);
   assert.equal(chromeShown(win.strip), "b", "the next switch reaches Chrome");
   assert.equal(shown(win.w), "b");
+});
+
+test("a window's page sends no command for another window's strip, which the engine only lets that window's own page command", async () => {
+  const { takeTabStripCounts } = await import("../telemetry/tabStripCounts.ts");
+  const { setSharing } = await import("../telemetry/client.ts");
+  const { setStripOwner } = await import("../../platform/stripOwner.ts");
+  const fetched = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 200 });
+  const mine = windowWith("a", "b", "c");
+  const other = anotherWindow("x", "y", "z");
+  mountViews(other);
+  await settle(mine);
+  const [, b, c] = S().windows[mine.w].tabIds;
+  const [, y] = S().windows[other.w].tabIds;
+  chrome.owner = mine.w;
+  setStripOwner(mine.w);
+  takeTabStripCounts();
+  setSharing(true, "settings");
+  try {
+    chrome.attempts.length = 0;
+    S().activate(y);
+    await settle(mine);
+    assert.equal(takeTabStripCounts().tab_strip_commands_refused, 0, "the engine refuses no command: the strip is not owned by this window");
+    assert.deepEqual(chrome.attempts.filter((strip) => strip === other.strip), [], "no command is sent for the other window's strip");
+    S().activate(c);
+    await settle(mine);
+    assert.equal(chromeShown(mine.strip), "c", "the window's own strip still follows the app");
+    S().activate(b);
+    await settle(mine);
+    assert.equal(chromeShown(mine.strip), "b");
+    assert.equal(chromeShown(other.strip), "x", "the other window's strip is left to its own page");
+    assert.equal(takeTabStripCounts().tab_strip_commands_refused, 0);
+  } finally {
+    setSharing(false, "settings");
+    globalThis.fetch = fetched;
+    setStripOwner(null);
+    chrome.owner = null;
+  }
 });
 
 test("a switch made while a refused command was on its way goes out once the refusal comes back", async () => {

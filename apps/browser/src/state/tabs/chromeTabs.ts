@@ -1,5 +1,6 @@
 import { chromeWindows, devWindowAction } from "../../platform/windows";
 import { engineInfo } from "../../platform/app";
+import { isForeignStrip } from "../../platform/stripOwner";
 import {
   onTabStripTransaction,
   sendTabStripCommand,
@@ -165,7 +166,7 @@ function scheduleProject() {
 
 function project(s: BrowserState) {
   for (const strip of mirror.values()) {
-    if (inflight.has(strip.strip)) continue;
+    if (isForeignStrip(strip) || inflight.has(strip.strip)) continue;
     const plan = stripPlan(s, strip);
     if (!plan) continue;
     const actual = stripActual(strip, plan);

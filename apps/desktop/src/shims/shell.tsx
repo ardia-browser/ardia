@@ -11,6 +11,7 @@ import { quiesceLinuxDocuments, resumeLinuxDocuments, flushLinuxDocuments } from
 import { linuxMenuShortcuts } from "../shortcuts";
 import { useBrowser } from "../../../browser/src/state/browser/store";
 import { setManagedWindowClose } from "../../../browser/src/platform/windowClose";
+import { setStripOwner } from "../../../browser/src/platform/stripOwner";
 import { createWindowCloseCoordinator, type DecideClose, type DrainReply } from "../windowCloseCoordinator";
 import { reopenTelemetry, settleTelemetry } from "../telemetrySettle";
 
@@ -93,6 +94,7 @@ ardiaHost?.onEvent((module, event, payload) => {
   if (envelope?.name === "shell.closeCancelled" && envelope.data?.windowId === ownWindowId)
     closeCoordinator.cancelled(envelope.data);
 });
+if (ardiaHost) setStripOwner(ownWindowId);
 if (ardiaHost && !isLinuxUtility(ownWindowId)) setManagedWindowClose((windowId, reason) => {
   if (windowId !== ownWindowId) return false;
   void closeCoordinator.close(reason).catch(reportClose);

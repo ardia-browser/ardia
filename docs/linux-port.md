@@ -369,7 +369,9 @@ The acceptance suite is in [linux-acceptance.md](linux-acceptance.md) and CI in 
     of their own, `engine.info` doesn't count them, and Chrome keeps an empty one open while its window is open.
   - Each member reports its own strip (`tabs.strips`): its session id as `strip`, the visible window as `window` and
     `appWindow`, and its engine profile. Strip commands go to the member that owns the strip, and the tab-strip
-    observer reads the strip that notified it.
+    observer reads the strip that notified it. Every window's renderer gets every window's strips but commands only
+    its own (`setStripOwner` in `shims/shell.tsx`); the host refuses a command for another window's strip (`The strip
+    is not owned by this window`).
   - A tab moved to another engine profile is recreated in the destination profile (`CreateTabIn` drops the old binding
     and its contents); a tab moved to another window keeps its contents only when the profile matches, and lands in
     the destination window's member for that profile.
@@ -2530,8 +2532,6 @@ These were open at the time of the PR.
     downloads, controls and file operations reach the window from every profile it shows;
   - a window Chrome itself creates for an isolated profile (`chrome.windows.create` from that profile's extension)
     is still a plain Chrome window, as before;
-  - a shell renderer may send a strip command for another window's strip, which that window's host refuses
-    (`The strip is not owned by this window`); the owning window's renderer keeps its own strips in order;
   - that a companion never maps a second toplevel has been confirmed on X11 only, not on Wayland.
 - **Tab drags across windows.** There is no floating drag preview; in-window drags show the ghost row. On Wayland,
   where windows have no global coordinates, tearing a tab off or dropping it on another window does nothing. On X11 a

@@ -503,22 +503,57 @@ test("an automatic run whose password prompt went unanswered offers Update, not 
     await settled(() => seen.ready.length === 1);
     assert.deepEqual(engine.updates, ["0.2.46", "0.2.46"]);
   }
-  assert.deepEqual(SELF_UPDATE_COUNTS(takeUpdateCounts()), {
+  const counts = takeUpdateCounts();
+  assert.deepEqual(SELF_UPDATE_COUNTS(counts), {
     update_downloads_started: 4,
     update_downloads_finished: 4,
     update_install_failures_timeout: 1,
     update_install_failures_polkit: 1,
     update_installs_tarball: 2,
   });
+  assert.equal(counts.update_offers_ask_first, 2);
 
   const askFirst = () => new Map([[UPDATE_PREFERENCES, JSON.stringify({ askFirst: true })]]);
-  const deb = harness({ engine: fakeEngine({ kind: "deb" }), disk: askFirst() });
+  const debEngine = fakeEngine({ kind: "deb" });
+  const deb = harness({ engine: debEngine, disk: askFirst() });
   await deb.updater.check(false);
-  assert.deepEqual([deb.seen.offeredInstalls.map((o) => o.version), deb.seen.offered], [["0.2.46"], []], "a pkexec install that had to ask before asks first");
+  assert.deepEqual([deb.seen.offeredInstalls.map((o) => o.version), deb.seen.offered, debEngine.updates], [["0.2.46"], [], []], "a pkexec install that had to ask before asks first, without starting pkexec");
+  assert.equal(takeUpdateCounts().update_offers_ask_first, 1);
+  await deb.updater.methods.setAutomaticUpdateDownloads(true);
+  assert.equal(JSON.parse(deb.docs.get(UPDATE_PREFERENCES)).askFirst, false, "turning automatic updates back on clears askFirst");
   const appimage = harness({ engine: fakeEngine({ kind: "appimage" }), disk: askFirst() });
   await appimage.updater.check(false);
   await settled(() => appimage.seen.ready.length === 1);
   assert.equal(appimage.seen.offeredInstalls.length, 0, "an AppImage never needs a password, so it still updates by itself");
+  const appimageTimeout = harness({ engine: fakeEngine({ kind: "appimage", fail: "timeout", failWhile: "installing" }) });
+  await appimageTimeout.updater.check(false);
+  await settled(() => appimageTimeout.seen.offered.length === 1);
+  assert.deepEqual([appimageTimeout.seen.offered, appimageTimeout.seen.offeredInstalls.length], [["0.2.46 failed"], 0], "an AppImage timeout keeps the release page");
+
+  const sharedEngine = fakeEngine({ kind: "tarball", fail: "timeout", failWhile: "installing" });
+  const sharedDisk = new Map();
+  const stopsFollowing = async () => { throw new Error("stopped following"); };
+  const starter = harness({ engine: sharedEngine, disk: sharedDisk, wait: stopsFollowing });
+  const other = harness({ engine: sharedEngine, disk: sharedDisk });
+  await starter.updater.check(false);
+  sharedEngine.finish();
+  await other.updater.watch();
+  await other.updater.watch();
+  await settled(() => other.seen.offered.length === 1);
+  assert.deepEqual([other.seen.offered, other.seen.offeredInstalls.length], [["0.2.46 failed"], 0], "a window that didn't start the run can't tell it was automatic, so the release page stays");
+  assert.notEqual(JSON.parse(sharedDisk.get(UPDATE_PREFERENCES)).askFirst, true);
+
+  const joinedEngine = fakeEngine({ kind: "deb", fail: "polkit", failWhile: "installing" });
+  const joined = harness({ engine: joinedEngine, wait: stopsFollowing });
+  await joined.updater.methods.checkForUpdates();
+  await settled(() => joinedEngine.updates.length === 1);
+  await joined.updater.check(false);
+  assert.deepEqual(joinedEngine.updates, ["0.2.46", "0.2.46"], "the automatic check joined the run Check Now started");
+  joinedEngine.finish();
+  await joined.updater.watch();
+  await joined.updater.watch();
+  await settled(() => joined.seen.asked.length === 1);
+  assert.deepEqual([joined.seen.asked, joined.seen.offeredInstalls.length], [[["0.2.46", "0.2.45", "failed"]], 0], "joining never turns a run the user asked for into an automatic one");
 
   const acceptedEngine = fakeEngine({ kind: "tarball", fail: "timeout", failWhile: "installing" });
   const accepted = harness({ engine: acceptedEngine, wait: async () => { throw new Error("stopped following"); } });

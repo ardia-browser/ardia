@@ -1035,10 +1035,13 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
   no repository, AUR package or Flatpak remote to update from yet, and `ardia-update kind` says only `managed`, so the
   dialog can't tell an Arch install from an `.rpm` (#4078). When Check Now runs in Settings and no regular window is open to show the page, a dialog gives
   its link with Copy Link instead. A failed download or install falls back to the release page once and isn't retried automatically.
-  The exception is a `.deb` or tarball install whose automatic run ended in `polkit` or `timeout`, which means nobody answered
-  the password prompt (a disconnected remote desktop, a switched-away session). Ardia then offers the update toast with
-  Update, so the prompt only follows a click, and it remembers `askFirst` in `linux-updates.json`: later automatic runs on
-  that install offer Update instead of starting pkexec unasked (#3383).
+  The exception is an automatic run on a `.deb` or tarball install that ends in `polkit` or `timeout`. Those can mean
+  nobody answered the password prompt (a disconnected remote desktop, a switched-away session), though `timeout` also
+  covers a slow helper after the password and `polkit` a dismissed prompt or no agent; a retry suits all of them. Ardia
+  then offers the update toast with Update, so the prompt only follows a click, and it remembers `askFirst` in
+  `linux-updates.json`: later automatic runs on that install offer Update instead of starting pkexec unasked, and are
+  counted in `update_offers_ask_first`. Turning "Automatically update Ardia" back on clears `askFirst`. Only the window
+  that started the run knows it was automatic; when another window settles it, the release page stays (#3383).
 - **Self-update.** `ac_linux_self_update.cc` serves `ArdiaUpdates.installKind`, `update(version)`, `status()`,
   `claimOutcome(run)` and `restart`; the rules are in `ac_linux_self_update_policy.h`. The engine owns each run, so it
   carries on whatever window started it or closes.
@@ -1075,6 +1078,7 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
 - **Telemetry.** `update_checks_asked`, `update_checks_automatic`, `update_check_failures`, `update_checks_found`,
   `update_release_page_opens`, `update_notices_dismissed`, `update_offers_managed_flatpak` and
   `update_offers_managed_package` (a release offered to an install Flatpak or another package manager updates),
+  `update_offers_ask_first` (an Update offer instead of an automatic install that would ask for a password),
   `kill_switch_refreshes`, `kill_switch_refresh_failures`, and for self-update `update_downloads_started`,
   `update_downloads_finished`, `update_download_failures_<reason>`,
   `update_installs_<deb|tarball|appimage>`, `update_install_failures_<reason>` and `update_restarts`. Watch installs

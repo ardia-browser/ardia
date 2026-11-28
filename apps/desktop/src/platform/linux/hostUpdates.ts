@@ -7,6 +7,7 @@ import { channelOf, compareVersions, isAppVersion, linuxReleases, newestRelease,
 import {
   UPDATE_INSTALL_FAILURES,
   UPDATE_DOWNLOAD_FAILURES,
+  noteAskFirstUpdateOffer,
   noteManagedUpdateOffer,
   noteUpdateCheck,
   noteUpdateDownloadFailed,
@@ -200,11 +201,12 @@ export function linuxUpdater(deps: UpdateDeps) {
     }
   }
 
-  async function fallBack(release: Release, from: StartedFrom, consent: ConsentToken | null, failure?: EngineStatus) {
+  async function fallBack(release: Release, from: StartedFrom, consent: ConsentToken | null, promptUnanswered = false) {
     const current = version();
     switchCheck = { phase: "found", channel: switchCheck?.channel ?? channelOf(release.version), version: release.version };
-    if (from === "automatic" && failure && passwordUnanswered(failure)) {
+    if (promptUnanswered) {
       await remember({ notified: release.version, askFirst: true }).catch(() => {});
+      noteAskFirstUpdateOffer(consent);
       deps.offerInstall(release, () => installOffered(release));
       return;
     }
@@ -219,27 +221,28 @@ export function linuxUpdater(deps: UpdateDeps) {
     deps.offer(release, true);
   }
 
-  async function settle(status: EngineStatus, consent: ConsentToken | null, followed: OwnRun | null) {
-    const own = followed ?? ownRuns.get(status.run) ?? null;
+  async function settle(status: EngineStatus, consent: ConsentToken | null) {
     if (!finished(status) || status.run <= settledRun) return;
     if (status.phase === "ready" && deps.showsToasts === false) return;
+    const own = ownRuns.get(status.run) ?? null;
     if (!(await claim(status.run))) return;
+    ownRuns.delete(status.run);
     countOutcome(status, consent);
     const target = status.version ?? own?.release.version;
     if (!target) return;
     if (status.phase === "ready") return (await preferences()).readyNotified === target ? undefined : deps.ready(target, restartToUpdate);
     console.info(`[ardia linux] the update to ${target} failed: ${status.reason ?? "unknown"}`);
-    await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent, status);
+    await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent, own?.from === "automatic" && passwordUnanswered(status));
   }
 
-  async function followRun(started: EngineStatus, own: OwnRun, consent: ConsentToken | null) {
+  async function followRun(started: EngineStatus, consent: ConsentToken | null) {
     const until = now() + FOLLOW_RUN_FOR_MS;
     let status: EngineStatus | null = started;
     while (status && updateBusy(status) && now() < until) {
       await wait(FOLLOW_RUN_EVERY_MS);
       status = (await engineStatus()) ?? status;
     }
-    await settle(status, consent, own);
+    await settle(status, consent);
   }
 
   async function startRun(release: Release, from: StartedFrom, consent: ConsentToken | null) {
@@ -250,8 +253,10 @@ export function linuxUpdater(deps: UpdateDeps) {
       return fallBack(release, from, consent);
     }
     if (started.phase === "installing") installingRuns.add(started.run);
-    ownRuns.set(started.run, { release, from });
-    void followRun(started, { release, from }, consent).catch((error: unknown) => console.info(`[ardia linux] the update to ${release.version} stopped: ${String(error)}`));
+    const known = ownRuns.get(started.run);
+    if (!known || (known.from === "automatic" && from !== "automatic")) ownRuns.set(started.run, { release, from });
+    if (known) return;
+    void followRun(started, consent).catch((error: unknown) => console.info(`[ardia linux] the update to ${release.version} stopped: ${String(error)}`));
   }
 
   async function deliver(release: Release, current: string, asked: boolean, saved: Preferences, consent: ConsentToken | null) {
@@ -270,8 +275,11 @@ export function linuxUpdater(deps: UpdateDeps) {
       if (asked) return startRun(release, "asked", consent);
       if (saved.failed === release.version) return;
       const latest = await preferences();
-      if (latest.automaticDownloads && !(latest.askFirst && installsThroughPkexec(status.kind))) return startRun(release, "automatic", consent);
-      if (await offeredOnce(release)) deps.offerInstall(release, () => installOffered(release));
+      const askFirst = latest.askFirst && installsThroughPkexec(status.kind);
+      if (latest.automaticDownloads && !askFirst) return startRun(release, "automatic", consent);
+      if (!(await offeredOnce(release))) return;
+      if (askFirst) noteAskFirstUpdateOffer(consent);
+      deps.offerInstall(release, () => installOffered(release));
       return;
     }
     if (asked) {
@@ -339,7 +347,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       sightedRun = status.run;
       return;
     }
-    await settle(status, consent, null);
+    await settle(status, consent);
   }
 
   async function menuItem(): Promise<"check" | "restart"> {
@@ -376,7 +384,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     },
     checkForUpdates: () => checkOrRestart(consentToken(), shownReady),
     setAutomaticUpdateChecks: async (on: unknown) => remember({ automaticChecks: on === true }),
-    setAutomaticUpdateDownloads: async (on: unknown) => remember({ automaticDownloads: on === true }),
+    setAutomaticUpdateDownloads: async (on: unknown) => remember(on === true ? { automaticDownloads: true, askFirst: false } : { automaticDownloads: false }),
     setUpdateChannel: async (next: unknown) => {
       await remember({ channel: next === "nightly" ? "nightly" : "stable", notified: null });
       await check(true);

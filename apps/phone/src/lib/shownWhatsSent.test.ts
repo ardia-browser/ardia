@@ -52,3 +52,11 @@ test("only Android lists why Gemini Nano wasn't used", () => {
   assert.ok(listed("android"));
   assert.ok(!listed("ios"));
 });
+
+test("only Android's What's Sent lists the download notification counts, since iPhone posts no download notifications", () => {
+  const fields = (os: string) => shownWhatsSent(os, false).flatMap((section) => section.items.flatMap((item) => item.fields));
+  assert.ok(fields("android").includes("download_notifications_opened"));
+  assert.ok(fields("android").includes("download_notification_cancels"));
+  assert.ok(!fields("ios").includes("download_notifications_opened"));
+  assert.ok(!fields("ios").includes("download_notification_cancels"));
+});

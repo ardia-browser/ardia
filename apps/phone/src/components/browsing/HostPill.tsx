@@ -11,6 +11,7 @@ import { privateMark } from "../ui/IncognitoSpecs";
 import { barAddress, spokenAddress } from "./FloatingBar";
 import { hostPillLayout } from "./hostPillTokens";
 import { NotSecureLock } from "./NotSecureLock";
+import { DownloadIndicator } from "./DownloadIndicator";
 import { useBarReturn } from "./barReturn";
 
 const REACH = slopToReach(controlSize.hitTarget, hostPillLayout.height);
@@ -44,7 +45,7 @@ export function HostPill({ tab, dark, wash = null, shown, anchors = false, sampl
     <Pressable testID="hostPillReach" accessible={false} importantForAccessibility="no" onPress={onExpand} onPressIn={pressIn} onPressOut={pressOut} style={styles.reach} />
     <ChromeSurface testID="hostPill" shape="capsule" cornerRadius={capsule(hostPillLayout.height)} incognito={tab.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={glassShown} shownMs={Platform.OS === "android" ? 0 : centreFlips ? back.centreGlass.shownMs : hostPillLayout.glassMs} sampleHold={glassShown ? sampleHold : null} style={styles.pill}>
       <Animated.View testID="hostPillCentreGlyphs" collapsable={false} style={[styles.content, back.centreGlyphs]}>
-      <Animated.View testID="hostPillContent" nativeID={ids?.face} collapsable={false} style={[styles.content, contentStyle]}>
+      <Animated.View testID="hostPillContent" nativeID={ids?.face} collapsable={false} style={[styles.content, styles.contentRow, contentStyle]}>
       {wash ? <LoadWash testID="hostPillLoadWash" values={wash} tint={washTint} cornerRadius={capsule(hostPillLayout.height)} /> : null}
       <Pressable testID="hostPillButton" accessibilityRole="button" accessibilityLabel="Show Toolbar" accessibilityValue={{ text: spokenAddress(address) }} accessibilityState={{ busy }} onPress={onExpand} onPressIn={pressIn} onPressOut={pressOut} style={[styles.hit, pressedLook("text", pressed, false, rowPressed)]}>
         <PlateInk>
@@ -63,6 +64,7 @@ export function HostPill({ tab, dark, wash = null, shown, anchors = false, sampl
           )}
         </PlateInk>
       </Pressable>
+      <DownloadIndicator place="pill" testID="hostPillDownloads" />
       </Animated.View>
       </Animated.View>
     </ChromeSurface>
@@ -128,6 +130,7 @@ const styles = StyleSheet.create({
   pill: { maxWidth: hostPillLayout.maxWidth, height: hostPillLayout.height },
   reach: { position: "absolute", left: -REACH.left, right: -REACH.right, top: -REACH.top, bottom: -REACH.bottom },
   content: { flex: 1 },
+  contentRow: { flexDirection: "row", alignItems: "center" },
   hit: { height: hostPillLayout.height, flexDirection: "row", alignItems: "center", gap: hostPillLayout.spacing, paddingHorizontal: hostPillLayout.sideInset },
   host: { flexShrink: 1, fontSize: hostPillLayout.hostText, fontWeight: hostPillLayout.hostWeight },
 });

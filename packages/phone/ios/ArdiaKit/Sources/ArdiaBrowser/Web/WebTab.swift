@@ -516,12 +516,11 @@ public final class WebTab: DiscardablePage, Identifiable {
   }
 
   fileprivate func decidePolicy(for response: WKNavigationResponse) -> WKNavigationResponsePolicy {
-    if !response.canShowMIMEType { return .download }
-    if response.isForMainFrame, let http = response.response as? HTTPURLResponse,
-       let disposition = http.value(forHTTPHeaderField: "Content-Disposition")?.lowercased(), disposition.hasPrefix("attachment") {
-      return .download
-    }
-    return .allow
+    let disposition = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")
+    let wanted = ResponseDownload.wanted(
+      canShow: response.canShowMIMEType, mainFrame: response.isForMainFrame, disposition: disposition, response: response.response.url, page: webView?.url
+    )
+    return wanted ? .download : .allow
   }
 
   fileprivate func didStartNavigation() {

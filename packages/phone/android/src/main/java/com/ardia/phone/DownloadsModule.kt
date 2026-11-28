@@ -60,7 +60,7 @@ class DownloadsModule : Module() {
 
         AsyncFunction("cancel") { id: String ->
             PhonePages.engine(context)
-            id.toLongOrNull()?.let(PhonePages.downloads::cancel)
+            id.toLongOrNull()?.let { PhonePages.cancelDownload(context, it) }
             Unit
         }.runOnQueue(Queues.MAIN)
 
@@ -96,6 +96,10 @@ class DownloadsModule : Module() {
         Function("takeInstallStatus") { AppUpdateInstaller.takeUnreported() }
 
         AsyncFunction("notifyUpdateReady") { fileName: String, title: String, text: String -> AppUpdateHandoff.notifyReady(context, fileName, title, text) }
+
+        AsyncFunction("askForDownloadNotifications") { DownloadNotifications.askOnce(appContext.currentActivity) }.runOnQueue(Queues.MAIN)
+
+        Function("downloadNotificationsShown") { DownloadNotifications.shown(context) }
 
         AsyncFunction("askForUpdateNotifications") { AppUpdateHandoff.askForNotifications(appContext.currentActivity) }.runOnQueue(Queues.MAIN)
 

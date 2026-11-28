@@ -1,4 +1,7 @@
+import type { DownloadFailure } from "@ardia/phone-native";
 import { actionWords, dismissWords } from "../../lib/sharedWords.ts";
+import { fileSizeText } from "../library/libraryText.ts";
+import { webHost } from "../../lib/url.ts";
 export type FindResult = { query: string; activeIndex: number; total: number; isDone: boolean };
 
 export type FindCount = { kind: "match"; label: string } | { kind: "none"; label: string } | null;
@@ -177,15 +180,40 @@ export function backLayer(state: BackState): BackLayer | null {
   return null;
 }
 
-export const downloadingToast = (fileName: string) => (fileName ? `Downloading ${fileName}` : "Downloading");
-
-export const downloadedToast = (fileName: string) => `Downloaded ${fileName}`;
-
 export const opensInInstaller = (os: string, fileName: string) => os === "android" && /\.apk$/i.test(fileName.trim());
 
-export const downloadFailedToast = (fileName: string) => (fileName ? `Couldn’t Download ${fileName}` : "Couldn’t Download File");
+export const DOWNLOAD_FAILURE_WHY: Record<Exclude<DownloadFailure, "privateSessionEnded">, string> = {
+  network: "Check your connection and try again.",
+  server: "The site didn’t send the file.",
+  insecureRedirect: "The site moved it to an insecure address.",
+  tooManyRedirects: "The site kept redirecting.",
+  unsupported: "Ardia can’t save this kind of link.",
+  storage: "Ardia couldn’t write it to Downloads.",
+  noSpace: "Your phone is out of space.",
+};
+
+export const downloadFailedToast = (fileName: string) => (fileName ? `Couldn’t download ${fileName}` : "Couldn’t download the file");
+
+export const downloadFailureWhy = (failure: DownloadFailure | null | undefined): string | null => (failure && failure !== "privateSessionEnded" ? DOWNLOAD_FAILURE_WHY[failure] : null);
+
+export const RETRYABLE_FAILURES: readonly DownloadFailure[] = ["network", "server", "storage"];
+
+export const downloadRetries = (failure: DownloadFailure | null | undefined, url: string, isPrivate: boolean) => !isPrivate && failure != null && RETRYABLE_FAILURES.includes(failure) && /^https?:\/\//i.test(url);
 
 export const stoppedPrivateDownloadsToast = (count: number) => (count === 1 ? "Stopped 1 Private Download" : `Stopped ${count} Private Downloads`);
+
+export const downloadHost = webHost;
+
+export function downloadedDetail(size: number | null, host: string | null): string {
+  const parts = ["Downloaded"];
+  if (size !== null && size > 0) parts.push(fileSizeText(size));
+  if (host) parts.push(host);
+  return parts.join(" · ");
+}
+
+export const downloadsCompleteTitle = (count: number) => (count === 1 ? "1 download complete" : `${count} downloads complete`);
+
+export const downloadsCompleteDetail = (names: readonly string[]) => names.join(", ");
 
 export const leadImageAspect = (width: number, height: number, tallest: number): number | null =>
   width > 1 && height > 1 ? Math.max(width / height, tallest) : null;

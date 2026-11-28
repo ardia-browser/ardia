@@ -25,6 +25,8 @@ type DownloadsNative = {
   takeInstallStatus?(): unknown;
   notifyUpdateReady?(fileName: string, title: string, text: string): Promise<boolean>;
   askForUpdateNotifications?(): Promise<void>;
+  askForDownloadNotifications?(): Promise<boolean>;
+  downloadNotificationsShown?(): boolean;
   discardAppUpdate?(id: string): Promise<boolean>;
   canInstallPackages?(): boolean;
   openInstallPermission?(): Promise<boolean>;
@@ -58,6 +60,8 @@ export const downloads = {
   addInstallStatusListener: (listener: (event: unknown) => void): Subscription => native().addListener("onAppUpdateInstallStatus", listener),
   notifyUpdateReady: (fileName: string, title: string, text: string): Promise<boolean> => native().notifyUpdateReady?.(fileName, title, text) ?? Promise.resolve(false),
   askForUpdateNotifications: (): Promise<void> => native().askForUpdateNotifications?.() ?? Promise.resolve(),
+  askForDownloadNotifications: (): Promise<boolean> => native().askForDownloadNotifications?.() ?? Promise.resolve(false),
+  downloadNotificationsShown: (): boolean => native().downloadNotificationsShown?.() ?? false,
   discardAppUpdate: (id: string): Promise<boolean> => native().discardAppUpdate?.(id) ?? Promise.resolve(false),
   canInstallPackages: (): boolean => native().canInstallPackages?.() ?? false,
   openInstallPermission: (): Promise<boolean> => native().openInstallPermission?.() ?? Promise.resolve(false),

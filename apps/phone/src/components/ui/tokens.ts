@@ -63,7 +63,8 @@ const lightRoles = {
   tertiaryLabel: "rgba(60,60,67,0.3)",
   toastFill: "rgba(255,255,255,0.97)",
   toastLabel: "#000000",
-  toastShadow: "rgba(0,0,0,0.18)",
+  toastDetail: "rgba(60,60,67,0.8)",
+  toastShadow: "rgba(0,0,0,0.14)",
   panelBorder: "rgba(0,0,0,0.1)",
   dialogScrim: "rgba(0,0,0,0.32)",
   appSurface: neutralFills.light.appSurface as string,
@@ -111,8 +112,9 @@ const darkRoles: ColorRoles = {
   separator: "rgba(84,84,88,0.6)",
   tertiaryFill: "rgba(118,118,128,0.24)",
   tertiaryLabel: "rgba(235,235,245,0.3)",
-  toastFill: "rgba(28,28,30,0.97)",
+  toastFill: "rgba(38,38,40,0.97)",
   toastLabel: "#FFFFFF",
+  toastDetail: "rgba(235,235,245,0.7)",
   toastShadow: "rgba(0,0,0,0.5)",
   panelBorder: "rgba(255,255,255,0.1)",
   dialogScrim: "rgba(0,0,0,0.48)",
@@ -150,7 +152,7 @@ export const pageMenuInk = {
   dark: { sheet: "#000000", group: "#171717", rowPressed: "rgba(120,120,128,0.36)" },
 } as const;
 
-export const toastLayout = { radius: shape.control, minHeight: 44, verticalPadding: 11, iconSize: 17, barClearance: 64, sideInset: 32, shadowRadius: 14, shadowY: 6 } as const;
+export const toastLayout = { radius: shape.card, minHeight: 52, verticalPadding: 9, leadingPadding: 12, trailingPadding: 10, gap: 10, tile: 26, tileRadius: 7, tileText: 10, iconSize: 15, textGap: 1, buttonHeight: 30, buttonPadding: 12, barClearance: 64, shadowRadius: 18, shadowY: 4 } as const;
 
 export const pageInk = { findError: "#C93333" } as const;
 

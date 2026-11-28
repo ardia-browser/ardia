@@ -3,7 +3,64 @@ import WebKit
 
 public enum DownloadOutcome: Equatable, Sendable {
   case finished(URL)
-  case failed(fileName: String)
+  case failed(fileName: String, reason: DownloadFailure)
+}
+
+public enum DownloadFailure: String, Equatable, Sendable {
+  case network
+  case server
+  case tooManyRedirects
+  case unsupported
+  case storage
+  case noSpace
+
+  public static func of(_ error: any Error) -> DownloadFailure {
+    var current: NSError? = error as NSError
+    var found: DownloadFailure?
+    while let ns = current {
+      if let reason = reason(of: ns) {
+        if reason == .noSpace { return .noSpace }
+        found = found ?? reason
+      }
+      current = ns.userInfo[NSUnderlyingErrorKey] as? NSError
+    }
+    return found ?? .network
+  }
+
+  public static func of(status: Int) -> DownloadFailure? {
+    status >= 400 ? .server : nil
+  }
+
+  private static func reason(of error: NSError) -> DownloadFailure? {
+    switch error.domain {
+    case NSPOSIXErrorDomain:
+      return error.code == Int(ENOSPC) || error.code == Int(EDQUOT) ? .noSpace : nil
+    case NSCocoaErrorDomain:
+      if error.code == NSFileWriteOutOfSpaceError { return .noSpace }
+      if (NSFileWriteUnknownError...NSFileWriteVolumeReadOnlyError).contains(error.code) { return .storage }
+      return nil
+    case NSURLErrorDomain:
+      switch error.code {
+      case NSURLErrorHTTPTooManyRedirects:
+        return .tooManyRedirects
+      case NSURLErrorUnsupportedURL, NSURLErrorBadURL:
+        return .unsupported
+      case NSURLErrorBadServerResponse, NSURLErrorZeroByteResource, NSURLErrorCannotDecodeRawData, NSURLErrorCannotDecodeContentData,
+        NSURLErrorCannotParseResponse, NSURLErrorResourceUnavailable, NSURLErrorFileDoesNotExist, NSURLErrorNoPermissionsToReadFile,
+        NSURLErrorRedirectToNonExistentLocation, NSURLErrorUserAuthenticationRequired, NSURLErrorUserCancelledAuthentication:
+        return .server
+      case NSURLErrorCannotCreateFile, NSURLErrorCannotOpenFile, NSURLErrorCannotCloseFile, NSURLErrorCannotWriteToFile,
+        NSURLErrorCannotRemoveFile, NSURLErrorCannotMoveFile:
+        return .storage
+      case NSURLErrorDownloadDecodingFailedMidStream, NSURLErrorDownloadDecodingFailedToComplete:
+        return .server
+      default:
+        return .network
+      }
+    default:
+      return nil
+    }
+  }
 }
 
 public struct DownloadStart: Sendable {
@@ -27,7 +84,7 @@ public struct DownloadProgressInfo: Sendable, Equatable {
 @MainActor
 public final class DownloadManager {
   public let directory: URL
-  public var onOutcome: (@MainActor (DownloadOutcome) -> Void)?
+  public var onOutcome: (@MainActor (DownloadOutcome, UUID) -> Void)?
   public var onStart: (@MainActor (DownloadStart, WKWebView?) -> Void)?
   public var onProgress: (@MainActor ([DownloadProgressInfo]) -> Void)?
 
@@ -56,10 +113,15 @@ public final class DownloadManager {
     }
   }
 
+  public var writing: Set<String> {
+    Set(active.values.compactMap { $0.destination.map(Self.path) })
+  }
+
   public func cancel(_ id: UUID) {
     guard let entry = active.values.first(where: { $0.id == id }) else { return }
-    entry.download.cancel { _ in }
-    failed(entry.download)
+    let destination = entry.destination
+    entry.download.cancel { _ in Self.discard(destination) }
+    failed(entry.download, reason: .network)
   }
 
   func track(_ download: WKDownload) {
@@ -74,10 +136,27 @@ public final class DownloadManager {
   func destination(for download: WKDownload, response: URLResponse, suggestedFilename: String) -> URL? {
     let key = ObjectIdentifier(download)
     guard let entry = active[key] else { return nil }
+    let length = response.expectedContentLength
+    func announce(_ fileName: String) {
+      onStart?(
+        DownloadStart(id: entry.id, url: download.originalRequest?.url ?? response.url, fileName: fileName, mimeType: response.mimeType, contentLength: length >= 0 ? length : nil),
+        download.webView
+      )
+    }
+    if let status = (response as? HTTPURLResponse)?.statusCode, let refused = DownloadFailure.of(status: status) {
+      let fileName = Self.uniqueURL(in: directory, for: suggestedFilename).lastPathComponent
+      active[key]?.fileName = fileName
+      announce(fileName)
+      failed(download, reason: refused)
+      return nil
+    }
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     } catch {
-      failed(download)
+      let fileName = Self.uniqueURL(in: directory, for: suggestedFilename).lastPathComponent
+      active[key]?.fileName = fileName
+      announce(fileName)
+      failed(download, reason: DownloadFailure.of(error))
       return nil
     }
     let url = Self.uniqueURL(in: directory, for: suggestedFilename)
@@ -86,11 +165,7 @@ public final class DownloadManager {
     active[key]?.observation = download.progress.observe(\.completedUnitCount, options: []) { [weak self] _, _ in
       MainActor.assumeIsolated { self?.reportProgress() }
     }
-    let length = response.expectedContentLength
-    onStart?(
-      DownloadStart(id: entry.id, url: download.originalRequest?.url ?? response.url, fileName: url.lastPathComponent, mimeType: response.mimeType, contentLength: length >= 0 ? length : nil),
-      download.webView
-    )
+    announce(url.lastPathComponent)
     reportProgress()
     return url
   }
@@ -98,15 +173,25 @@ public final class DownloadManager {
   func finished(_ download: WKDownload) {
     guard let entry = remove(download) else { return }
     if let destination = entry.destination {
-      onOutcome?(.finished(destination))
+      onOutcome?(.finished(destination), entry.id)
     } else {
-      onOutcome?(.failed(fileName: entry.fileName))
+      onOutcome?(.failed(fileName: entry.fileName, reason: .network), entry.id)
     }
   }
 
-  func failed(_ download: WKDownload) {
+  func failed(_ download: WKDownload, reason: DownloadFailure) {
     guard let entry = remove(download) else { return }
-    onOutcome?(.failed(fileName: entry.fileName))
+    Self.discard(entry.destination)
+    onOutcome?(.failed(fileName: entry.fileName, reason: reason), entry.id)
+  }
+
+  public nonisolated static func path(_ url: URL) -> String {
+    url.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
+  }
+
+  nonisolated static func discard(_ partial: URL?) {
+    guard let partial else { return }
+    try? FileManager.default.removeItem(at: partial)
   }
 
   private func remove(_ download: WKDownload) -> Active? {
@@ -158,6 +243,6 @@ final class DownloadDelegate: NSObject, WKDownloadDelegate {
   }
 
   func download(_ download: WKDownload, didFailWithError error: any Error, resumeData: Data?) {
-    manager?.failed(download)
+    manager?.failed(download, reason: DownloadFailure.of(error))
   }
 }

@@ -11,8 +11,9 @@ enum DownloadedFiles {
   static func list() -> [[String: Any]] {
     let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
     let urls = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])) ?? []
+    let writing = PhonePages.shared.engine.downloads.writing
     return urls.compactMap { url -> (URL, Int, Date)? in
-      guard let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { return nil }
+      guard !writing.contains(DownloadManager.path(url)), let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { return nil }
       return (url, values.fileSize ?? 0, values.contentModificationDate ?? .distantPast)
     }
     .sorted { $0.2 > $1.2 }

@@ -191,7 +191,7 @@ class PageViewModule : Module() {
 
         AsyncFunction("setDesktopSite") { pageId: String, enabled: Boolean -> PhonePages.require(pageId).setDesktopSite(enabled) }.runOnQueue(Queues.MAIN)
 
-        AsyncFunction("download") { pageId: String, url: String -> PhonePages.require(pageId).download(url) }.runOnQueue(Queues.MAIN)
+        AsyncFunction("download") { pageId: String, url: String, fileName: String? -> PhonePages.require(pageId).download(url, fileName) }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("print") { pageId: String ->
             val activity = PhonePages.hostActivity() ?: return@AsyncFunction false

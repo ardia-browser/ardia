@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics, toastSpokenLabel } from "./semantics.ts";
+import { activatesToast, dismissesToast, toastAnnouncement, toastDragReturn, toastSemantics, toastSpokenLabel } from "./semantics.ts";
 
 test("a toast with an action is a button; one without is an alert, never a button whose tap only hides it", () => {
   assert.deepEqual([toastSemantics("Open", "ios").pressable, toastSemantics("Open", "ios").role], [true, "button"]);
@@ -12,15 +12,17 @@ test("each phone announces a toast one way: iPhone through an announcement, Andr
   assert.deepEqual([toastSemantics("Open", "android").announcement, toastSemantics("Open", "android").liveRegion], ["liveRegion", "polite"]);
 });
 
-test("swipe-to-dismiss has one named Close action and the system's two-finger escape, on every toast; no unnamed escape action", () => {
+test("swipe-to-dismiss has one named Close action and the system's two-finger escape, on every toast; an actionable card also activates by name", () => {
   for (const actionable of ["Open", null]) {
     const { actions, escapes } = toastSemantics(actionable, "ios");
-    assert.deepEqual(actions, [{ name: "dismiss", label: "Close" }]);
+    assert.deepEqual(actions, actionable ? [{ name: "dismiss", label: "Close" }, { name: "activate", label: "Open" }] : [{ name: "dismiss", label: "Close" }]);
     assert.equal(escapes, true);
   }
   assert.equal(dismissesToast("dismiss"), true);
   assert.equal(dismissesToast("escape"), false);
   assert.equal(dismissesToast("activate"), false);
+  assert.equal(activatesToast("activate"), true);
+  assert.equal(activatesToast("dismiss"), false);
 });
 
 test("with Reduce Motion a dragged toast snaps back instead of springing", () => {

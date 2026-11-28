@@ -67,6 +67,16 @@ export function clearTitle(choice: ClearChoice, range: ClearRange, websiteDataBy
   return choice.history ? `Clear History ${phrase}, and ${allTime}?` : `Clear ${allTime}?`;
 }
 
+export const CLEARED_TOAST = "Cleared Browsing Data";
+
+export function clearedDetail(choice: ClearChoice, range: ClearRange, websiteDataByTime = true): string {
+  const rangeTitle = CLEAR_RANGES.find((r) => r.id === range)!.title;
+  if (!websiteDataIgnoresRange(choice, range, websiteDataByTime)) return `${joinList(clearNames(choice))} · ${rangeTitle}`;
+  const allTime = CLEAR_RANGES.find((r) => r.id === "allTime")!.title;
+  const site = joinList(websiteDataNames(choice));
+  return choice.history ? `History · ${rangeTitle}, ${site} · ${allTime}` : `${site} · ${allTime}`;
+}
+
 export const clearMessage = (choice: ClearChoice) =>
   choice.cookies ? "You’ll be signed out of websites. Open tabs stay open." : "Open tabs stay open, and you stay signed in to websites.";
 

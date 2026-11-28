@@ -243,7 +243,7 @@ export function Surfaces() {
       {material ? <MaterialLibrary /> : null}
       <Layer covered={onboarding}>{voiceSeen ? <VoiceSearchView /> : null}</Layer>
       {onboardingSeen ? <OnboardingView /> : null}
-      <ToastHost />
+      <ToastHost covered={sheetCovers || libraryCovers || onboarding || voice} />
       {lightIcons !== null ? <LayerInk key={layer} light={lightIcons} /> : null}
     </>
   );

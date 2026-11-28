@@ -180,7 +180,7 @@ public final class PageViewModule: Module {
       try MainActor.assumeIsolated { try PhonePages.shared.setDesktopSite(pageID, enabled) }
     }.runOnQueue(.main)
 
-    AsyncFunction("download") { (pageID: String, url: String) in
+    AsyncFunction("download") { (pageID: String, url: String, _: String?) in
       try MainActor.assumeIsolated {
         let page = try PhonePages.shared.require(pageID)
         guard let target = URL(string: url) else { throw PagePayloads.badArgs("Not a URL: \(url)") }

@@ -1,10 +1,10 @@
 import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
-import { ChromeSurface, chromeLayout, press } from "../components/ui";
+import { ChromeSurface, stroke, surfaceInkFor, toastLayout } from "../components/ui";
 import { act } from "react-test-renderer";
 import { ToastHost } from "../components/toasts/ToastHost";
 import { showToast, useToasts } from "../state/toasts/store";
 import { useTabs } from "../state/tabs/store";
-import { chromeInk, rolesFor } from "../components/ui";
+import { rolesFor } from "../components/ui";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 beforeEach(() => {
@@ -28,6 +28,8 @@ test("a toast without an action is an alert with no press, and swiping it away h
   expect(toast.props.accessibilityRole).toBe("alert");
   expect(toast.props.onPress).toBeUndefined();
   expect(toast.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }]);
+  act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "activate" } }));
+  expect(useToasts.getState().toast).not.toBeNull();
   expect(typeof toast.props.onAccessibilityEscape).toBe("function");
   expect(root.root.findAll((node) => node.props.testID === "toastAction")).toHaveLength(0);
   act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "dismiss" } }));
@@ -35,20 +37,18 @@ test("a toast without an action is an alert with no press, and swiping it away h
   unmount(root);
 });
 
-test("a toast with an action is a button that dims on press with the shared look, names its action in words and to screen readers, and runs it on tap", () => {
+test("a toast with an action is a button that names its action in words and to screen readers, and runs it when activated", () => {
   const tapped = jest.fn();
   const root = renderSurface(<ToastHost />);
   act(() => showToast("Downloaded otter.pdf", "download", 3000, { label: "Open", run: tapped }));
-  const toast = root.root.findAll((node) => node.props.testID === "toast" && typeof node.props.style === "function")[0]!;
+  const toast = toastNode(root);
   expect(toast.props.accessibilityRole).toBe("button");
   expect(toast.props.accessibilityLabel).toBe("Downloaded otter.pdf, Open");
-  expect(toast.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }]);
+  expect(toast.props.accessibilityActions).toEqual([{ name: "dismiss", label: "Close" }, { name: "activate", label: "Open" }]);
   expect(typeof toast.props.onAccessibilityEscape).toBe("function");
   expect(root.root.findAll((node) => node.props.testID === "toastAction" && typeof node.type === "string")[0]!.props.children).toBe("Open");
   expect(symbols(root)).not.toContain("chevronRight");
-  expect(StyleSheet.flatten(toast.props.style({ pressed: false })).opacity).toBeUndefined();
-  expect(StyleSheet.flatten(toast.props.style({ pressed: true })).opacity).toBe(press.filledOpacity);
-  act(() => toast.props.onPress());
+  act(() => toast.props.onAccessibilityAction({ nativeEvent: { actionName: "activate" } }));
   expect(tapped).toHaveBeenCalledTimes(1);
   expect(useToasts.getState().toast).toBeNull();
   unmount(root);
@@ -76,21 +76,22 @@ test("on iPhone an actionable toast arrives as one announcement that names its a
   unmount(root);
 });
 
-test("the toast's plate is the shared chrome surface, so Glass, Classic and Reduce Transparency decide it as they do the bars, with the chrome stroke", () => {
+test("the toast's plate is an opaque card, not live glass: the theme's toast fill with a hairline edge and a soft shadow, in Glass and Classic alike", () => {
   const root = renderSurface(<ToastHost />);
   act(() => showToast("Copied Link", "link"));
-  const plates = root.root.findAll((node) => node.type === ChromeSurface);
-  expect(plates).toHaveLength(1);
-  expect(plates[0]!.props).toMatchObject({ shape: "rounded", interactive: false });
+  expect(root.root.findAll((node) => node.type === ChromeSurface)).toHaveLength(0);
   const drawn = root.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!;
   const face = StyleSheet.flatten(drawn.props.style);
-  if (face.borderWidth !== undefined) expect(face.borderWidth).toBe(chromeLayout.edge);
+  expect(face.backgroundColor).toBe(rolesFor(false).toastFill);
+  expect(face.borderWidth).toBe(stroke.hairline);
+  expect(face.shadowRadius).toBe(toastLayout.shadowRadius);
+  expect(face.shadowOffset).toEqual({ width: 0, height: toastLayout.shadowY });
   expect(StyleSheet.flatten(toastNode(root).props.style)?.backgroundColor).toBeUndefined();
   unmount(root);
 });
 
 test("Material You keeps its own snackbar plate, the inverse surface, with the named hairline stroke", () => {
-  const { DesignProvider, stroke } = require("../components/ui") as typeof import("../components/ui");
+  const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
   const root = renderSurface(
     <DesignProvider design="material">
       <ToastHost />
@@ -104,32 +105,21 @@ test("Material You keeps its own snackbar plate, the inverse surface, with the n
   unmount(root);
 });
 
-test("in Incognito the toast's shared plate and ink take the private look, never the profile tint, though the host sits outside the deck", () => {
-  const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
-  const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
-  const plate = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "toastPlate" && node.props.source !== undefined)[0]!;
+test("in Incognito the toast's card and ink take the dark shade, never the profile tint, though the host sits outside the deck", () => {
   const label = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Copied Link")[0]!.props.style).color;
+  const face = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!.props.style);
   const regular = renderSurface(<ToastHost />);
   act(() => showToast("Copied Link", "link"));
-  expect(plate(regular).props.color).not.toBe(nativeModule.INCOGNITO_LOOK);
+  expect(face(regular).backgroundColor).toBe(rolesFor(false).toastFill);
   unmount(regular);
   act(() => useToasts.setState({ toast: null }));
   act(() => useTabs.setState({ incognito: true }));
   const privately = renderSurface(<ToastHost />);
   act(() => showToast("Copied Link", "link"));
-  expect(plate(privately).props).toMatchObject({ color: nativeModule.INCOGNITO_LOOK, dark: true });
-  expect(plate(privately).props.tint).toBeUndefined();
-  expect(label(privately)).toBe(rolesFor(true).toastLabel);
+  expect(face(privately).backgroundColor).toBe(rolesFor(true).toastFill);
+  expect(label(privately)).toBe(surfaceInkFor(true).roles.toastLabel);
   expect(rolesFor(true).toastLabel).not.toBe(rolesFor(false).toastLabel);
   unmount(privately);
-  glass.mockRestore();
   act(() => useToasts.setState({ toast: null }));
-  act(() => useTabs.setState({ incognito: false }));
-  const drawn = renderSurface(<ToastHost />);
-  act(() => useTabs.setState({ incognito: true }));
-  act(() => showToast("Copied Link", "link"));
-  const face = drawn.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!;
-  expect(StyleSheet.flatten(face.props.style).backgroundColor).toBe(chromeInk.dark.surface);
-  unmount(drawn);
   act(() => useTabs.setState({ incognito: false }));
 });

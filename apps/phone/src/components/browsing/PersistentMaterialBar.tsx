@@ -16,6 +16,7 @@ import { Favicon, LoadWash, materialWashTint, Symbol, useReduceMotion, type Load
 import { MaterialBottomBar, type MaterialBottomBarProps } from "../ui/MaterialBottomBar";
 import { barAddress, spokenAddress } from "./FloatingBar";
 import { NotSecureLock } from "./NotSecureLock";
+import { DownloadIndicator } from "./DownloadIndicator";
 import { useMaterialTheme } from "../ui/materialTheme";
 import { materialBarPill, materialBottomBar, materialShape, materialType } from "../ui/materialTokens";
 
@@ -238,6 +239,7 @@ export function MaterialBarPill({ tab, scheme, wash = null, onExpand }: { tab: B
       <Text testID="materialBarPillHost" numberOfLines={1} ellipsizeMode="middle" style={[materialType.labelLarge, styles.pillHost, { color: scheme.onSurface }]}>
         {address.host}
       </Text>
+      <DownloadIndicator place="pill" testID="materialBarPillDownloads" ink={scheme.onSurfaceVariant} />
     </Pressable>
   );
 }

@@ -64,6 +64,9 @@ object PhonePages {
         private set
     lateinit var snapshots: PageSnapshots
         private set
+    private var notices: DownloadNotifications? = null
+
+    fun downloadNotices(context: Context): DownloadNotifications = notices ?: DownloadNotifications(context.applicationContext ?: context).also { notices = it }
     val fullscreen = FullscreenHost()
 
     var pageSink: EventSink? = null
@@ -97,6 +100,7 @@ object PhonePages {
         made.filter = blocking.pageFilter(isPrivate = false)
         made.privateFilter = blocking.pageFilter(isPrivate = true)
         made.onPrivateBrowsingEnded = ::privateBrowsingEnded
+        made.addPrivateSessionEndListener { session -> downloadNotices(context).endPrivateSession(session) }
         made.onPageNightChange = { night -> pageSink?.invoke(mapOf("name" to "pages.dark", "dark" to night)) }
         made.pageNight = sitePreferences.pageNight
         made.onNightShadeVerdict = { use -> scope.launch(Dispatchers.IO) { PendingCounts.add(context, PendingCounts.nightShadeField(use), UsageConsent.window(context)) } }
@@ -113,8 +117,18 @@ object PhonePages {
         host?.get()?.let(made::attach)
         made.warmUp()
         blocking.start()
-        scope.launch { downloads.active.collect { list -> downloadSink?.invoke(mapOf("name" to "downloads.progress", "downloads" to list.map(::progress))) } }
-        scope.launch { downloads.outcomes.collect { outcome -> downloadSink?.invoke(finished(outcome)) } }
+        scope.launch {
+            downloads.active.collect { list ->
+                downloadNotices(context).progressed(list)
+                downloadSink?.invoke(mapOf("name" to "downloads.progress", "downloads" to list.map(::progress)))
+            }
+        }
+        scope.launch {
+            downloads.identifiedOutcomes.collect { identified ->
+                downloadNotices(context).finished(identified.id, identified.outcome)
+                downloadSink?.invoke(finished(identified.id, identified.outcome))
+            }
+        }
         scope.launch { blocking.changes.collect { blockingSink?.invoke(mapOf("name" to "blocking.state", "state" to blocking.state())) } }
         return made
     }
@@ -485,6 +499,7 @@ object PhonePages {
             is PageEvent.Download -> {
                 val download = event.download
                 val downloadId = downloads.enqueue(download)
+                if (downloadId != null) downloadNotices(app).started(downloadId, download, id)
                 send(
                     id,
                     "page.download",
@@ -511,12 +526,31 @@ object PhonePages {
     }
 
     private fun privateBrowsingEnded() {
+        notices?.endPrivateSession(null)
         sitePreferences.endPrivateBrowsing()
         blocking.endPrivateBrowsing()
         snapshots.endPrivateBrowsing()
         popups.entries.removeAll { it.value.isPrivate }
         pageSink?.invoke(mapOf("name" to "pages.privateSessionEnded"))
     }
+
+    fun cancelDownload(context: Context, id: Long) {
+        if (shared != null) downloads.cancel(id)
+        downloadNotices(context).cancelled(id)
+    }
+
+    fun cancelDownloadFromNotice(context: Context, id: Long, isPrivate: Boolean) {
+        cancelDownload(context, id)
+        if (!isPrivate) PendingCounts.add(context, DOWNLOAD_NOTIFICATION_CANCELS, UsageConsent.window(context))
+        downloadSink?.invoke(mapOf("name" to "downloads.cancelled", "id" to id.toString()))
+    }
+
+    fun retryDownloadFromNotice(context: Context, id: Long) {
+        downloadNotices(context).cancelled(id)
+        downloadSink?.invoke(mapOf("name" to "downloads.retryRequested", "id" to id.toString()))
+    }
+
+    const val DOWNLOAD_NOTIFICATION_CANCELS = "download_notification_cancels"
 
     private fun progress(progress: DownloadProgress): Map<String, Any?> = mapOf(
         "id" to progress.id.toString(),
@@ -527,9 +561,9 @@ object PhonePages {
         "isQueued" to progress.isQueued,
     )
 
-    private fun finished(outcome: DownloadOutcome): Map<String, Any?> = when (outcome) {
-        is DownloadOutcome.Finished -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to outcome.uri?.toString(), "failure" to null)
-        is DownloadOutcome.Failed -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to null, "failure" to downloadFailure(outcome.reason))
+    private fun finished(id: Long, outcome: DownloadOutcome): Map<String, Any?> = when (outcome) {
+        is DownloadOutcome.Finished -> mapOf("name" to "downloads.finished", "id" to id.toString(), "fileName" to outcome.fileName, "uri" to outcome.uri?.toString(), "failure" to null)
+        is DownloadOutcome.Failed -> mapOf("name" to "downloads.finished", "id" to id.toString(), "fileName" to outcome.fileName, "uri" to null, "failure" to downloadFailure(outcome.reason))
     }
 
     private fun downloadFailure(failure: DownloadFailure): String = when (failure) {

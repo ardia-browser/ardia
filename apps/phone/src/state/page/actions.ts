@@ -15,8 +15,8 @@ import { closeTabById, currentTabs, openNewTab, useTabs } from "../tabs/store";
 import { isSyncableUrl, type BrowserTab } from "../tabs/tabModels";
 import { findTab } from "../tabs/tabsState";
 import { blockersToast, searchQuery, translationAsks, translationUrl, type NightShadeMode } from "./pageMenu";
-import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, opensInInstaller, pressPlan, stoppedPrivateDownloadsToast, type PressAction, type Request } from "./pagePrompts";
-import { installDownloadedPackage } from "../appUpdate/store";
+import { backLayer, pressPlan, stoppedPrivateDownloadsToast, type PressAction, type Request } from "./pagePrompts";
+import { downloadCancelledElsewhere, downloadDropped, downloadFinished, downloadRetryRequested, downloadsProgressed, downloadStarted } from "./downloadCards";
 import { onboardingBack } from "../onboarding/store";
 import { refreshSitePermissions } from "../settings/sitePermissions";
 import { refreshSettings } from "../settings/actions";
@@ -36,7 +36,6 @@ import { pageSummariesEnabled, pageSummariesRevision, refreshPageSummariesEnable
 import { dismissArchiveCard } from "../browse/archiveCard";
 import { copy } from "../../lib/platformCopy";
 import { launchValues } from "../../platform/launch";
-import { actionWords } from "../../lib/sharedWords";
 import { syncData } from "../sync/store";
 import { libraryBack } from "../library/store";
 import { showToast, TOAST_LONG_DURATION_MS } from "../toasts/store";
@@ -734,18 +733,24 @@ function notePrivateDownloadStopped() {
 }
 
 function downloadEvent(event: DownloadEvent) {
-  if (event.name !== "downloads.finished") return;
+  if (event.name === "downloads.progress") {
+    downloadsProgressed(event.downloads);
+    return;
+  }
+  if (event.name === "downloads.cancelled") {
+    downloadCancelledElsewhere(event.id);
+    return;
+  }
+  if (event.name === "downloads.retryRequested") {
+    downloadRetryRequested(event.id);
+    return;
+  }
   if (event.failure === "privateSessionEnded") {
+    downloadDropped(event);
     notePrivateDownloadStopped();
     return;
   }
-  if (event.failure) {
-    showToast(downloadFailedToast(event.fileName), "warning");
-    return;
-  }
-  const uri = event.uri;
-  const open = opensInInstaller(Platform.OS, event.fileName) && downloads.installsPackages() ? (target: string) => quietly(async () => (await installDownloadedPackage(target)) || showToast("Couldn’t open the installer.", "warning")) : (target: string) => quietly(() => downloads.open(target));
-  showToast(downloadedToast(event.fileName), "download", TOAST_LONG_DURATION_MS, uri ? { label: actionWords.open, run: () => open(uri) } : null);
+  downloadFinished(event);
 }
 
 function pageEvent(event: PageEngineEvent) {
@@ -763,8 +768,7 @@ function pageEvent(event: PageEngineEvent) {
       void openPopup(event.pageId, event.popupId, event.url, event.isPrivate, event.inBackground === true);
       return;
     case "page.download":
-      if (event.downloadId === null) showToast(downloadFailedToast(event.fileName), "warning");
-      else showToast(downloadingToast(event.fileName), "download");
+      downloadStarted(event);
       return;
     case "page.longPress":
       if (event.pageId !== selectedId()) return;

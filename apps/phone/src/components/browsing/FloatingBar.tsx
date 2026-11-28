@@ -13,6 +13,7 @@ import { IDLE_PLUS_TOUCH, isTouchRelease, NO_EARLY_REVEAL, plusTouchDown, plusTo
 import { currentTabs } from "../../state/tabs/store";
 import { useBarReturn } from "./barReturn";
 import { AddressFace, AddressLeaf, DestinationFallbackLeaf } from "./AddressFace";
+import { DownloadIndicator } from "./DownloadIndicator";
 import { destination, destinationAddresses, destinationLeafShows, destinationStandsIn } from "../../state/browse/destination";
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { NotSecureLock } from "./NotSecureLock";
@@ -324,6 +325,7 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
         {standsIn ? <DestinationFallbackLeaf shownId={tab.id} leafId={previewId} style={styles.addressHit} /> : null}
         {swipe ? landedLeaves(swipe, tab).map((leaf) => <LandedLeaf key={leaf.tab.id} tab={leaf.tab} side={leaf.side} ownerId={tab.id} cursor={swipe.cursor} />) : null}
         </Animated.View>
+        {squeezed ? null : <DownloadIndicator testID="floatingBarDownloads" />}
         <PressInPlace ref={menuButton} label={squeezed ? `Page Menu, ${spokenAddress(address)}` : "Page Menu"} busy={squeezed ? squeezedBusy : undefined} onPress={() => openPageMenuFrom(() => menuButton.current, onMore)} onPressIn={haptics.barPress} style={styles.menu}>
           <Animated.View style={[styles.menuGlyph, dotsFade]}>
             <PlateInk>{(plate) => <Symbol name="ellipsis" size={floatingBarLayout.menuSymbol} color={plate.chrome.foreground} />}</PlateInk>

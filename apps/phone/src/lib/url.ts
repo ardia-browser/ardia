@@ -3,6 +3,12 @@ export function displayHost(host: string, url: string): string {
   return bare || url;
 }
 
+export function webHost(url: string): string | null {
+  const match = /^https?:\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]+)/i.exec(url.trim());
+  const host = match?.[1]?.toLowerCase().replace(/^www\./, "") ?? "";
+  return host.length > 0 ? host : null;
+}
+
 export function landingKey(url: string): string {
   const match = /^(https?):\/\/([^/?#]*)([^#]*)/i.exec(url.trim());
   if (!match) return url.trim();

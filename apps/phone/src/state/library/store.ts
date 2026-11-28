@@ -36,6 +36,7 @@ const HISTORY_SCAN = 20_000;
 type LibraryState = {
   open: boolean;
   section: LibrarySection;
+  alone: boolean;
   path: string[];
   history: HistoryEntry[];
   historyLoaded: boolean;
@@ -43,10 +44,10 @@ type LibraryState = {
   filesLoaded: boolean;
 };
 
-export const useLibrary = create<LibraryState>()(() => ({ open: false, section: "history", path: [], history: [], historyLoaded: false, files: [], filesLoaded: false }));
+export const useLibrary = create<LibraryState>()(() => ({ open: false, section: "history", alone: false, path: [], history: [], historyLoaded: false, files: [], filesLoaded: false }));
 
-export function openLibrary(section: LibrarySection) {
-  useLibrary.setState({ open: true, section, path: [] });
+export function openLibrary(section: LibrarySection, { alone = false }: { alone?: boolean } = {}) {
+  useLibrary.setState({ open: true, section, alone, path: [] });
   if (!useTabs.getState().incognito) countUsage("library_opened");
 }
 
@@ -76,7 +77,8 @@ export function openFromLibrary(url: string, title: string) {
 }
 
 export function showLibrarySection(section: LibrarySection) {
-  if (useLibrary.getState().section === section) return;
+  const { section: shown, alone } = useLibrary.getState();
+  if (shown === section || alone) return;
   useLibrary.setState({ section, path: [] });
 }
 

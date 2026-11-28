@@ -13,6 +13,8 @@ export type ToastSemantics = {
 
 export const TOAST_DISMISS_ACTION = "dismiss";
 
+export const TOAST_ACTIVATE_ACTION = "activate";
+
 export function toastSemantics(actionLabel: string | null, os: string): ToastSemantics {
   const hasAction = actionLabel !== null;
   const announcement: ToastAnnouncement = os === "ios" ? "announceForAccessibility" : "liveRegion";
@@ -21,7 +23,7 @@ export function toastSemantics(actionLabel: string | null, os: string): ToastSem
     role: hasAction ? "button" : "alert",
     announcement,
     liveRegion: announcement === "liveRegion" ? "polite" : "none",
-    actions: [{ name: TOAST_DISMISS_ACTION, label: dismissWords.close }],
+    actions: hasAction ? [{ name: TOAST_DISMISS_ACTION, label: dismissWords.close }, { name: TOAST_ACTIVATE_ACTION, label: actionLabel }] : [{ name: TOAST_DISMISS_ACTION, label: dismissWords.close }],
     escapes: true,
   };
 }
@@ -31,6 +33,8 @@ export const toastSpokenLabel = (message: string, actionLabel: string | null) =>
 export const toastAnnouncement = toastSpokenLabel;
 
 export const dismissesToast = (actionName: string) => actionName === TOAST_DISMISS_ACTION;
+
+export const activatesToast = (actionName: string) => actionName === TOAST_ACTIVATE_ACTION;
 
 export function toastDragReturn(reduceMotion: boolean): "snap" | "spring" {
   "worklet";

@@ -42,6 +42,7 @@ export function rolesFromScheme(s: MaterialScheme, dark: boolean): ColorRoles {
     tertiaryLabel: s.outline,
     toastFill: s.inverseSurface,
     toastLabel: s.inverseOnSurface,
+    toastDetail: s.inverseOnSurface,
     toastShadow: withAlpha(s.scrim, MATERIAL_STATE.scrim),
     panelBorder: s.outlineVariant,
     dialogScrim: withAlpha(s.scrim, MATERIAL_STATE.scrim),

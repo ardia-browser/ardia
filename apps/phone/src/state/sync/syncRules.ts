@@ -188,6 +188,10 @@ export const sentToast = (device: string) => `Sent to ${device}`;
 
 export const couldNotSendToast = (device: string) => `Couldn’t Send to ${device}`;
 
+export const COULD_NOT_SEND_DETAIL = "Check your connection and try again.";
+
+export const sentDetail = (host: string | null, isPrivate: boolean) => (isPrivate || !host ? null : host);
+
 export const PINNED_TOAST = "Pinned to Your Mac";
 export const COULD_NOT_PIN_TOAST = "Couldn’t Pin to Your Mac";
 export const SYNC_TO_PIN_TOAST = "Sync With Your Mac to Pin Tabs";

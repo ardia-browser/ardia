@@ -113,7 +113,7 @@ async function runLaunchHooks(args: LaunchArguments) {
   if (args.toast === null) return;
   await wait(LAUNCH_TIMING.toastMs - LAUNCH_TIMING.sheetMs);
   const toast = sampleToast(args.toast);
-  if (toast) showToast(toast.message, toast.icon);
+  if (toast) showToast(toast);
 }
 
 async function runDeckScript(script: string) {

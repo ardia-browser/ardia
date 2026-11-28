@@ -9,6 +9,7 @@ import { BAR_SHOWN, barShown, bottomBarCollapses, followScroll, obscuredBottom, 
 import type { Design } from "../../lib/design";
 import { neighbours, PAGER } from "../../lib/pagerPhysics";
 import { useSystemBars } from "../../state/app/systemBars";
+import { notePageBar } from "../../state/toasts/store";
 import { useNavigation, usePageTone } from "../../state/browse/hooks";
 import { armDeckPull, beginDeckPull, deckCutOwns, deckPull, disarmDeckPull, pageBarPreviewShown, pageBarShown, pageBodyShown, previewPageBar, releaseDeckPull, trackDeckPull, usePageBarPreview, type PullSettled } from "../../state/browse/deckPull";
 import { refreshHiddenDeck } from "../../state/browse/deckHold";
@@ -633,6 +634,8 @@ function useBarCollapse(tabId: string, isPrivate: boolean, finding: boolean, des
     wasCollapsed.current = collapsed;
   }, [collapsed, tabId, isPrivate, squeezes]);
   const fold = useBarFold(collapsed, reduceMotion);
+  useEffect(() => notePageBar(collapsed ? "pill" : hidden && !finding ? "gone" : "full"), [collapsed, hidden, finding]);
+  useEffect(() => () => notePageBar("full"), []);
   const hide = useSharedValue(0);
   useEffect(() => {
     if (android && reduceMotion) {

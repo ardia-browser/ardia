@@ -1,0 +1,95 @@
+import XCTest
+@testable import ArdiaUpdaterCore
+
+final class MouseGestureStrokesTests: XCTestCase {
+  private func strokes(_ moves: [(CGFloat, CGFloat)], from start: CGPoint = CGPoint(x: 500, y: 500)) -> MouseGestureStrokes {
+    var strokes = MouseGestureStrokes(start: start)
+    var point = start
+    for (dx, dy) in moves {
+      for _ in 0..<10 {
+        point = CGPoint(x: point.x + dx / 10, y: point.y + dy / 10)
+        strokes.add(point)
+      }
+    }
+    return strokes
+  }
+
+  func testAJitterShorterThanAStepIsNoGestureSoTheRightClickStaysAClick() {
+    let jitter = strokes([(6, -4), (-3, 9)])
+    XCTAssertFalse(jitter.isGesture)
+    XCTAssertNil(jitter.action)
+  }
+
+  func testOneStraightStrokeLeftGoesBackAndRightGoesForward() {
+    XCTAssertEqual(strokes([(-120, 8)]).action?.command, "back")
+    XCTAssertEqual(strokes([(140, -10)]).action?.command, "forward")
+  }
+
+  func testUpIsTowardTheTopOfTheScreenInAppKitCoordinates() {
+    XCTAssertEqual(strokes([(0, 100), (0, -100)]).action?.command, "reload")
+    XCTAssertEqual(strokes([(0, 100), (-100, 0)]).action?.command, "previousTab")
+    XCTAssertEqual(strokes([(0, 100), (100, 0)]).action?.command, "nextTab")
+  }
+
+  func testTwoStrokeGesturesMatchEdgesDefaults() {
+    XCTAssertEqual(strokes([(0, -100), (100, 0)]).action?.command, "closeTab")
+    XCTAssertEqual(strokes([(-100, 0), (0, 100)]).action?.command, "reopenClosedTab")
+    XCTAssertEqual(strokes([(100, 0), (0, 100)]).action?.command, "newTab")
+  }
+
+  func testAWobblyLineStaysOneStroke() {
+    let wobbly = strokes([(-60, 15), (-60, -15), (-60, 10)])
+    XCTAssertEqual(wobbly.directions, [.left])
+    XCTAssertEqual(wobbly.action?.title, "Back")
+  }
+
+  func testANearlyStraightDiagonalNeverTurnsIntoTwoStrokes() {
+    var diagonal = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    for point in [CGPoint(x: 24, y: 23), CGPoint(x: 47, y: 47), CGPoint(x: 71, y: 70)] { diagonal.add(point) }
+    XCTAssertTrue(diagonal.isGesture)
+    XCTAssertEqual(diagonal.directions, [])
+    XCTAssertNil(diagonal.action)
+  }
+
+  func testADiagonalTailAfterAGestureCancelsIt() {
+    var tail = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    for point in [CGPoint(x: 0, y: -48), CGPoint(x: 48, y: -48), CGPoint(x: 72, y: -24), CGPoint(x: 96, y: 0)] { tail.add(point) }
+    XCTAssertEqual(tail.directions, [.down, .right])
+    XCTAssertTrue(tail.strayed)
+    XCTAssertNil(tail.action)
+  }
+
+  func testOneRoundedCornerStillMakesTheGesture() {
+    var corner = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    for point in [CGPoint(x: 0, y: -48), CGPoint(x: 24, y: -72), CGPoint(x: 72, y: -72), CGPoint(x: 120, y: -72)] { corner.add(point) }
+    XCTAssertEqual(corner.directions, [.down, .right])
+    XCTAssertFalse(corner.strayed)
+    XCTAssertEqual(corner.action?.command, "closeTab")
+  }
+
+  func testAStrokeThatLeansUnderAThirdOfAnAxisStillCounts() {
+    XCTAssertEqual(strokes([(-120, 40)]).action?.command, "back")
+    XCTAssertEqual(strokes([(0, -100), (100, -30)]).action?.command, "closeTab")
+  }
+
+  func testAShapeWithNoActionOrTooManyStrokesRunsNothingButIsStillAGesture() {
+    let unknown = strokes([(0, -100), (0, 100)])
+    XCTAssertTrue(unknown.isGesture)
+    XCTAssertNil(unknown.action)
+    let tooLong = strokes([(0, -100), (100, 0), (0, 100)])
+    XCTAssertTrue(tooLong.isGesture)
+    XCTAssertNil(tooLong.action)
+  }
+
+  func testTheTrailKeepsEveryDistinctPointFromThePress() {
+    var trail = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    XCTAssertTrue(trail.add(CGPoint(x: 5, y: 0)))
+    XCTAssertFalse(trail.add(CGPoint(x: 5, y: 0)))
+    XCTAssertEqual(trail.points, [CGPoint(x: 0, y: 0), CGPoint(x: 5, y: 0)])
+  }
+
+  func testEveryActionHasItsOwnTelemetryName() {
+    let names = MouseGestureStrokes.actions.values.map(\.telemetry)
+    XCTAssertEqual(Set(names).count, names.count)
+  }
+}

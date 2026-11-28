@@ -177,6 +177,7 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     downloadsInProgress: s.downloads.filter((d) => d.state === "downloading").length,
     shortcuts: menuBarBindings(s),
     mouseShortcuts: menuBarMouseBindings(s),
+    mouseGestures: PLATFORM_FEATURES.mouseGestures && s.settings.mouseGestures,
     extensions: extensionMenu(s, windowId) };
 }
 

@@ -49,6 +49,7 @@ export type MenuState = {
   extensions?: { id: string; title: string; icon?: string | null; enabled: boolean }[];
   shortcuts?: Record<string, string[][]>;
   mouseShortcuts?: Record<string, string[]>;
+  mouseGestures?: boolean;
 };
 
 export type MenuBookmarkKey = "bookmarkFolders" | "recentBookmarks" | "bookmarksBar" | "otherBookmarks";

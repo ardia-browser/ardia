@@ -12,7 +12,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   var profile = ""
   var initialURL: String?
   var adoptId: String?
-  var transferKey: String?
+  @objc var transferKey: String?
   var visible = true { didSet { updateHidden(); wakeIfShown(was: oldValue); updateSight(); noteShownChanged(); showNextDialog(); if !visible { WebKitHub.shared.logins.closeDropdowns(for: self) } } }
   var selected = true { didSet { noteShownChanged() } }
   var wasShown = true

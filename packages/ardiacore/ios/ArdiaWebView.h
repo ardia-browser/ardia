@@ -117,6 +117,8 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)installScrollZoom;
 + (void)installSwitchPrewarm;
 + (void)setCommandScrollZoomEnabled:(BOOL)enabled NS_SWIFT_NAME(setCommandScrollZoomEnabled(_:));
++ (nullable NSView *)pageViewAt:(NSPoint)locationInWindow window:(NSWindow *)window NS_SWIFT_NAME(pageView(at:in:));
++ (NSString *)tabIdOfPageView:(NSView *)view NS_SWIFT_NAME(tabId(ofPageView:));
 + (NSArray<NSNumber *> *)devScrollZoom:(NSArray<NSDictionary<NSString *, id> *> *)steps
                                browser:(int)browserId NS_SWIFT_NAME(devScrollZoom(_:browserId:));
 @end

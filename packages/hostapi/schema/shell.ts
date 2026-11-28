@@ -262,6 +262,7 @@ export const shell = defineModuleDomain({
         devKeyEquivalentTrace: { args: [], result: "string[]", async: true, queue: "main", debug: true, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
         devFocusHandoffTrace: { args: [], result: "string[]", async: true, queue: "main", debug: true, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
         devClick: { args: [["windowId", "string"], ["click", "Click", "[String: Any]"]], result: "ClickResult", async: true, promise: true, queue: "main", optional: true, debug: true, mac: "custom", desktop: "absent", windows: "absent" },
+        devMouseGesture: { args: [["windowId", "string"], ["points", "number[][]", "[[Double]]"], ["release", "boolean"]], result: "Record<string, unknown>", swiftResult: "[String: Any]", async: true, queue: "main", debug: true, optional: true, mac: "custom", desktop: "absent", windows: "absent" },
         devRunAppleScript: { args: [["source", "string"]], result: "{ ok: boolean; result?: unknown; error?: string; number?: number }", async: true, promise: true, optional: true, debug: true, mac: "custom", desktop: "absent", windows: "absent" },
       },
       events: {},

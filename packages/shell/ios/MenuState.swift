@@ -23,6 +23,7 @@ struct MenuState {
   var downloadsInProgress = 0
   var shortcuts: [String: [[String]]] = [:]
   var mouseShortcuts: [String: [String]] = [:]
+  var mouseGestures = false
   var extensions: [MenuExtension] = []
   var fromApp = false
 
@@ -46,6 +47,7 @@ struct MenuState {
     downloadsInProgress = update.downloadsInProgress
     shortcuts = update.shortcuts
     mouseShortcuts = update.mouseShortcuts
+    mouseGestures = update.mouseGestures
     extensions = update.extensions
     fromApp = true
   }

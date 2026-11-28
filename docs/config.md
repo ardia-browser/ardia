@@ -73,6 +73,9 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   `["mouse:5"]`, optionally followed by `"control"`, `"option"`, `"shift"`, `"command"`. It sits beside the command's
   key shortcut (setting one never takes the other), runs only on the Mac for now, and is what Settings › Shortcuts
   records when you press the middle or a side button over a shortcut field.
+- `mouseGestures` (`false`) turns on Edge-style mouse gestures on the Mac: hold the right button over a page and draw
+  (← Back, → Forward, ↑↓ Reload, ↓→ Close Tab, ←↑ Reopen Closed Tab, →↑ New Tab, ↑← Previous Tab, ↑→ Next Tab). A
+  right-click that doesn't draw still opens the page's menu, on release.
 - `launchActions` is a list of up to 20 Ardia command ids (`"newTab"`, or `"selectTab:2"` for a variant) that the app
   runs itself, once per launch, after the session is restored and the first window is up, in the focused window: no
   CLI control and no LaunchAgent needed. `"launchActions": ["newTab"]` keeps your tabs and lands on a new tab.

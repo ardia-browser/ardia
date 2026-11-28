@@ -244,6 +244,7 @@ export type DevNative = {
   devKeyEquivalentTrace?(): Promise<string[]>;
   devFocusHandoffTrace?(): Promise<string[]>;
   devClick?(windowId: string, click: Click): Promise<ClickResult>;
+  devMouseGesture?(windowId: string, points: number[][], release: boolean): Promise<Record<string, unknown>>;
   devRunAppleScript?(source: string): Promise<{ ok: boolean; result?: unknown; error?: string; number?: number }>;
 };
 

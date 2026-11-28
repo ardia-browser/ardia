@@ -54,6 +54,7 @@ const TOP = [
   ["download folder", ["general.downloadsFolder"]],
   ["shortcuts", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],
   ["keyboard shortcuts", ["shortcuts.menuCommands"]],
+  ["mouse gestures", ["shortcuts.mouseGestures"]],
   ["hotkeys", ["shortcuts.menuCommands", "shortcuts.extensionShortcuts"]],
   ["⌘L", ["appearance.commandBarPlacement"]],
   ["alt tab", ["appearance.ctrlTab"]],

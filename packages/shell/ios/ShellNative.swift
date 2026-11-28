@@ -751,6 +751,7 @@ protocol DevNative {
   static func devKeyEquivalentTrace() -> [String]
   static func devFocusHandoffTrace() -> [String]
   static func devClick(_ windowId: String, _ click: [String: Any], _ promise: Promise)
+  static func devMouseGesture(_ windowId: String, _ points: [[Double]], _ release: Bool) -> [String: Any]
   static func devRunAppleScript(_ source: String, _ promise: Promise)
   #endif
 }
@@ -905,6 +906,10 @@ extension DevNative {
 
   static var devClickFunction: AnyDefinition {
     AsyncFunction("devClick") { (windowId: String, click: [String: Any], promise: Promise) in Self.devClick(windowId, click, promise) }.runOnQueue(.main)
+  }
+
+  static var devMouseGestureFunction: AnyDefinition {
+    AsyncFunction("devMouseGesture") { (windowId: String, points: [[Double]], release: Bool) -> [String: Any] in Self.devMouseGesture(windowId, points, release) }.runOnQueue(.main)
   }
 
   static var devRunAppleScriptFunction: AnyDefinition {

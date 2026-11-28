@@ -1,0 +1,216 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
+
+const kotlin = readFileSync(fileURLToPath(new URL("../../../../packages/phone/android/src/main/java/com/ardia/phone/PageScrollScripts.kt", import.meta.url)), "utf8");
+
+const shipped = (name: string) => {
+  const found = new RegExp(`const val ${name} = """([\\s\\S]*?)"""`).exec(kotlin);
+  assert.ok(found, `${name} is in PageScrollScripts.kt`);
+  return found[1]!;
+};
+
+const KEY_A = "ardia-scroll-capture-6f1c2d3e-0a4b-4c5d-8e9f-a0b1c2d3e4f5";
+const KEY_B = "ardia-scroll-capture-11111111-2222-4333-8444-555555555555";
+
+const scriptFor = (name: string) => (key: string, y: number | null = null) => shipped(name).replaceAll("ARDIA_CAPTURE_KEY", key).replaceAll("ARDIA_SCROLL_Y", y === null ? "null" : String(y));
+const mark = scriptFor("MARK");
+const scroll = scriptFor("SCROLL");
+const owns = (key: string) => `(${scroll(key, 0)}) >= 0 ? 1 : 0`;
+const hide = scriptFor("HIDE_FIXED");
+const show = scriptFor("SHOW_FIXED");
+const drop = scriptFor("DROP");
+const zoomed = shipped("ZOOMED");
+
+function page(body: string) {
+  const dom = new JSDOM(`<!doctype html><html><head><style>.bar{position:fixed;top:0}.head{position:sticky;top:0}</style></head><body>${body}</body></html>`, { runScripts: "outside-only", url: "https://example.com/a" });
+  const run = (script: string) => dom.window.eval(script) as number;
+  const byId = (id: string) => dom.window.document.getElementById(id)!;
+  return { dom, run, byId };
+}
+
+test("a capture marks the document, fades fixed and sticky elements out, and puts back each element's own style attribute exactly", () => {
+  const { run, byId } = page('<div id="bar" class="bar" style="color: red">bar</div><h2 id="head" class="head">head</h2><p id="plain" style="margin: 1px">text</p>');
+  assert.equal(run(owns(KEY_A)), 0);
+  assert.equal(run(mark(KEY_A)), 1);
+  assert.equal(run(owns(KEY_A)), 1);
+  assert.equal(run(hide(KEY_A)), 2);
+  assert.equal(byId("bar").style.getPropertyValue("opacity"), "0");
+  assert.equal(byId("head").style.getPropertyValue("opacity"), "0");
+  assert.equal(byId("head").style.getPropertyValue("position"), "", "a sticky element keeps its place in the layout, so nothing below it moves");
+  assert.equal(byId("plain").getAttribute("style"), "margin: 1px");
+  assert.equal(run(show(KEY_A)), 2);
+  assert.equal(byId("bar").getAttribute("style"), "color: red");
+  assert.equal(byId("head").hasAttribute("style"), false);
+  assert.equal(run(owns(KEY_A)), 1, "the token outlives the style restore, so publishing can still check the document");
+  assert.equal(run(drop(KEY_A)), 1);
+  assert.equal(run(owns(KEY_A)), 0);
+});
+
+test("without the capture's token nothing is hidden, restored or scrolled for: that is a different document", () => {
+  const { run, byId } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  assert.equal(run(hide(KEY_A)), -1);
+  assert.equal(run(show(KEY_A)), -1);
+  assert.equal(byId("bar").getAttribute("style"), "color: red");
+  const fresh = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  run(mark(KEY_A));
+  run(hide(KEY_A));
+  assert.equal(fresh.run(owns(KEY_A)), 0, "a reload or redirect starts a window without the token");
+  assert.equal(fresh.run(show(KEY_A)), -1, "so cleanup is a no-op there");
+});
+
+test("an in-page address change keeps the document, so the capture goes on and cleanup still restores", () => {
+  const { run, byId, dom } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  run(mark(KEY_A));
+  run(hide(KEY_A));
+  dom.window.history.pushState({}, "", "/b");
+  dom.window.location.hash = "#section";
+  assert.equal(run(owns(KEY_A)), 1);
+  assert.equal(run(show(KEY_A)), 1);
+  assert.equal(byId("bar").getAttribute("style"), "color: red");
+});
+
+test("cleanup never touches an element the page marked itself with the attribute the old scripts trusted", () => {
+  const { run, byId, dom } = page('<div id="bar" class="bar">bar</div><p id="mine" data-ardia-long-shot="sx" style="color: blue">page owned</p>');
+  dom.window.document.documentElement.setAttribute("data-ardia-long-shot", "");
+  run(mark(KEY_A));
+  run(hide(KEY_A));
+  run(show(KEY_A));
+  assert.equal(byId("mine").getAttribute("style"), "color: blue");
+  assert.equal(byId("bar").hasAttribute("style"), false);
+});
+
+test("an element the page removes during the capture still gets its style back if it returns", () => {
+  const { run, byId, dom } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  run(mark(KEY_A));
+  run(hide(KEY_A));
+  const bar = byId("bar");
+  bar.remove();
+  run(show(KEY_A));
+  dom.window.document.body.append(bar);
+  assert.equal(bar.getAttribute("style"), "color: red");
+});
+
+test("another capture's key changes nothing, a second mark is refused, and a second cleanup is a no-op", () => {
+  const { run, byId } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  run(mark(KEY_A));
+  assert.equal(run(mark(KEY_A)), 0);
+  run(hide(KEY_A));
+  assert.equal(run(show(KEY_B)), -1);
+  assert.equal(byId("bar").style.getPropertyValue("opacity"), "0");
+  assert.equal(run(show(KEY_A)), 1);
+  assert.equal(run(show(KEY_A)), 0);
+  assert.equal(byId("bar").getAttribute("style"), "color: red");
+});
+
+test("the page sees no marker attribute and no enumerable property while it is captured", () => {
+  const { run, dom } = page('<div id="bar" class="bar">bar</div>');
+  run(mark(KEY_A));
+  run(hide(KEY_A));
+  assert.equal(dom.window.document.querySelectorAll("[data-ardia-long-shot]").length, 0);
+  assert.equal(Object.keys(dom.window).some((key) => key.includes("ardia")), false);
+});
+
+test("a scroll runs only in the capture's own document, in the same script as the check, and leaves the page's own style attribute as it was", () => {
+  const { run, dom } = page('<div style="height: 5000px">tall</div>');
+  const root = dom.window.document.documentElement;
+  root.setAttribute("style", "scroll-behavior: smooth; color: red");
+  assert.equal(run(scroll(KEY_A, 300)), -1, "no token, no scroll");
+  run(mark(KEY_A));
+  assert.ok(run(scroll(KEY_A, 300)) >= 0);
+  assert.equal(root.getAttribute("style"), "scroll-behavior: smooth; color: red");
+  root.removeAttribute("style");
+  run(scroll(KEY_A, 0));
+  assert.equal(root.hasAttribute("style"), false, "a page without a style attribute keeps none");
+  assert.equal(run(show(KEY_A, 0)), 0, "restoring with a scroll still answers for the token");
+  assert.equal(run(drop(KEY_A)), 1, "drop says the token was there");
+  assert.equal(run(drop(KEY_A)), 0, "and only once");
+  assert.equal(run(scroll(KEY_A, 300)), -1);
+});
+
+test("a scroll overrides smooth scrolling on the root element even when the body scrolls the page, and puts both style attributes back", () => {
+  const dom = new JSDOM(`<html style="scroll-behavior: smooth"><body style="margin: 0"><div style="height: 5000px">tall</div></body></html>`, { runScripts: "outside-only", url: "https://example.com/q" });
+  const run = (script: string) => dom.window.eval(script) as number;
+  const doc = dom.window.document;
+  Object.defineProperty(doc, "scrollingElement", { value: doc.body, configurable: true });
+  const seen: string[] = [];
+  Object.defineProperty(doc.body, "scrollTop", { configurable: true, get: () => 0, set: () => seen.push(`${doc.documentElement.style.getPropertyValue("scroll-behavior")} ${doc.body.style.getPropertyValue("scroll-behavior")}`) });
+  run(mark(KEY_A));
+  run(scroll(KEY_A, 300));
+  run(show(KEY_A, 0));
+  assert.deepEqual(seen, ["auto auto", "auto auto"]);
+  assert.equal(doc.documentElement.getAttribute("style"), "scroll-behavior: smooth");
+  assert.equal(doc.body.getAttribute("style"), "margin: 0");
+});
+
+test("a pinch-zoomed page is refused before it is marked, so nothing is scrolled or left behind", () => {
+  const { run, dom } = page('<div style="height: 5000px">tall</div>');
+  Object.defineProperty(dom.window, "visualViewport", { value: { scale: 2 }, configurable: true });
+  assert.equal(run(mark(KEY_A)), 2);
+  assert.equal(run(owns(KEY_A)), 0);
+  assert.equal(run(drop(KEY_A)), 0);
+  Object.defineProperty(dom.window, "visualViewport", { value: { scale: 1 }, configurable: true });
+  assert.equal(run(mark(KEY_A)), 1);
+});
+
+test("the search's zoom probe reads the visual viewport and changes nothing", () => {
+  const { run, dom } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  const symbols = Object.getOwnPropertySymbols(dom.window).length;
+  assert.equal(run(zoomed), 0);
+  Object.defineProperty(dom.window, "visualViewport", { value: { scale: 2 }, configurable: true });
+  assert.equal(run(zoomed), 1);
+  assert.equal(Object.getOwnPropertySymbols(dom.window).length, symbols);
+  assert.equal(dom.window.document.getElementById("bar")!.getAttribute("style"), "color: red");
+});
+
+test("fixed and sticky elements inside open shadow roots, nested ones too, are faded and put back like any other", () => {
+  const { run, dom } = page('<div id="host"></div><p id="plain">text</p>');
+  const doc = dom.window.document;
+  const outer = doc.getElementById("host")!.attachShadow({ mode: "open" });
+  outer.innerHTML = '<header id="bar" style="position: fixed; top: 0px">bar</header><div id="inner-host"></div><h2 id="head" style="position: sticky; top: 0px">head</h2>';
+  const inner = outer.getElementById("inner-host")!.attachShadow({ mode: "open" });
+  inner.innerHTML = '<nav id="deep" style="position: fixed; bottom: 0px">deep</nav>';
+  run(mark(KEY_A));
+  assert.equal(run(hide(KEY_A)), 3);
+  for (const element of [outer.getElementById("bar")!, outer.getElementById("head")!, inner.getElementById("deep")!]) assert.equal(element.style.getPropertyValue("opacity"), "0");
+  assert.equal(run(show(KEY_A)), 3);
+  assert.equal(outer.getElementById("bar")!.getAttribute("style"), "position: fixed; top: 0px");
+  assert.equal(inner.getElementById("deep")!.getAttribute("style"), "position: fixed; bottom: 0px");
+  assert.equal(doc.getElementById("plain")!.hasAttribute("style"), false);
+});
+
+test("a closed shadow root stays closed: the scripts never reach into it", () => {
+  const { run, dom } = page('<div id="host"></div>');
+  const closed = dom.window.document.getElementById("host")!.attachShadow({ mode: "closed" });
+  closed.innerHTML = '<header id="bar" style="position: fixed">bar</header>';
+  run(mark(KEY_A));
+  assert.equal(run(hide(KEY_A)), 0);
+  assert.equal(closed.getElementById("bar")!.style.getPropertyValue("opacity"), "");
+});
+
+test("the publish check reads the token and changes nothing, and a reloaded document answers no", () => {
+  const { run, dom } = page('<div id="bar" class="bar" style="color: red">bar</div>');
+  const owns = scriptFor("OWNS");
+  assert.equal(run(owns(KEY_A)), 0);
+  run(mark(KEY_A));
+  assert.equal(run(owns(KEY_A)), 1);
+  assert.equal(run(owns(KEY_B)), 0);
+  assert.equal(dom.window.document.getElementById("bar")!.getAttribute("style"), "color: red");
+  const reloaded = page('<div id="bar" class="bar">bar</div>');
+  assert.equal(reloaded.run(owns(KEY_A)), 0);
+});
+
+test("a fixed element in an open shadow root attached to the body itself is hidden once and put back", () => {
+  const dom = new JSDOM(`<!doctype html><html><head></head><body><p>text</p></body></html>`, { runScripts: "outside-only", url: "https://example.com/s" });
+  const run = (script: string) => dom.window.eval(script) as number;
+  const root = dom.window.document.body.attachShadow({ mode: "open" });
+  root.innerHTML = '<div id="badge" style="position: fixed; top: 0">badge</div><slot></slot>';
+  const badge = root.getElementById("badge")!;
+  assert.equal(run(mark(KEY_A)), 1);
+  assert.equal(run(hide(KEY_A)), 1);
+  assert.equal(badge.style.getPropertyValue("opacity"), "0");
+  run(show(KEY_A));
+  assert.equal(badge.getAttribute("style"), "position: fixed; top: 0");
+});

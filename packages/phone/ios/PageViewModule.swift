@@ -39,6 +39,7 @@ public final class PageViewModule: Module {
     OnCreate {
       onMain {
         PhonePages.shared.pageSink = { [weak self] event in self?.sendEvent("onPageEngineEvent", event) }
+        FullPageScreenshots.shared.install()
       }
     }
 

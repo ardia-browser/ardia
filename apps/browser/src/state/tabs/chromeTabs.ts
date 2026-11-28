@@ -165,6 +165,7 @@ function scheduleProject() {
 
 function project(s: BrowserState) {
   for (const strip of mirror.values()) {
+    if (strip.appWindow && !s.windows[strip.appWindow]) continue;
     if (inflight.has(strip.strip)) continue;
     const plan = stripPlan(s, strip);
     if (!plan) continue;

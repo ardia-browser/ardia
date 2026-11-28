@@ -3,14 +3,15 @@ import { test } from "node:test";
 
 globalThis.__DEV__ = false;
 const { useBrowser } = await import("../browser/store.ts");
-const { iconMarks, titleStruck } = await import("./rowState.ts");
+const { FADED, iconMarks, titleStruck } = await import("./rowState.ts");
+const { isPageUnloaded } = await import("../pins/pinShare.ts");
 const { useLifecycle, isSleeping } = await import("../tabs/sleepingTabs.ts");
 const { DEFAULT_SETTINGS } = await import("../settings/settings.ts");
 await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 
-const struck = (id) => titleStruck(S().settings.strikeSleepingTabs, isSleeping(id), iconMarks(S(), id));
+const struck = (id) => titleStruck(S().settings.strikeSleepingTabs, isSleeping(id), isPageUnloaded(S(), id));
 
 function session() {
   S().hydrate({});
@@ -44,24 +45,26 @@ test("a tab that wakes loses the strike at once", () => {
   assert.equal(struck(asleep), false);
 });
 
-test("a closed pinned tab is struck only when Fade icons of unloaded tabs treats it as asleep too", () => {
+test("a closed pinned tab is struck with Strike through alone, without fading its icon", () => {
   const { background } = session();
   S().pinTabs([background], true);
   S().closeTabs([background]);
-  S().updateSettings({ strikeSleepingTabs: true });
   assert.equal(struck(background), false);
+  S().updateSettings({ strikeSleepingTabs: true });
+  assert.equal(struck(background), true);
+  assert.equal(iconMarks(S(), background) & FADED, 0);
   S().updateSettings({ fadeUnloadedTabs: true });
   assert.equal(struck(background), true);
+  assert.ok(iconMarks(S(), background) & FADED);
   S().updateSettings({ strikeSleepingTabs: false });
   assert.equal(struck(background), false);
 });
 
-test("a closed Top App is struck when it loses its tile, as its icon fades then", () => {
+test("Fade alone fades a closed pinned tab's icon and leaves its title alone", () => {
   const { background } = session();
   S().pinTabs([background], true);
   S().closeTabs([background]);
-  S().updateSettings({ strikeSleepingTabs: true });
+  S().updateSettings({ fadeUnloadedTabs: true });
+  assert.ok(iconMarks(S(), background) & FADED);
   assert.equal(struck(background), false);
-  S().updateSettings({ closedTopAppTiles: false });
-  assert.equal(struck(background), true);
 });

@@ -41,13 +41,13 @@ export const markedEngine = (marks: number): PageEngine | null =>
 export const useIconMarks = (tabId: string | undefined, given: number | undefined): number =>
   useKeyed(watchTabState, given === undefined ? tabId : null, () => given ?? (tabId ? iconMarks(useBrowser.getState(), tabId) : 0));
 
-export const titleStruck = (strikeSleeping: boolean, sleeping: boolean, marks: number): boolean => strikeSleeping && (sleeping || !!(marks & FADED));
+export const titleStruck = (strikeSleeping: boolean, sleeping: boolean, unloaded: boolean): boolean => strikeSleeping && (sleeping || unloaded);
 
-export function useStruckTitle(tabId: string, marks?: number): boolean {
+export function useStruckTitle(tabId: string): boolean {
   const on = useSettings((s) => s.strikeSleepingTabs);
   const sleeping = useIsSleeping(on ? tabId : "");
-  const iconMarks = useIconMarks(on ? tabId : undefined, on ? marks : 0);
-  return titleStruck(on, sleeping, iconMarks);
+  const unloaded = useKeyed(watchTabState, on ? tabId : null, () => on && isPageUnloaded(useBrowser.getState(), tabId));
+  return titleStruck(on, sleeping, unloaded);
 }
 
 export function rowFlags(s: BrowserState, windowId: string, tabId: string): number {
@@ -63,7 +63,7 @@ export function rowFlags(s: BrowserState, windowId: string, tabId: string): numb
   if (splitOf(s, tabId)) flags |= IN_SPLIT;
   const sleeping = isSleeping(tabId);
   if (sleeping) flags |= SLEEPING;
-  if (titleStruck(s.settings.strikeSleepingTabs, sleeping, flags)) flags |= STRUCK;
+  if (titleStruck(s.settings.strikeSleepingTabs, sleeping, isPageUnloaded(s, tabId))) flags |= STRUCK;
   return flags;
 }
 

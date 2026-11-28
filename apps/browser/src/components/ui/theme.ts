@@ -1,4 +1,5 @@
 import { createContext, use } from "react";
+import { isUntouched, presetStartingTheme } from "../../lib/presetLook";
 import { opaqueThemeTint, PRESET_BACKDROP, resolveTheme, requestedDarkFor, shownLook, themeAccent, themeBackdrop, themePalette, type LookSource, type ProfileColor, type ProfileLookFields, type ProfileTheme } from "../../lib/profileLook";
 import type { ThemeBackdropProps } from "@ardia/core";
 import { backdropTint, opaqueTint, tintForHue, type BackdropTint } from "../../lib/windowTint";
@@ -6,7 +7,7 @@ import { contrastRatio, isRgbFunction, luminance, mix, over, parseColor, rgbToHs
 import { CARD_INSET, DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
-import { arcSelectedFill, colorRoles, fieldInk, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, popoverMenuMaterial, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
+import { colorRoles, fieldInk, HIGH_CONTRAST_INK, ink, INCOGNITO_TINT, popoverMenuMaterial, withAlpha, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
 import type { BasePalette } from "../../lib/themeFile";
 import { visibleLine, visibleSelection } from "../../lib/selectionContrast";
 
@@ -49,7 +50,7 @@ export function hex(color: string): string {
 }
 
 export function profileNameColor(profile: ProfileLookFields, dark: boolean): string {
-  const spec = PROFILE_COLORS[profile.color] ?? PROFILE_COLORS.plum;
+  const spec = PROFILE_COLORS[profile.color] ?? PROFILE_COLORS.green;
   const base = profile.theme ? themeAccent(resolveTheme(profile.theme, dark)) : (spec.action ?? spec.swatch);
   return dark ? mix(base, ink.white, 0.6) : mix(base, ink.black, 0.4);
 }
@@ -67,13 +68,15 @@ export function inkOn(rows: readonly string[], dark: boolean): string {
   return worst(own) >= MIN_INK_CONTRAST || worst(other) <= worst(own) ? own : other;
 }
 
-function arcSelectionRoles(base: ColorRoles, windowTint: readonly string[], adaptiveInk: boolean): Pick<Theme, "tabSelected" | "pinnedSelectedFill" | "rowSelectedText" | "tabSelectedText"> {
-  const tabSelected = base.dark ? arcSelectedFill.dark : visibleSelection(arcSelectedFill.light, ink.black, windowTint);
+function selectionRoles(base: ColorRoles, windowTint: readonly string[], adaptiveInk: boolean, adaptFill = true): Pick<Theme, "tabSelected" | "pinnedSelectedFill" | "rowSelectedText" | "tabSelectedText"> {
+  const stockFill = colorRoles[base.dark ? "dark" : "light"].tabSelected;
+  const fallback = base.dark ? ink.white : ink.black;
+  const tabSelected = adaptFill ? visibleSelection(stockFill, fallback, windowTint) : stockFill;
   const inkOver = (fill: string) => (adaptiveInk ? inkOn(windowTint.map((tint) => over(fill, tint)), base.dark) : base.tabSelectedText);
   return {
     tabSelected,
-    pinnedSelectedFill: visibleSelection(base.pinnedSelectedFill, base.dark ? ink.white : ink.black, windowTint),
-    rowSelectedText: inkOver(tabSelected),
+    pinnedSelectedFill: adaptFill ? visibleSelection(base.pinnedSelectedFill, fallback, windowTint) : base.pinnedSelectedFill,
+    rowSelectedText: inkOn(windowTint.map((tint) => over(tabSelected, tint)), base.dark),
     tabSelectedText: inkOver(base.card),
   };
 }
@@ -173,18 +176,19 @@ export function themeFor(key: string, palette?: BasePalette | null): Theme {
   if (!theme) {
     const [color, mode] = key.split(":") as [ProfileColor | "incognito", string];
     const base = color === "incognito" || mode === "dark" ? layer.palettes.dark : layer.palettes.light;
-    const spec = color === "incognito" ? null : (PROFILE_COLORS[color] ?? PROFILE_COLORS.plum);
+    const spec = color === "incognito" ? null : (PROFILE_COLORS[color] ?? PROFILE_COLORS.green);
     const powerUpColor = !spec ? null : spec.palette ? (spec.powerUp ?? spec.swatch) : ink.neutralGrey;
     const backdrop = backdropTint(spec ? (spec.tint ?? tintForHue(spec.swatch, !spec.palette)) : INCOGNITO_TINT, !spec?.palette);
+    const windowTint = opaqueTint(backdrop, base.dark);
     theme = {
       ...base,
-      rowSelectedText: base.tabSelectedText,
+      ...selectionRoles(base, windowTint, false, false),
       pinnedDivider: base.divider,
       adaptiveInk: false,
       highContrastText: false,
       profileColor: color,
       backdrop: { ...backdrop, ...PRESET_BACKDROP },
-      windowTint: opaqueTint(backdrop, base.dark),
+      windowTint,
       powerUpColor,
       powerUpPalette: powerUpColor ? [powerUpColor] : null,
       custom: null,
@@ -202,7 +206,7 @@ export function nearestPreset(hexColor: string): ProfileColor {
   };
   const [h, s] = hsl(hexColor);
   if (s < 0.12) return "neutral";
-  let best: ProfileColor = "plum";
+  let best: ProfileColor = "green";
   let distance = Infinity;
   for (const [name, spec] of Object.entries(PROFILE_COLORS) as [ProfileColor, ProfileColorSpec][]) {
     if (name === "neutral") continue;
@@ -227,7 +231,7 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
     const windowTint = opaqueThemeTint(look, dark);
     theme = {
       ...preset,
-      ...arcSelectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint, adaptiveInk),
+      ...selectionRoles(dark ? preset.palettes.dark : preset.palettes.light, windowTint, adaptiveInk),
       pinnedDivider: visibleLine(preset.divider, inkOn(windowTint, dark), windowTint),
       adaptiveInk,
       profileColor: nearestPreset(accent),
@@ -246,15 +250,24 @@ function customTheme(custom: ProfileTheme, color: ProfileColor, appDark: boolean
   return theme;
 }
 
+const presetLooks = new Map<ProfileColor, ProfileTheme>();
+
+export function presetLook(color: ProfileColor): ProfileTheme {
+  let look = presetLooks.get(color);
+  if (!look) presetLooks.set(color, (look = presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.green).swatch)));
+  return look;
+}
+
 export function profileTheme(profile: ProfileLookFields | undefined, appDark: boolean, source: LookSource = "own", palette?: BasePalette | null, adaptTextToColor = true): Theme {
-  const color = profile?.color ?? "plum";
-  if (profile?.theme) return customTheme(profile.theme, color, appDark, source, palette, adaptTextToColor);
-  return themeFor(`${color}:${appDark ? "dark" : "light"}`, palette);
+  const color = profile?.color ?? "green";
+  const start = presetLook(color);
+  const theme = profile?.theme;
+  if (color === "neutral" && (!theme || isUntouched(theme, start))) return themeFor(`neutral:${appDark ? "dark" : "light"}`, palette);
+  return customTheme(theme ?? start, color, appDark, source, palette, adaptTextToColor);
 }
 
 export function profileAccent(profile: ProfileLookFields | undefined): string {
-  if (profile?.theme) return themeAccent(profile.theme);
-  return (PROFILE_COLORS[profile?.color ?? "plum"] ?? PROFILE_COLORS.plum).swatch;
+  return themeAccent(profile?.theme ?? presetLook(profile?.color ?? "green"));
 }
 
 export function scopedTheme(incognito: boolean, profile: ProfileLookFields | undefined, appDark: boolean, source: LookSource, palette?: BasePalette | null, adaptTextToColor = true): Theme {
@@ -276,7 +289,7 @@ export function useTheme(): Theme {
   const scoped = useScopedTheme();
   if (scoped) return scoped;
   if (__DEV__) console.warn("useTheme outside a ThemeScope");
-  return themeFor("plum:dark");
+  return themeFor("green:dark");
 }
 
 const SELECTED_TAB_GLOW = {

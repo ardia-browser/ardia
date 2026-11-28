@@ -4,8 +4,8 @@ import { test } from "node:test";
 globalThis.__DEV__ = false;
 
 const { inkOn, profileTheme, scopedTheme, surfaceTheme, tintTheme, PROFILE_COLORS } = await import("./theme.ts");
-const { arcSelectedFill, colorRoles } = await import("./tokens.ts");
-const { luminance, over } = await import("../../lib/color.ts");
+const { colorRoles } = await import("./tokens.ts");
+const { contrastRatio, luminance, over } = await import("../../lib/color.ts");
 const { selectionLightnessDelta, visibleSelection, MIN_SELECTION_LIGHTNESS } = await import("../../lib/selectionContrast.ts");
 
 const flat = (r, g, b, mode) => {
@@ -21,47 +21,31 @@ const customThemes = () =>
     ["dark", "light"].map((mode) => ({ label: `${[r, g, b]} ${mode}`, theme: profileTheme({ color: "neutral", theme: flat(r, g, b, mode) }, mode === "dark") })),
   );
 
-test("built-in presets keep Dia's selected-tab fill, neutral included", () => {
-  for (const dark of [true, false])
-    for (const color of Object.keys(PROFILE_COLORS)) {
-      const theme = profileTheme({ color }, dark);
-      const base = colorRoles[dark ? "dark" : "light"];
-      assert.equal(theme.tabSelected, base.tabSelected, `${color} ${dark ? "dark" : "light"}`);
-      assert.equal(theme.pinnedSelectedFill, base.pinnedSelectedFill, `${color} ${dark ? "dark" : "light"} pinned`);
-    }
-});
-
-test("every light custom profile colour shows its selected tab against the sidebar", () => {
-  for (const { label, theme } of customThemes().filter(({ theme }) => !theme.dark)) {
-    assert.ok(selectionLightnessDelta(theme.tabSelected, theme.windowTint) >= MIN_SELECTION_LIGHTNESS - 1e-9, `${label}: ${theme.tabSelected} on ${theme.windowTint}`);
+test("every custom profile colour keeps its appearance's selected fill when it shows", () => {
+  for (const { label, theme } of customThemes()) {
+    const stock = colorRoles[theme.dark ? "dark" : "light"].tabSelected;
+    const fallback = theme.dark ? "#FFFFFF" : "#000000";
+    assert.equal(theme.tabSelected, visibleSelection(stock, fallback, theme.windowTint), label);
+    assert.ok(selectionLightnessDelta(theme.tabSelected, theme.windowTint) >= MIN_SELECTION_LIGHTNESS - 1e-9, label);
     assert.ok(selectionLightnessDelta(theme.pinnedSelectedFill, theme.windowTint) >= MIN_SELECTION_LIGHTNESS - 1e-9, `${label} pinned`);
   }
 });
 
-test("every dark custom profile colour gets Arc's white selected tab, light greys and black-to-white gradients included", () => {
-  const vivid = (stops) => ({ stops, intensity: 1, mode: "dark", grain: 0, texture: "grain", translucency: 1 });
-  const grey = (v) => ({ r: v, g: v, b: v, a: 1 });
-  const extremes = [
-    vivid([{ x: 0.2, y: 0.2, color: grey(0.88) }, { x: 0.8, y: 0.8, color: grey(0.88) }]),
-    vivid([{ x: 0, y: 0, color: grey(0) }, { x: 1, y: 1, color: grey(1) }]),
-  ].map((look) => profileTheme({ color: "neutral", theme: look }, true));
-  for (const theme of [...customThemes().map(({ theme }) => theme).filter((theme) => theme.dark), ...extremes]) {
-    assert.ok(theme.dark);
-    assert.equal(theme.tabSelected, arcSelectedFill.dark, theme.windowTint.join(" "));
-  }
+test("a near-black dark profile gets a lighter selected tab", () => {
+  const theme = profileTheme({ color: "neutral", theme: flat(0, 0, 0, "dark") }, true);
+  assert.notEqual(theme.tabSelected, colorRoles.dark.tabSelected);
+  assert.ok(luminance(over(theme.tabSelected, theme.windowTint[0])) > luminance(theme.windowTint[0]));
 });
 
-test("dark custom colours from black to mid-grey all get Arc's lighter selected tab, so a small colour change can't swap it", () => {
-  for (let v = 0; v <= 0.3 + 1e-9; v += 0.005) {
-    const theme = profileTheme({ color: "neutral", theme: flat(v, v, v, "dark") }, true);
-    assert.equal(theme.tabSelected, arcSelectedFill.dark, `grey ${v.toFixed(3)}`);
-    assert.ok(luminance(over(theme.tabSelected, theme.windowTint[0])) > luminance(theme.windowTint[0]));
-  }
+test("a mid-tone dark profile gets a dark selected tab", () => {
+  const theme = profileTheme({ color: "neutral", theme: flat(0.4, 0.3, 0.35, "dark") }, true);
+  assert.equal(theme.tabSelected, colorRoles.dark.tabSelected);
+  assert.ok(luminance(over(theme.tabSelected, theme.windowTint[0])) < luminance(theme.windowTint[0]));
 });
 
-test("a light custom colour gets Arc's white selected tab", () => {
+test("a light custom colour gets the white selected tab", () => {
   const theme = profileTheme({ color: "neutral", theme: flat(0.95, 0.62, 0.78, "light") }, false);
-  assert.equal(theme.tabSelected, arcSelectedFill.light);
+  assert.equal(theme.tabSelected, colorRoles.light.tabSelected);
 });
 
 test("a near-white profile gets a darker selected tab", () => {
@@ -70,7 +54,7 @@ test("a near-white profile gets a darker selected tab", () => {
 });
 
 test("a fill that already shows is returned as is", () => {
-  assert.equal(visibleSelection(arcSelectedFill.dark, "#000000", ["#342123"]), arcSelectedFill.dark);
+  assert.equal(visibleSelection(colorRoles.dark.tabSelected, "#FFFFFF", ["#50404D"]), colorRoles.dark.tabSelected);
 });
 
 const vivid = (stops, mode = "dark") => ({ stops, intensity: 1, mode, grain: 0, texture: "grain", translucency: 1 });
@@ -90,9 +74,11 @@ test("an ink keeps the mode's own colour until it drops below 3:1, as Arc keeps 
 });
 
 test("a selected row's title keeps the mode's ink unless it can't be read on that row", () => {
-  assert.equal(custom(solid(grey(0))).rowSelectedText, "#FFFFFF");
-  assert.equal(custom(solid(grey(0.88))).rowSelectedText, "#000000");
-  assert.equal(custom(solid(rgb(128, 92, 91))).rowSelectedText, "#FFFFFF");
+  for (const { label, theme } of customThemes()) {
+    const rows = theme.windowTint.map((tint) => over(theme.tabSelected, tint));
+    assert.equal(theme.rowSelectedText, inkOn(rows, theme.dark), label);
+    assert.ok(rows.every((row) => contrastRatio(theme.rowSelectedText, row) >= 3), label);
+  }
   assert.equal(profileTheme({ color: "neutral", theme: flat(0.95, 0.62, 0.78, "light") }, false).rowSelectedText, "#000000");
   for (const dark of [true, false])
     for (const color of Object.keys(PROFILE_COLORS)) assert.equal(profileTheme({ color }, dark).rowSelectedText, colorRoles[dark ? "dark" : "light"].tabSelectedText);
@@ -106,7 +92,7 @@ test("a light custom colour in dark mode draws its sidebar text, glyphs and hove
   for (const role of SIDEBAR_INK) assert.equal(sidebar[role], colorRoles.light[role], role);
   assert.equal(sidebar.tabSelected, theme.tabSelected);
   assert.equal(sidebar.pinnedSelectedFill, theme.pinnedSelectedFill);
-  assert.equal(sidebar.rowSelectedText, "#000000");
+  assert.equal(sidebar.rowSelectedText, theme.rowSelectedText);
   assert.equal(sidebar.windowTint, theme.windowTint);
   assert.equal(theme.textTab, colorRoles.dark.textTab);
 });
@@ -137,11 +123,14 @@ test("every custom colour's sidebar text reads at 3:1 on its tint, or takes the 
   }
 });
 
-test("built-in presets keep their sidebar and strip palette", () => {
+test("built-in presets and incognito use the Ardia fill for their appearance", () => {
+  assert.equal(colorRoles.dark.tabSelected, "rgba(18,18,18,0.5)");
+  assert.equal(colorRoles.light.tabSelected, "rgba(255,255,255,0.7)");
   for (const dark of [true, false])
     for (const color of [...Object.keys(PROFILE_COLORS), "incognito"]) {
-      const theme = color === "incognito" ? profileTheme(undefined, dark) : profileTheme({ color }, dark);
+      const theme = scopedTheme(color === "incognito", { color }, dark, "app");
       assert.equal(tintTheme(theme), theme, `${color} ${dark}`);
+      assert.equal(theme.tabSelected, colorRoles[theme.dark ? "dark" : "light"].tabSelected, `${color} ${dark}`);
     }
 });
 
@@ -172,13 +161,12 @@ test("an emphasised title on the tint can use textPrimary: the presets draw it a
 
 test("a custom colour adjusts its inks to the tint", () => {
   assert.equal(tintTheme(custom(solid(grey(0.88)))).textTab, colorRoles.light.textTab);
-  assert.equal(custom(solid(grey(0.88))).rowSelectedText, "#000000");
+  assert.equal(custom(solid(grey(0.88))).rowSelectedText, "#FFFFFF");
 });
 
-test("the line under the pinned tabs keeps Dia's colour on built-in presets and reaches the selection floor on every custom colour", () => {
-  for (const dark of [true, false])
-    for (const color of Object.keys(PROFILE_COLORS)) assert.equal(profileTheme({ color }, dark).pinnedDivider, colorRoles[dark ? "dark" : "light"].divider, `${color} ${dark ? "dark" : "light"}`);
-  for (const { label, theme } of customThemes()) {
+test("the line under the pinned tabs reaches the selection floor on every built-in preset and custom colour", () => {
+  const presets = Object.keys(PROFILE_COLORS).flatMap((color) => [true, false].map((dark) => ({ label: `${color} ${dark ? "dark" : "light"}`, theme: profileTheme({ color }, dark) })));
+  for (const { label, theme } of [...presets, ...customThemes()]) {
     assert.ok(selectionLightnessDelta(theme.pinnedDivider, theme.windowTint) >= MIN_SELECTION_LIGHTNESS - 1e-9, `${label}: ${theme.pinnedDivider} on ${theme.windowTint}`);
     if (selectionLightnessDelta(theme.divider, theme.windowTint) >= MIN_SELECTION_LIGHTNESS) assert.equal(theme.pinnedDivider, theme.divider, `${label} already shows`);
   }

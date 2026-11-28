@@ -47,7 +47,7 @@ export {
 
 export type LookSource = ThemeLookSource;
 
-export const PROFILE_COLOR_NAMES = ["plum", "blue", "purple", "pink", "red", "orange", "yellow", "green", "neutral"] as const;
+export const PROFILE_COLOR_NAMES = ["green", "blue", "purple", "plum", "pink", "red", "orange", "yellow", "neutral"] as const;
 
 export type ProfileColor = (typeof PROFILE_COLOR_NAMES)[number];
 

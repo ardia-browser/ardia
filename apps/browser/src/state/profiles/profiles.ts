@@ -29,9 +29,9 @@ export function onProfileDeleted(listener: (profileId: string) => void): () => v
   return () => void deletionListeners.delete(listener);
 }
 
-export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "plum" };
+export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "green", icon: null, createdAt: 0, presetThemes: {}, seenTheme: null, seenColor: "green" };
 
-const COLORS: ProfileColor[] = ["blue", "green", "orange", "purple", "red", "yellow", "pink"];
+const COLORS: ProfileColor[] = ["blue", "plum", "orange", "purple", "red", "yellow", "pink"];
 
 export const unusedProfileColor = (profiles: Record<string, Profile>): ProfileColor =>
   COLORS.find((c) => !Object.values(profiles).some((p) => p.color === c)) ?? "blue";

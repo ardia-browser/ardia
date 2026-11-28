@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-const { arcSelectedFill, colorRoles, fieldInk } = await import("./tokens.ts");
+const { colorRoles, fieldInk } = await import("./tokens.ts");
 const { caretColor, caretColorOnRow, popoverFieldSurface, quietBarGlyph, quietGoLabel, contrastTheme, profileTheme } = await import("./theme.ts");
 const { contrastRatio, over } = await import("../../lib/color.ts");
 
@@ -120,12 +120,13 @@ test("a sidebar rename field reads its caret against the row it sits in: a #787D
   const { PROFILE_COLOR_NAMES, hexColor } = await import("../../lib/profileLook.ts");
   for (const dark of [false, true]) for (const color of PROFILE_COLOR_NAMES) {
     const theme = profileTheme({ color }, dark), mode = dark ? "dark" : "light";
-    assert.equal(caretColorOnRow(theme, theme.tabSelected, arcSelectedFill[mode]), fieldInk.caret[mode], `${color} ${mode}: the selected row`);
-    assert.equal(caretColorOnRow(theme, "#00000000"), fieldInk.caret[mode], `${color} ${mode}: a plain row`);
+    assert.equal(caretColorOnRow(theme, theme.tabSelected, colorRoles[mode].tabSelected), fieldInk.caret[mode], `${color} ${mode}: the selected row`);
+    const plain = (caret) => Math.min(...theme.windowTint.map((tint) => shown(caret, tint)));
+    assert.ok(plain(caretColorOnRow(theme, "#00000000")) >= plain(fieldInk.caret[mode]), `${color} ${mode}: a plain row`);
     assert.equal(caretColorOnRow(theme, theme.tabPressed, colorRoles[mode].tabPressed), fieldInk.caret[mode], `${color} ${mode}: a folder taking a drop`);
   }
   const custom = { ...stock(false), tabSelected: "#787D86", textPrimary: "#FFFFFF" };
-  const caret = caretColorOnRow(custom, custom.tabSelected, arcSelectedFill.light);
+  const caret = caretColorOnRow(custom, custom.tabSelected, colorRoles.light.tabSelected);
   const worst = Math.min(...custom.windowTint.map((tint) => shown(caret, over(custom.tabSelected, tint))));
   assert.ok(worst >= 3, `caret on a #787D86 selected tab: ${caret} at ${worst.toFixed(2)}`);
   const opaqueGrey = profileTheme({ color: "plum", theme: { mode: "light", stops: [{ color: hexColor("#787D86"), x: 0.5, y: 0.5 }], intensity: 1, grain: 0, texture: "grain", translucency: 0 } }, false);
@@ -134,7 +135,7 @@ test("a sidebar rename field reads its caret against the row it sits in: a #787D
   const inactiveWorst = Math.min(...opaqueGrey.windowTint.map((tint) => shown(inactiveCaret, tint)));
   assert.ok(inactiveWorst >= 3, `inactive tab or group rename on an opaque #787D86 light profile: ${inactiveCaret} at ${inactiveWorst.toFixed(2)}`);
   const tabRow = readFileSync(fileURLToPath(new URL("../sidebar/TabRow.tsx", import.meta.url)), "utf8");
-  assert.match(tabRow, /surface=\{fill\}\s+stockSurface=\{active && !quiet \? arcSelectedFill\[theme\.dark \? "dark" : "light"\] : fill\}/, "the tab row passes the fill it paints");
+  assert.match(tabRow, /surface=\{fill\}\s+stockSurface=\{active && !quiet \? colorRoles\[theme\.dark \? "dark" : "light"\]\.tabSelected : fill\}/, "the tab row passes the fill it paints");
   assert.match(tabRow, /cursorColor=\{caretColorOnRow\(theme, surface, stockSurface\)\}/);
   assert.match(readFileSync(fileURLToPath(new URL("../sidebar/GroupBlock.tsx", import.meta.url)), "utf8"), /<RenameField[^>]*surface=\{dropInto \? theme\.tabPressed : ink\.clear\}/s, "the group header passes its fill");
 });

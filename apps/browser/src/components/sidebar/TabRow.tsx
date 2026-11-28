@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type Insets, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
 import { caretColorOnRow, hex, layout, useTheme } from "../ui/theme";
-import { arcSelectedFill } from "../ui/tokens";
+import { colorRoles } from "../ui/tokens";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
 import { useSplitRowPanes } from "../../state/sidebar/hooks";
@@ -180,7 +180,7 @@ export const TabRow = memo(function TabRow({
                 placeholder={tab.title || "Tab name"}
                 color={active ? theme.rowSelectedText : theme.textPrimary}
                 surface={fill}
-                stockSurface={active && !quiet ? arcSelectedFill[theme.dark ? "dark" : "light"] : fill}
+                stockSurface={active && !quiet ? colorRoles[theme.dark ? "dark" : "light"].tabSelected : fill}
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : away ? (

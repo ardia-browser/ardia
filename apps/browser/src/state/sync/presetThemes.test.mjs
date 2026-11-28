@@ -9,6 +9,7 @@ const adapters = await import("./profileAdapters.ts");
 const v0247 = await import("./fixtures/profileAdapters-v0.2.47.ts");
 const { pairTheme, settleThemeAdoption } = await import("./syncThemes.ts");
 const { choosePresetColor, resetPresetTheme, setProfileTheme } = await import("../profiles/themeActions.ts");
+const { DEFAULT_PROFILE } = await import("../profiles/profiles.ts");
 const { profilesWithOwnLooks } = await import("../../lib/presetLook.ts");
 
 const S = () => useBrowser.getState();
@@ -48,7 +49,7 @@ class Mac {
     this.folder = folder;
     this.links = { default: { syncId: "s1" } };
     this.paired = !joining;
-    S().hydrate({});
+    S().hydrate({ profiles: { default: { ...DEFAULT_PROFILE, color: "plum", seenColor: "plum" } }, profileOrder: ["default"] });
     this.browser = S();
     this.scope = emptyScope();
     this.scope.joined = !joining;

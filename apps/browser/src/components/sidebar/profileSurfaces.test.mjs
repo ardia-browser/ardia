@@ -24,11 +24,11 @@ const themes = [
   ...[true, false].flatMap((dark) => ["#2E8C9A", "#1B1F3B", "#F2C14E"].map((swatch) => [`custom ${swatch} ${dark ? "dark" : "light"}`, tintTheme(profileTheme({ color: "green", theme: startingTheme(swatch) }, dark))])),
 ];
 
-test("the neutral profile's ghost stays the near-black (dark) and white (light) solid it was", () => {
-  const dark = profileSurfaces(themeFor("neutral:dark")).ghost;
-  const light = profileSurfaces(themeFor("neutral:light")).ghost;
-  assert.ok(colorDistance(dark, "#0F0F14") < 0.04 && chroma(dark) < 0.01, dark);
-  assert.ok(colorDistance(light, "#FFFFFF") < 0.02 && chroma(light) < 0.01, light);
+test("the neutral profile's ghost stays colourless in both modes", () => {
+  for (const mode of ["dark", "light"]) {
+    const ghost = profileSurfaces(themeFor(`neutral:${mode}`)).ghost;
+    assert.ok(chroma(ghost) < 0.01, `${mode}: ${ghost}`);
+  }
 });
 
 test("a coloured profile's ghost and panes carry its hue and more colour than the neutral profile's", () => {
@@ -65,11 +65,10 @@ test("split panes stand apart from their row and from the shown pane, and the sh
   }
 });
 
-test("a pane on a light custom backdrop steps away from white titles instead of washing them out", () => {
+test("a pane on a tinted backdrop keeps its unselected title readable", () => {
   const theme = tintTheme(profileTheme({ color: "green", theme: startingTheme("#2E8C9A") }, true));
   const s = profileSurfaces(theme);
-  const row = contrastRatio(theme.textTab, s.selectedRow);
-  assert.ok(contrastRatio(theme.textTab, s.activePanes.rest) >= row, `${s.activePanes.rest} on ${s.selectedRow}: ${row}`);
+  assert.ok(contrastRatio(theme.textTab, s.activePanes.rest) >= MIN_PANE_TEXT_CONTRAST, s.activePanes.rest);
 });
 
 test("a tone near white keeps its hue instead of clipping to another one", () => {

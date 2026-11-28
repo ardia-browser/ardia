@@ -2,7 +2,7 @@ import { holdThemedWindowsKeyLook, choosePresetColor, onPresetSelection, resetPr
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { flatColors, lookAngle, MAX_THEME_STOPS, requestedDarkFor, resolveTheme, shownLook, themeAccent, withAddedStop, withAngle, withoutStop, spaceLookSource, stopLightness, type PresetLookFields, type ShownLook } from "../../lib/profileLook";
-import { isUntouched, presetStartingTheme, presetThemeOf } from "../../lib/presetLook";
+import { presetStartingTheme, presetThemeOf, sameTheme, withEditedHalf } from "../../lib/presetLook";
 import { THEME_TEXTURES } from "@ardia/core";
 import { PROFILE_COLORS } from "../ui/theme";
 import { useAppDark, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
@@ -52,22 +52,24 @@ function useLiveTheme(profileId: string, theme: ProfileTheme | null | undefined,
 
 export function useThemeDraft(profileId: string, apply: (theme: ProfileTheme | null, final: boolean) => void) {
   const profile = useProfile(profileId, (p) => p);
-  const color = profile?.color ?? "plum";
+  const color = profile?.color ?? "green";
   const live = useLiveTheme(profileId, profile?.theme, `${profileId}:${color}`, () => `${profileId}:${showingPreset(profileId)}`, apply);
   const appDark = useAppDark();
   const source = useSettings((s) => spaceLookSource(s));
-  const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).swatch), [color]);
+  const original = useMemo(() => presetStartingTheme((PROFILE_COLORS[color] ?? PROFILE_COLORS.green).swatch), [color]);
   const stored = live.theme;
   const look = stored ?? original;
-  const editsDark = !!stored && requestedDarkFor(stored, appDark, source);
-  const editing = stored?.dark ? resolveTheme(stored, editsDark) : look;
+  const editsDark = requestedDarkFor(look, appDark, source);
+  const editing = look.dark ? resolveTheme(look, editsDark) : look;
+  const start = original.dark ? resolveTheme(original, editsDark) : original;
   const shown = shownLook(look, appDark, source);
   const change = (next: ProfileTheme | null, settle = false) => {
-    const kept = next && isUntouched(next, original) ? null : next;
+    const whole = next ? withEditedHalf(look, editsDark, next) : null;
+    const kept = whole && sameTheme(whole, original) ? null : whole;
     if (kept && !stored) noteThemePreset("edited");
     live.change(kept, settle);
   };
-  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original, dragging: live.dragging };
+  return { profile, stored, editing, editsDark, shown, followsApp: source === "app", change, cancel: live.cancel, begin: live.begin, original: start, dragging: live.dragging };
 }
 
 export function ThemeSection({ profileId, anchor }: { profileId: string; anchor: SettingId }) {
@@ -91,7 +93,7 @@ export function ThemeSection({ profileId, anchor }: { profileId: string; anchor:
           anchor={anchor}
           description={
             stored?.dark
-              ? `Separate light and dark looks. Editing keeps the ${editsDark ? "dark" : "light"} one.`
+              ? `Separate light and dark looks. Editing changes the ${editsDark ? "dark" : "light"} one.`
               : presetLabel(profile.color, !!stored)
           }
         >
@@ -148,7 +150,7 @@ export function ThemePicker({
 }
 
 function presetLabel(color: ProfileColor, edited: boolean): string {
-  const name = (PROFILE_COLORS[color] ?? PROFILE_COLORS.plum).name;
+  const name = (PROFILE_COLORS[color] ?? PROFILE_COLORS.green).name;
   return edited ? `${name}, edited` : name;
 }
 
@@ -167,10 +169,13 @@ export function ThemeSwatches({
   size?: number;
   gap?: number;
 }) {
+  const appDark = useAppDark();
+  const source = useSettings((s) => spaceLookSource(s));
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap }} accessibilityRole="radiogroup" accessibilityLabel="Theme color">
       {COLORS.map((c) => {
-        const edited = edits ? presetThemeOf(edits, c) : null;
+        const stored = edits ? presetThemeOf(edits, c) : null;
+        const edited = stored ? shownLook(stored, appDark, source).look : null;
         const name = presetLabel(c, !!edited);
         return edited ? (
           <ColorButton key={c} name={name} ring={themeAccent(edited)} size={size} selected={color === c} onPress={() => onPreset(c)}>

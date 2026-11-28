@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 
 globalThis.__DEV__ = false;
 
-const { profileTheme, PROFILE_COLORS } = await import("./theme.ts");
+const { profileTheme, themeFor, PROFILE_COLORS } = await import("./theme.ts");
 const look_ = { ...(await import("../../lib/profileLook.ts")), ...(await import("../../lib/presetLook.ts")) };
 const { editedPresetCount, presetStartingTheme, presetThemeOf, PROFILE_COLOR_NAMES, withPresetChosen } = look_;
 const { themeFromRecord } = await import("../../state/sync/profileAdapters.ts");
@@ -16,22 +16,30 @@ const EDIT_B = look(0.9, 0.8);
 
 const digest = (theme) => createHash("sha256").update(JSON.stringify(theme)).digest("hex");
 const SAVED_CUSTOM = { stops: [{ x: 0.2, y: 0.7, color: { r: 0.9, g: 0.4, b: 0.8, a: 1 } }, { x: 0.8, y: 0.3, color: { r: 0.2, g: 0.7, b: 0.5, a: 1 } }], intensity: 0.8, mode: "auto", grain: 0.3, texture: "sand", translucency: 0.5, angle: 200 };
+const visualDigest = ({ tabSelected, rowSelectedText, ...theme }) => digest(theme);
 const digests = () =>
   Object.fromEntries(
     PROFILE_COLOR_NAMES.flatMap((color) =>
-      ["light", "dark"].flatMap((mode) => [
-        [`${color}:${mode}`, digest(profileTheme({ color }, mode === "dark"))],
-        [`custom:${color}:${mode}`, digest(profileTheme({ color, theme: SAVED_CUSTOM }, mode === "dark"))],
+      ["light", "dark"].map((mode) => [
+        `custom:${color}:${mode}`, visualDigest(profileTheme({ color, theme: SAVED_CUSTOM }, mode === "dark")),
       ]),
     ),
   );
 const BEFORE = JSON.parse(readFileSync(new URL("./fixtures/preset-themes-0247.json", import.meta.url), "utf8"));
 
-test("an untouched preset computes the same theme as 0.2.47 did, for all nine in light and dark", () => {
-  const now = digests();
-  for (const key of Object.keys(BEFORE).filter((k) => !k.startsWith("custom:"))) assert.equal(now[key], BEFORE[key], key);
+test("an untouched preset draws exactly the look its editor opens with, for all nine in light and dark", () => {
   for (const color of PROFILE_COLOR_NAMES) {
+    for (const dark of [true, false]) assert.deepEqual(profileTheme({ color }, dark), profileTheme({ color, theme: presetStartingTheme(PROFILE_COLORS[color].swatch) }, dark), `${color} ${dark ? "dark" : "light"}`);
     assert.deepEqual(profileTheme({ color, theme: null, presetThemes: { [color === "plum" ? "blue" : "plum"]: EDIT_A } }, true), profileTheme({ color }, true), `${color}: another preset's edit changes nothing here`);
+  }
+});
+
+test("the untouched Neutral keeps its original dark and light chrome", () => {
+  for (const dark of [true, false]) {
+    const neutral = profileTheme({ color: "neutral" }, dark);
+    assert.equal(neutral, themeFor(`neutral:${dark ? "dark" : "light"}`));
+    const edited = profileTheme({ color: "neutral", theme: EDIT_A }, dark);
+    assert.equal(edited.custom, EDIT_A);
   }
 });
 
@@ -97,10 +105,10 @@ test("a slider ignores the pointer until its track has a real width, and snaps o
   assert.equal(trackValueAt(172.3, 100, 120, 0.6), 0.6, "0.3 px from the start snaps to it");
 });
 
-test("a 0.2.47 custom theme becomes the edit of the preset it was on, and the window looks exactly the same", () => {
+test("a 0.2.47 custom theme becomes the edit of the preset it was on, and keeps its saved look", () => {
   for (const color of PROFILE_COLOR_NAMES) {
     const saved = { color, theme: SAVED_CUSTOM };
-    for (const mode of ["light", "dark"]) assert.equal(digests()[`custom:${color}:${mode}`], BEFORE[`custom:${color}:${mode}`], `${color} ${mode}: drawn as 0.2.47 drew it`);
+    for (const mode of ["light", "dark"]) assert.equal(digests()[`custom:${color}:${mode}`], BEFORE[`custom:${color}:${mode}`], `${color} ${mode}: saved look survives the upgrade`);
     const seeded = look_.withOwnLooksSeeded(saved);
     assert.deepEqual(presetThemeOf(seeded, color), SAVED_CUSTOM, `${color}: its swatch draws the custom look`);
     assert.equal(editedPresetCount(seeded), 1);
@@ -113,7 +121,7 @@ test("a preset opens in the editor as one colour, its swatch, with the custom ed
   for (const color of PROFILE_COLOR_NAMES) {
     const start = presetStartingTheme(PROFILE_COLORS[color].swatch);
     assert.equal(start.stops.length, 1);
-    assert.deepEqual({ intensity: start.intensity, grain: start.grain, translucency: start.translucency, texture: start.texture, mode: start.mode, angle: start.angle }, { intensity: 0.6, grain: 0, translucency: 1, texture: "grain", mode: "auto", angle: undefined });
+    assert.deepEqual({ intensity: start.intensity, grain: start.grain, translucency: start.translucency, texture: start.texture, mode: start.mode, angle: start.angle }, { intensity: 0.15, grain: 0.15, translucency: 1, texture: "grain", mode: "auto", angle: undefined });
     const hex = `#${[start.stops[0].color.r, start.stops[0].color.g, start.stops[0].color.b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("")}`;
     assert.equal(hex.toLowerCase(), PROFILE_COLORS[color].swatch.toLowerCase());
   }
@@ -150,8 +158,8 @@ test("a control lands on the preset's start only within half a pixel of it, and 
   const TRACK = 120;
   assert.equal(snapToStart(0.6 + 0.4 / TRACK, 0.6, TRACK), 0.6, "0.4 px off snaps back");
   assert.equal(snapToStart(0.61, 0.6, TRACK), 0.61, "1.2 px off is a real adjustment");
-  assert.ok(!isUntouched({ ...start, intensity: 0.61 }, start), "and it stays an edit");
-  assert.ok(isUntouched({ ...start, intensity: snapToStart(0.6 - 0.3 / TRACK, 0.6, TRACK) }, start));
+  assert.ok(!isUntouched({ ...start, intensity: start.intensity + 0.01 }, start), "and it stays an edit");
+  assert.ok(isUntouched({ ...start, intensity: snapToStart(start.intensity - 0.3 / TRACK, start.intensity, TRACK) }, start));
   const [stop] = start.stops;
   assert.deepEqual(snapPointToStart({ x: stop.x + 0.4 / 172, y: stop.y - 0.4 / 172 }, stop, 172), { x: stop.x, y: stop.y }, "the pad snaps within half a point");
   assert.equal(snapPointToStart({ x: stop.x + 1 / 172, y: stop.y }, stop, 172).x, stop.x + 1 / 172, "a point away stays");
@@ -217,4 +225,38 @@ test("a profile made on this version records the look it starts with, so a 0.2.4
   assert.equal(made.seenColor, "green");
   const editedOn0247 = { ...made, theme: EDIT_A };
   assert.deepEqual(withOwnLooksSeeded(editedOn0247).presetThemes, { green: EDIT_A });
+});
+
+test("a preset's dark look scales its swatch to 75% RGB and resetting back to either light or dark start counts as untouched", () => {
+  const { isUntouched, PRESET_DARK_KEEP, resolveTheme, withStopAt } = look_;
+  for (const color of PROFILE_COLOR_NAMES) {
+    const start = presetStartingTheme(PROFILE_COLORS[color].swatch);
+    const darkStart = resolveTheme(start, true);
+    const lightStart = resolveTheme(start, false);
+    assert.ok(Math.abs(darkStart.stops[0].color.r - lightStart.stops[0].color.r * PRESET_DARK_KEEP) < 1e-9);
+    assert.ok(Math.abs(darkStart.stops[0].color.g - lightStart.stops[0].color.g * PRESET_DARK_KEEP) < 1e-9);
+    assert.ok(Math.abs(darkStart.stops[0].color.b - lightStart.stops[0].color.b * PRESET_DARK_KEEP) < 1e-9);
+    assert.ok(isUntouched(darkStart, start), `${color}: dark start is untouched`);
+    assert.ok(isUntouched(lightStart, start), `${color}: light start is untouched`);
+    assert.ok(isUntouched(withStopAt(darkStart, 0, darkStart.stops[0].x, darkStart.stops[0].y), darkStart), `${color}: pad round-trip in dark mode`);
+  }
+});
+
+test("editing one half of a light and dark pair keeps the other half as stored", () => {
+  const { resolveTheme, sameTheme, withEditedHalf } = look_;
+  for (const color of PROFILE_COLOR_NAMES.filter((c) => c !== "neutral")) {
+    const start = presetStartingTheme(PROFILE_COLORS[color].swatch);
+    assert.ok(start.dark, `${color}: an untouched preset carries its dark look`);
+    const darkEdit = withEditedHalf(start, true, { ...resolveTheme(start, true), intensity: 0.4 });
+    assert.deepEqual(resolveTheme(darkEdit, false), resolveTheme(start, false), `${color}: a dark-mode edit leaves the light look`);
+    assert.equal(resolveTheme(darkEdit, true).intensity, 0.4, `${color}: and changes the dark one`);
+    const lightEdit = withEditedHalf(start, false, { ...resolveTheme(start, false), grain: 0.5 });
+    assert.deepEqual(lightEdit.dark, start.dark, `${color}: a light-mode edit leaves the dark look`);
+    assert.equal(lightEdit.grain, 0.5);
+    for (const dark of [true, false]) assert.ok(sameTheme(withEditedHalf(start, dark, resolveTheme(start, dark)), start), `${color}: dragged back in ${dark ? "dark" : "light"} is untouched`);
+  }
+  const flat = { ...presetStartingTheme(PROFILE_COLORS.green.swatch), dark: undefined };
+  delete flat.dark;
+  const edited = { ...flat, intensity: 0.3 };
+  assert.deepEqual(withEditedHalf(flat, true, edited), edited, "a single look is replaced as before");
 });

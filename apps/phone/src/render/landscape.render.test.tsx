@@ -100,9 +100,9 @@ test("in landscape the page bar stays one centred row: the wider side inset on b
 });
 
 const DUO_POSES = [
-  { name: "closed", width: 466, height: 678, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "closed", span: { left: 24, right: 96 }, stripX: 418, plusY: -55, tabsY: 0, deckPlusY: 0, ends: false },
-  { name: "open", width: 951, height: 669, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "fullyOpen", span: { left: 527, right: 24 }, stripX: 903, plusY: -110, tabsY: -55, deckPlusY: -110, ends: true },
-] as const satisfies readonly { name: string; width: number; height: number; insets: typeof INSETS; hinge: ScreenHinge; span: { left: number; right: number }; stripX: number; plusY: number; tabsY: number; deckPlusY: number; ends: boolean }[];
+  { name: "closed", width: 466, height: 678, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "closed", span: { left: 24, right: 96 }, stripX: 418, plusY: -55, tabsY: 0, deckPlusY: 0, deckMoreY: -110, ends: false },
+  { name: "open", width: 951, height: 669, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "fullyOpen", span: { left: 527, right: 24 }, stripX: 903, plusY: -110, tabsY: -55, deckPlusY: -110, deckMoreY: -165, ends: true },
+] as const satisfies readonly { name: string; width: number; height: number; insets: typeof INSETS; hinge: ScreenHinge; span: { left: number; right: number }; stripX: number; plusY: number; tabsY: number; deckPlusY: number; deckMoreY: number; ends: boolean }[];
 
 function onDuo(pose: (typeof DUO_POSES)[number]) {
   Dimensions.set({ window: { ...PORTRAIT, width: pose.width, height: pose.height }, screen: { ...PORTRAIT, width: pose.width, height: pose.height } });
@@ -174,36 +174,26 @@ for (const pose of DUO_POSES) {
 }
 
 for (const pose of DUO_POSES) {
-  test(`on the ${pose.name} Duo the deck's cards, header and grid keep clear of the strip and its camera, which starts ${pose.width - pose.insets.right} across`, () => {
+  test(`on the ${pose.name} Duo the deck has no header: its cards rise to the safe top and keep clear of the strip and its camera, which starts ${pose.width - pose.insets.right} across, ··· stacks in the strip ${-pose.deckMoreY} above the bar's line, and the grid keeps clear`, () => {
     onDuo(pose);
     const strip = pose.width - pose.insets.right;
     act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
     const root = redesigned(<TabDeck />);
-    const g = deckGeometry(pose.width, pose.height, pose.insets.top, pose.insets.bottom, pose.insets.right, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc", { side: "right", inset: pose.insets.right });
+    const g = deckGeometry(pose.width, pose.height, pose.insets.top, pose.insets.bottom, pose.insets.right, Platform.OS, "redesigned", 0, 55, "arc", { side: "right", inset: pose.insets.right });
     const card = root.root.findAll((node) => node.props.testID === "deckCard" && typeof node.type === "string")[0]!;
     expect(flat(card).width).toBeCloseTo(g.cardWidth, 1);
     expect(deckLeading(g, 0) + g.cardWidth).toBeLessThan(strip);
     expect(hosts(root, "deckStripClip")).toHaveLength(0);
-    const header = hosts(root, "deckHeader")[0]!;
-    expect(flat(header)).toMatchObject({ paddingLeft: 24, paddingRight: pose.insets.right + 12 });
-    expect(flat(header).top).toBe(4);
-    expect(flat(hosts(root, "deckHeaderLead")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44 });
-    expect(flat(hosts(root, "deckHeaderTrail")[0]!)).toMatchObject({ flex: 1, flexBasis: 0, minWidth: 44 });
+    expect(hosts(root, "deckHeader")).toHaveLength(0);
+    expect(hosts(root, "deckHeaderMore")).toHaveLength(0);
     const hitMore = hosts(root, "deckHit-more");
     expect(hitMore).toHaveLength(1);
-    if (pose.ends) {
-      expect(holds(header, "deckHeaderMore")).toBe(true);
-      expect(flat(hitMore[0]!)).toMatchObject({ position: "absolute", top: 0, right: pose.insets.right + 12 });
-      expect(hosts(root, "deckStripMore")).toHaveLength(0);
-    } else {
-      expect(holds(header, "deckHeaderMore")).toBe(false);
-      const stripMore = hosts(root, "deckStripMore")[0]!;
-      expect(flat(stripMore)).toMatchObject({ top: -110, left: pose.stripX - 24, width: 48 });
-      expect(holds(stripMore, "deckBarMore")).toBe(true);
-      expect(holds(stripMore, "deckHit-more")).toBe(true);
-      expect(root.root.findAll((node) => node.props.testID === "deckBarMore" && node.props.shape === "circle")[0]!.props.cornerRadius).toBe(24);
-      expect(root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.type === "string").length).toBeGreaterThan(0);
-    }
+    const stripMore = hosts(root, "deckStripMore")[0]!;
+    expect(flat(stripMore)).toMatchObject({ top: pose.deckMoreY, left: pose.stripX - 24, width: 48 });
+    expect(holds(stripMore, "deckBarMore")).toBe(true);
+    expect(holds(stripMore, "deckHit-more")).toBe(true);
+    expect(root.root.findAll((node) => node.props.testID === "deckBarMore" && node.props.shape === "circle")[0]!.props.cornerRadius).toBe(24);
+    expect(root.root.findAll((node) => node.props.accessibilityLabel === "More" && typeof node.type === "string").length).toBeGreaterThan(0);
     if (Platform.OS !== "ios") return unmount(root);
     act(() => deckGrid.setDeckGrid(true));
     act(() => jest.advanceTimersByTime(1000));
@@ -212,13 +202,12 @@ for (const pose of DUO_POSES) {
   });
 }
 
-test("with the strip on the leading side the closed Duo deck mirrors: the header holds only the switcher, and ···, Incognito and + stack in the strip 48 from the left edge", () => {
+test("with the strip on the leading side the closed Duo deck mirrors: no header, and ···, Incognito and + stack in the strip 48 from the left edge", () => {
   const [closed] = DUO_POSES;
   onDuo({ ...closed, insets: { top: 0, bottom: 34, left: 84, right: 0 } } as unknown as (typeof DUO_POSES)[number]);
   act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
   const root = redesigned(<TabDeck />);
-  expect(flat(hosts(root, "deckHeader")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });
-  expect(holds(hosts(root, "deckHeader")[0]!, "deckHeaderMore")).toBe(false);
+  expect(hosts(root, "deckHeader")).toHaveLength(0);
   expect(flat(hosts(root, "deckStripMore")[0]!)).toMatchObject({ top: -110, left: 24, width: 48 });
   expect(flat(hosts(root, "deckBottomBar")[0]!)).toMatchObject({ paddingLeft: 96, paddingRight: 24 });
   expect(flat(hosts(root, "deckStripIncognito")[0]!)).toMatchObject({ top: -55, left: 24, width: 48 });

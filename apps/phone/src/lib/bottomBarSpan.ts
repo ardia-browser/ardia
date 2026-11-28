@@ -8,7 +8,7 @@ export type DuoStrip = { side: "left" | "right"; centerX: number; plus: number; 
 
 export type BottomBarLayout = { span: BarSpan; strip: DuoStrip | null };
 
-export const DUO_BAR = { openFrom: 600, openWidth: 400, stripGap: 12, button: FLOATING_BAR_PLACE.control, axis: 48, buttonGap: 7, menuGap: 8 } as const;
+export const DUO_BAR = { openFrom: 600, openWidth: 400, stripGap: 12, button: FLOATING_BAR_PLACE.control, axis: 48, buttonGap: 7, menuGap: 8, slotGap: 8 } as const;
 
 export const DUO_PLUS_ABOVE = DUO_BAR.button + DUO_BAR.buttonGap;
 
@@ -60,17 +60,33 @@ export function besideStrip(strip: DuoStrip, width: number, menuWidth: number, m
 
 export const deckStripOf = (layout: BottomBarLayout, insets: { left: number; right: number }): DeckStrip | null => (layout.strip ? { side: layout.strip.side, inset: layout.strip.side === "left" ? insets.left : insets.right } : null);
 
-export function deckHeaderSides(insets: { left: number; right: number }, side: number, strip: DeckStrip | null): BarSpan {
-  if (!strip) {
-    const safe = Math.max(insets.left, insets.right) + side;
-    return { left: safe, right: safe };
-  }
-  const beside = strip.inset + DUO_BAR.stripGap;
-  return strip.side === "left" ? { left: beside, right: insets.right + side } : { left: insets.left + side, right: beside };
+export function deckHeaderSides(insets: { left: number; right: number }, side: number): BarSpan {
+  const safe = Math.max(insets.left, insets.right) + side;
+  return { left: safe, right: safe };
 }
 
-export type DeckStripSlots = { plus: number; incognito: number; more: number | null };
+export type DeckStripSlots = { more: number; plus: number; incognito: number };
 
-export const deckStripSlots = (strip: DuoStrip): DeckStripSlots => (strip.ends ? { plus: strip.plus, incognito: strip.tabs, more: null } : { plus: strip.tabs, incognito: strip.plus, more: strip.plus - DUO_PLUS_ABOVE });
+export const deckStripSlots = (strip: DuoStrip): DeckStripSlots => (strip.ends ? { more: strip.plus - DUO_PLUS_ABOVE, plus: strip.plus, incognito: strip.tabs } : { more: strip.plus - DUO_PLUS_ABOVE, plus: strip.tabs, incognito: strip.plus });
 
-export const deckMoreInStrip = (layout: BottomBarLayout) => layout.strip !== null && deckStripSlots(layout.strip).more !== null;
+export type DeckSpacesSlot = { inRow: boolean; anchor: "start" | "end"; at: number; from: number; to: number; maxWidth: number };
+
+export function deckSpacesSlot(width: number, layout: BottomBarLayout, side: number, gap: number): DeckSpacesSlot | null {
+  const { span, strip } = layout;
+  if (!strip) return null;
+  const rowFrom = span.left;
+  const rowTo = width - span.right;
+  if (!strip.ends) {
+    const maxWidth = (rowTo - rowFrom - gap) / 2;
+    return strip.side === "right" ? { inRow: true, anchor: "start", at: rowFrom, from: rowFrom, to: rowTo, maxWidth } : { inRow: true, anchor: "end", at: rowTo, from: rowFrom, to: rowTo, maxWidth };
+  }
+  const beside = DUO_BAR.button / 2 + DUO_BAR.slotGap;
+  const maxWidth = DUO_BAR.openWidth / 2;
+  return strip.side === "right" ? { inRow: false, anchor: "end", at: strip.centerX - beside, from: side, to: strip.centerX - beside, maxWidth } : { inRow: false, anchor: "start", at: strip.centerX + beside, from: strip.centerX + beside, to: width - side, maxWidth };
+}
+
+export function deckSpacesMenu(slot: DeckSpacesSlot, capsuleWidth: number, menuWidth: number) {
+  const fitted = Math.max(Math.min(menuWidth, slot.to - slot.from), 0);
+  const capsuleLeft = slot.anchor === "start" ? slot.at : slot.at - capsuleWidth;
+  return { left: Math.min(Math.max(capsuleLeft, slot.from), slot.to - fitted), width: fitted };
+}

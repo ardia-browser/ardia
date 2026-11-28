@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { barSwipeSpan, besideStrip, bottomBarLayout, deckHeaderSides, deckMoreInStrip, deckStripOf, deckStripSlots, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
+import { barSwipeSpan, besideStrip, bottomBarLayout, deckHeaderSides, deckSpacesMenu, deckSpacesSlot, deckStripOf, deckStripSlots, DUO_PLUS_ABOVE, duoFieldReach, duoSqueeze, isOpenDuo } from "./bottomBarSpan.ts";
 import { pagerCommitDistance, snapTarget } from "./pagerPhysics.ts";
 
 test("with no hinge every bottom bar pads by the larger side inset plus its own side, on both sides, and nothing goes to a strip", () => {
@@ -136,25 +136,52 @@ test("the deck's cards keep clear of the Duo's strip on whichever side it is, an
   assert.equal(deckStripOf(bottomBarLayout(466, { left: 0, right: 20 }, "closed", 24), { left: 0, right: 20 }), null);
 });
 
-test("on a Duo the deck header takes the whole top bar, the strip's inset ignored there, and a plain iPhone keeps the wider inset plus 24 on both sides", () => {
-  const strip = (width: number, insets: { left: number; right: number }, hinge: "none" | "closed" | "fullyOpen") => deckStripOf(bottomBarLayout(width, insets, hinge, 24), insets);
-  assert.deepEqual(deckHeaderSides({ left: 0, right: 84 }, 24, strip(466, { left: 0, right: 84 }, "closed")), { left: 24, right: 96 });
-  assert.deepEqual(deckHeaderSides({ left: 0, right: 84 }, 24, strip(951, { left: 0, right: 84 }, "fullyOpen")), { left: 24, right: 96 });
-  assert.deepEqual(deckHeaderSides({ left: 84, right: 0 }, 24, strip(466, { left: 84, right: 0 }, "closed")), { left: 96, right: 24 });
-  assert.deepEqual(deckHeaderSides({ left: 10, right: 84 }, 24, strip(466, { left: 10, right: 84 }, "closed")), { left: 34, right: 96 }, "the strip side stops 12 short of the strip, as the bar does");
-  assert.deepEqual(deckHeaderSides({ left: 0, right: 0 }, 24, strip(402, { left: 0, right: 0 }, "none")), { left: 24, right: 24 });
-  assert.deepEqual(deckHeaderSides({ left: 59, right: 59 }, 24, strip(852, { left: 59, right: 59 }, "none")), { left: 83, right: 83 });
-  assert.deepEqual(deckHeaderSides({ left: 0, right: 20 }, 24, strip(466, { left: 0, right: 20 }, "closed")), { left: 44, right: 44 }, "a pose with no usable strip keeps the plain header");
+test("the deck header pads by the wider side inset plus 24 on both sides, as it is drawn only where there is no strip", () => {
+  assert.deepEqual(deckHeaderSides({ left: 0, right: 0 }, 24), { left: 24, right: 24 });
+  assert.deepEqual(deckHeaderSides({ left: 59, right: 59 }, 24), { left: 83, right: 83 });
+  assert.deepEqual(deckHeaderSides({ left: 62, right: 0 }, 24), { left: 86, right: 86 });
 });
 
-test("the deck puts + and Incognito in the strip: on the closed Duo + on the bar's line and Incognito 55 above it, so Search Tabs spans 24 to 370 as the page's address capsule does; on the open Duo + in the top slot and Incognito in the middle one", () => {
+test("the deck stacks ···, Incognito and + in the strip: on the closed Duo + on the bar's line, Incognito 55 and ··· 110 above it; on the open Duo ··· 165, + 110 and Incognito 55 above the magnifier's slot on the line", () => {
   const closed = bottomBarLayout(466, { left: 0, right: 84 }, "closed", 24);
-  assert.deepEqual(deckStripSlots(closed.strip!), { plus: 0, incognito: -55, more: -110 });
-  assert.equal(deckMoreInStrip(closed), true);
-  assert.equal(deckMoreInStrip(bottomBarLayout(466, { left: 84, right: 0 }, "closed", 24)), true);
+  assert.deepEqual(deckStripSlots(closed.strip!), { more: -110, plus: 0, incognito: -55 });
   assert.deepEqual([closed.span.left, 466 - closed.span.right], [24, 370]);
   const open = bottomBarLayout(951, { left: 0, right: 84 }, "fullyOpen", 24);
-  assert.deepEqual(deckStripSlots(open.strip!), { plus: -110, incognito: -55, more: null });
-  assert.equal(deckMoreInStrip(open), false, "the open Duo keeps ··· in the header");
-  assert.equal(deckMoreInStrip(bottomBarLayout(402, { left: 0, right: 0 }, "none", 24)), false);
+  assert.deepEqual(deckStripSlots(open.strip!), { more: -165, plus: -110, incognito: -55 });
+  assert.deepEqual(deckStripSlots(bottomBarLayout(951, { left: 84, right: 0 }, "fullyOpen", 24).strip!), { more: -165, plus: -110, incognito: -55 });
+});
+
+test("on the open Duo the top slot, ··· at 165 above the line, clears the Wi-Fi ring and the clock: on the 669-high pose with its bar line at 624 it spans 435 to 483, the ring ending about 150", async () => {
+  const { deckGeometry } = await import("./deckGeometry.ts");
+  const barLine = deckGeometry(951, 669, 0, 34, 84, "ios", "redesigned", 0, 55, "arc", { side: "right", inset: 84 }).barCenterY;
+  const slots = deckStripSlots(bottomBarLayout(951, { left: 0, right: 84 }, "fullyOpen", 24).strip!);
+  assert.equal(barLine, 624);
+  assert.deepEqual([barLine + slots.more - 24, barLine + slots.more + 24], [435, 483]);
+  assert.ok(barLine + slots.more - 24 > 150);
+});
+
+test("on the closed Duo the space switcher leads the bar row from 24 and Search Tabs flexes after it to 370, 12 short of the strip; the switcher takes at most half the row", () => {
+  const closed = bottomBarLayout(466, { left: 0, right: 84 }, "closed", 24);
+  assert.deepEqual(deckSpacesSlot(466, closed, 24, 8), { inRow: true, anchor: "start", at: 24, from: 24, to: 370, maxWidth: 169 });
+  assert.deepEqual(deckSpacesMenu(deckSpacesSlot(466, closed, 24, 8)!, 120, 250), { left: 24, width: 250 }, "its menu rises above it, left-aligned with it");
+  const mirrored = bottomBarLayout(466, { left: 84, right: 0 }, "closed", 24);
+  assert.deepEqual(deckSpacesSlot(466, mirrored, 24, 8), { inRow: true, anchor: "end", at: 442, from: 96, to: 442, maxWidth: 169 });
+  assert.deepEqual(deckSpacesMenu(deckSpacesSlot(466, mirrored, 24, 8)!, 120, 250), { left: 192, width: 250 });
+});
+
+test("on the open Duo the space switcher sits on the bar line ending 8 before the magnifier's slot circle, at 871 where the circle starts at 879, and its menu never reaches past it into the strip", () => {
+  const open = bottomBarLayout(951, { left: 0, right: 84 }, "fullyOpen", 24);
+  const slot = deckSpacesSlot(951, open, 24, 8)!;
+  assert.deepEqual(slot, { inRow: false, anchor: "end", at: 871, from: 24, to: 871, maxWidth: 200 });
+  assert.equal(open.strip!.centerX - 24 - 8, 871);
+  assert.deepEqual(deckSpacesMenu(slot, 110, 250), { left: 621, width: 250 });
+  assert.deepEqual(deckSpacesMenu(slot, 300, 250), { left: 571, width: 250 }, "a capsule wider than the menu keeps it left-aligned");
+  const mirrored = deckSpacesSlot(951, bottomBarLayout(951, { left: 84, right: 0 }, "fullyOpen", 24), 24, 8)!;
+  assert.deepEqual(mirrored, { inRow: false, anchor: "start", at: 80, from: 80, to: 927, maxWidth: 200 });
+  assert.deepEqual(deckSpacesMenu(mirrored, 110, 250), { left: 80, width: 250 });
+});
+
+test("with no strip there is no bottom-row switcher, so Search Tabs keeps the whole row", () => {
+  assert.equal(deckSpacesSlot(402, bottomBarLayout(402, { left: 0, right: 0 }, "none", 24), 24, 8), null);
+  assert.equal(deckSpacesSlot(466, bottomBarLayout(466, { left: 0, right: 20 }, "closed", 24), 24, 8), null);
 });

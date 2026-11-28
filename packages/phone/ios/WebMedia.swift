@@ -40,6 +40,8 @@ final class WebMedia {
   private var frames: [String: [String: Frame]] = [:]
   private var known: [String: [String: KnownFrame]] = [:]
   private var retentionCheck = 0
+  private var answeredSince: [String: TimeInterval] = [:]
+  static let answerWindow: TimeInterval = 3
   private var sent: [String: Sent] = [:]
 
   struct Sent: Equatable {
@@ -183,7 +185,8 @@ final class WebMedia {
   private func publish(_ pageID: String) {
     let frame = best(pageID)
     let next = Sent(report: frame?.report, startedAt: frame?.startedAt ?? 0, isPrivate: host.isPrivate(pageID))
-    guard sent[pageID] != next, frame != nil || sent[pageID] != nil else { return }
+    let answersACommand = answeredSince[pageID].map { ProcessInfo.processInfo.systemUptime - $0 < Self.answerWindow } ?? false
+    guard sent[pageID] != next || answersACommand, frame != nil || sent[pageID] != nil else { return }
     sent[pageID] = frame == nil ? nil : next
     host.send(payload(pageID))
     keepPlayingPagesLive()
@@ -233,6 +236,7 @@ final class WebMedia {
   }
 
   func forget(_ pageID: String) {
+    answeredSince[pageID] = nil
     returning.forget(pageID)
     known[pageID] = nil
     guard frames.removeValue(forKey: pageID) != nil || sent[pageID] != nil else { return }
@@ -254,6 +258,7 @@ final class WebMedia {
     let step = command == .skip ? PageMediaCommand.skipSeconds(seconds) : nil
     if command == .skip, step == nil { return false }
     guard let (webView, frameInfo, script) = prepare(command, pageID: pageID, token: frame.report.token, seconds: step) else { return false }
+    answeredSince[pageID] = ProcessInfo.processInfo.systemUptime
     let answer = try? await webView.evaluateJavaScript(script, in: frameInfo, contentWorld: .page)
     let accepted = answer as? Bool == true
     Self.trace("answer \(pageID) \(command.rawValue) \(accepted)")

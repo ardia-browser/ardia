@@ -1,0 +1,47 @@
+#!/bin/bash
+# Prints the least loaded build Mac (mbp1, mbp2 or mini) on AC power with enough free disk,
+# and reserves it for 5 minutes so the next caller sees the load it is about to add.
+#   pick-host [min_free_gb]   default 30; prints the host name, falls back to this Mac
+#   PICK_HOSTS="mbp2 mini"    limits the candidates
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+  sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'
+  exit 0
+fi
+min_free=${1:-30}
+resv=/tmp/ac-pick-host.reservations
+touch "$resv"
+now=$(date +%s)
+is_self() {
+  local ip
+  ip=$(ssh -G "$1" 2>/dev/null | awk '$1=="hostname"{print $2}')
+  ifconfig 2>/dev/null | grep -qw "inet $ip"
+}
+best=""
+best_score=""
+for h in ${PICK_HOSTS:-mbp1 mbp2 mini}; do
+  probe='uptime; df -g /System/Volumes/Data | tail -1; sysctl -n hw.ncpu; pmset -g batt | head -1'
+  if is_self "$h"; then
+    info=$(bash -c "$probe")
+  else
+    info=$(timeout 8 ssh -o ConnectTimeout=4 -o BatchMode=yes "$h" "$probe" 2>/dev/null) || continue
+  fi
+  load=$(awk -F'load averages?: ' 'NR==1{split($2,a,/[ ,]+/); print a[1]}' <<<"$info")
+  free=$(awk 'NR==2{print $4}' <<<"$info")
+  cpus=$(awk 'NR==3{print $1}' <<<"$info")
+  ac=$(grep -c "AC Power" <<<"$info")
+  [[ -z $load || -z $free || -z $cpus ]] && continue
+  (( ac == 0 )) && continue
+  (( free < min_free )) && continue
+  recent=$(awk -v h="$h" -v n="$now" '$1==h && n-$2<300' "$resv" | wc -l | tr -d ' ')
+  score=$(awk -v l="$load" -v c="$cpus" -v r="$recent" 'BEGIN{printf "%.3f", (l + 8*r)/c}')
+  if [[ -z $best_score ]] || awk -v a="$score" -v b="$best_score" 'BEGIN{exit !(a<b)}'; then
+    best=$h
+    best_score=$score
+  fi
+done
+if [[ -z $best ]]; then
+  for h in ${PICK_HOSTS:-mbp1 mbp2 mini}; do is_self "$h" && best=$h; done
+  best=${best:-localhost}
+fi
+echo "$best $now" >> "$resv"
+echo "$best"

@@ -504,6 +504,33 @@ layer copies files from `packages/`), run:
     python3 scripts/engine/series-base-pack.py pack --platform mac --dest <scratch dir>
     scripts/agent/locked chromium --release <you>
 
+**A patch for a file the base lacks doesn't need a re-pack** when step 3 can't have changed that file: the base then
+holds Chromium's own file from the pinned tag. On each builder, from a checkout with the new series (the patch not
+applied to the tree):
+
+    scripts/agent/locked chromium --take <you>
+    python3 scripts/engine/series-base-pack.py extend --platform mac --dest <scratch dir>
+    scripts/agent/locked chromium --release <you>
+
+`extend` starts from a private copy of the pinned archive (`--archive`, or the one `series-zero-fuzz.py` cached; either
+way the copy's sha256 must be the one `series-bases.tsv` pins) and adds each file the series changes that the archive lacks. It takes a file
+only when:
+- **no step-3 stage selects it.** Its name doesn't end in `grd`, `grdp` or `xtb`, in any case (the name
+  substitution, translation and branding passes rewrite every such file). It isn't `chrome/VERSION` or a file
+  `03-helium.py`'s `FIXUPS` edits. No file under Helium's `patches/` (whatever its suffix), `domain_substitution.list`,
+  `pruning.list` or resource list at the pinned Helium commits names it (they're read from git, so a sparse or edited checkout can't hide one), nor does
+  `ardia_resources.txt`;
+- **it's Chromium's own file at the tag.** Chromium's repository tracks it as a regular file at the pinned tag's
+  commit (resolved on chromium.googlesource.com), which must be the tree's HEAD. The bytes and mode come from that
+  commit, with git replacement refs ignored;
+- **the archive doesn't already hold it** or record it as absent;
+- **the tree agrees:** it holds the same bytes and mode.
+
+Anything else stops it with the reason; re-pack that file from a fresh step 3. The new archive keeps the pinned one's
+provenance and lists what it added under `extensions`, with the tag commit. Publish it with `publish` as above. A
+re-pack needs step 3 on a reset tree, which on the Mac costs a 17k to 80k-step rebuild, so use `extend` whenever it
+accepts the files.
+
 Use `--platform linux` on the Linux builder, and set `AC_CHROMIUM_BUILD` for a tree outside `~/chromium-build`. Pack
 is read-only on the tree. It refuses unless:
 - `chrome/VERSION` is the pinned Chromium;

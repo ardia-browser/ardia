@@ -67,32 +67,40 @@ impl Sealer for Dpapi {
     }
 
     fn open(&self, sealed: &[u8], purpose: &str) -> Option<Zeroizing<Vec<u8>>> {
-        let input = blob(sealed);
-        let entropy = blob(purpose.as_bytes());
-        let mut output = CRYPT_INTEGER_BLOB {
-            cbData: 0,
-            pbData: null_mut(),
-        };
-        let opened = unsafe {
-            CryptUnprotectData(
-                &input,
-                null_mut(),
-                &entropy,
-                null(),
-                null(),
-                CRYPTPROTECT_UI_FORBIDDEN,
-                &mut output,
-            )
-        };
-        if opened == 0 || output.pbData.is_null() {
-            return None;
-        }
-        let plain = unsafe { std::slice::from_raw_parts_mut(output.pbData, output.cbData as usize) };
-        let copy = Zeroizing::new(plain.to_vec());
-        plain.zeroize();
-        unsafe { LocalFree(output.pbData as HLOCAL) };
-        Some(copy)
+        unprotect(sealed, Some(purpose.as_bytes()))
     }
+
+    fn open_unbound(&self, sealed: &[u8]) -> Option<Zeroizing<Vec<u8>>> {
+        unprotect(sealed, None)
+    }
+}
+
+fn unprotect(sealed: &[u8], purpose: Option<&[u8]>) -> Option<Zeroizing<Vec<u8>>> {
+    let input = blob(sealed);
+    let entropy = purpose.map(blob);
+    let mut output = CRYPT_INTEGER_BLOB {
+        cbData: 0,
+        pbData: null_mut(),
+    };
+    let opened = unsafe {
+        CryptUnprotectData(
+            &input,
+            null_mut(),
+            entropy.as_ref().map_or(null(), |e| e as *const CRYPT_INTEGER_BLOB),
+            null(),
+            null(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut output,
+        )
+    };
+    if opened == 0 || output.pbData.is_null() {
+        return None;
+    }
+    let plain = unsafe { std::slice::from_raw_parts_mut(output.pbData, output.cbData as usize) };
+    let copy = Zeroizing::new(plain.to_vec());
+    plain.zeroize();
+    unsafe { LocalFree(output.pbData as HLOCAL) };
+    Some(copy)
 }
 
 pub struct CredentialManager;

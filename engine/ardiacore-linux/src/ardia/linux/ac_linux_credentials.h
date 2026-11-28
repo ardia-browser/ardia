@@ -14,6 +14,7 @@ namespace ardia::linux_credentials {
 inline constexpr size_t kMaxOriginBytes = 2048;
 inline constexpr size_t kMaxUsernameBytes = 1024;
 inline constexpr size_t kMaxSecretBytes = 4096;
+inline constexpr size_t kMaxSavedSecretBytes = 65536;
 inline constexpr size_t kMaxFieldBytes = 1024;
 inline constexpr size_t kMaxIdBytes = 128;
 inline constexpr size_t kMaxPathBytes = 4096;

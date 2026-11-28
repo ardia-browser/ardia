@@ -1,0 +1,88 @@
+#!/usr/bin/env swift
+import CoreGraphics
+import Foundation
+
+let usage = """
+Posts a two-finger trackpad scroll to one app's window through the system event path (CGEventPostToPid), with the
+scroll and momentum phases a real trackpad sends, without moving the pointer or activating the app. NSScrollView's
+responsive scrolling tracks these like a finger, so a list really scrolls, coasts and rubber-bands. ArdiaSwipe's
+devSimulate hands events straight to NSApp instead: a scroll view only shows the elastic part of those.
+
+  scripts/agent/trackpad <pid> <window-number> <x> <y> <dy-per-step> <steps> [end|hold|continue|momentum]
+
+<window-number> is the CGWindowID (CGWindowListCopyWindowInfo, or cua-driver's list_windows), <x> <y> are points
+from the window's top left, and a negative <dy-per-step> scrolls the content up (toward the end of a list).
+end (default) lifts the fingers, hold keeps them down for a mid-gesture capture, continue moves fingers already held
+down by an earlier hold, and momentum lifts them and coasts. Send `0 0 end` to lift held fingers.
+"""
+
+let args = CommandLine.arguments
+if args.count < 7 || args.contains("-h") || args.contains("--help") {
+  print(usage)
+  exit(args.count < 7 && !args.contains("-h") && !args.contains("--help") ? 2 : 0)
+}
+guard let pidValue = Int32(args[1]), let windowNumber = Int(args[2]), let localX = Double(args[3]), let localY = Double(args[4]),
+      let perStep = Double(args[5]), let steps = Int(args[6]) else {
+  print(usage)
+  exit(2)
+}
+let pid = pid_t(pidValue)
+let release = args.count > 7 ? args[7] : "end"
+guard ["end", "hold", "continue", "momentum"].contains(release) else {
+  print(usage)
+  exit(2)
+}
+
+let windows = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+guard let window = windows.first(where: { ($0[kCGWindowNumber as String] as? Int) == windowNumber }),
+      (window[kCGWindowOwnerPID as String] as? Int) == Int(pid),
+      let bounds = window[kCGWindowBounds as String] as? [String: Double],
+      let originX = bounds["X"], let originY = bounds["Y"] else {
+  FileHandle.standardError.write("trackpad: no window \(windowNumber) owned by pid \(pid)\n".data(using: .utf8)!)
+  exit(1)
+}
+let location = CGPoint(x: originX + localX, y: originY + localY)
+
+typealias SetWindowLocation = @convention(c) (CGEvent, CGPoint) -> Void
+let setWindowLocation = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGEventSetWindowLocation")
+  .map { unsafeBitCast($0, to: SetWindowLocation.self) }
+
+func post(_ dy: Double, phase: CGScrollPhase?, momentum: CGMomentumScrollPhase?) {
+  guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: Int32(dy.rounded()), wheel2: 0, wheel3: 0) else {
+    FileHandle.standardError.write("trackpad: could not create a scroll event\n".data(using: .utf8)!)
+    exit(1)
+  }
+  event.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+  event.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: dy)
+  event.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: Int64(dy.rounded()))
+  if let phase { event.setIntegerValueField(.scrollWheelEventScrollPhase, value: Int64(phase.rawValue)) }
+  if let momentum { event.setIntegerValueField(.scrollWheelEventMomentumPhase, value: Int64(momentum.rawValue)) }
+  event.location = location
+  event.setIntegerValueField(CGEventField(rawValue: 51)!, value: Int64(windowNumber))
+  event.setIntegerValueField(.mouseEventWindowUnderMousePointer, value: Int64(windowNumber))
+  event.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent, value: Int64(windowNumber))
+  setWindowLocation?(event, CGPoint(x: localX, y: localY))
+  event.postToPid(pid)
+  usleep(16_000)
+}
+
+if release == "continue" {
+  for _ in 0..<steps { post(perStep, phase: .changed, momentum: nil) }
+  exit(0)
+}
+if steps > 0 || perStep != 0 {
+  post(0, phase: .mayBegin, momentum: nil)
+  post(perStep, phase: .began, momentum: nil)
+  for _ in 0..<steps { post(perStep, phase: .changed, momentum: nil) }
+}
+if release == "hold" { exit(0) }
+post(0, phase: .ended, momentum: nil)
+if release == "momentum" {
+  var dy = perStep
+  post(dy, phase: nil, momentum: .begin)
+  for _ in 0..<20 {
+    dy *= 0.85
+    post(dy, phase: nil, momentum: .continuous)
+  }
+  post(0, phase: nil, momentum: .end)
+}

@@ -209,6 +209,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         text: "In the same daily counts: how many page loads took long enough to show their progress in the address bar, never while browsing privately. A count only, never which page",
         fields: ["bar_load_washes"],
       },
+      {
+        text: "In the same daily counts, on Android: how often the content blocker built and installed its rule engine. Counts only, never which lists or sites",
+        fields: ["blocker_engines_installed"],
+      },
     ],
   },
 ];

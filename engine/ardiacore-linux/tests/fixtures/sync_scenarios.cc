@@ -295,6 +295,50 @@ void PasswordSaves(SyncCore& core) {
   CHECK(broken && !core.OpenLogin(*broken));
 }
 
+void NewestCopyIsSynced(SyncCore& core) {
+  const std::string origin = "https://shop.example";
+  for (const bool newest_first : {false, true}) {
+    LoginRead read{true, {}};
+    read.logins.emplace_back(origin, "ann", Fixture(newest_first ? "edited" : "older"), 0);
+    read.logins.back().modified_ms = newest_first ? 20 : 10;
+    read.logins.emplace_back(origin, "ann", Fixture(newest_first ? "older" : "edited"), 0);
+    read.logins.back().modified_ms = newest_first ? 10 : 20;
+    auto sealed = core.SealLogins(std::move(read));
+    CHECK(sealed.ok && sealed.value.items.size() == 1);
+    if (!sealed.ok || sealed.value.items.size() != 1) continue;
+    auto save = ParsePasswordSave({S("default"), S(origin), S("ann"), S(sealed.value.items[0].Find("sealed")->text),
+                                   JsonValue::Null()});
+    CHECK(save);
+    if (!save) continue;
+    auto opened = core.OpenLogin(*save);
+    CHECK(opened && opened->login.password == Fixture("edited"));
+  }
+  LoginRead tied{true, {}};
+  tied.logins.emplace_back(origin, "ann", Fixture("profile"), 0);
+  tied.logins.back().modified_ms = 30;
+  tied.logins.emplace_back(origin, "ann", Fixture("account"), 0);
+  tied.logins.back().modified_ms = 30;
+  auto sealed = core.SealLogins(std::move(tied));
+  CHECK(sealed.ok && sealed.value.items.size() == 1);
+  if (!sealed.ok || sealed.value.items.size() != 1) return;
+  auto save = ParsePasswordSave({S("default"), S(origin), S("ann"), S(sealed.value.items[0].Find("sealed")->text),
+                                 JsonValue::Null()});
+  CHECK(save);
+  if (!save) return;
+  auto opened = core.OpenLogin(*save);
+  CHECK(opened && opened->login.password == Fixture("profile"));
+  LoginRead oversized{true, {}};
+  oversized.logins.emplace_back(origin, "ann", Fixture("older"), 0);
+  oversized.logins.back().modified_ms = 10;
+  oversized.logins.emplace_back(origin, "ann", std::string(kMaxLoginPasswordBytes + 1, 'p'), 0);
+  oversized.logins.back().modified_ms = 20;
+  auto held = core.SealLogins(std::move(oversized));
+  CHECK(held.ok && held.value.items.size() == 1);
+  if (!held.ok || held.value.items.size() != 1) return;
+  CHECK(held.value.items[0].Find("passwordless") && held.value.items[0].Find("passwordless")->flag);
+  CHECK(!held.value.items[0].Find("sealed"));
+}
+
 void Core(const std::string& scratch) {
   const std::string folder = scratch + "/core-folder";
   SyncCore core(MakeFileKeyStore(scratch + "/core-keys"), {folder, "Test Device"});
@@ -330,6 +374,7 @@ void Core(const std::string& scratch) {
   CHECK(read.value.Find("files")->items[0].Find("payload")->text == "{\"v\":1,\"kind\":\"log\"}");
   CHECK(!core.Dispatch("ArdiaSync.read", {S(folder), S("app"), S("not a list")}, now).ok);
   PasswordSaves(core);
+  NewestCopyIsSynced(core);
   auto words = core.Dispatch("ArdiaSync.recoveryWords", {}, now);
   CHECK(words.ok && words.value.items.size() == kPhraseWords);
   std::string phrase;

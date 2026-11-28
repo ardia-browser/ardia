@@ -32,22 +32,23 @@ export function MiniPlayer() {
   const otherSide = !media && kept.current === null;
   const reduceMotion = useReduceMotion();
   const shown = useSharedValue(0);
-  if (shows && !present) setPresent(true);
+  if ((shows || media !== null) && !present) setPresent(true);
   useEffect(() => {
     if (!otherSide) return;
     cancelAnimation(shown);
     shown.value = 0;
     setPresent(false);
   }, [otherSide]);
+  const hasMedia = media !== null;
   useEffect(() => {
     if (shows) {
       shown.value = withTiming(1, { duration: MINI_PLAYER.inMs, easing: entering });
       return;
     }
     shown.value = withTiming(0, { duration: MINI_PLAYER.outMs, easing: leaving }, (finished) => {
-      if (finished) runOnJS(setPresent)(false);
+      if (finished && !hasMedia) runOnJS(setPresent)(false);
     });
-  }, [shows]);
+  }, [shows, hasMedia]);
   useEffect(() => {
     setMiniPlayerRoom(shows ? MINI_PLAYER.height + MINI_PLAYER.gap : 0);
     if (shows && media) noteMiniPlayerShown(media);
@@ -65,7 +66,7 @@ export function MiniPlayer() {
     <View testID="miniPlayerPlace" pointerEvents="box-none" style={[styles.place, { left: span.left, right: span.right, bottom: miniPlayerBottom(insets.bottom) }]}>
       <Animated.View testID="miniPlayer" collapsable={false} pointerEvents={shows ? "box-none" : "none"} accessibilityElementsHidden={!shows} importantForAccessibility={shows ? "auto" : "no-hide-descendants"} style={[styles.motion, motion]}>
         <GlassSource name={surface === "browsing" ? PAGE_FROST : surface === "start" ? START_FROST : SURFACES_FROST}>
-          <MiniPlayerCard media={showing} skipSeconds={skipSeconds} plateWidth={plateWidth} fontScale={fontScale} />
+          <MiniPlayerCard media={showing} skipSeconds={skipSeconds} plateWidth={plateWidth} fontScale={fontScale} shows={shows} />
         </GlassSource>
       </Animated.View>
     </View>
@@ -80,7 +81,7 @@ function skipWords(control: SkipControl) {
   return { label, glyph, backwards };
 }
 
-function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale }: { media: PlayingMedia; skipSeconds: number; plateWidth: number; fontScale: number }) {
+function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale, shows }: { media: PlayingMedia; skipSeconds: number; plateWidth: number; fontScale: number; shows: boolean }) {
   const theme = useTheme();
   const dark = theme.dark || media.isPrivate;
   const ink = dark ? chromeInk.dark : chromeInk.light;
@@ -97,7 +98,7 @@ function MiniPlayerCard({ media, skipSeconds, plateWidth, fontScale }: { media: 
   ];
   const playing = media.state === "playing";
   return (
-    <ChromeSurface testID="miniPlayerPlate" shape="capsule" cornerRadius={MINI_PLAYER.radius} incognito={media.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} style={styles.plate}>
+    <ChromeSurface testID="miniPlayerPlate" shape="capsule" cornerRadius={MINI_PLAYER.radius} incognito={media.isPrivate} dark={dark} barShadow={chromeLayout.barCastsShadow} shown={shows} shownMs={shows ? MINI_PLAYER.inMs : MINI_PLAYER.outMs} style={styles.plate}>
       <PressInPlace grow label={MINI_PLAYER_WORDS.open(lines.title)} hint={MINI_PLAYER_WORDS.openHint} actions={spokenExtras.length ? spokenExtras : undefined} onPress={() => openMiniPlayerTab(media)} onPressIn={haptics.barPress} style={styles.lead}>
         <Artwork media={media} faviconUrl={tab?.faviconUrl ?? null} pageUrl={tab?.url ?? null} fill={ink.edge} />
         <View style={styles.lines}>

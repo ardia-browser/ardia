@@ -7,6 +7,7 @@ import { channelOf, compareVersions, isAppVersion, linuxReleases, newestRelease,
 import {
   UPDATE_INSTALL_FAILURES,
   UPDATE_DOWNLOAD_FAILURES,
+  noteAskFirstUpdateOffer,
   noteManagedUpdateOffer,
   noteUpdateCheck,
   noteUpdateDownloadFailed,
@@ -38,7 +39,7 @@ type InstallKind = UpdateInstallKind | "managed" | "unsupported";
 type PackageManager = "flatpak" | "package";
 type Phase = "idle" | "downloading" | "installing" | "ready" | "failed";
 type EngineStatus = { phase: Phase; version: string | null; reason: string | null; kind: InstallKind; run: number };
-type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null; readyNotified: string | null };
+type Preferences = { automaticChecks: boolean; automaticDownloads: boolean; lastCheck: number | null; channel: UpdateChannel | null; notified: string | null; failed: string | null; readyNotified: string | null; askFirst: boolean };
 type Fetched = { status: number; body: string };
 type SwitchCheck = NonNullable<Extract<UpdaterState, { available: true }>["switchCheck"]>;
 type StartedFrom = "asked" | "automatic" | "accepted";
@@ -65,12 +66,15 @@ type UpdateDeps = {
   now?: () => number;
 };
 
-const DEFAULTS: Preferences = { automaticChecks: true, automaticDownloads: true, lastCheck: null, channel: null, notified: null, failed: null, readyNotified: null };
+const DEFAULTS: Preferences = { automaticChecks: true, automaticDownloads: true, lastCheck: null, channel: null, notified: null, failed: null, readyNotified: null, askFirst: false };
 const INSTALLABLE: ReadonlySet<string> = new Set<UpdateInstallKind>(["deb", "tarball", "appimage"]);
 const PHASES: ReadonlySet<string> = new Set<Phase>(["idle", "downloading", "installing", "ready", "failed"]);
 const ONLY_INSTALL_FAILURES: ReadonlySet<string> = new Set(UPDATE_INSTALL_FAILURES.filter((reason) => !(UPDATE_DOWNLOAD_FAILURES as readonly string[]).includes(reason)));
+const UNANSWERED_PASSWORD: ReadonlySet<string> = new Set(["polkit", "timeout"]);
 
 const installs = (kind: InstallKind | null | undefined): kind is UpdateInstallKind => !!kind && INSTALLABLE.has(kind);
+const installsThroughPkexec = (kind: InstallKind | null | undefined) => kind === "deb" || kind === "tarball";
+const passwordUnanswered = (status: EngineStatus) => installsThroughPkexec(status.kind) && UNANSWERED_PASSWORD.has(status.reason ?? "");
 const updateBusy = (status: EngineStatus | null | undefined) => status?.phase === "downloading" || status?.phase === "installing";
 const finished = (status: EngineStatus) => status.run > 0 && (status.phase === "ready" || status.phase === "failed");
 
@@ -103,6 +107,7 @@ function readPreferences(read: UpdateDeps["read"]): Preferences {
       notified: typeof saved.notified === "string" ? saved.notified : null,
       failed: isAppVersion(saved.failed) ? saved.failed : null,
       readyNotified: isAppVersion(saved.readyNotified) ? saved.readyNotified : null,
+      askFirst: saved.askFirst === true,
     };
   } catch {
     return { ...DEFAULTS };
@@ -118,6 +123,7 @@ export function linuxUpdater(deps: UpdateDeps) {
   let sightedRun = 0;
   let shownReady = false;
   const installingRuns = new Set<number>();
+  const ownRuns = new Map<number, OwnRun>();
   const preferences = async () => {
     await deps.refresh?.(UPDATE_PREFERENCES).catch(() => {});
     return readPreferences(deps.read);
@@ -195,9 +201,15 @@ export function linuxUpdater(deps: UpdateDeps) {
     }
   }
 
-  async function fallBack(release: Release, from: StartedFrom, consent: ConsentToken | null) {
+  async function fallBack(release: Release, from: StartedFrom, consent: ConsentToken | null, promptUnanswered = false) {
     const current = version();
     switchCheck = { phase: "found", channel: switchCheck?.channel ?? channelOf(release.version), version: release.version };
+    if (promptUnanswered) {
+      await remember({ notified: release.version, askFirst: true }).catch(() => {});
+      noteAskFirstUpdateOffer(consent);
+      deps.offerInstall(release, () => installOffered(release));
+      return;
+    }
     if (from === "asked" && current) {
       if (await deps.ask(release, current, true)) {
         if (deps.open(release.url)) noteUpdatePageOpened(consent);
@@ -209,26 +221,28 @@ export function linuxUpdater(deps: UpdateDeps) {
     deps.offer(release, true);
   }
 
-  async function settle(status: EngineStatus, consent: ConsentToken | null, own: OwnRun | null) {
+  async function settle(status: EngineStatus, consent: ConsentToken | null) {
     if (!finished(status) || status.run <= settledRun) return;
     if (status.phase === "ready" && deps.showsToasts === false) return;
+    const own = ownRuns.get(status.run) ?? null;
     if (!(await claim(status.run))) return;
+    ownRuns.delete(status.run);
     countOutcome(status, consent);
     const target = status.version ?? own?.release.version;
     if (!target) return;
     if (status.phase === "ready") return (await preferences()).readyNotified === target ? undefined : deps.ready(target, restartToUpdate);
     console.info(`[ardia linux] the update to ${target} failed: ${status.reason ?? "unknown"}`);
-    await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent);
+    await fallBack(own?.release.version === target ? own.release : releasePage(target), own?.from ?? "automatic", consent, own?.from === "automatic" && passwordUnanswered(status));
   }
 
-  async function followRun(started: EngineStatus, own: OwnRun, consent: ConsentToken | null) {
+  async function followRun(started: EngineStatus, consent: ConsentToken | null) {
     const until = now() + FOLLOW_RUN_FOR_MS;
     let status: EngineStatus | null = started;
     while (status && updateBusy(status) && now() < until) {
       await wait(FOLLOW_RUN_EVERY_MS);
       status = (await engineStatus()) ?? status;
     }
-    await settle(status, consent, own);
+    await settle(status, consent);
   }
 
   async function startRun(release: Release, from: StartedFrom, consent: ConsentToken | null) {
@@ -239,7 +253,10 @@ export function linuxUpdater(deps: UpdateDeps) {
       return fallBack(release, from, consent);
     }
     if (started.phase === "installing") installingRuns.add(started.run);
-    void followRun(started, { release, from }, consent).catch((error: unknown) => console.info(`[ardia linux] the update to ${release.version} stopped: ${String(error)}`));
+    const known = ownRuns.get(started.run);
+    if (!known || (known.from === "automatic" && from !== "automatic")) ownRuns.set(started.run, { release, from });
+    if (known) return;
+    void followRun(started, consent).catch((error: unknown) => console.info(`[ardia linux] the update to ${release.version} stopped: ${String(error)}`));
   }
 
   async function deliver(release: Release, current: string, asked: boolean, saved: Preferences, consent: ConsentToken | null) {
@@ -255,9 +272,14 @@ export function linuxUpdater(deps: UpdateDeps) {
         if (asked && status.version) await noticeReady(status, status.version, consent);
         return;
       }
-      if (!asked && saved.failed === release.version) return;
-      if (asked || (await preferences()).automaticDownloads) return startRun(release, asked ? "asked" : "automatic", consent);
-      if (await offeredOnce(release)) deps.offerInstall(release, () => installOffered(release));
+      if (asked) return startRun(release, "asked", consent);
+      if (saved.failed === release.version || updateBusy(status)) return;
+      const latest = await preferences();
+      const askFirst = latest.automaticDownloads && latest.askFirst && installsThroughPkexec(status.kind);
+      if (latest.automaticDownloads && !askFirst) return startRun(release, "automatic", consent);
+      if (!(await offeredOnce(release))) return;
+      if (askFirst) noteAskFirstUpdateOffer(consent);
+      deps.offerInstall(release, () => installOffered(release));
       return;
     }
     if (asked) {
@@ -325,7 +347,7 @@ export function linuxUpdater(deps: UpdateDeps) {
       sightedRun = status.run;
       return;
     }
-    await settle(status, consent, null);
+    await settle(status, consent);
   }
 
   async function menuItem(): Promise<"check" | "restart"> {
@@ -362,7 +384,7 @@ export function linuxUpdater(deps: UpdateDeps) {
     },
     checkForUpdates: () => checkOrRestart(consentToken(), shownReady),
     setAutomaticUpdateChecks: async (on: unknown) => remember({ automaticChecks: on === true }),
-    setAutomaticUpdateDownloads: async (on: unknown) => remember({ automaticDownloads: on === true }),
+    setAutomaticUpdateDownloads: async (on: unknown) => remember(on === true ? { automaticDownloads: true, askFirst: false } : { automaticDownloads: false }),
     setUpdateChannel: async (next: unknown) => {
       await remember({ channel: next === "nightly" ? "nightly" : "stable", notified: null });
       await check(true);

@@ -23,6 +23,7 @@ public struct ParsedFilterList: Sendable {
   var scopedExceptions: [String: [String]] = [:]
   var badfilters: Set<String> = []
   var blockedDomains: [String] = []
+  var scriptlets = ScriptletTable()
 }
 
 public struct FilterChunk: Sendable, Equatable {
@@ -122,13 +123,28 @@ public enum FilterListConverter {
 
   public static func parse(_ text: String, id: String) -> ParsedFilterList {
     var list = ParsedFilterList(id: id, convertedLines: 0, skippedLines: 0)
+    let trustsScriptlets = ScriptletTable.trusts(listID: id)
     var seenBlocks: Set<String> = []
     var seenGeneric: Set<String> = []
+    var conditions: [(outer: Bool, holds: Bool)] = []
     text.enumerateLines { raw, _ in
       let bytes = raw.utf8
       let line = bytes.first == 0x20 || bytes.first == 0x09 || bytes.last == 0x20 || bytes.last == 0x09 || bytes.last == 0x0D
         ? raw.trimmingCharacters(in: .whitespacesAndNewlines) : raw
-      if line.isEmpty || line.hasPrefix("!") || line.hasPrefix("[") { return }
+      let applies = conditions.last.map { $0.outer && $0.holds } ?? true
+      if line.hasPrefix("!#if ") {
+        conditions.append((outer: applies, holds: applies && Preparser.holds(line.dropFirst(5))))
+        return
+      }
+      if line.hasPrefix("!#else"), let last = conditions.popLast() {
+        conditions.append((outer: last.outer, holds: !last.holds))
+        return
+      }
+      if line.hasPrefix("!#endif") {
+        _ = conditions.popLast()
+        return
+      }
+      if !applies || line.isEmpty || line.hasPrefix("!") || line.hasPrefix("[") { return }
       if line.hasPrefix("#"), !line.hasPrefix("##"), !line.hasPrefix("#@#"), !line.hasPrefix("#?#"), !line.hasPrefix("#$#") { return }
       if let host = hostsFileDomain(line) {
         list.convertedLines += 1
@@ -136,6 +152,20 @@ public enum FilterListConverter {
         if seenBlocks.insert(filter).inserted {
           list.blocks.append(KeyedRule(key: filter, rule: Rule(trigger: Trigger(urlFilter: hostPrefix(host) + "[:/]"), action: Action(type: "block")), host: host))
           list.blockedDomains.append(host)
+        }
+        return
+      }
+      if line.utf8.contains(0x23), let scriptlet = ScriptletTable.parse(line, trusted: trustsScriptlets) {
+        switch scriptlet {
+        case .skip:
+          list.skippedLines += 1
+        case .run(let hosts, let excluded, let body):
+          list.convertedLines += 1
+          list.scriptlets.add(body, on: hosts)
+          list.scriptlets.except(body, on: excluded)
+        case .exception(let hosts, let body):
+          list.convertedLines += 1
+          list.scriptlets.except(body, on: hosts)
         }
         return
       }
@@ -177,6 +207,7 @@ public enum FilterListConverter {
         list.allows.append(AllowRule(rule: Rule(trigger: trigger, action: Action(type: "ignore-previous-rules")), host: host))
       case .allowDocument(let domain):
         list.convertedLines += 1
+        list.scriptlets.except([], on: [domain])
         list.documentAllows.append(Rule(trigger: Trigger(urlFilter: ".*", ifDomain: ["*" + domain]), action: Action(type: "ignore-previous-rules")))
       }
     }
@@ -656,5 +687,64 @@ public enum FilterListConverter {
       index += 1
     }
     return depth == 0 && bracket == 0 && quote == nil
+  }
+}
+
+enum Preparser {
+  static let tokens: Set<String> = ["ext_ublock", "env_safari", "env_mobile", "cap_user_stylesheet"]
+  static let longestExpression = 256
+  static let deepestNesting = 16
+
+  static func holds(_ expression: Substring) -> Bool {
+    guard expression.count <= longestExpression else { return false }
+    var reader = Reader(text: Array(expression.filter { !$0.isWhitespace }))
+    guard let value = reader.either(), reader.index == reader.text.count else { return false }
+    return value
+  }
+
+  struct Reader {
+    let text: [Character]
+    var index = 0
+    var depth = 0
+
+    mutating func take(_ symbol: String) -> Bool {
+      let characters = Array(symbol)
+      guard index + characters.count <= text.count, Array(text[index..<index + characters.count]) == characters else { return false }
+      index += characters.count
+      return true
+    }
+
+    mutating func either() -> Bool? {
+      guard var value = both() else { return nil }
+      while take("||") {
+        guard let next = both() else { return nil }
+        value = value || next
+      }
+      return value
+    }
+
+    mutating func both() -> Bool? {
+      guard var value = single() else { return nil }
+      while take("&&") {
+        guard let next = single() else { return nil }
+        value = value && next
+      }
+      return value
+    }
+
+    mutating func single() -> Bool? {
+      depth += 1
+      defer { depth -= 1 }
+      guard depth <= Preparser.deepestNesting else { return nil }
+      if take("!") { return single().map { !$0 } }
+      if take("(") {
+        guard let value = either(), take(")") else { return nil }
+        return value
+      }
+      let start = index
+      while index < text.count, text[index].isLetter || text[index].isNumber || text[index] == "_" { index += 1 }
+      guard index > start else { return nil }
+      return Preparser.tokens.contains(String(text[start..<index]))
+    }
   }
 }

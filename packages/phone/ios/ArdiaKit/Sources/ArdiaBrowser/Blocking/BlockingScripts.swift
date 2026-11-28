@@ -195,4 +195,105 @@ enum BlockingScripts {
     }, true);
   })();
   """#
+
+  static let scriptlets = #"""
+  ((table) => {
+    const hostname = location.hostname;
+    if (!hostname) return;
+    const regexpTest = RegExp.prototype.test;
+    const reflectApply = Reflect.apply;
+    const arrayFrom = Array.from;
+    const reflectConstruct = Reflect.construct;
+    const ProxyType = Proxy;
+    const matches = (pattern, text) => reflectApply(regexpTest, pattern, [text]);
+    const wholeNumber = /^-?\d+$/;
+    const suffixes = [];
+    for (let rest = hostname; rest.includes("."); rest = rest.slice(rest.indexOf(".") + 1)) suffixes.push(rest);
+    const pick = (map) => suffixes.flatMap((host) => map[host] || []).map((at) => table.bodies[at]).filter(Array.isArray);
+    const excepted = new Set(pick(table.exceptions || {}).map((body) => JSON.stringify(body)));
+    if (excepted.has("[]")) return;
+    const chosen = new Map();
+    for (const body of pick(table.hosts || {})) {
+      const key = JSON.stringify(body);
+      if (!excepted.has(key)) chosen.set(key, body);
+    }
+    if (!chosen.size) return;
+
+    const toRegExp = (pattern) => {
+      const literal = /^\/(.+)\/([dgimsuvy]*)$/.exec(pattern);
+      if (literal) return new RegExp(literal[1], literal[2].replace(/[gy]/g, ""));
+      return new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    };
+    const options = (list) => {
+      const out = {};
+      for (let i = 0; i + 1 < list.length; i += 2) out[list[i]] = list[i + 1];
+      return out;
+    };
+    const constant = (raw) => {
+      switch (raw) {
+        case "undefined": return { value: undefined };
+        case "false": return { value: false };
+        case "true": return { value: true };
+        case "null": return { value: null };
+        case "''": case "emptyStr": return { value: "" };
+        case "[]": case "emptyArr": return { value: [] };
+        case "{}": case "emptyObj": return { value: {} };
+        case "noopFunc": return { value: function () {} };
+        case "trueFunc": return { value: function () { return true; } };
+        case "falseFunc": return { value: function () { return false; } };
+      }
+      if (matches(wholeNumber, raw)) return { value: parseInt(raw, 10) };
+      if (raw.startsWith("json:") || raw.startsWith("repl:") || raw.startsWith("add:") || (raw.startsWith("{") && raw.endsWith("}"))) return null;
+      return { value: raw };
+    };
+    const owner = (chain) => {
+      const parts = chain.split(".");
+      const prop = parts.pop();
+      let target = globalThis;
+      for (const part of parts) {
+        target = target == null ? undefined : target[part];
+        if (target == null) return null;
+      }
+      return typeof target[prop] === "function" ? { target, prop } : null;
+    };
+
+    const scriptlets = {
+      "trusted-replace-argument": (chain = "", position = "", raw = "", ...rest) => {
+        if (!chain || !matches(wholeNumber, position)) return;
+        const found = owner(chain);
+        const replacement = constant(raw);
+        if (!found || !replacement) return;
+        const index = parseInt(position, 10);
+        if (rest.length % 2 !== 0) return;
+        const extra = options(rest);
+        if (Object.keys(extra).some((key) => key !== "condition")) return;
+        const condition = extra.condition === undefined ? null : toRegExp(extra.condition);
+        const replaced = (args) => {
+          const at = index >= 0 ? index : args.length + index;
+          if (at < 0 || at >= args.length) return args;
+          const value = args[at];
+          if (condition !== null && !(typeof value === "string" && matches(condition, value))) return args;
+          const out = arrayFrom(args);
+          out[at] = replacement.value;
+          return out;
+        };
+        const original = found.target[found.prop];
+        found.target[found.prop] = new ProxyType(original, {
+          apply(fn, self, args) {
+            return reflectApply(fn, self, replaced(args));
+          },
+          construct(fn, args, target) {
+            return reflectConstruct(fn, replaced(args), target);
+          },
+        });
+      },
+    };
+
+    for (const [name, ...args] of chosen.values()) {
+      const run = scriptlets[name];
+      if (!run) continue;
+      try { run(...args); } catch (e) {}
+    }
+  })
+  """#
 }

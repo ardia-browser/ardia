@@ -544,6 +544,7 @@ public final class WebTab: DiscardablePage, Identifiable {
     processRecovery.pageCommitted(host: PageHost.key(webView?.url))
     hasCommittedLoad = true
     committedDocuments += 1
+    engine?.blocker.countScriptletPage(toHost: webView?.url.flatMap { BrowserURL.host(of: $0.absoluteString) }, isPrivate: isPrivate)
     capturingOrigins = [:]
     blockedResources.reset()
     scrollTracker.reset()

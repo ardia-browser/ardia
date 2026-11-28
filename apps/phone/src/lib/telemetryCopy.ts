@@ -202,6 +202,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["web_videos_floated", "web_videos_kept_playing"],
       },
       {
+        text: "In the same daily counts, on iPhone: how many pages you opened on a site your filter lists have a fix for that stops it putting its ads back. Counts only, never which page or site, and never while browsing privately",
+        fields: ["scriptlet_pages"],
+      },
+      {
         text: "In the same daily counts, on Android: how many glass buttons and bars found nothing under them to blur, so they drew a flat fill instead of glass. Counts only",
         fields: ["glass_unsourced"],
       },

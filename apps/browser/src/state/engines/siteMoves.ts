@@ -3,7 +3,7 @@ import { useBrowser } from "../browser/store";
 import { patchPage } from "../tabs/pageState";
 import { canSwitchEngine, chosenEngine, chromiumOnly, modeEngineFor, needsChromium, singleEngine, siteOf, tabEngine, webStorePage } from "./engines";
 import { navigationOf } from "../tabs/pageSession";
-import { declineSite, modeStillHolds, openPageIn, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
+import { declineSite, modeStillHolds, openPageIn, pageDocumentOf, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
 import { openedByPage, openerState } from "./openedPages";
 import { noteSiteMove } from "../telemetry/engineSwitchCounts";
 import { heldByCli } from "../tabs/cliHolds";
@@ -208,7 +208,8 @@ async function moveForProtectedVideo(tabId: string, site: string, keySystem: str
   if (probingVideo.has(tabId)) return;
   const holds = modeStillHolds();
   const consent = consentToken();
-  const onSite = () => holds() && siteOf(pageUrl(store().tabs[tabId])) === site && tabEngine(store(), tabId) !== "webkit";
+  const document = pageDocumentOf(tabId);
+  const onSite = () => holds() && pageDocumentOf(tabId) === document && siteOf(pageUrl(store().tabs[tabId])) === site && tabEngine(store(), tabId) !== "webkit";
   const stillRouted = () => onSite() && routedTo(tabId, "webkit")(pageUrl(store().tabs[tabId]));
   let opener: "live" | "none" | "unknown" = "none";
   if (openedByPage(tabId)) {

@@ -902,6 +902,28 @@ test("S4: a Chromium rule added while a protected-video opener check waits carri
   webviews.clear();
 });
 
+test("S4: a protected-video opener check that answers after the popup reached another video on the same site neither moves nor offers on the new page", async () => {
+  const { w, opener } = streamingWindow();
+  S().updateSettings({ offerWebKitForProtectedVideo: true });
+  for (const live of [false, true]) {
+    const held = heldAnswer();
+    const popup = openedTab(w, opener, "https://www.netflix.com/", [held.answer]);
+    S().updateTab(popup, { url: "https://www.netflix.com/watch/1" });
+    notePageCommit(popup, 1000);
+    offerWebKit(popup, { keySystem: "com.widevine.alpha", main: true });
+    await settle();
+    S().updateTab(popup, { url: "https://www.netflix.com/watch/2" });
+    notePageCommit(popup, 2000);
+    engineCalls.length = 0;
+    held.release(live);
+    for (let i = 0; i < 20; i++) await settle();
+    assert.equal(tabEngine(S(), popup), "chromium");
+    assert.deepEqual(engineCalls.filter(carryCall), []);
+    assert.equal(useEngineOffers.getState()[popup], undefined);
+  }
+  webviews.clear();
+});
+
 test("S5: a redirect to another WebKit site while a protected-video move runs waits its turn and then lands", async () => {
   const { w } = streamingWindow("https://www.netflix.com/watch/1");
   const tabId = model.activeTabId(S(), w);

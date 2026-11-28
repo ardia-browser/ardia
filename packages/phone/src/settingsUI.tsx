@@ -140,6 +140,8 @@ export const contentMargins = (params: { edges: "top" | "bottom" | "all"; length
 
 export const neverBounces = () => ardia("neverBounces");
 
+export const bouncesWhenLong = () => ardia("bouncesWhenLong");
+
 export const modifierList = (...items: (ModifierConfig | null | undefined | false)[]): ModifierConfig[] => items.filter((item): item is ModifierConfig => !!item);
 
 export const accessibilityFocusRequest = (request: number) => ardia("accessibilityFocusRequest", { request });

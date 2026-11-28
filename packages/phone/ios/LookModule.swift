@@ -13,6 +13,10 @@ public final class LookModule: Module {
       GlassReport.render(classic: false).rawValue
     }
 
+    Function("rememberLaunchLook") { (saved: [String: Any]) -> Bool in
+      LaunchLookWrites.remember(LaunchLook.recalled(saved: saved))
+    }
+
     OnCreate {
       DispatchQueue.main.async {
         MainActor.assumeIsolated {
@@ -229,27 +233,8 @@ final class ProfileBackdropView: LookHostView {
   var softened = false
   var fadesOut = false
 
-  required init(appContext: AppContext? = nil) {
-    super.init(appContext: appContext)
-    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ProfileBackdropView, _: UITraitCollection) in
-      view.rememberLaunchLook()
-    }
-  }
-
-  override func didMoveToWindow() {
-    super.didMoveToWindow()
-    rememberLaunchLook()
-  }
-
   func render() {
-    rememberLaunchLook()
     show(ProfileBackdrop(look: colors.look, themeLook: colors.shownThemeLook, themed: themed, softened: softened, fadesOut: fadesOut), dark: colors.isIncognito ? true : dark)
-  }
-
-  private func rememberLaunchLook() {
-    guard themed, window != nil else { return }
-    let appDark = traitCollection.userInterfaceStyle == .dark
-    LaunchLook.remember(colors, drawnDark: dark ?? appDark, appDark: appDark)
   }
 }
 

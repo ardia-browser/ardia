@@ -15,6 +15,7 @@ export type SyncNative = {
   forget(account: string): Promise<void>;
   chainStatus(folder: string): Promise<"ok" | "missing" | "unavailable">;
   createChain(folder: string): Promise<void>;
+  createChainInNewFolder(folder: string): Promise<void>;
   write(folder: string, scope: string, payload: string): Promise<string>;
   read(folder: string, scope: string, known: string[]): Promise<Listing>;
   remove(folder: string, scope: string, ids: string[]): Promise<void>;
@@ -30,7 +31,7 @@ export type SyncNative = {
   copyRecoveryPhrase(): Promise<boolean | null>;
   revealFolder(path: string): Promise<void>;
   readPasswords(engineProfile: string): Promise<SealedLogin[] | null>;
-  savePassword(engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean): Promise<boolean>;
+  savePassword(engineProfile: string, origin: string, username: string, sealed: string, replaced: string): Promise<boolean>;
   takeFileCounts?(): { placeholders: number; busy: number; hydrated: number };
 };
 

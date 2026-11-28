@@ -243,3 +243,38 @@ test("snapshot reasons are validated", () => {
   assert.equal(h.send(control(2, "1", { action: "snapshot", reason: "restore", events: [] })), true);
   assert.equal(h.send(control(3, "1", { action: "snapshot", reason: "document", events: [] })), true);
 });
+
+test("a page full-screen entry is counted once when it happens, never when a snapshot restores it", async () => {
+  const client = await import("../../browser/src/state/telemetry/client.ts");
+  const placement = await import("../../browser/src/state/telemetry/windowPlacementCounts.ts");
+  client.loadChoice();
+  client.setSharing(true, "onboarding");
+  placement.takeWindowPlacementCounts();
+
+  const live = setup();
+  assert.ok(live.receiver.install(snapshot()));
+  live.send(message(2, "fullscreen", { fullscreen: true }));
+  live.send(message(3, "fullscreen", { fullscreen: true }));
+  live.send(message(4, "fullscreen", { fullscreen: false }));
+  live.send(message(5, "fullscreen", { fullscreen: true }));
+  assert.equal(placement.takeWindowPlacementCounts().page_full_screens_entered, 2);
+
+  const restored = setup();
+  assert.ok(restored.receiver.install(snapshot(1, [event("fullscreen", { fullscreen: true })])));
+  assert.equal(pageOf(restored.tab).fullscreen, true, "the claimed page shows full screen at once");
+  restored.send(message(2, "fullscreen", { fullscreen: true }));
+  assert.ok(restored.send(control(3, "1", { action: "snapshot", reason: undefined, events: [event("fullscreen", { fullscreen: true })] })), "a plain snapshot is accepted");
+  assert.ok(restored.send(control(4, "1", { action: "snapshot", reason: "restore", events: [event("fullscreen", { fullscreen: true })] })), "a restore snapshot is accepted");
+  assert.equal(pageOf(restored.tab).fullscreen, true);
+  assert.equal(placement.takeWindowPlacementCounts().page_full_screens_entered, 0, "a page that was already full screen when its view mounted or was restored is not a new entry");
+
+  const rebound = setup();
+  assert.ok(rebound.receiver.install(snapshot()));
+  rebound.send(message(2, "fullscreen", { fullscreen: true }));
+  const creation = { browserId: 9, chromeTabId: 9, lease: { ...lease, bindingGeneration: "4" }, snapshot: { watermark: 1, events: [event("navigation", navigation)] } };
+  assert.ok(rebound.send({ ...lease, type: "pageLifecycle", sequence: 3, action: "rebind", creation }));
+  assert.equal(pageOf(rebound.tab).fullscreen, false, "a rebind's snapshot replaces the page's full screen");
+  rebound.send(message(2, "fullscreen", { fullscreen: true }, { bindingGeneration: "4" }));
+  assert.equal(placement.takeWindowPlacementCounts().page_full_screens_entered, 2, "full screen after a navigation-only rebind is a new entry");
+  client.setSharing(false, "settings");
+});

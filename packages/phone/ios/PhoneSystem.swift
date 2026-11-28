@@ -132,6 +132,7 @@ public final class SystemModule: Module {
 
     OnCreate {
       PhoneExits.shared.follow(sharing: UsageConsent.state().sharing)
+      DispatchQueue.main.async { MainActor.assumeIsolated { KeyboardWarmUp.watchTouches() } }
     }
 
     Events("onSystemLink")
@@ -190,6 +191,18 @@ public final class SystemModule: Module {
 
     AsyncFunction("initialLink") { () -> [String: Any]? in
       MainActor.assumeIsolated { PhoneSystemLinks.shared.takeInitial() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("prepareKeyboardWarmUp") { () in
+      MainActor.assumeIsolated { KeyboardWarmUp.watchTouches() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("warmKeyboard") { () -> [String: Any] in
+      MainActor.assumeIsolated { KeyboardWarmUp.attempt() }
+    }.runOnQueue(.main)
+
+    AsyncFunction("endKeyboardWarmUp") { () in
+      MainActor.assumeIsolated { KeyboardWarmUp.finish() }
     }.runOnQueue(.main)
   }
 }

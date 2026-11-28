@@ -2240,7 +2240,7 @@ Both are ports of the Mac's native code (`ArdiaWebView+Peek.mm`, `ArdiaWebView+T
   from the page's bottom edge, in the shell's points, when the pointer is over the page
   (`ShellHostView::PointerFromPageBottom`, `ac_desktop_status_geometry.h`). The shared UI moves the bubble to the top
   when the pointer is near the bottom.
-- **`ArdiaSystem.setThinScrollBars(thin)`** (Settings › Appearance › Scroll bars). Helium turns on Chromium's
+- **`ArdiaSystem.setThinScrollBars(thin)`** (`pageScrollBars` in `config.json`). Helium turns on Chromium's
   overlay scroll bars in the mode that follows the OS, which on Linux is GTK's `gtk-overlay-scrolling`.
   `chromium-linux-thin-scroll-bars.patch` adds `ui::NativeTheme::SetArdiaLinuxThinScrollBars`: Thin makes
   `NativeTheme::CalculateUseOverlayScrollbar` prefer overlay scroll bars whatever GTK says, and the change runs the
@@ -2612,7 +2612,7 @@ These were open at the time of the PR.
   Peek or Little Ardia still doesn't apply on Linux.
 - **Link status bubble.** The pointer's place is the last one Chromium saw in this window. With an older engine the
   status carries no `fromBottom` and the bubble stays at the bottom.
-- **Scroll bars.** Follow the system and Thin look the same on a desktop whose GTK setting already prefers overlay
+- **Scroll bars.** `"system"` and `"thin"` look the same on a desktop whose GTK setting already prefers overlay
   scroll bars, which is GTK's default. Thin needs Chromium's `OverlayScrollbar` feature, on by default here; with it
   turned off by a flag the setting does nothing.
 - **Hardware details.** The GPU name and the hardware decoders are empty until Chromium's GPU process has reported,

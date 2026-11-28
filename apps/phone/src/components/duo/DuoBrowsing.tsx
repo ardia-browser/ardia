@@ -4,11 +4,13 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScreenLayout, type ScreenFold } from "../../state/app/screenLayout";
 import { useSystemBars } from "../../state/app/systemBars";
+import { setDuoSidebarShown } from "../../state/browse/duoSidebar";
 import { useSurface } from "../../state/browse/hooks";
 import { consumeDeckEntrance, deckEntered, leaveDeck, pageLaidOut, useBrowse } from "../../state/browse/store";
 import { closePageMenu } from "../../state/page/actions";
 import { useFindOpen, useMenuOpen, useReaderTabId } from "../../state/page/hooks";
 import { useSearchOpen } from "../../state/search/hooks";
+import { usePreferences } from "../../state/settings/hooks";
 import { useIncognito, useSelectedTab } from "../../state/tabs/hooks";
 import { currentTabs } from "../../state/tabs/store";
 import type { BrowserTab } from "../../state/tabs/tabModels";
@@ -23,7 +25,7 @@ import { PageRequestHost, PressMenu } from "../browsing/PageRequests";
 import { ReaderView, useLeavingReader } from "../browsing/ReaderView";
 import { DuoSidebar } from "./DuoSidebar";
 import { DuoToolbar } from "./DuoToolbar";
-import { DUO, sidebarFrame, splitCardFrame, splitPanelFrame, toolbarFrame, wideCardFrame, type DuoFrame } from "./duoLayout";
+import { DUO, sidebarFrame, SPLIT_CARD_EDGE, splitCardFrame, splitPanelFrame, toolbarFrame, wideCardEdge, wideCardFrame, type CardEdge, type DuoFrame } from "./duoLayout";
 import { duoInk, duoMotion } from "./tokens";
 
 export function DuoBrowsing() {
@@ -42,6 +44,8 @@ export function DuoBrowsing() {
   useSystemBars(theme.dark || incognito);
   const sidebar = useSidebar(reduceMotion);
   const { show } = sidebar;
+  useEffect(() => setDuoSidebarShown(sidebar.shown), [sidebar.shown]);
+  useEffect(() => () => setDuoSidebarShown(false), []);
   useEffect(() => {
     if (surface !== "deck") return;
     if (tab) {
@@ -61,13 +65,16 @@ export function DuoBrowsing() {
     wasFolded.current = folded;
     show(false);
   }, [folded]);
-  const card = fold ? splitCardFrame(width, insets, fold) : wideCardFrame(width, height, insets);
+  const pageBorder = usePreferences((p) => p.pageBorder);
+  const cornerRadius = usePreferences((p) => p.pageCornerRadius);
+  const edge = fold ? SPLIT_CARD_EDGE : wideCardEdge(pageBorder, cornerRadius);
+  const card = fold ? splitCardFrame(width, insets, fold) : wideCardFrame(width, height, insets, edge.bordered);
   const toolbar = toolbarFrame(card);
   const shownTab = tab && surface !== "start" ? tab : null;
   return (
     <View testID="duoBrowsing" style={StyleSheet.absoluteFill}>
       <LookBackdrop themed={!incognito} incognito={incognito} />
-      <PageCard card={card} tab={shownTab} front={surface === "browsing" && !sidebar.shown} />
+      <PageCard card={card} edge={edge} tab={shownTab} front={surface === "browsing" && !sidebar.shown} />
       <View testID="duoToolbarPlace" pointerEvents="box-none" style={[styles.place, frameStyle(toolbar)]}>
         <DuoToolbar showsAddress={!fold} sidebarShown={sidebar.shown} sidebar={sidebar.progress} onToggleSidebar={() => show(!sidebar.shown)} />
       </View>
@@ -136,11 +143,12 @@ function SplitPanel({ width, height, fold, safeBottom }: { width: number; height
 
 const noop = () => undefined;
 
-function PageCard({ card, tab, front }: { card: DuoFrame; tab: BrowserTab | null; front: boolean }) {
+function PageCard({ card, edge, tab, front }: { card: DuoFrame; edge: CardEdge; tab: BrowserTab | null; front: boolean }) {
   const theme = useTheme();
+  const corner = { borderRadius: edge.radius };
   return (
-    <View testID="duoCard" style={[styles.place, styles.card, { boxShadow: shadowCss("control", theme.dark) }, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
-      <View style={[styles.cardClip, { backgroundColor: tab ? theme.canvas : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
+    <View testID="duoCard" style={[styles.place, styles.card, corner, edge.bordered ? { boxShadow: shadowCss("control", theme.dark) } : null, frameStyle(card)]} importantForAccessibility={front ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!front}>
+      <View testID="duoCardClip" style={[styles.cardClip, corner, { backgroundColor: tab ? theme.canvas : undefined }]} onLayout={tab ? () => pageLaidOut(tab.id) : undefined}>
         {tab ? (
           <>
             <PageSurface key={tab.id} tab={tab} toneBottom={0} obscured={NO_INSETS} topClearance={DUO.toolbarClearance} testID="duoPage" />
@@ -178,6 +186,6 @@ const frameStyle = (frame: DuoFrame) => ({ left: frame.x, top: frame.y, width: f
 
 const styles = StyleSheet.create({
   place: { position: "absolute" },
-  card: { borderRadius: DUO.cardRadius, ...smoothCorners },
-  cardClip: { flex: 1, borderRadius: DUO.cardRadius, ...smoothCorners, overflow: "hidden" },
+  card: { ...smoothCorners },
+  cardClip: { flex: 1, ...smoothCorners, overflow: "hidden" },
 });

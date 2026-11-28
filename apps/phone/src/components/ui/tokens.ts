@@ -764,6 +764,14 @@ export const browseLayout = {
   traySurfaceInset: 8,
 } as const;
 
+export const loadWashLayout = {
+  feather: 28,
+  accentAlpha: { light: 0.16, dark: 0.24 },
+  privateAlpha: { light: 0.08, dark: 0.12 },
+  materialAlpha: 0.16,
+  materialPrivateAlpha: 0.1,
+} as const;
+
 export const logoInk = {
   sun: ["#FFCB45", "#F5A812"],
   backHill: ["#8DAF63", "#5E7D3E"],

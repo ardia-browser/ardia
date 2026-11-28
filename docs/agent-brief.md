@@ -206,7 +206,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   - In a linked worktree, never `pnpm install`: its `.pnpmfile.cjs` refuses, and the read-only tree stops a bypass.
     `pnpm run` and `pnpm exec` print the refusal and still run, but calling tools directly is quieter:
     `node_modules/.bin/tsrs -p .`, `node --import ./src/test-loader.mjs --test …` in `apps/browser`, or
-    `node node_modules/react-native/cli.js start --port <n>` there for Metro. `metro.config.js` reads the link
+    `node ../../node_modules/react-native/cli.js start --port <n>` there for Metro (react-native sits in the root
+    `node_modules`; launch with `ac launch … --js localhost:<n>`). `metro.config.js` reads the link
     marker, so Metro, `js-bench.mjs bundle` and the Xcode bundle phase resolve through the links with no wrapper.
   - Changing dependencies (a lockfile, a patch, `pnpm patch`) needs a real install: `--undo` first, then
     `pnpm install` under `scripts/agent/locked pod`; to link again afterwards, run the setup with `--replace`, which
@@ -256,6 +257,8 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     `--prebuilt-engine` to use the published engine instead of a stale `~/chromium-build`. A new engine framework is staged
     under the chromium lock: `--release` your chromium take first, or it uses your take (`--as`).
     `/tmp/ac-<name>.holder` says who holds a lock. Every `scripts/agent` script takes `--help`.
+    To choose where a heavy build or test run goes, `scripts/agent/pick-host [min_free_gb]` prints the least
+    loaded Mac on AC power with enough disk and reserves it for 5 minutes, so parallel agents spread out.
     When the main session runs the build train (`scripts/agent/train serve`: one shared build of the tree), don't
     build yourself: `train request --as <you>`, then `train wait --as <you>` prints the app to run.
   - Run: `scripts/agent/ac launch <the app build-app printed> --data <scratch>/data`
@@ -338,7 +341,9 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     For the New Tab intro, launch with `--test shadersKeyWindow` (it only plays in a key window).
   - The user's screen may be locked: screen captures then fail or deliver no frames. Fall back to
     `ac.shell.devSnapshotWindow(windowId, path)` (`false` means it failed; the window's layers at 2x; Metal views
-    render blank; text opacity is applied twice, so a label at α reads 1 − (1 − α)², don't match colours on it),
+    render blank; text opacity is applied twice, so a label at α reads 1 − (1 − α)², don't match colours on it; the
+    traffic lights and other window chrome are missing, so PR and owner-facing media use `screencapture -l` whenever the
+    screen is unlocked),
     `globalThis.expo.modules.ArdiaAreaLight.debugSnapshot(dir)` (every Metal view, offscreen, with its frame),
     the accessibility tree and store state, and list "needs visual check" items in your report.
   - Hover and pressed states in a hidden instance (Debug builds): `ac.shell.devSetPointer(windowId, { x, y })` puts the
@@ -348,6 +353,12 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     `ac.engine.call("windows.dev", { window: <windows.list's hasRoot window>, action: "mouse:down:x,y" })`, capture, then
     `mouse:up`. `ac.shell.devHoverStats(false).log` lists the enters and leaves the pointer caused. Controls that are
     disabled (back, forward and reload on a New Tab) show no hover.
+  - Trackpad scrolling in a hidden instance: `scripts/agent/trackpad <pid> <window-number> <x> <y> <dy> <steps>
+    [end|hold|momentum]` posts a phased two-finger scroll through the system event path, so a native scroll view
+    scrolls, coasts and rubber-bands as under a finger, with no pointer move or activation (`--help`). Use it for any
+    scroll, momentum or bounce check. `expo.modules.ArdiaSwipe.devSimulate` sends its events straight to `NSApp`, which
+    `NSScrollView`'s responsive scrolling never tracks: a list then shows only a few points of elastic pull and never
+    scrolls, so it can't prove scrolling works or doesn't.
 - Code style: read the surrounding code first and match its naming and idioms. No comments (AGENTS.md).
   Keep files cohesive; new features go in new files where sensible.
 - Dia fidelity: when you build UI, match Dia, and check it with numbers against a Dia capture

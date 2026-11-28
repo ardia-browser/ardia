@@ -30,7 +30,8 @@ public enum LaunchBackdrop {
     capTask = nil
     contentShown = false
     fading = false
-    let host = UIHostingController(rootView: AnyView(LaunchProfileBackdrop(recalled: LaunchLook.recalled()).ignoresSafeArea()))
+    let recalled = LaunchLook.recalled()
+    let host = UIHostingController(rootView: AnyView(LaunchProfileBackdrop(recalled: recalled).ignoresSafeArea()))
     host.view.backgroundColor = .clear
     host.view.frame = rootView.bounds
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -87,5 +88,6 @@ private struct LaunchProfileBackdrop: View {
     let drawn = recalled.drawn(appDark: colorScheme == .dark)
     ProfileBackdrop(look: drawn.colors.look, themeLook: drawn.colors.themeLook, themed: true)
       .environment(\.colorScheme, drawn.dark.map { $0 ? .dark : .light } ?? colorScheme)
+      .onAppear { LaunchLookWrites.noteShown(recalled, appDark: colorScheme == .dark) }
   }
 }

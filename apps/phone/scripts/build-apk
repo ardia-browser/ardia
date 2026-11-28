@@ -96,6 +96,7 @@ else
 fi
 echo "bundling $commit from the $source"
 gradleArgs+=(-Pandroid.enableMinifyInReleaseBuilds=$([ "$r8" = "1" ] && echo true || echo false))
+gradleArgs+=(-Pandroid.enableShrinkResourcesInReleaseBuilds=$([ "$r8" = "1" ] && echo true || echo false))
 if [ -n "$release" ]; then
   [ "$lab" = "0" ] || { echo "--version is for a --store build: a lab build carries no release version" >&2; exit 64; }
   planned="$(node --no-warnings "$here/android-version.ts" "$release")"

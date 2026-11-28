@@ -20,7 +20,7 @@ import { haptics } from "../../state/app/haptics";
 import { TabsMenuTrigger } from "./tabsMenu";
 import { display } from "../../state/search/omnibox";
 import type { BrowserTab } from "../../state/tabs/tabModels";
-import { BarPlusGlyph, capsule, chromeLayout, ChromeSurface, floatingBarLayout, PlateInk, PressInPlace, Symbol, type ColorRoles } from "../ui";
+import { BarPlusGlyph, capsule, chromeLayout, ChromeSurface, floatingBarLayout, LoadWash, PlateInk, PressInPlace, Symbol, useWashTint, type ColorRoles, type LoadWashValues } from "../ui";
 import { newTabLabel } from "./barWords";
 import { openPageMenuFrom } from "./pageMenuOpener";
 import { privateMark } from "../ui/IncognitoSpecs";
@@ -56,6 +56,7 @@ type Props = {
   onPlus: () => void;
   onMore: () => void;
   fold?: BarFoldLook | null;
+  wash?: LoadWashValues | null;
   swipe?: SwipeAddresses | null;
   handover?: HandOverFocus;
 };
@@ -213,7 +214,7 @@ export function barAddress(tab: BrowserTab): BarAddress {
   };
 }
 
-export function FloatingBar({ tab, preview = null, standsIn = false, privateLook, order, roles, dark, showsPlus, anchors = true, duo = null, fold = null, swipe = null, handover, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
+export function FloatingBar({ tab, preview = null, standsIn = false, privateLook, order, roles, dark, showsPlus, anchors = true, duo = null, fold = null, wash = null, swipe = null, handover, onTabs, onTabsMenu, onStep, onAddress, onPlus, onMore }: Props) {
   const previewId = preview?.id ?? null;
   const previewHides = useAnimatedStyle(() => {
     const lifted = destination.id.value;
@@ -229,6 +230,7 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
   const styledTab = looksPrivate === tab.isPrivate ? tab : { ...tab, isPrivate: looksPrivate };
   useLayoutEffect(() => markShownFrame(`bar:${tab.id}`), [tab.id]);
   const landedHere = useHereAddress(swipe, tab.id);
+  const washTint = useWashTint(looksPrivate, dark);
   const address = barAddress(tab);
   const { spoken, backShown } = useSpokenAddress(swipe, tab.id, spokenAddress(address));
   const menuButton = useRef<ViewInstance>(null);
@@ -309,6 +311,7 @@ export function FloatingBar({ tab, preview = null, standsIn = false, privateLook
         <Animated.View testID="floatingBarCentreGlyphs" nativeID={ids?.face} collapsable={false} style={[styles.addressRow, back.centreGlyphs]}>
         <Animated.View testID="floatingBarFoldGlyphs" collapsable={false} style={[styles.addressRow, centreFold]}>
         <PullGlyphs style={styles.addressRow}>
+        {wash ? <LoadWash testID="floatingBarLoadWash" values={wash} tint={washTint} cornerRadius={capsule(floatingBarLayout.control)} /> : null}
         <Animated.View testID="floatingBarAddressFade" collapsable={false} style={[styles.addressFade, addressFade]} pointerEvents={squeezed ? "none" : "box-none"} importantForAccessibility={squeezed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={squeezed}>
         <Animated.View testID="floatingBarAddressStack" collapsable={false} style={[styles.addressStack, landedHere, previewHides]} pointerEvents="box-none">
           <AddressFace address={address} testIDPrefix="floatingBar" style={styles.addressHit} onPress={onAddress} onPressIn={haptics.barPress} pressRef={addressButton} spoken={SPEAKS_LANDED_ADDRESS && tabSwitchCuts() ? spoken : undefined} />

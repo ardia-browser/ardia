@@ -15,3 +15,10 @@ public enum ScrollBounceTarget {
     return sameColumn && holds
   }
 }
+
+public enum ScrollBounceMode: String, Sendable {
+  case never
+  case whenLong
+
+  public var bouncesVertically: Bool { self == .whenLong }
+}

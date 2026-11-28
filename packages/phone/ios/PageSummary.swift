@@ -35,6 +35,7 @@ final class PageSummarySession: Identifiable {
   let page: UUID
   let navigation: Int
   let revision: Int
+  let address: URL?
   @ObservationIgnored weak var source: WKWebView?
   private(set) var title: String
   private(set) var phase: Phase = .reading
@@ -49,6 +50,7 @@ final class PageSummarySession: Identifiable {
     page = tab.id
     navigation = tab.navigationGeneration
     revision = PageSummarySwitch.shared.revision
+    address = tab.url
     source = tab.webView
     title = tab.title
   }
@@ -57,6 +59,20 @@ final class PageSummarySession: Identifiable {
     if case .failed = phase { return "failed" }
     if phase == .interrupted { return "failed" }
     return writer?.rawValue ?? "failed"
+  }
+
+  var host: String? { address.flatMap { BrowserURL.host(of: $0.absoluteString) } }
+
+  var isShareable: Bool { phase == .done || phase == .interrupted }
+
+  var sharedText: String {
+    let outline = outline(finished: true)
+    var parts: [String] = []
+    if !title.isEmpty { parts.append(title) }
+    if let lead = outline.lead { parts.append(lead) }
+    let rows = outline.rows.map { row in row.label.map { "• \($0): \(row.info)" } ?? "• \(row.info)" }
+    if !rows.isEmpty { parts.append(rows.joined(separator: "\n")) }
+    return parts.joined(separator: "\n\n")
   }
 
   func outline(finished: Bool) -> PageSummaryOutline {

@@ -128,6 +128,10 @@ test("the installer is the WebUI shell's only, and still launches it with the sw
   assert.ok(SCRIPT.includes('ValueData: """{app}\\Ardia.exe""{#OpenSuffix} --single-argument %1"'));
   assert.ok(SCRIPT.includes('Name: "{autoprograms}\\Ardia"; Filename: "{app}\\Ardia.exe"; Parameters: "{#LaunchSwitch}"; IconFilename: "{app}\\Ardia.ico"; AppUserModelID: "Ardia.Browser"'));
   assert.equal((SCRIPT.match(/Parameters: "\{#LaunchSwitch\}"/g) || []).length, 4, "both shortcuts and both launches after setup carry the switch");
+  const run = SCRIPT.slice(SCRIPT.indexOf("[Run]\n"), SCRIPT.indexOf("[Code]")).trim().split("\n");
+  assert.equal(run[1], 'Filename: "{app}\\ardia-webui-migrate.exe"; Parameters: "--from-rnw --chromium-profiles"; StatusMsg: "Bringing over your history, logins and extensions..."; Flags: runhidden waituntilterminated runasoriginaluser; Check: MigratorBundled', "the Chromium profiles move over while Ardia is closed, before setup starts it");
+  assert.ok(run.slice(2).every((line) => line.includes('Filename: "{app}\\Ardia.exe"')), "every launch comes after the profile move");
+  assert.ok(SCRIPT.includes("Result := FileExists(ExpandConstant('{app}\\ardia-webui-migrate.exe'));"));
   const installer = read("scripts/windows/make-installer.ps1");
   assert.ok(!installer.includes("/DShell="), "the installer script names its own shell");
   assert.ok(installer.includes('$shellKind = Resolve-ShellLayout $sourceRoot "webui"'), "make-installer packages only a WebUI folder");

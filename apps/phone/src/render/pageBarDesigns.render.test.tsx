@@ -250,7 +250,7 @@ test("the address answers a press with the shared dim and the bar's tap haptic, 
   unmount(root);
 });
 
-test("the page's one busy cue for screen readers is the address: busy while the page loads, not after, and the progress line stays hidden from them", () => {
+test("the page's one busy cue for screen readers is the address: busy while the page loads, not after, and the load wash stays hidden from them", () => {
   const tab = currentTabs().open[0]!;
   const navigation = (isLoading: boolean, progress: number) => act(() => storeNavigation(tab.id, { url: "https://site0.example/", title: "Site", isLive: true, isLoading, progress, failure: null, canGoBack: false, canGoForward: false } as unknown as PageState));
   navigation(true, 0.4);
@@ -262,19 +262,112 @@ test("the page's one busy cue for screen readers is the address: busy while the 
   expect(address().props.accessibilityState).toEqual({ busy: true });
   navigation(false, 1);
   expect(address().props.accessibilityState).toEqual({ busy: false });
-  expect(host(root, "loadingLine")!.props.accessibilityElementsHidden).toBe(true);
+  expect(host(root, "floatingBarLoadWash")!.props.accessibilityElementsHidden).toBe(true);
+  expect(host(root, "floatingBarLoadWash")!.props.importantForAccessibility).toBe("no-hide-descendants");
+  expect(host(root, "floatingBarLoadWash")!.props.pointerEvents).toBe("none");
   unmount(root);
 });
 
-test("the browsing address is the shared address face and the page's progress line is the shared one, set below the status bar", () => {
+test("the browsing address is the shared address face, and only the original design keeps the shared progress line below the status bar", () => {
   const { AddressFace } = require("../components/browsing/AddressFace") as typeof import("../components/browsing/AddressFace");
   const { PageProgressLine } = require("../components/browsing/PageProgressLine") as typeof import("../components/browsing/PageProgressLine");
   const root = page("redesigned");
   const faces = root.root.findAll((node) => node.type === AddressFace);
   expect(faces).toHaveLength(1);
   expect(faces[0]!.props.testIDPrefix).toBe("floatingBar");
-  const progress = root.root.findAll((node) => node.type === PageProgressLine);
+  expect(root.root.findAll((node) => node.type === PageProgressLine)).toHaveLength(0);
+  expect(host(root, "pageProgressLine")).toBeUndefined();
+  unmount(root);
+  const original = page("original");
+  const progress = original.root.findAll((node) => node.type === PageProgressLine);
   expect(progress).toHaveLength(1);
-  expect(StyleSheet.flatten(host(root, "pageProgressLine")!.props.style)).toMatchObject({ position: "absolute", left: 0, right: 0, top: progress[0]!.props.top });
+  expect(progress[0]!.props.top).toBe(47);
+  expect(StyleSheet.flatten(host(original, "pageProgressLine")!.props.style)).toMatchObject({ position: "absolute", left: 0, right: 0, top: 47 });
+  expect(original.root.findAll((node) => typeof node.props.testID === "string" && node.props.testID.endsWith("LoadWash"))).toHaveLength(0);
+  unmount(original);
+});
+
+const within = (node: { parent: unknown } | undefined, testID: string) => {
+  let at = node as { parent: unknown; props?: { testID?: string } } | null | undefined;
+  while (at) {
+    if (at.props?.testID === testID) return true;
+    at = at.parent as typeof at;
+  }
+  return false;
+};
+
+test("the load wash is drawn inside the address capsule and the folded host pill, under their glyphs, clipped to each one's capsule, from one shared progress so a fold never restarts it", () => {
+  setPreference("collapsesBottomBar", true);
+  const root = page("redesigned");
+  const bar = host(root, "floatingBarLoadWash")!;
+  const pill = host(root, "hostPillLoadWash")!;
+  expect(within(bar, "floatingBarAddress") || within(bar, "floatingBarAddressFace")).toBe(true);
+  expect(within(pill, "hostPill")).toBe(true);
+  expect(StyleSheet.flatten(bar.props.style)).toMatchObject({ position: "absolute", overflow: "hidden", borderRadius: 24 });
+  expect(StyleSheet.flatten(pill.props.style)).toMatchObject({ position: "absolute", overflow: "hidden", borderRadius: 15 });
+  const underGlyphs = (wash: typeof bar) => {
+    let holder = wash.parent;
+    while (holder && typeof holder.type !== "string") holder = holder.parent;
+    let first = holder?.children[0];
+    while (first && typeof first !== "string" && typeof first.type !== "string") first = first.children[0];
+    return { holder: holder?.props.testID as string | undefined, first: typeof first === "string" ? first : (first?.props.testID as string | undefined) };
+  };
+  expect(underGlyphs(bar)).toEqual({ holder: "pullGlyphs", first: "floatingBarLoadWash" });
+  expect(underGlyphs(pill)).toEqual({ holder: "hostPillContent", first: "hostPillLoadWash" });
+  const { LoadWash } = require("../components/ui") as typeof import("../components/ui");
+  const washes = root.root.findAll((node) => node.type === LoadWash);
+  expect(washes).toHaveLength(2);
+  expect(washes[0]!.props.values === washes[1]!.props.values).toBe(true);
+  setPreference("collapsesBottomBar", false);
+  unmount(root);
+});
+
+test("Material You draws the wash in its address field and its folded pill in the scheme's primary, and drops the top line", () => {
+  const { PageProgressLine } = require("../components/browsing/PageProgressLine") as typeof import("../components/browsing/PageProgressLine");
+  const { LoadWash } = require("../components/ui") as typeof import("../components/ui");
+  const root = page("material");
+  expect(root.root.findAll((node) => node.type === PageProgressLine)).toHaveLength(0);
+  expect(within(host(root, "materialBarLoadWash"), "materialAddressField")).toBe(true);
+  expect(within(host(root, "materialBarPillLoadWash"), "materialBarPill")).toBe(true);
+  const washes = root.root.findAll((node) => node.type === LoadWash);
+  expect(washes).toHaveLength(2);
+  expect(washes[0]!.props.values === washes[1]!.props.values).toBe(true);
+  expect(washes[0]!.props.tint.alpha).toBeLessThan(0.3);
+  unmount(root);
+});
+
+test("the wash waits out the reveal delay, then fills from the left with the page's progress behind the address, and fades away once the page has loaded", () => {
+  const reanimated = require("react-native-reanimated") as typeof import("react-native-reanimated");
+  const tab = currentTabs().open[0]!;
+  const navigation = (isLoading: boolean, progress: number) => act(() => storeNavigation(tab.id, { url: "https://site0.example/", title: "Site", isLive: true, isLoading, progress, failure: null, canGoBack: false, canGoForward: false } as unknown as PageState));
+  navigation(false, 1);
+  const root = page("redesigned", tab);
+  act(() => host(root, "floatingBarLoadWash")!.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 280, height: 48 } } }));
+  const shown = () => {
+    const style = reanimated.getAnimatedStyle(host(root, "floatingBarLoadWashFill")!) as { opacity: number; transform: { translateX: number }[] };
+    return { opacity: style.opacity, x: style.transform[0]!.translateX };
+  };
+  const frames = (count: number) => {
+    for (let frame = 0; frame < count; frame++) act(() => jest.advanceTimersByTime(16));
+  };
+  frames(4);
+  expect(shown().opacity).toBe(0);
+  navigation(true, 0.05);
+  frames(3);
+  expect(shown().opacity).toBe(0);
+  frames(30);
+  expect(shown().opacity).toBe(1);
+  const early = shown().x;
+  expect(early).toBeLessThan(0);
+  navigation(true, 0.6);
+  frames(60);
+  const later = shown().x;
+  expect(later).toBeGreaterThan(early);
+  expect(later).toBeLessThan(0);
+  navigation(false, 1);
+  frames(14);
+  expect(shown().x).toBe(0);
+  frames(30);
+  expect(shown().opacity).toBe(0);
   unmount(root);
 });

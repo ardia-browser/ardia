@@ -13,12 +13,13 @@ const { startNativeSettings } = await import("./nativeSettings.ts");
 const { useProfileTheme } = await import("../../components/window/ThemeScope.tsx");
 const media = await import("../media/media.ts");
 const { ardiaCoreNativeModules } = await import("../../test-native/ardiacore.ts");
+const { shellNativeModules } = await import("../../test-native/shell.ts");
 const stub = await import("../../test-native/index.ts");
 
 const S = () => useBrowser.getState();
 const THEME = { stops: [{ x: 0.5, y: 0.5, color: { r: 0.95, g: 0.9, b: 0.3, a: 1 } }], intensity: 1, mode: "dark", grain: 0, texture: "grain", translucency: 0 };
 const PROFILE = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0, theme: THEME };
-const OFF_IN_0246 = { commandScrollZoom: false, sidebarMediaControls: false, adaptTextToColor: false };
+const OFF_IN_0246 = { commandScrollZoom: false, sidebarMediaControls: false, adaptTextToColor: false, pageScrollBars: "thin" };
 
 const sessionOf0246 = (choices) => ({
   version: 11,
@@ -54,6 +55,20 @@ function commandScrollZoomSent() {
   return sent;
 }
 
+function thinScrollBarsSent() {
+  const system = shellNativeModules.ArdiaSystem;
+  const orig = system.setThinScrollBars;
+  const sent = [];
+  system.setThinScrollBars = (thin) => {
+    sent.push(thin);
+    return orig(thin);
+  };
+  const stop = startNativeSettings();
+  stop();
+  system.setThinScrollBars = orig;
+  return sent;
+}
+
 function hiddenPlayers() {
   const w = S().createWindow({ url: "a.com" });
   const playing = S().newTab(w, { url: "music.com", background: true });
@@ -62,7 +77,7 @@ function hiddenPlayers() {
 
 const adaptiveInk = () => mount(() => useProfileTheme("default")).value.adaptiveInk;
 
-test("the four 0.2.46 choices still load from a 0.2.46 file, with the Import button's under its new name", () => {
+test("the five 0.2.46 choices still load from a 0.2.46 file, with the Import button's under its new name", () => {
   load({ ...OFF_IN_0246, hideBookmarksBarImport: true });
   for (const [key, value] of Object.entries(OFF_IN_0246)) {
     assert.equal(S().settings[key], value, key);
@@ -98,6 +113,15 @@ test("a hidden Import button on the empty bookmarks bar stays hidden", () => {
   assert.equal(S().settings.bookmarksImportDismissed, true);
   load({});
   assert.equal(S().settings.bookmarksImportDismissed, false);
+});
+
+test("page scroll bars follow the system by default and keep a saved thin choice", () => {
+  load({});
+  assert.deepEqual(thinScrollBarsSent(), [false]);
+  load({ pageScrollBars: "system" });
+  assert.deepEqual(thinScrollBarsSent(), [false]);
+  load({ pageScrollBars: "thin" });
+  assert.deepEqual(thinScrollBarsSent(), [true]);
 });
 
 test("the kept choices sync, so another Mac follows them and can't reset them", () => {

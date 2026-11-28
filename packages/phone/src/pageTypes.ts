@@ -191,6 +191,8 @@ export type PageEngineCapabilities = {
   snapshotsIncludeVideo: boolean;
 };
 
+export type PageProcessOutcome = "gone" | "recovered" | "failed";
+
 export type PageEngineEvent =
   | { name: "page.state"; pageId: string; state: PageState }
   | { name: "page.find"; pageId: string; result: FindResult | null }
@@ -210,7 +212,9 @@ export type PageEngineEvent =
     }
   | { name: "page.longPress"; pageId: string; target: PressTarget; x: number; y: number }
   | { name: "page.closeRequested"; pageId: string }
+  | { name: "page.processEnded"; pageId: string; outcome: PageProcessOutcome }
   | { name: "page.summaryOpened"; pageId: string; trigger: PageSummaryTrigger; isPrivate: boolean }
+  | { name: "page.summaryShared"; pageId: string; isPrivate: boolean }
   | { name: "page.summarySettled"; pageId: string; trigger: PageSummaryTrigger; outcome: PageSummaryOutcome; chatGPTFellBack?: boolean; geminiNanoMissing?: string | null; isPrivate: boolean }
   | { name: "page.snapshotLanded"; pageId: string; uri: string; generation: number }
   | { name: "page.scrollSettled"; pageId: string; y: number }
@@ -218,6 +222,7 @@ export type PageEngineEvent =
   | { name: "page.externalAppMissing"; pageId: string; url: string }
   | { name: "page.desktop"; pageId: string; line: string }
   | { name: "pages.privateSessionEnded" }
+  | { name: "pages.dark"; dark: boolean }
   | { name: "pages.webVideo"; outcome: "floated" | "keptPlaying"; isPrivate: boolean };
 
 export type PageEventPayload =

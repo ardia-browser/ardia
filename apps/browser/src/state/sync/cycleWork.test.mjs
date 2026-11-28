@@ -6,7 +6,7 @@ await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 200 });
 
 const client = await import("../telemetry/client.ts");
-const { noteChainStatus, takeCycleWork, takeSnapshotWrites, timedCycle } = await import("./cycleWork.ts");
+const { noteChainHealthy, noteChainMissing, takeCycleWork, takeSnapshotWrites, timedCycle } = await import("./cycleWork.ts");
 after(() => client.setSharing(false, "settings"));
 
 const none = { cycles: 0, ms: 0, longestMs: 0 };
@@ -47,54 +47,60 @@ test("with sharing on, cycles add up to a count, a total and the longest", async
   assert.deepEqual(takeCycleWork(), none);
 });
 
-test("with sharing on, each stretch the sync chain is missing counts once, and so does its return", () => {
+test("with sharing on, each outage of the sync chain counts once, and so does its return", () => {
   client.setSharing(true, "onboarding");
   takeSnapshotWrites();
   const token = client.consentToken();
-  for (const status of ["ok", "missing", "missing", "ok", "ok"]) noteChainStatus(token, "mac", status);
-  noteChainStatus(token, "mac", "missing");
-  noteChainStatus(token, "set-up-again", "ok");
+  const doc = {};
+  noteChainHealthy(doc, "/sync");
+  for (let i = 0; i < 3; i++) noteChainMissing(doc, "/sync", token);
+  noteChainHealthy(doc, "/sync");
+  noteChainHealthy(doc, "/sync");
+  noteChainMissing(doc, "/sync", token);
+  noteChainHealthy({}, "/sync");
   const taken = takeSnapshotWrites();
-  assert.deepEqual([taken.chainMissing, taken.chainReturned], [2, 1], "one count per stretch the chain is gone, and a new setup finding its chain isn't a return");
-  noteChainStatus(token, "mac", "missing");
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [2, 1], "one count per outage, and a new setup finding its chain isn't a return");
+  assert.deepEqual(doc.chainOutage, { folder: "/sync", seen: token, counted: true }, "the outage stays recorded until the chain is healthy again");
   client.setSharing(false, "settings");
-  noteChainStatus(client.consentToken(), "mac", "ok");
+  noteChainHealthy(doc, "/sync");
   const off = takeSnapshotWrites();
   assert.deepEqual([off.chainMissing, off.chainReturned], [0, 0], "turning sharing off forgets the count and nothing is counted while it's off");
+  assert.equal(doc.chainOutage, undefined);
 });
 
-test("a chain status noted under a stale consent token changes nothing, so it can't pair with a later one", () => {
-  client.setSharing(true, "onboarding");
+test("an outage first seen with sharing off, or under a stale token, is never counted, nor is its return", () => {
+  client.setSharing(false, "settings");
+  const doc = {};
+  noteChainMissing(doc, "/sync", client.consentToken());
+  client.setSharing(true, "settings");
   takeSnapshotWrites();
+  for (let i = 0; i < 3; i++) noteChainMissing(doc, "/sync", client.consentToken());
+  noteChainHealthy(doc, "/sync");
   const stale = client.consentToken();
   client.setSharing(false, "settings");
   client.setSharing(true, "settings");
-  const token = client.consentToken();
-  noteChainStatus(stale, "mac", "missing");
-  noteChainStatus(token, "mac", "ok");
-  let taken = takeSnapshotWrites();
-  assert.deepEqual([taken.chainMissing, taken.chainReturned], [0, 0], "a stale missing doesn't make the next ok a return");
-  noteChainStatus(token, "mac", "missing");
-  noteChainStatus(stale, "mac", "ok");
-  noteChainStatus(token, "mac", "missing");
-  taken = takeSnapshotWrites();
-  assert.deepEqual([taken.chainMissing, taken.chainReturned], [1, 0], "a stale ok doesn't end the stretch the chain is gone");
+  const staleDoc = {};
+  noteChainMissing(staleDoc, "/sync", stale);
+  noteChainMissing(staleDoc, "/sync", client.consentToken());
+  noteChainHealthy(staleDoc, "/sync");
+  const taken = takeSnapshotWrites();
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [0, 0]);
 });
 
-test("a new consent period starts with no missing chain, so a return across it isn't counted and the next missing stretch is", () => {
+test("an outage first seen in one consent period is counted in none after it, and a new outage in the new period is", () => {
   client.setSharing(true, "onboarding");
   takeSnapshotWrites();
-  noteChainStatus(client.consentToken(), "mac", "missing");
+  const doc = {};
+  noteChainMissing(doc, "/sync", client.consentToken(), false);
   client.setSharing(false, "settings");
   client.setSharing(true, "settings");
-  const token = client.consentToken();
-  noteChainStatus(token, "mac", "ok");
+  noteChainMissing(doc, "/sync", client.consentToken());
+  noteChainMissing(doc, "/sync", client.consentToken());
+  noteChainHealthy(doc, "/sync");
   let taken = takeSnapshotWrites();
-  assert.deepEqual([taken.chainMissing, taken.chainReturned], [0, 0], "a chain that went missing in an earlier period isn't counted back");
-  noteChainStatus(client.consentToken(), "mac", "missing");
-  client.setSharing(false, "settings");
-  client.setSharing(true, "settings");
-  noteChainStatus(client.consentToken(), "mac", "missing");
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [0, 0], "the outage belongs to the period it was first seen in");
+  noteChainMissing(doc, "/sync", client.consentToken());
+  noteChainMissing(doc, "/moved", client.consentToken());
   taken = takeSnapshotWrites();
-  assert.deepEqual([taken.chainMissing, taken.chainReturned], [1, 0], "the stretch is counted once in the period it's seen in");
+  assert.deepEqual([taken.chainMissing, taken.chainReturned], [2, 0], "a new outage, or one in another folder, is its own");
 });

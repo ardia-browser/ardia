@@ -2643,7 +2643,7 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   - **Closed** (under 600 wide): Tabs on the bar's centre line, `+` 55 above it. The bar row keeps only the address
     capsule with its `···`, from 24 to 12 short of the strip (24 to 370 on 466). The start bar keeps Settings in that
     span; the deck bar's row holds the space switcher and Search Tabs there (24 to 370, where the address capsule
-    sits; see the deck's switcher below), and stacks three 48 circles in the strip as the open Duo does (`deckStripSlots`; the owner, 2026-11-27): `+` on the bar's line, the
+    sits; see the deck's switcher below), and stacks three 48 circles in the strip, as the open Duo does (`DECK_STRIP_SLOTS`; the owner, 2026-11-27): `+` on the bar's line, the
     Incognito switch 55 above it and the deck's `···` 110 above it, within reach of the thumb (on 466×678, all at x
     394 to 442: `···` y 499 to 547, Incognito 554 to 602, `+` 609 to 657). `···` opens its menu beside the strip
     (`besideStrip`), keeps the `deckHit-more` target for taps during the deck's pull and reads "More". It
@@ -2654,10 +2654,13 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
     its right end and its `···` on that slot (527 to 927 on 951). Scrolling down, whatever Collapse Bottom Bar says,
     moves only its left edge into the slot (on `barCollapse`, the host pill's spring) while the host fades, leaving
     the `···` circle; it opens the page menu (never expands the bar), shows the red open lock on an insecure page,
-    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck adds a fourth
-    slot above the three for its `···` (165 above the line: y 435 to 483 on 669, well below the Wi-Fi ring at about
-    110 to 150 and the clock), puts its `+` in the next slot, the Incognito switch in the middle one (where the page's Tabs button turns into the Incognito
-    glyph as the deck pulls in) and Search Tabs as a 48 magnifier circle in the bottom slot that grows left into the 400-wide field when tapped (on the same spring, focused, counted in `search_tabs_opened`), runs from 24 to the slot while the keyboard is up, and shrinks back once the search closes empty; the page's capsule hands over to it on the same slot as the deck pulls in; the start page puts `+` and Tabs in the
+    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck's strip is the
+    closed Duo's (the owner, 2026-11-28, after seeing both poses): `+` on the bar's line, the Incognito switch 55
+    above it (where the page's Tabs button turns into the Incognito glyph as the deck pulls in) and `···` 110 above
+    it (y 490 to 538 on 669, well below the Wi-Fi ring at about 110 to 150 and the clock); the magnifier slot and its
+    circle-grows-into-field are gone, and the deck's bar row is its own (`deckBarSpan`): 460 wide, ending 8 before the
+    strip, 399 to 859 on 951 (from 24 on a screen too narrow for 460), holding the space switcher and Search Tabs as
+    the closed Duo does; the start page puts `+` and Tabs in the
     top two and Settings in the bottom slot. On either Duo the search panel keeps 8 from the safe edges, so it ends
     short of the strip and its clock. Closing search on the open Duo lands the panel on the capsule in one move
     (`landsDirectly`): the phone's drop, fold and then narrow read as a second slide there, the panel being twice
@@ -2667,17 +2670,25 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   the strip, so the header row would be empty. Its geometry gets no header height there (`deckGeometry`'s chrome
   height 0 from TabDeck), so the card band's floor starts 41 below the safe top instead of 89; on the closed and open
   poses Arc's centre (0.514 of the height) already sits below that floor, so the cards are where they were until the
-  arc's centring uses the band. The switcher is a 48-high glass capsule sized to its text (`deckSpacesSlot`): on the
-  closed Duo it leads the bar row from 24, at most half the row, and Search Tabs flexes in the rest to 370; on the open
-  Duo it sits on the bar's line ending 8 before the magnifier's circle (871, the circle at 879 to 927). While Search
-  Tabs is focused or holds text it folds away, fading and narrowing to nothing on the bar's `barCollapse` spring, so
-  Search Tabs takes the whole row (closed) or grows into its 400 (open); unfocused and empty it comes back. Its menu is
-  drawn (`MenuTrigger`'s `drawn`) 8 above the bar, left-aligned with the capsule (`deckSpacesMenu`: 24 to 274 closed)
-  and never past the capsule's end toward the strip, so on the open Duo it ends at 871. It keeps the header's label
-  ("Space, <name>"), hint, `deckHit-spaces` target during the deck's pull and `spaces_picked` count. With one space or
-  sync off there is no switcher, and Search Tabs keeps the whole row. With the strip on the left all of it mirrors:
-  the closed Duo's switcher ends the row at 442 after Search Tabs, the open Duo's starts 8 after the circle at 80,
-  and `···` stacks in the strip at 24 to 72.
+  arc's centring uses the band. On either Duo the bar row is [space switcher][Search Tabs] (`deckSpacesSlot`, the
+  owner, 2026-11-28): the switcher is a 48-high glass capsule sized to its text from the row's start, the field
+  flexes in the rest, 8 between them. The switcher and its gap take at most 40% of the row, so Search Tabs keeps at
+  least 60%: the switcher at most 130.4 of 346 closed and 176 of 460 open, a longer name ending in an ellipsis
+  (`SpaceTitle`'s `truncates`). With "Personal" (about 126) the field is about 212 closed (158 to 370) and 326 open
+  (533 to 859). On the closed Duo, while Search Tabs is focused or holds text, the field grows left over the
+  switcher, drawn above it (`zIndex`), its left edge going to 24 on the bar's `barCollapse` spring (a plain timing
+  under Reduce Motion) by one negative margin, its right edge never moving; the switcher fades out underneath and
+  keeps its slot, so nothing else in the row moves, and it takes no taps or VoiceOver focus while covered. The
+  field's magnifier and text keep their offset from its left edge, so they travel with that edge as it grows and
+  never jump. Unfocused and empty, the field shrinks back and the switcher fades in. On the open Duo nothing moves
+  while searching: the switcher stays, and the field keeps its 326 with the keyboard up too (it no longer widens
+  left to 24, which would cover the switcher); the bar still rises above the keyboard as on any iPhone. The
+  switcher's menu is drawn (`MenuTrigger`'s `drawn`) 8 above the bar, left-aligned with the capsule
+  (`deckSpacesMenu`: 24 to 274 closed, 399 to 649 open) and kept inside the row, so it never reaches the strip. It
+  keeps the header's label ("Space, <name>"), hint, `deckHit-spaces` target during the deck's pull and
+  `spaces_picked` count. With one space or sync off there is no switcher, and Search Tabs fills the row. With the
+  strip on the left all of it mirrors: [Search Tabs][switcher], the closed field growing right over the switcher to
+  442, the open row 92 to 552, and the strip at 24 to 72.
   A plain iPhone keeps its header as it was: `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
   (`deckGeometry`'s `strip`, from `deckStripOf`): Arc's stack is laid out in the screen beside the strip, as if that
   were the whole screen, so the focused card stays clear of the clock and the sensor. The cards beyond it run on under the strip, and

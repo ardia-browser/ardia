@@ -10,14 +10,14 @@ import { deckHitAccepted, switchDeckIncognito } from "../../state/browse/store";
 import { menuOpenedHaptic } from "../../state/browse/tabMenus";
 import { countUsage } from "../../state/telemetry/telemetry";
 import { noteDeckBarTop, watchDeckBar } from "../../state/toasts/store";
-import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, PressInPlace, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
+import { capsule, chromeLayout, ChromeSurface, controlSize, deckChromeLayout, deckChromeMotion, FieldAccessory, font, iconRoles, iPhoneOr, rolesFor, ToggleIconButton, tabsCurve, tabsLayout, tabsMotion, useReduceMotion, useTheme, type MenuItem, SystemGlyph } from "../ui";
 import { MenuTrigger } from "../ui/MenuTrigger";
 import { PressedGlyph } from "../ui/PressInPlace";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { deckLook } from "./deckLook";
 import { useKeyboardTopFromBottom } from "../search/useKeyboardHeight";
 import { FadingGlyphs, PlusMenuButton, type ChromeFade } from "./ChromeButtons";
-import { besideStrip, deckSpacesMenu, deckSpacesSlot, deckStripSlots, duoFieldReach, type BottomBarLayout } from "../../lib/bottomBarSpan";
+import { besideStrip, DECK_STRIP_SLOTS, deckBarSpan, deckSpacesMenu, deckSpacesSlot, type BottomBarLayout } from "../../lib/bottomBarSpan";
 import { DeckHitTarget } from "./DeckHitTarget";
 import { DeckMoreButton, DeckSpacesSwitcher, useDeckSpaces } from "./DeckHeader";
 import type { MenuOpener } from "../ui/MenuTrigger";
@@ -73,8 +73,6 @@ export function IncognitoSwitch({ incognito, dark, onLongPress, glassShown, glas
 const switchIncognitoSide = () => switchDeckIncognito();
 
 const LIVE_KEYBOARD = Platform.OS === "ios";
-
-const SWITCHER_FOLD_REST = 0.001;
 
 function LiveKeyboardTop({ into }: { into: SharedValue<number> }) {
   const keyboard = useAnimatedKeyboard();
@@ -137,7 +135,7 @@ export function useSearchTabs(shown: boolean, incognito: boolean, onQuery: (need
 
 const TurnTextInput = Animated.createAnimatedComponent(TextInput) as unknown as (props: ComponentProps<typeof TextInput> & { onFocusOnTurn?: unknown }) => ReactNode;
 
-export function SearchTabsField({ search, testID = "deckSearchTabs", style, resting = false, incognito = false, contentStyle, glassShown, glassShownMs, glyphFade }: { search: SearchTabs; testID?: string; style?: StyleProp<ViewStyle>; resting?: boolean; incognito?: boolean; contentStyle?: ComponentProps<typeof Animated.View>["style"] } & ChromeFade) {
+export function SearchTabsField({ search, testID = "deckSearchTabs", style, incognito = false, glassShown, glassShownMs, glyphFade }: { search: SearchTabs; testID?: string; style?: StyleProp<ViewStyle>; incognito?: boolean } & ChromeFade) {
   const roles = useTheme();
   const dark = roles.dark || incognito;
   const { input, text, change, focus, blur } = search;
@@ -156,10 +154,9 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
     else if (claimed) runOnJS(deckHitAccepted)(claimed);
   }, ["onFocus"]);
   return (
-    <Pressable accessible={false} onPress={() => input.current?.focus()} style={style} collapsable={false} pointerEvents={resting ? "none" : "auto"} importantForAccessibility={resting ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={resting}>
+    <Pressable accessible={false} onPress={() => input.current?.focus()} style={style} collapsable={false}>
       <ChromeSurface testID={testID} shape="capsule" cornerRadius={deckLook.fieldCorner} incognito={incognito} dark={dark} shown={glassShown} shownMs={glassShownMs} style={[styles.search, { paddingRight: text ? deckLook.clearTrail : deckChromeLayout.searchTrail }]}>
-        <Animated.View testID={`${testID}Fade`} style={[styles.searchRow, contentStyle]}>
-          <FadingGlyphs testID={`${testID}Content`} fade={glyphFade} style={styles.searchRow}>
+        <FadingGlyphs testID={`${testID}Content`} fade={glyphFade} style={styles.searchRow}>
             <View pointerEvents="none">
               <SystemGlyph testID="deckSearchGlyph" systemName="magnifyingglass" pointSize={14} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={roles.secondaryLabel} />
             </View>
@@ -185,8 +182,7 @@ export function SearchTabsField({ search, testID = "deckSearchTabs", style, rest
             {text ? (
               <FieldAccessory testID="deckSearchClear" icon={iconRoles.clearText} label={actionWords.clearText} color={roles.secondaryLabel} onPress={() => change("")} />
             ) : null}
-          </FadingGlyphs>
-        </Animated.View>
+        </FadingGlyphs>
       </ChromeSurface>
     </Pressable>
   );
@@ -206,10 +202,10 @@ export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, b
     };
   }, [searchOpener, search.input]);
   const row = useRef<ViewInstance>(null);
-  const reach = duoFieldReach(width, layout, chromeLayout.barSideInset);
-  const keyboard = useKeyboardTopFromBottom(shown && (!LIVE_KEYBOARD || reach !== null));
+  const keyboard = useKeyboardTopFromBottom(shown && !LIVE_KEYBOARD);
   const keyboardTop = useSharedValue(0);
-  const barCenterFromBottom = floatingBarCenter(useSafeAreaInsets().bottom, "android");
+  const safeArea = useSafeAreaInsets();
+  const barCenterFromBottom = floatingBarCenter(safeArea.bottom, "android");
   const centerY = iPhoneOr(barCenterY, deckHeight - barCenterFromBottom);
   const rest = iPhoneOr<ViewStyle>({ top: centerY - controlSize.bar / 2 }, { bottom: barCenterFromBottom - controlSize.bar / 2 });
   const focusedNow = useSharedValue(focused);
@@ -238,10 +234,11 @@ export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, b
     if (!LIVE_KEYBOARD) return { transform: [{ translateY: rise.value }] };
     return { transform: [{ translateY: typing.value ? -deckBarLift(centerY, deckHeight, keyboardTop.value) : 0 }] };
   }, [centerY, deckHeight]);
-  const { span, strip } = layout;
+  const { strip } = layout;
+  const span = deckBarSpan(width, layout, safeArea, chromeLayout.barSideInset);
   const rowHits = hits && !strip;
   const rowTop = centerY - controlSize.bar / 2;
-  const slots = strip ? deckStripSlots(strip) : null;
+  const slots = strip ? DECK_STRIP_SLOTS : null;
   const plusTop = slots?.plus ?? 0;
   const besideSlot = (top: number) => (strip ? { bottom: deckHeight - centerY - controlSize.bar / 2 - top, ...besideStrip(strip, width, tabsLayout.menuWidth, deckChromeLayout.menuGap) } : null);
   const plusPlace = besideSlot(plusTop) ?? { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, right: span.right, width: tabsLayout.menuWidth };
@@ -255,61 +252,46 @@ export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, b
       </MenuTrigger>
     </DeckHitTarget>
   );
-  const ends = strip?.ends ?? false;
-  const opened = search.focused || search.text !== "";
-  const reduceMotion = useReduceMotion();
-  const growth = useSharedValue(opened ? 1 : 0);
-  useLayoutEffect(() => {
-    growth.value = reduceMotion ? withTiming(opened ? 1 : 0, { duration: tabsMotion.barCollapseReduced }) : withSpring(opened ? 1 : 0, tabsMotion.barCollapse);
-  }, [opened, reduceMotion]);
-  const reachTo = reach ? (focused && keyboard > 0 ? reach.typing : opened ? reach.open : reach.rest) : 0;
-  const edge = useSharedValue(reachTo);
-  useLayoutEffect(() => {
-    edge.value = reduceMotion ? withTiming(reachTo, { duration: tabsMotion.barCollapseReduced }) : withSpring(reachTo, tabsMotion.barCollapse);
-  }, [reachTo, reduceMotion]);
-  const reachSide = reach?.side ?? null;
-  const grow = useAnimatedStyle(() => (reachSide === "marginLeft" ? { marginLeft: edge.value } : reachSide === "marginRight" ? { marginRight: edge.value } : {}), [reachSide]);
-  const fieldFade = useAnimatedStyle(() => (ends ? { opacity: Math.min(Math.max(growth.value, 0), 1) } : {}), [ends]);
-  const circleFade = useAnimatedStyle(() => ({ opacity: 1 - Math.min(Math.max(growth.value, 0), 1) }));
   const { spaces, current } = useDeckSpaces();
-  const spacesSlot = current && spaces.length > 1 ? deckSpacesSlot(width, layout, chromeLayout.barSideInset, deckChromeLayout.barGap) : null;
+  const spacesSlot = current && spaces.length > 1 ? deckSpacesSlot(width, span, strip, deckChromeLayout.barGap) : null;
+  const covers = spacesSlot?.covered ?? false;
+  const opened = search.focused || search.text !== "";
+  const covered = covers && opened;
+  const reduceMotion = useReduceMotion();
+  const cover = useSharedValue(covered ? 1 : 0);
+  useLayoutEffect(() => {
+    cover.value = reduceMotion ? withTiming(covered ? 1 : 0, { duration: tabsMotion.barCollapseReduced }) : withSpring(covered ? 1 : 0, tabsMotion.barCollapse);
+  }, [covered, reduceMotion]);
   const [switcherWidth, setSwitcherWidth] = useState(0);
-  const naturalWidth = useSharedValue(0);
+  const coverReach = useSharedValue(0);
   const noteSwitcherWidth = (next: number) => {
-    if (next <= 0 || opened) return;
-    naturalWidth.value = next;
+    if (next <= 0) return;
+    coverReach.value = next + deckChromeLayout.barGap;
     setSwitcherWidth(next);
   };
-  const foldGap = spacesSlot?.inRow ? deckChromeLayout.barGap : 0;
-  const switcherRoom = spacesSlot?.maxWidth ?? 0;
-  const foldSide = spacesSlot?.anchor === "end" ? "marginLeft" : "marginRight";
-  const switcherFold = useAnimatedStyle(() => {
-    const folded = Math.min(Math.max(growth.value, 0), 1);
-    const kept = 1 - folded;
-    const gap = { [foldSide]: foldGap * kept };
-    return { opacity: kept, maxWidth: folded > SWITCHER_FOLD_REST && naturalWidth.value > 0 ? naturalWidth.value * kept : switcherRoom, ...gap };
-  }, [foldGap, foldSide, switcherRoom]);
-  const switcherLock = useAnimatedStyle(() => ({ minWidth: growth.value > SWITCHER_FOLD_REST ? naturalWidth.value : 0 }));
+  const coverSide = spacesSlot?.anchor === "end" ? "marginRight" : "marginLeft";
+  const fieldCovers = useAnimatedStyle(() => (covers ? { [coverSide]: -Math.max(cover.value, 0) * coverReach.value } : {}), [covers, coverSide]);
+  const switcherFade = useAnimatedStyle(() => (covers ? { opacity: 1 - Math.min(Math.max(cover.value, 0), 1) } : {}), [covers]);
   const spacesMenu = spacesSlot ? { bottom: deckHeight - centerY + controlSize.bar / 2 + deckChromeLayout.menuGap, ...deckSpacesMenu(spacesSlot, switcherWidth, tabsLayout.menuWidth) } : null;
-  const switcher = spacesSlot && spacesMenu ? (
-    <DeckSpacesSwitcher
-      opener={spacesOpener}
-      height={controlSize.bar}
-      place={spacesMenu}
-      drawn
-      live={hits}
-      originY={rowTop}
-      hitStyle={spacesSlot.inRow ? [styles.switcherInRow, { maxWidth: spacesSlot.maxWidth + foldGap, justifyContent: spacesSlot.anchor === "end" ? "flex-end" : "flex-start" }] : [styles.switcherBeside, { maxWidth: spacesSlot.maxWidth }, spacesSlot.anchor === "end" ? { right: width - spacesSlot.at, alignItems: "flex-end" } : { left: spacesSlot.at, alignItems: "flex-start" }]}
-      fold={switcherFold}
-      lock={switcherLock}
-      folded={opened}
-      onNaturalWidth={noteSwitcherWidth}
-      menusShown={menusShown}
-      onMenu={onMenu}
-      {...fade}
-    />
-  ) : null;
-  const switcherInRow = spacesSlot?.inRow ? switcher : null;
+  const switcher =
+    spacesSlot && spacesMenu ? (
+      <DeckSpacesSwitcher
+        opener={spacesOpener}
+        height={controlSize.bar}
+        place={spacesMenu}
+        drawn
+        live={hits}
+        originY={rowTop}
+        hitStyle={[styles.switcherSlot, { maxWidth: spacesSlot.maxWidth }]}
+        fade={switcherFade}
+        covered={covered}
+        onWidth={noteSwitcherWidth}
+        truncates
+        menusShown={menusShown}
+        onMenu={onMenu}
+        {...fade}
+      />
+    ) : null;
   const plus = (
     <DeckHitTarget control="plus" live={rowHits} originY={rowTop} style={styles.circleHit}>
       <PlusMenuButton width={controlSize.bar} label={incognito ? actionWords.newIncognitoTab : actionWords.newTab} testID="deckBarPlus" dark={dark} incognito={incognito} place={plusPlace} drawn={strip !== null} menusShown={menusShown} onMenu={onMenu} onCloseAll={onCloseAll} {...fade} />
@@ -323,33 +305,28 @@ export function DeckBottomBar({ searchOpener, moreOpener, spacesOpener, shown, b
     watchDeckBar(measure);
     return () => watchDeckBar(null);
   }, []);
+  const searchField = (
+    <DeckHitTarget control="search" live={rowHits} originY={rowTop} style={styles.searchHit}>
+      <SearchTabsField search={search} style={styles.searchHit} incognito={incognito} {...fade} />
+    </DeckHitTarget>
+  );
   return (
     <Animated.View pointerEvents="box-none" style={[styles.place, rest, riseStyle]}>
       {shown ? <FabricCatchUp motion={riseNow} testID="deckBarFabricCatchUp" /> : null}
       {shown && LIVE_KEYBOARD ? <LiveKeyboardTop into={keyboardTop} /> : null}
-      <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingLeft: span.left, paddingRight: span.right }, switcherInRow ? styles.barFolds : null]}>
+      <View ref={row} testID="deckBottomBar" onLayout={measure} pointerEvents="box-none" style={[styles.bar, { paddingLeft: span.left, paddingRight: span.right }]}>
         {strip ? null : incognitoSwitch}
-        {switcherInRow && spacesSlot?.anchor === "start" ? switcherInRow : null}
-        {ends ? (
-          <Animated.View testID="deckSearchGrow" collapsable={false} style={[styles.searchHit, styles.grows, grow]}>
-            <SearchTabsField search={search} style={styles.searchHit} resting={!opened} incognito={incognito} contentStyle={fieldFade} {...fade} />
-            <Animated.View testID="deckSearchCircle" collapsable={false} style={[styles.searchCircle, strip?.side === "left" ? styles.circleLeading : styles.circleTrailing, circleFade]} pointerEvents={opened ? "none" : "auto"} importantForAccessibility={opened ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={opened}>
-              <PressInPlace label="Search Tabs" onPress={() => search.input.current?.focus()} onPressIn={haptics.barPress} style={[styles.centered, styles.circleHit]}>
-                <FadingGlyphs fade={glyphFade} pointerEvents="none" style={styles.centered}>
-                  <SystemGlyph testID="deckSearchCircleGlyph" systemName="magnifyingglass" pointSize={18} weight="medium" fitted name="magnifyingglass" size={deckChromeLayout.searchGlyph} color={roles.label} />
-                </FadingGlyphs>
-              </PressInPlace>
-            </Animated.View>
+        {spacesSlot?.anchor === "start" ? switcher : null}
+        {covers ? (
+          <Animated.View testID="deckSearchCover" collapsable={false} pointerEvents="box-none" style={[styles.searchHit, styles.above, fieldCovers]}>
+            {searchField}
           </Animated.View>
         ) : (
-          <DeckHitTarget control="search" live={rowHits} originY={rowTop} style={styles.searchHit}>
-            <SearchTabsField search={search} style={styles.searchHit} incognito={incognito} {...fade} />
-          </DeckHitTarget>
+          searchField
         )}
-        {switcherInRow && spacesSlot?.anchor === "end" ? switcherInRow : null}
+        {spacesSlot?.anchor === "end" ? switcher : null}
         {strip ? null : plus}
       </View>
-      {spacesSlot && !spacesSlot.inRow ? switcher : null}
       {strip ? <View testID="deckStripPlus" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: plusTop }]}>{plus}</View> : null}
       {strip && slots ? <View testID="deckStripIncognito" pointerEvents="box-none" style={[styles.strip, { left: strip.centerX - controlSize.bar / 2, top: slots.incognito }]}>{incognitoSwitch}</View> : null}
       {strip && slots ? (
@@ -367,14 +344,9 @@ const styles = StyleSheet.create({
   bar: { height: controlSize.bar, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.barGap },
   strip: { position: "absolute", width: controlSize.bar, height: controlSize.bar },
   searchHit: { flex: 1, height: controlSize.bar },
-  grows: { overflow: "hidden", borderRadius: deckLook.fieldCorner },
-  searchCircle: { position: "absolute", top: 0, width: controlSize.bar, height: controlSize.bar },
-  circleLeading: { left: 0 },
-  circleTrailing: { right: 0 },
   circleHit: { width: controlSize.bar, height: controlSize.bar },
-  barFolds: { gap: 0 },
-  switcherInRow: { flexDirection: "row", flexShrink: 1, height: controlSize.bar },
-  switcherBeside: { position: "absolute", top: 0, height: controlSize.bar },
+  above: { zIndex: 1 },
+  switcherSlot: { flexShrink: 1, height: controlSize.bar, alignItems: "flex-start" },
   search: { flex: 1, paddingLeft: deckChromeLayout.searchLead + 3 },
   searchRow: { flex: 1, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.searchSpacing },
   field: { flex: 1, paddingVertical: 0 },

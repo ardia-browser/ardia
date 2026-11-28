@@ -113,30 +113,30 @@ type SwitcherProps = ChromeFade & {
   live: boolean;
   originY: number;
   hitStyle?: StyleProp<ViewStyle>;
-  fold?: FoldStyle;
-  lock?: FoldStyle;
-  folded?: boolean;
-  onNaturalWidth?: (width: number) => void;
+  fade?: FadeStyle;
+  covered?: boolean;
+  onWidth?: (width: number) => void;
+  truncates?: boolean;
   underlay?: boolean;
   menusShown: boolean;
   onMenu?: (open: boolean) => void;
 };
 
-type FoldStyle = ComponentProps<typeof Animated.View>["style"];
+type FadeStyle = ComponentProps<typeof Animated.View>["style"];
 
-export function DeckSpacesSwitcher({ opener, height, place, drawn = false, live, originY, hitStyle, fold, lock, folded = false, onNaturalWidth, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: SwitcherProps) {
+export function DeckSpacesSwitcher({ opener, height, place, drawn = false, live, originY, hitStyle, fade, covered = false, onWidth, truncates = false, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: SwitcherProps) {
   const theme = useTheme();
   const incognito = useIncognito();
   const { current, spaceItems } = useDeckSpaces();
   if (!current) return null;
   const corner = capsule(height);
   const trigger = (
-    <MenuTrigger opener={opener} items={spaceItems} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown || folded} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={corner} place={place} drawn={drawn}>
+    <MenuTrigger opener={opener} items={spaceItems} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown || covered} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={corner} place={place} drawn={drawn}>
       {({ onPress }) => (
         <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={corner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
           <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={[styles.switcherPress, { height }]}>
             <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
-              <SpaceTitle space={current} dark={theme.dark} showsChevron />
+              <SpaceTitle space={current} dark={theme.dark} showsChevron truncates={truncates} />
             </FadingGlyphs>
           </Tappable>
         </ChromeSurface>
@@ -145,11 +145,9 @@ export function DeckSpacesSwitcher({ opener, height, place, drawn = false, live,
   );
   return (
     <DeckHitTarget control="spaces" live={live} originY={originY} style={hitStyle}>
-      {fold ? (
-        <Animated.View testID="deckSwitcherFold" collapsable={false} pointerEvents={folded ? "none" : "box-none"} importantForAccessibility={folded ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={folded} style={[styles.fold, fold]}>
-          <Animated.View testID="deckSwitcherLock" collapsable={false} onLayout={(event) => onNaturalWidth?.(event.nativeEvent.layout.width)} style={[styles.lock, lock]}>
-            {trigger}
-          </Animated.View>
+      {onWidth || fade ? (
+        <Animated.View testID="deckSwitcherFade" collapsable={false} onLayout={(event) => onWidth?.(event.nativeEvent.layout.width)} pointerEvents={covered ? "none" : "box-none"} importantForAccessibility={covered ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={covered} style={fade}>
+          {trigger}
         </Animated.View>
       ) : (
         trigger
@@ -220,8 +218,6 @@ const styles = StyleSheet.create({
   row: { position: "absolute", left: 0, right: 0, height: browseLayout.hitTarget, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.headerGap },
   switcher: { flexShrink: 1 },
   switcherPress: { justifyContent: "center", paddingLeft: deckLook.switcherLead, paddingRight: deckLook.switcherTrail },
-  fold: { flexDirection: "row", flexShrink: 1, overflow: "hidden" },
-  lock: { flexShrink: 1 },
   spacer: { flex: 1 },
   fallback: { fontWeight: "600" },
 });

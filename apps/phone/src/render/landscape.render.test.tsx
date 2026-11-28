@@ -100,9 +100,9 @@ test("in landscape the page bar stays one centred row: the wider side inset on b
 });
 
 const DUO_POSES = [
-  { name: "closed", width: 466, height: 678, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "closed", span: { left: 24, right: 96 }, stripX: 418, plusY: -55, tabsY: 0, deckPlusY: 0, deckMoreY: -110, ends: false },
-  { name: "open", width: 951, height: 669, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "fullyOpen", span: { left: 527, right: 24 }, stripX: 903, plusY: -110, tabsY: -55, deckPlusY: -110, deckMoreY: -165, ends: true },
-] as const satisfies readonly { name: string; width: number; height: number; insets: typeof INSETS; hinge: ScreenHinge; span: { left: number; right: number }; stripX: number; plusY: number; tabsY: number; deckPlusY: number; deckMoreY: number; ends: boolean }[];
+  { name: "closed", width: 466, height: 678, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "closed", span: { left: 24, right: 96 }, stripX: 418, plusY: -55, tabsY: 0, deckSpan: { left: 24, right: 96 }, deckMoreY: -110, ends: false },
+  { name: "open", width: 951, height: 669, insets: { top: 0, bottom: 34, left: 0, right: 84 }, hinge: "fullyOpen", span: { left: 527, right: 24 }, stripX: 903, plusY: -110, tabsY: -55, deckSpan: { left: 399, right: 92 }, deckMoreY: -110, ends: true },
+] as const satisfies readonly { name: string; width: number; height: number; insets: typeof INSETS; hinge: ScreenHinge; span: { left: number; right: number }; stripX: number; plusY: number; tabsY: number; deckSpan: { left: number; right: number }; deckMoreY: number; ends: boolean }[];
 
 function onDuo(pose: (typeof DUO_POSES)[number]) {
   Dimensions.set({ window: { ...PORTRAIT, width: pose.width, height: pose.height }, screen: { ...PORTRAIT, width: pose.width, height: pose.height } });
@@ -139,20 +139,20 @@ for (const pose of DUO_POSES) {
     unmount(page);
   });
 
-  test(`on the ${pose.name} Duo the deck's + and the start page's + and Tabs take the page's strip slots, so nothing jumps between screens`, () => {
+  test(`on the ${pose.name} Duo the deck's + sits on the bar's line with Incognito 55 above it, and the start page's + and Tabs take the page's strip slots`, () => {
     onDuo(pose);
     act(() => browse.useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null, leaving: null }));
     const deck = redesigned(<TabDeck />);
     const deckBar = hosts(deck, "deckBottomBar")[0]!;
-    expect(flat(deckBar)).toMatchObject({ paddingLeft: pose.span.left, paddingRight: pose.span.right });
+    expect(flat(deckBar)).toMatchObject({ paddingLeft: pose.deckSpan.left, paddingRight: pose.deckSpan.right });
     expect(holds(deckBar, "deckBarIncognito")).toBe(false);
     expect(holds(deckBar, "deckBarPlus")).toBe(false);
     const stripPlus = hosts(deck, "deckStripPlus")[0]!;
-    expect(flat(stripPlus)).toMatchObject({ top: pose.deckPlusY, left: pose.stripX - 24, width: 48 });
+    expect(flat(stripPlus)).toMatchObject({ top: 0, left: pose.stripX - 24, width: 48 });
     const stripIncognito = hosts(deck, "deckStripIncognito")[0]!;
     expect(flat(stripIncognito)).toMatchObject({ top: -55, left: pose.stripX - 24, width: 48 });
     expect(holds(stripIncognito, "deckBarIncognito")).toBe(true);
-    if (!pose.ends) expect(holds(deckBar, "deckSearchTabs")).toBe(true);
+    expect(holds(deckBar, "deckSearchTabs")).toBe(true);
     const plus = deck.root.findAll((node) => node.props.testID === "deckBarPlus" && node.props.place)[0]!;
     expect(plus.props.place).toMatchObject({ right: pose.width - pose.stripX + 32 });
     unmount(deck);

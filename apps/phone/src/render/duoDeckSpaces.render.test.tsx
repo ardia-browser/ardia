@@ -19,9 +19,9 @@ const safeArea = require("react-native-safe-area-context") as { useSafeAreaInset
 const PORTRAIT = Dimensions.get("window");
 
 const POSES = [
-  { name: "closed", width: 466, height: 678, hinge: "closed", inRow: true },
-  { name: "open", width: 951, height: 669, hinge: "fullyOpen", inRow: false },
-] as const satisfies readonly { name: string; width: number; height: number; hinge: ScreenHinge; inRow: boolean }[];
+  { name: "closed", width: 466, height: 678, hinge: "closed", row: { left: 24, right: 96 }, cap: 346 * 0.4 - 8, covers: true },
+  { name: "open", width: 951, height: 669, hinge: "fullyOpen", row: { left: 399, right: 92 }, cap: 176, covers: false },
+] as const satisfies readonly { name: string; width: number; height: number; hinge: ScreenHinge; row: { left: number; right: number }; cap: number; covers: boolean }[];
 
 const profile = (syncId: string, name: string): SyncedProfile => ({ syncId, name, color: null, icon: null, isDefault: syncId === "work", theme: null, deviceTabs: [], pinned: { tiles: [], sections: [] }, bookmarks: [], history: [], sendTargets: null });
 
@@ -73,7 +73,9 @@ const settle = () => {
 const hosts = (root: Root, testID: string) => root.root.findAll((node) => node.props.testID === testID && typeof node.type === "string");
 const host = (root: Root, testID: string) => hosts(root, testID)[0];
 const flat = (node: ReactTestInstance) => StyleSheet.flatten(node.props.style) ?? {};
-const shown = (node: ReactTestInstance) => ({ ...flat(node), ...(node.props.style ? getAnimatedStyle(node) : {}) }) as { opacity?: number; maxWidth?: number; minWidth?: number; marginLeft?: number; marginRight?: number };
+const shown = (node: ReactTestInstance) => ({ ...flat(node), ...(node.props.style ? getAnimatedStyle(node) : {}) }) as { opacity?: number; width?: number; maxWidth?: number; marginLeft?: number; marginRight?: number; zIndex?: number };
+const laidOut = (node: ReactTestInstance, width: number) => act(() => node.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width, height: 48 } } }));
+const rowOrder = (bar: ReactTestInstance) => bar.findAll((node) => typeof node.type === "string" && ["deckHit-spaces", "deckSearchCover", "deckHit-search"].includes(node.props.testID)).map((node) => node.props.testID as string);
 const holds = (node: ReactTestInstance, id: string) => node.findAll((inner) => inner.props.testID === id).length > 0;
 const barTop = (bar: ReactTestInstance) => {
   let place: ReactTestInstance | null = bar.parent;
@@ -88,34 +90,29 @@ const menuLabels = (root: Root) => root.root.findAll((node) => node.props.access
 const pickMenu = (root: Root, label: string) => act(() => root.root.findAll((node) => node.props.accessibilityRole === "menuitem" && node.props.accessibilityLabel === label && typeof node.props.onPress === "function")[0]!.props.onPress());
 
 for (const pose of POSES) {
-  test(`on the ${pose.name} Duo the space switcher is a 48-high capsule in the bottom bar, not in a header, with its label, hint and its deck-pull hit target, and its menu drawn above it, clear of the strip`, () => {
+  test(`on the ${pose.name} Duo the bottom row is [space switcher][Search Tabs] from ${pose.row.left} to ${pose.width - pose.row.right}, the switcher a 48-high capsule with its label, hint and deck-pull hit target, and its menu drawn above it, left-aligned with it`, () => {
     onScreen(pose.width, pose.height, pose.hinge, 84);
     const root = deck();
     expect(host(root, "deckHeader")).toBeUndefined();
     const bar = host(root, "deckBottomBar")!;
-    expect(holds(bar, "deckSwitcherGlass")).toBe(pose.inRow);
-    expect(hosts(root, "deckSwitcherGlass").length).toBeGreaterThan(0);
+    expect(flat(bar)).toMatchObject({ paddingLeft: pose.row.left, paddingRight: pose.row.right, gap: 8 });
+    expect(holds(bar, "deckSwitcherGlass")).toBe(true);
     expect(flat(host(root, "deckSwitcherGlass")!)).toMatchObject({ borderRadius: 24 });
     const hit = hosts(root, "deckHit-spaces");
     expect(hit).toHaveLength(1);
-    if (pose.inRow) {
-      expect(flat(bar)).toMatchObject({ paddingLeft: 24, paddingRight: 96, gap: 0 });
-      expect(bar.findAll((node) => typeof node.type === "string" && (node.props.testID === "deckHit-spaces" || node.props.testID === "deckSearchTabs")).map((node) => node.props.testID)).toEqual(["deckHit-spaces", "deckSearchTabs"]);
-      expect(flat(hit[0]!)).toMatchObject({ flexShrink: 1, height: 48, maxWidth: 169 + 8 });
-      expect(shown(host(root, "deckSwitcherFold")!)).toMatchObject({ opacity: 1, marginRight: 8 });
-    } else {
-      expect(flat(bar)).toMatchObject({ paddingLeft: 527, paddingRight: 24 });
-      expect(flat(hit[0]!)).toMatchObject({ position: "absolute", top: 0, right: 951 - 871, height: 48, maxWidth: 200 });
-      expect(951 - 24 - 48).toBe(871 + 8);
-    }
+    expect(flat(hit[0]!)).toMatchObject({ flexShrink: 1, height: 48, maxWidth: pose.cap });
+    expect(rowOrder(bar)).toEqual(pose.covers ? ["deckHit-spaces", "deckSearchCover", "deckHit-search"] : ["deckHit-spaces", "deckHit-search"]);
+    expect(flat(host(root, "deckHit-search")!)).toMatchObject({ flex: 1 });
+    expect(host(root, "deckSearchCircle")).toBeUndefined();
     const press = switcher(root)!;
     expect(press.props.accessibilityHint).toBe("Shows your Mac’s spaces.");
+    laidOut(host(root, "deckSwitcherFade")!, 126);
     const menu = spacesMenu(root);
     expect(menu.props.drawn).toBe(true);
     expect(menu.props.place.top).toBeUndefined();
     expect(menu.props.place.bottom).toBe(pose.height - barTop(bar) + 8);
-    expect(menu.props.place).toMatchObject(pose.inRow ? { left: 24, width: 250 } : { left: 871 - 250, width: 250 });
-    expect(menu.props.place.left + menu.props.place.width).toBeLessThanOrEqual(pose.inRow ? 370 : 871);
+    expect(menu.props.place).toMatchObject({ left: pose.row.left, width: 250 });
+    expect(menu.props.place.left + menu.props.place.width).toBeLessThanOrEqual(pose.width - pose.row.right);
     unmount(root);
   });
 
@@ -131,57 +128,120 @@ for (const pose of POSES) {
     unmount(root);
   });
 
-  test(`on the ${pose.name} Duo the switcher folds away while Search Tabs is focused or holds text, and comes back once it is empty and unfocused`, () => {
+  test(`on the ${pose.name} Duo a long space name truncates with an ellipsis inside the 40% cap, and Search Tabs keeps the rest`, () => {
+    withSpaces([profile("work", "A very long space name that runs on and on"), profile("home", "Home")]);
     onScreen(pose.width, pose.height, pose.hinge, 84);
     const root = deck();
-    act(() => host(root, "deckSwitcherLock")!.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: 110, height: 48 } } }));
-    act(() => field(root).props.onFocus());
-    settle();
-    const fold = () => shown(host(root, "deckSwitcherFold")!);
-    expect(fold().opacity).toBeCloseTo(0, 3);
-    expect(fold().maxWidth).toBeCloseTo(0, 3);
-    if (pose.inRow) expect(fold().marginRight).toBeCloseTo(0, 3);
-    expect(shown(host(root, "deckSwitcherLock")!).minWidth).toBe(110);
-    expect(host(root, "deckSwitcherFold")!.props.pointerEvents).toBe("none");
-    expect(host(root, "deckSwitcherFold")!.props.accessibilityElementsHidden).toBe(true);
-    expect(spacesMenu(root).props.disabled).toBe(true);
-    act(() => field(root).props.onChangeText("site1"));
-    act(() => field(root).props.onBlur());
-    settle();
-    expect(fold().opacity).toBeCloseTo(0, 3);
-    act(() => field(root).props.onChangeText(""));
-    settle();
-    expect(fold().opacity).toBeCloseTo(1, 3);
-    expect(fold().maxWidth).toBe(pose.inRow ? 169 : 200);
-    expect(shown(host(root, "deckSwitcherLock")!).minWidth).toBe(0);
-    if (pose.inRow) expect(fold().marginRight).toBeCloseTo(8, 3);
-    expect(host(root, "deckSwitcherFold")!.props.pointerEvents).toBe("box-none");
-    expect(spacesMenu(root).props.disabled).toBe(false);
+    expect(flat(host(root, "deckHit-spaces")!).maxWidth).toBeCloseTo(pose.cap, 6);
+    expect(pose.width - pose.row.left - pose.row.right - pose.cap - 8).toBeGreaterThanOrEqual((pose.width - pose.row.left - pose.row.right) * 0.6 - 1e-9);
+    const name = hosts(root, "spaceTitleName")[0]!;
+    expect(name.props.numberOfLines).toBe(1);
+    expect(name.props.ellipsizeMode).toBe("tail");
+    expect(flat(name)).toMatchObject({ flexShrink: 1, minWidth: 0 });
+    let row: ReactTestInstance | null = name.parent;
+    while (row && typeof row.type !== "string") row = row.parent;
+    expect(flat(row!)).toMatchObject({ flexDirection: "row", flexShrink: 1 });
     unmount(root);
   });
 
-  test(`on the ${pose.name} Duo with one space, or with sync off, there is no switcher and Search Tabs keeps the whole row`, () => {
+  test(`on the ${pose.name} Duo with one space, or with sync off, there is no switcher and Search Tabs fills the row`, () => {
     for (const [profiles, enabled] of [[[profile("work", "Work")], true], [[profile("work", "Work"), profile("home", "Home")], false]] as const) {
       withSpaces([...profiles], enabled);
       onScreen(pose.width, pose.height, pose.hinge, 84);
       const root = deck();
       expect(host(root, "deckHit-spaces")).toBeUndefined();
       expect(host(root, "deckSwitcherGlass")).toBeUndefined();
+      expect(host(root, "deckSearchCover")).toBeUndefined();
       expect(host(root, "deckHeader")).toBeUndefined();
-      expect(flat(host(root, "deckBottomBar")!)).toMatchObject({ gap: 8 });
-      expect(flat(host(root, "deckBottomBar")!)).toMatchObject(pose.inRow ? { paddingLeft: 24, paddingRight: 96 } : { paddingLeft: 527, paddingRight: 24 });
+      expect(flat(host(root, "deckBottomBar")!)).toMatchObject({ paddingLeft: pose.row.left, paddingRight: pose.row.right });
+      expect(flat(host(root, "deckHit-search")!)).toMatchObject({ flex: 1 });
       unmount(root);
     }
   });
+
+  test(`on the ${pose.name} Duo the strip holds three circles: ··· 110 and Incognito 55 above + on the bar's line, and no magnifier`, () => {
+    onScreen(pose.width, pose.height, pose.hinge, 84);
+    const root = deck();
+    const left = pose.width - 48 - 24;
+    expect(flat(host(root, "deckStripMore")!)).toMatchObject({ top: -110, left });
+    expect(flat(host(root, "deckStripIncognito")!)).toMatchObject({ top: -55, left });
+    expect(flat(host(root, "deckStripPlus")!)).toMatchObject({ top: 0, left });
+    expect(host(root, "deckSearchCircle")).toBeUndefined();
+    expect(host(root, "deckSearchGrow")).toBeUndefined();
+    unmount(root);
+  });
 }
 
-test("on the open Duo the strip holds four slots: ··· 165, + 110 and Incognito 55 above the magnifier on the bar's line", () => {
+test("on the closed Duo, while Search Tabs is focused or holds text, the field grows left over the switcher to 24, drawn above it, its right edge still; the switcher fades out underneath and keeps its slot; it all comes back once the field is empty and unfocused", () => {
+  onScreen(466, 678, "closed", 84);
+  const root = deck();
+  laidOut(host(root, "deckSwitcherFade")!, 126);
+  const cover = () => shown(host(root, "deckSearchCover")!);
+  const fade = () => shown(host(root, "deckSwitcherFade")!);
+  const bar = host(root, "deckBottomBar")!;
+  expect(cover()).toMatchObject({ flex: 1, zIndex: 1 });
+  expect(cover().marginLeft).toBeCloseTo(0, 3);
+  expect(fade().opacity).toBeCloseTo(1, 3);
+  act(() => field(root).props.onFocus());
+  act(() => jest.advanceTimersByTime(48));
+  expect(cover().marginLeft!).toBeLessThan(0);
+  expect(cover().marginLeft!).toBeGreaterThan(-134);
+  expect(fade().opacity!).toBeLessThan(1);
+  settle();
+  expect(cover().marginLeft).toBeCloseTo(-(126 + 8), 3);
+  expect(24 + 126 + 8 + cover().marginLeft!).toBeCloseTo(24, 3);
+  expect(cover().marginRight).toBeUndefined();
+  expect(fade().opacity).toBeCloseTo(0, 3);
+  expect(fade().width).toBeUndefined();
+  expect(fade().maxWidth).toBeUndefined();
+  expect(flat(host(root, "deckHit-spaces")!)).toMatchObject({ maxWidth: 346 * 0.4 - 8 });
+  expect(flat(bar)).toMatchObject({ paddingLeft: 24, paddingRight: 96, gap: 8 });
+  expect(rowOrder(bar)).toEqual(["deckHit-spaces", "deckSearchCover", "deckHit-search"]);
+  expect(host(root, "deckSwitcherFade")!.props.pointerEvents).toBe("none");
+  expect(host(root, "deckSwitcherFade")!.props.accessibilityElementsHidden).toBe(true);
+  expect(spacesMenu(root).props.disabled).toBe(true);
+  act(() => field(root).props.onChangeText("site1"));
+  act(() => field(root).props.onBlur());
+  settle();
+  expect(cover().marginLeft).toBeCloseTo(-134, 3);
+  expect(fade().opacity).toBeCloseTo(0, 3);
+  act(() => field(root).props.onChangeText(""));
+  settle();
+  expect(cover().marginLeft).toBeCloseTo(0, 3);
+  expect(fade().opacity).toBeCloseTo(1, 3);
+  expect(host(root, "deckSwitcherFade")!.props.pointerEvents).toBe("box-none");
+  expect(spacesMenu(root).props.disabled).toBe(false);
+  unmount(root);
+});
+
+test("on the closed Duo with the strip on the left the row mirrors: [Search Tabs][switcher], the field growing right over it to 442", () => {
+  Dimensions.set({ window: { ...PORTRAIT, width: 466, height: 678 }, screen: { ...PORTRAIT, width: 466, height: 678 } });
+  act(() => setRootSize(466, 678));
+  jest.spyOn(safeArea, "useSafeAreaInsets").mockImplementation(() => ({ top: 0, bottom: 34, left: 84, right: 0 }));
+  act(() => useScreenLayout.setState({ hinge: "closed" }));
+  const root = deck();
+  laidOut(host(root, "deckSwitcherFade")!, 126);
+  expect(rowOrder(host(root, "deckBottomBar")!)).toEqual(["deckSearchCover", "deckHit-search", "deckHit-spaces"]);
+  act(() => field(root).props.onFocus());
+  settle();
+  expect(shown(host(root, "deckSearchCover")!).marginRight).toBeCloseTo(-134, 3);
+  expect(shown(host(root, "deckSearchCover")!).zIndex).toBe(1);
+  unmount(root);
+});
+
+test("on the open Duo the switcher stays put and visible while searching, and Search Tabs keeps its 326 from 533 to 859", () => {
   onScreen(951, 669, "fullyOpen", 84);
   const root = deck();
-  expect(flat(host(root, "deckStripMore")!)).toMatchObject({ top: -165, left: 879 });
-  expect(flat(host(root, "deckStripPlus")!)).toMatchObject({ top: -110, left: 879 });
-  expect(flat(host(root, "deckStripIncognito")!)).toMatchObject({ top: -55, left: 879 });
-  expect(flat(host(root, "deckSearchCircle")!)).toMatchObject({ right: 0, width: 48 });
+  laidOut(host(root, "deckSwitcherFade")!, 126);
+  act(() => field(root).props.onFocus());
+  act(() => field(root).props.onChangeText("site"));
+  settle();
+  expect(host(root, "deckSearchCover")).toBeUndefined();
+  expect(shown(host(root, "deckSwitcherFade")!).opacity ?? 1).toBe(1);
+  expect(host(root, "deckSwitcherFade")!.props.pointerEvents).toBe("box-none");
+  expect(flat(host(root, "deckBottomBar")!)).toMatchObject({ paddingLeft: 399, paddingRight: 92 });
+  expect(951 - 92 - (399 + 126 + 8)).toBe(326);
+  expect(spacesMenu(root).props.disabled).toBe(false);
   unmount(root);
 });
 
@@ -204,6 +264,8 @@ test("on a Duo the deck gives its geometry no header height, so the card band's 
   expect(flat(host(phone, "deckSwitcherGlass")!)).toMatchObject({ borderRadius: 22 });
   expect(spacesMenu(phone).props.place).toEqual({ top: 62 + deckHeaderBottom() + 8, left: 24, width: 250 });
   expect(spacesMenu(phone).props.drawn).toBe(false);
+  expect(host(phone, "deckSwitcherFade")).toBeUndefined();
+  expect(flat(hosts(phone, "spaceTitleName")[0]!).flexShrink).toBeUndefined();
   const phoneGeometry = deckGeometry(402, 874, 62, 34, 0, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc");
   expect(flat(hosts(phone, "deckCard")[0]!).width).toBeCloseTo(phoneGeometry.cardWidth, 1);
   unmount(phone);

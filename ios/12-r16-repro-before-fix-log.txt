@@ -1,0 +1,7 @@
+# Pre-fix place() with the .grow probe (fullpage-r16repro.app, 6d6974f84 + .grow mode)
+2026-11-28 08:28:58.980 Df Ardia[870:324cf8] (Foundation) ARDIA build 6d6974f84c7d23700ad2c53a657b3f4b59bb765f dirty: no from the export of the commit; native 6d6974f84c7d23700ad2c53a657b3f4b59bb765f, dirty (packages/phone/ios/FullPageScreenshots.swift)
+2026-11-28 08:29:00.242 Df Ardia[870:324cf8] (Foundation) PAGELAB fullpage probe listening for com.ardia.browser.ios.lab.fullPage and .navigate, .scroll, .sheet, .grow
+2026-11-28 08:30:29.541 Df Ardia[870:324cf8] (Foundation) PAGELAB fullpage asked for a PDF
+2026-11-28 08:30:29.541 Df Ardia[870:324cf8] (Foundation) PAGELAB fullpage rendering https://en.wikipedia.org/wiki/Lighthouse offset 124
+2026-11-28 08:30:29.547 Df Ardia[870:324cf8] (Foundation) PAGELAB fullpage probe 1: grow while the PDF renders, now https://en.wikipedia.org/wiki/Lighthouse offset 4904
+2026-11-28 08:30:29.684 Df Ardia[870:324cf8] (Foundation) PAGELAB fullpage probe 1: delegate installed yes, answered 1290363 bytes, 1 pages of 402x2744, page 0 rect 0,0 402x0 (top 2744); page now https://en.wikipedia.org/wiki/Lighthouse offset 4904; written to <container>/Documents/FullPageProbe/probe-1.pdf

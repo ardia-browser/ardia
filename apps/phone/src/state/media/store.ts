@@ -13,11 +13,20 @@ import { currentTabs, useTabs } from "../tabs/store";
 import { findTab } from "../tabs/tabsState";
 import { countUsage } from "../telemetry/telemetry";
 import { useVoice } from "../voice/store";
-import { frontMediaOnSide, miniPlayerShows, shelve, withOptimisticState, type Dismissal, type MediaShelf, type PlayingMedia, type SkipControl } from "./nowPlaying";
+import { frontMediaOnSide, miniPlayerShows, shelve, withPending, type Dismissal, type MediaShelf, type PendingState, type PlayingMedia, type SkipControl } from "./nowPlaying";
 
-type MediaState = { shelf: MediaShelf; dismissed: Dismissal; counted: string | null };
+type MediaState = { shelf: MediaShelf; pending: Readonly<Record<string, PendingState>>; dismissed: Dismissal; counted: string | null };
 
-export const useMedia = create<MediaState>()(() => ({ shelf: {}, dismissed: null, counted: null }));
+export const useMedia = create<MediaState>()(() => ({ shelf: {}, pending: {}, dismissed: null, counted: null }));
+
+export const PENDING_CONFIRM_MS = 2_000;
+
+const dropPending = (pageId: string) =>
+  useMedia.setState((state) => {
+    if (!state.pending[pageId]) return state;
+    const { [pageId]: _done, ...pending } = state.pending;
+    return { pending };
+  });
 
 export const mediaOffered = () => pages.reportsMedia();
 
@@ -30,7 +39,8 @@ export const setMiniPlayerRoom = (room: number) => {
 export function takeMediaEvent(event: PageMediaEvent) {
   useMedia.setState((state) => {
     const shelf = shelve(state.shelf, event);
-    return shelf === state.shelf ? state : { shelf };
+    const { [event.pageId]: _answered, ...pending } = state.pending;
+    return shelf === state.shelf && !state.pending[event.pageId] ? state : { shelf, pending };
   });
 }
 
@@ -55,22 +65,18 @@ const countFor = (media: PlayingMedia, field: Counted) => {
   if (!media.isPrivate) countUsage(field);
 };
 
-const tellPage = (media: PlayingMedia, command: PageMediaCommand, seconds?: number) => {
-  void pages.mediaCommand(media.pageId, command, seconds).catch(() => false);
-};
-
-function showOptimistic(media: PlayingMedia, state: "playing" | "paused") {
-  useMedia.setState((now) => {
-    const current = now.shelf[media.pageId];
-    if (!current) return now;
-    return { shelf: { ...now.shelf, [media.pageId]: withOptimisticState(current, state, Date.now()) } };
-  });
-}
+const tellPage = (media: PlayingMedia, command: PageMediaCommand, seconds?: number): Promise<boolean> => pages.mediaCommand(media.pageId, command, seconds).catch(() => false);
 
 export function toggleMediaPlayback(media: PlayingMedia) {
   const next = media.state === "playing" ? "paused" : "playing";
-  showOptimistic(media, next);
-  tellPage(media, next === "playing" ? "play" : "pause");
+  const until = Date.now() + PENDING_CONFIRM_MS;
+  useMedia.setState((state) => ({ pending: { ...state.pending, [media.pageId]: { state: next, until } } }));
+  setTimeout(() => {
+    if (useMedia.getState().pending[media.pageId]?.until === until) dropPending(media.pageId);
+  }, PENDING_CONFIRM_MS);
+  void tellPage(media, next === "playing" ? "play" : "pause").then((accepted) => {
+    if (!accepted && useMedia.getState().pending[media.pageId]?.until === until) dropPending(media.pageId);
+  });
   countFor(media, "mini_player_controls_used");
 }
 
@@ -125,7 +131,9 @@ export function useMiniPlayer(): MiniPlayerView {
   const enabled = usePreferences((p) => p.miniPlayer) && mediaOffered();
   const everySpace = usePreferences((p) => p.miniPlayerEverySpace);
   const skipSeconds = usePreferences((p) => p.mediaSkipSeconds);
-  const shelf = useMedia((s) => s.shelf);
+  const confirmed = useMedia((s) => s.shelf);
+  const pending = useMedia((s) => s.pending);
+  const shelf = withPending(confirmed, pending, Date.now());
   const dismissed = useMedia((s) => s.dismissed);
   const surface = useBrowse((s) => s.surface);
   const sheet = useBrowse((s) => s.sheet);

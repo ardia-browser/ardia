@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PageMediaEvent } from "@ardia/phone-native";
-import { frontMedia, frontMediaOnSide, mediaFromEvent, miniPlayerLines, miniPlayerShows, positionAt, shelve, skipControls, withOptimisticState, type MiniPlayerScene, type PlayingMedia } from "./nowPlaying.ts";
+import { controlsThatFit, frontMedia, frontMediaOnSide, mediaFromEvent, withPending, miniPlayerLines, miniPlayerShows, positionAt, shelve, skipControls, withOptimisticState, type MiniPlayerScene, type PlayingMedia } from "./nowPlaying.ts";
 
 const event = (pageId: string, fields: Partial<PageMediaEvent> = {}): PageMediaEvent => ({
   name: "pages.media",
@@ -118,4 +118,23 @@ test("the lines show the media title and artist, falling back to the tab title a
 test("PlayingMedia never carries a page address", () => {
   const keys = Object.keys(media("a")) as (keyof PlayingMedia)[];
   assert.equal(keys.some((key) => /url$/i.test(key) && key !== "artworkUrl"), false);
+});
+
+test("every control keeps a 44 pt target: the skip buttons give way to the title on narrow plates and at large text", () => {
+  const all = { back: true, forward: true, pictureInPicture: true };
+  assert.deepEqual(controlsThatFit(480, 1, all), all);
+  assert.deepEqual(controlsThatFit(354, 1, { back: true, forward: true, pictureInPicture: false }), { back: true, forward: true, pictureInPicture: false });
+  assert.deepEqual(controlsThatFit(354, 1, all), { back: false, forward: true, pictureInPicture: true });
+  assert.deepEqual(controlsThatFit(327, 1, { back: true, forward: true, pictureInPicture: false }), { back: false, forward: true, pictureInPicture: false });
+  assert.deepEqual(controlsThatFit(354, 3, all), { back: false, forward: false, pictureInPicture: true });
+  assert.deepEqual(controlsThatFit(250, 3, all), { back: false, forward: false, pictureInPicture: false });
+});
+
+test("a pressed state shows at once, gives way to the page's next report, and lapses on its own", () => {
+  const shelf = { a: media("a", { state: "playing", position: 10, at: 0 }) };
+  const held = withPending(shelf, { a: { state: "paused", until: 2_000 } }, 1_000);
+  assert.equal(held.a?.state, "paused");
+  assert.equal(withPending(shelf, { a: { state: "paused", until: 2_000 } }, 2_500), shelf);
+  assert.equal(withPending(shelf, { a: { state: "playing", until: 2_000 } }, 1_000), shelf);
+  assert.equal(withPending(shelf, { gone: { state: "paused", until: 2_000 } }, 1_000), shelf);
 });

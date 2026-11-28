@@ -113,3 +113,31 @@ export function miniPlayerLines(media: Pick<PlayingMedia, "title" | "artist">, t
   const artist = media.artist.trim();
   return { title, detail: artist && artist !== title ? artist : host };
 }
+
+export const MINI_PLAYER_TARGET = 44;
+
+export type ControlSet = { back: boolean; forward: boolean; pictureInPicture: boolean };
+
+export function controlsThatFit(plateWidth: number, fontScale: number, offered: ControlSet): ControlSet {
+  const titleRoom = 96 * Math.min(Math.max(fontScale, 1), 1.35);
+  const lead = 8 + 40 + 10 + titleRoom + 4 + 6;
+  const shown = { ...offered };
+  const needs = () => lead + MINI_PLAYER_TARGET * (2 + Number(shown.back) + Number(shown.forward) + Number(shown.pictureInPicture));
+  if (needs() > plateWidth && shown.back) shown.back = false;
+  if (needs() > plateWidth && shown.forward) shown.forward = false;
+  if (needs() > plateWidth && shown.pictureInPicture) shown.pictureInPicture = false;
+  return shown;
+}
+
+export type PendingState = { state: "playing" | "paused"; until: number };
+
+export function withPending(shelf: MediaShelf, pending: Readonly<Record<string, PendingState>>, now: number): MediaShelf {
+  let next: Record<string, PlayingMedia> | null = null;
+  for (const [pageId, hold] of Object.entries(pending)) {
+    const media = shelf[pageId];
+    if (!media || hold.until <= now || media.state === hold.state) continue;
+    next ??= { ...shelf };
+    next[pageId] = withOptimisticState(media, hold.state, now);
+  }
+  return next ?? shelf;
+}

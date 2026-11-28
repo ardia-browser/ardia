@@ -1,6 +1,7 @@
 import { getAnimatedStyle } from "react-native-reanimated";
-import { act } from "react-test-renderer";
+import { act, type ReactTestRenderer } from "react-test-renderer";
 import { Surfaces } from "../App";
+import { PageSurface } from "../components/browsing/PageSurface";
 import { sendDeckCommand } from "../state/browse/deckCommands";
 import { deckPull, PULL_STAGE } from "../state/browse/deckPull";
 import { useBrowse } from "../state/browse/store";
@@ -9,8 +10,28 @@ import { currentTabs } from "../state/tabs/store";
 import * as telemetry from "../state/telemetry/telemetry";
 import { framesUntil, landOpeningPage, renderSurface, unmount, withTabs } from "../../test/render/harness";
 
-beforeEach(() => jest.useFakeTimers());
+let mockReportsHosted = false;
+
+jest.mock("@ardia/phone-native", () => ({ ...jest.requireActual<object>("@ardia/phone-native"), pageReportsHosted: () => mockReportsHosted }));
+
+beforeEach(() => {
+  mockReportsHosted = false;
+  jest.useFakeTimers();
+});
 afterEach(() => jest.useRealTimers());
+
+const pageViewOf = (root: ReactTestRenderer, id: string) => root.root.findAll((node) => node.props.pageId === id && typeof node.props.onPageEvent === "function")[0]!;
+const reportHosted = (root: ReactTestRenderer, id: string) => act(() => pageViewOf(root, id).props.onPageEvent({ nativeEvent: { name: "hosted" } }));
+const cardLandsWithinCap = () => act(() => jest.advanceTimersByTime(160));
+
+function openFocusedCard() {
+  withTabs(3);
+  useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
+  const root = renderSurface(<Surfaces />);
+  act(() => sendDeckCommand({ kind: "openFocused" }));
+  framesUntil(() => useBrowse.getState().opening !== null, 12);
+  return { root, id: useBrowse.getState().opening! };
+}
 
 
 test("opening a card makes no page while the card grows, so the mount can't stall the growth; the page is made once the card has landed, and that same page stays in front, never made twice", () => {
@@ -129,22 +150,107 @@ test("the deck takes taps and a card's page takes over as soon as its spring is 
   unmount(root);
 });
 
-test("card_opens_waited counts only an open whose page didn't lay out within its cap, not every pulled open whose page is made as its card lands", () => {
+test("card_opens_waited counts only an open whose page wasn't in place within its cap, not every pulled open whose page is made as its card lands, whether or not the native page view reports hosting", () => {
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
-  for (const laysOut of [true, false]) {
-    withTabs(3);
-    useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
-    const root = renderSurface(<Surfaces />);
-    act(() => sendDeckCommand({ kind: "openFocused" }));
-    let landed = false;
-    for (let elapsed = 0; elapsed < 1000 && useBrowse.getState().surface === "deck"; elapsed += 16) {
-      act(() => jest.advanceTimersByTime(16));
-      if (laysOut && !landed && useBrowse.getState().opening !== null) landed = landOpeningPage(root);
+  for (const reportsHosted of [false, true]) {
+    for (const laysOut of [true, false]) {
+      mockReportsHosted = reportsHosted;
+      withTabs(3);
+      useBrowse.setState({ surface: "deck", sheet: null, deckEntrance: null, frozenOrder: null, opening: null });
+      const root = renderSurface(<Surfaces />);
+      act(() => sendDeckCommand({ kind: "openFocused" }));
+      let landed = false;
+      for (let elapsed = 0; elapsed < 1000 && useBrowse.getState().surface === "deck"; elapsed += 16) {
+        act(() => jest.advanceTimersByTime(16));
+        const opening = useBrowse.getState().opening;
+        if (!laysOut || landed || opening === null) continue;
+        landed = landOpeningPage(root);
+        if (landed && reportsHosted) reportHosted(root, opening);
+      }
+      expect(useBrowse.getState().surface).toBe("browsing");
+      expect(counted.mock.calls.filter(([name]) => name === "card_opens_waited")).toHaveLength(laysOut ? 0 : 1);
+      counted.mockClear();
+      unmount(root);
+      act(() => jest.runOnlyPendingTimers());
     }
-    expect(useBrowse.getState().surface).toBe("browsing");
-    expect(counted.mock.calls.filter(([name]) => name === "card_opens_waited")).toHaveLength(laysOut ? 0 : 1);
-    counted.mockClear();
+  }
+});
+
+test("where the native page view reports hosting, a laid-out page whose web view isn't in place yet keeps the grown card in front until it reports, so the deck can't show through an empty page layer (#4546); without that report the page takes over on layout alone", () => {
+  for (const reportsHosted of [true, false]) {
+    mockReportsHosted = reportsHosted;
+    const { root, id } = openFocusedCard();
+    expect(landOpeningPage(root)).toBe(true);
+    cardLandsWithinCap();
+    expect(useBrowse.getState().surface).toBe(reportsHosted ? "deck" : "browsing");
+    if (reportsHosted) {
+      expect(deckPull.pageLive.value).toBe(false);
+      reportHosted(root, id);
+    }
+    framesUntil(() => deckPull.pageLive.value, 4);
+    expect(useBrowse.getState()).toMatchObject({ surface: "browsing", opening: null });
+    expect(deckPull.pageLive.value).toBe(true);
     unmount(root);
     act(() => jest.runOnlyPendingTimers());
   }
+});
+
+test("a laid-out page whose native view never reports hosting opens once on the cap, counts once, and a report after that changes nothing", () => {
+  mockReportsHosted = true;
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const { root, id } = openFocusedCard();
+  expect(landOpeningPage(root)).toBe(true);
+  cardLandsWithinCap();
+  expect(useBrowse.getState().surface).toBe("deck");
+  expect(deckPull.pageLive.value).toBe(false);
+  framesUntil(() => useBrowse.getState().surface === "browsing", 20);
+  expect(useBrowse.getState()).toMatchObject({ surface: "browsing", opening: null });
+  const waited = () => counted.mock.calls.filter(([name]) => name === "card_opens_waited").length;
+  expect(waited()).toBe(1);
+  const settled = useBrowse.getState();
+  reportHosted(root, id);
+  act(() => jest.advanceTimersByTime(500));
+  expect(waited()).toBe(1);
+  expect(useBrowse.getState()).toMatchObject({ surface: settled.surface, opening: settled.opening, arriving: settled.arriving });
+  expect(currentTabs().selectedId).toBe(id);
+  counted.mockRestore();
+  unmount(root);
+});
+
+test("a page whose native view reports hosting before its layout arrives takes the card's place on that layout, not on the cap", () => {
+  mockReportsHosted = true;
+  const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  const { root, id } = openFocusedCard();
+  reportHosted(root, id);
+  cardLandsWithinCap();
+  expect(useBrowse.getState().surface).toBe("deck");
+  expect(landOpeningPage(root)).toBe(true);
+  framesUntil(() => useBrowse.getState().surface === "browsing", 4);
+  expect(useBrowse.getState().surface).toBe("browsing");
+  expect(counted.mock.calls.filter(([name]) => name === "card_opens_waited")).toHaveLength(0);
+  counted.mockRestore();
+  unmount(root);
+});
+
+test("a hosting report from an earlier mount of the same tab, arriving after the tab's new page is made, can't release the open: only the new page's own report does", () => {
+  mockReportsHosted = true;
+  withTabs(3);
+  const earlierReports = new Map<string, (event: { nativeEvent: { name: "hosted" } }) => void>();
+  for (const tab of currentTabs().open) {
+    const earlier = renderSurface(<PageSurface tab={tab} toneBottom={0} />);
+    earlierReports.set(tab.id, pageViewOf(earlier, tab.id).props.onPageEvent);
+    reportHosted(earlier, tab.id);
+    unmount(earlier);
+  }
+  act(() => jest.runOnlyPendingTimers());
+  const { root, id } = openFocusedCard();
+  act(() => earlierReports.get(id)!({ nativeEvent: { name: "hosted" } }));
+  expect(landOpeningPage(root)).toBe(true);
+  cardLandsWithinCap();
+  expect(useBrowse.getState().surface).toBe("deck");
+  expect(deckPull.pageLive.value).toBe(false);
+  reportHosted(root, id);
+  framesUntil(() => deckPull.pageLive.value, 4);
+  expect(useBrowse.getState().surface).toBe("browsing");
+  unmount(root);
 });

@@ -242,6 +242,7 @@ final class PageView: ExpoView {
     Task { @MainActor [weak page] in page?.pageShown() }
     showLastFrame(of: webView)
     if PhoneTestBuild.isOn { NSLog("PAGELAB time page hosted %.0f", Date().timeIntervalSince1970 * 1000) }
+    onPageEvent(["name": "hosted"])
     applyObscuredInsets()
     gestures.attach(webView, page: page)
     scrollObservation = webView.scrollView.observe(\.contentOffset, options: []) { [weak self] _, _ in

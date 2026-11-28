@@ -78,6 +78,7 @@ export type PageViewProps = ViewProps & {
   onPageTone?: (tone: PageTone) => void;
   onPageError?: (error: PageError) => void;
   onPageDrawn?: (document?: number) => void;
+  onPageHosted?: () => void;
   coverNativeId?: string;
   onPageCoverHidden?: (reason: "drawn" | "cap", found: boolean, cover?: string, document?: number) => void;
 };
@@ -233,6 +234,7 @@ export type PageEventPayload =
       Omit<PageNavigationState, "url"> & { url?: string })
   | { name: "tone"; top?: string; bottom?: string; barDark?: boolean }
   | { name: "drawn"; document?: number }
+  | { name: "hosted" }
   | { name: "coverHidden"; reason: "drawn" | "cap"; found: boolean; cover?: string; document?: number }
   | { name: "swipedPastHistory"; direction: PageSwipeDirection }
   | ({ name: "error" } & PageError);

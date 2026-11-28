@@ -853,10 +853,10 @@ export const TabDeck = memo(function TabDeck() {
     const state = { id, ready: false, landed: false };
     prepared.current = state;
     beginOpeningTab(id, veiled, openPath.current === "coveringCard" ? coverFrame(g).width : g.cardWidth);
-    const ready = (laidOut: boolean) => {
+    const ready = (inPlace: boolean) => {
       if (prepared.current !== state || state.ready) return;
       state.ready = true;
-      if (!laidOut && openPath.current !== "coveringCard" && !tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
+      if (!inPlace && openPath.current !== "coveringCard" && !tabs.get(id)?.isPrivate) countUsage("card_opens_waited");
       if (state.landed) finishOpen(id);
     };
     whenPageLaidOut(id, HANDOVER_CAP_MS, ready);

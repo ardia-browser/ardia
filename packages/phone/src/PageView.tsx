@@ -33,18 +33,22 @@ const NativePageView = requireNativeViewManager<NativeProps>("ArdiaPhonePageView
 
 export const closePage = (pageId: string) => pages.close(pageId);
 
-const pageModule = requireOptionalNativeModule<{ obscuresInsets?: boolean; reportsDrawn?: boolean }>("ArdiaPhonePageView");
+const pageModule = requireOptionalNativeModule<{ obscuresInsets?: boolean; reportsDrawn?: boolean; reportsHosted?: boolean }>("ArdiaPhonePageView");
 
 const obscuresInsets = pageModule?.obscuresInsets === true;
 
 const reportsDrawn = pageModule?.reportsDrawn === true;
 
+const reportsHosted = pageModule?.reportsHosted === true;
+
 export const pageObscuresInsets = () => obscuresInsets;
 
 export const pageReportsDrawn = () => reportsDrawn;
 
+export const pageReportsHosted = () => reportsHosted;
+
 export const PageView = forwardRef<PageViewHandle, PageViewProps>(function PageView(props, ref) {
-  const { onPageState, onPageTone, onPageError, onPageDrawn, onPageCoverHidden, onSwipedPastHistory, coverNativeId, toneInsets, bottomInsetTransitionMs, summaryBottomInset, summaryLook, obscuredInsets, obscuredColors, surfaceColor, ...rest } = props;
+  const { onPageState, onPageTone, onPageError, onPageDrawn, onPageHosted, onPageCoverHidden, onSwipedPastHistory, coverNativeId, toneInsets, bottomInsetTransitionMs, summaryBottomInset, summaryLook, obscuredInsets, obscuredColors, surfaceColor, ...rest } = props;
   const native = useRef<NativeHandle>(null);
   useImperativeHandle(
     ref,
@@ -65,6 +69,8 @@ export const PageView = forwardRef<PageViewHandle, PageViewProps>(function PageV
       onPageTone?.({ top: nativeEvent.top ?? null, bottom: nativeEvent.bottom ?? null, ...(typeof nativeEvent.barDark === "boolean" ? { barDark: nativeEvent.barDark } : {}) });
     } else if (nativeEvent.name === "drawn") {
       onPageDrawn?.(typeof nativeEvent.document === "number" ? nativeEvent.document : undefined);
+    } else if (nativeEvent.name === "hosted") {
+      onPageHosted?.();
     } else if (nativeEvent.name === "coverHidden") {
       onPageCoverHidden?.(nativeEvent.reason, nativeEvent.found, typeof nativeEvent.cover === "string" ? nativeEvent.cover : undefined, typeof nativeEvent.document === "number" ? nativeEvent.document : undefined);
     } else if (nativeEvent.name === "swipedPastHistory") {

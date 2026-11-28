@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet } from "react-native";
-import { ARRIVAL_COVER_ID, notePageHosted, OPENING_COVER_ID, pageCoverHidden, pageDrawn, pageOpenFailed, pageStateChanged, pageToneChanged, swipedPastHistory } from "../../state/browse/store";
+import { ARRIVAL_COVER_ID, forgetNativeHosting, notePageHosted, OPENING_COVER_ID, pageCoverHidden, pageDrawn, pageHostedNatively, pageOpenFailed, pageStateChanged, pageToneChanged, swipedPastHistory } from "../../state/browse/store";
 import { useArrivalCover, useNavigation, useOpeningCover, usePageArriving, usePageCovered, usePageTone, usePageVeiled } from "../../state/browse/hooks";
 import { shownTone } from "../../lib/pageTone";
 import { destinationPageFailed, useDestinationCover } from "../../state/browse/destination";
@@ -52,7 +52,19 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
   );
   const onPageCoverHidden = useCallback((reason: "drawn" | "cap", found: boolean, cover?: string, document?: number) => pageCoverHidden(id, reason, cover, found, document), [id]);
   const [setup] = useState(() => ({ url: tab.url, title: tab.title, saved: tabSavedState(id) ?? undefined }));
-  useLayoutEffect(() => notePageHosted(id), [id]);
+  const surfaceMounted = useRef(false);
+  const onPageHosted = useCallback(() => {
+    if (surfaceMounted.current) pageHostedNatively(id);
+  }, [id]);
+  useLayoutEffect(() => {
+    notePageHosted(id);
+    forgetNativeHosting(id);
+    surfaceMounted.current = true;
+    return () => {
+      surfaceMounted.current = false;
+      forgetNativeHosting(id);
+    };
+  }, [id]);
   useEffect(() => {
     registerPageHandle(id, handle.current);
     return () => registerPageHandle(id, null);
@@ -83,6 +95,7 @@ export function PageSurface({ tab, toneBottom, obscured, summaryBottomInset, top
       onPageState={onPageState}
       onPageTone={onPageTone}
       onPageDrawn={onPageDrawn}
+      onPageHosted={onPageHosted}
       onPageError={onPageError}
       coverNativeId={destinationCover ?? (covered ? (arriving ? (arrivalCover ?? ARRIVAL_COVER_ID) : (openingCover ?? OPENING_COVER_ID)) : undefined)}
       onPageCoverHidden={onPageCoverHidden}

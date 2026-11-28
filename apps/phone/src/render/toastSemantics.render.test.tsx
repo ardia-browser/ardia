@@ -165,3 +165,28 @@ test("in Incognito the toast's shared plate and ink take the private look, never
   unmount(drawn);
   act(() => useTabs.setState({ incognito: false }));
 });
+
+test("over a page the toast takes the bar's shade, so a light page in dark mode gets dark ink on a light plate, and away from the page it follows the app again", () => {
+  const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
+  const { useBrowse } = require("../state/browse/store") as typeof import("../state/browse/store");
+  const { notePageBarDark } = require("../state/toasts/store") as typeof import("../state/toasts/store");
+  const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
+  const surfaceWas = useBrowse.getState().surface;
+  const plate = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "toastPlate" && node.props.source !== undefined)[0]!;
+  const label = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Couldn’t Download otter.pdf")[0]!.props.style).color;
+  act(() => useTabs.setState({ incognito: true }));
+  act(() => useBrowse.setState({ surface: "browsing" }));
+  act(() => notePageBarDark(false));
+  const overPage = renderSurface(<ToastHost />);
+  act(() => showToast("Couldn’t Download otter.pdf", "warning"));
+  expect(plate(overPage).props.dark).toBe(false);
+  expect(label(overPage)).toBe(rolesFor(false).toastLabel);
+  act(() => useBrowse.setState({ surface: "deck" }));
+  expect(plate(overPage).props.dark).toBe(true);
+  expect(label(overPage)).toBe(rolesFor(true).toastLabel);
+  unmount(overPage);
+  act(() => notePageBarDark(null));
+  act(() => useBrowse.setState({ surface: surfaceWas }));
+  act(() => useTabs.setState({ incognito: false }));
+  glass.mockRestore();
+});

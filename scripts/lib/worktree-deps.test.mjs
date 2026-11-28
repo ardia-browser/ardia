@@ -27,8 +27,8 @@ import {
   parseArgs,
   workspacePatterns,
   workspaceProjects,
-  workspacesOf,
   worktreeStatus,
+  ownInstallBases,
 } from "./worktree-deps.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -91,9 +91,9 @@ function harness() {
     installs.push(staging);
     fakeInstall(staging);
   };
-  const build = ({ worktree, cacheRoot: cache, runtime, base }) => buildCache({ worktree, cacheRoot: cache, runtime, install, base });
+  const build = ({ worktree, cacheRoot: cache, runtime }) => buildCache({ worktree, cacheRoot: cache, runtime, install });
   const home = fresh("home");
-  const setup = (worktree, extra = {}) => setupWorktree(worktree, { cacheRoot, build, runtime: RUNTIME, log: quiet, home, ...extra });
+  const setup = (worktree, extra = {}) => setupWorktree(worktree, { cacheRoot, build, runtime: RUNTIME, log: quiet, home, ownInstalls: [], ...extra });
   return { cacheRoot, installs, setup };
 }
 
@@ -530,13 +530,13 @@ test("a marker that parses but isn't valid keeps every claim; a valid marker nam
   const { key } = setup(exported);
   const markerFile = path.join(exported, "node_modules", MARKER);
   const good = JSON.parse(fs.readFileSync(markerFile, "utf8"));
-  for (const bad of [{}, null, [], { key }, { ...good, root: "relative/path" }, { ...good, key: "not-a-key" }, { ...good, projects: "x" }, { ...good, workspaces: "x" }, { ...good, workspaces: [{ dir: "apps/phone", key: "nope", root: "/x/nope" }] }]) {
+  for (const bad of [{}, null, [], { key }, { ...good, root: "relative/path" }, { ...good, key: "not-a-key" }, { ...good, projects: "x" }]) {
     fs.writeFileSync(markerFile, JSON.stringify(bad));
     assert.deepEqual(markerState(exported), { unknown: true }, JSON.stringify(bad));
     assert.deepEqual(pruneCaches({ cacheRoot, now: LATER(), log: quiet }), [], JSON.stringify(bad));
   }
   fs.writeFileSync(markerFile, JSON.stringify(good));
-  assert.deepEqual(markerState(exported), { key, keys: [key] });
+  assert.deepEqual(markerState(exported), { key });
   const other = "0123456789abcdef";
   fs.writeFileSync(markerFile, JSON.stringify({ ...good, key: other, root: path.join(path.dirname(good.root), other) }));
   assert.deepEqual(pruneCaches({ cacheRoot, now: LATER(), log: quiet }), [path.join(cacheRoot, key)]);
@@ -1043,93 +1043,44 @@ test("CR30: a first setup that fails after publishing the guard says how to reco
   }
 });
 
-function addNestedWorkspace(dir) {
-  write(path.join(dir, "apps", "docs", "pnpm-lock.yaml"), `${MAIN_DOC}\nimporters:\n  .: {}\n`);
-  write(path.join(dir, "apps", "docs", "pnpm-workspace.yaml"), 'packages:\n  - "."\n  - "../../packages/docs-native"\n\nnodeLinker: hoisted\n');
-  write(path.join(dir, "apps", "docs", "patches", "expo@1.0.0.patch"), "docs patch\n");
-  write(path.join(dir, "packages", "docs-native", "package.json"), '{"name":"@ardia/docs-native"}');
-  write(path.join(dir, "pnpm-workspace.yaml"), `${WORKSPACE.replace('  - "!apps/docs"\n', '  - "!apps/docs"\n  - "!packages/docs-native"\n')}`);
+function addOwnWorkspace(dir, lock = "own lock v1\n") {
+  write(path.join(dir, "apps", "docs", "pnpm-lock.yaml"), `${MAIN_DOC}# ${lock}`);
+  write(path.join(dir, "apps", "docs", "pnpm-workspace.yaml"), 'packages:\n  - "."\n');
 }
 
-function fakeNestedInstall(dir) {
-  const nm = path.join(dir, "node_modules");
-  write(path.join(nm, ".pnpm", "lock.yaml"), normalizeLockfile(fs.readFileSync(path.join(dir, "pnpm-lock.yaml"), "utf8")));
-  write(path.join(nm, "expo", "package.json"), '{"name":"expo","version":"58.0.0"}');
-  fs.mkdirSync(path.join(nm, "@ardia"), { recursive: true });
-  fs.symlinkSync("../../../../packages/docs-native", path.join(nm, "@ardia", "docs-native"));
-  fs.symlinkSync("../../../../packages/base", path.join(nm, "@ardia", "base"));
-}
-
-test("a folder with its own workspace and lockfile gets its own cached tree, linked, keyed, claimed and checked on its own", () => {
-  const cacheRoot = fresh("cache");
-  const installs = [];
-  const install = (staging) => {
-    installs.push(staging);
-    if (fs.existsSync(path.join(staging, "pnpm-workspace.yaml")) && fs.readFileSync(path.join(staging, "pnpm-workspace.yaml"), "utf8").includes("docs-native")) fakeNestedInstall(staging);
-    else fakeInstall(staging);
+function fakeOwnInstall(log) {
+  return (dir) => {
+    log.push(dir);
+    write(path.join(dir, "node_modules", ".pnpm", "lock.yaml"), normalizeLockfile(fs.readFileSync(path.join(dir, "pnpm-lock.yaml"), "utf8")));
+    write(path.join(dir, "node_modules", "expo", "package.json"), '{"name":"expo"}');
   };
-  const build = ({ worktree, cacheRoot: cache, runtime, base }) => buildCache({ worktree, cacheRoot: cache, runtime, install, base });
-  const nested = ["apps/docs"];
-  const setup = (worktree, extra = {}) => setupWorktree(worktree, { cacheRoot, build, runtime: RUNTIME, log: quiet, home: fresh("home"), nested, ...extra });
+}
+
+test("a folder with its own lockfile gets a real install of its own, once per lockfile, and status checks it", () => {
+  const { setup } = harness();
   const worktree = makeWorktree();
-  addNestedWorkspace(worktree);
-
-  const [own, docs] = workspacesOf(worktree, RUNTIME, nested);
-  assert.deepEqual(docs.projects, ["apps/docs", "packages/docs-native"]);
-  assert.ok(!own.projects.includes("apps/docs") && !own.projects.includes("packages/docs-native"));
-  assert.notEqual(own.key, docs.key);
-  assert.ok(docs.files.some(([name]) => name === "apps/docs/patches/expo@1.0.0.patch"));
-
-  const result = setup(worktree);
+  addOwnWorkspace(worktree);
+  const installs = [];
+  const options = { ownInstalls: ["apps/docs", "apps/none"], installInPlace: fakeOwnInstall(installs) };
+  assert.deepEqual(ownInstallBases(worktree, options.ownInstalls), ["apps/docs"]);
+  const first = setup(worktree, options);
+  assert.deepEqual(first.ownInstalls, [{ dir: "apps/docs", installed: true }]);
+  assert.deepEqual(installs, [path.join(worktree, "apps", "docs")]);
+  assert.ok(!lstatOrNullForTest(path.join(worktree, "apps", "docs", "node_modules")).isSymbolicLink());
+  assert.ok(fs.lstatSync(path.join(worktree, "apps", "docs", "node_modules", "expo")).isDirectory(), "its packages are real folders, not links into a shared tree");
+  assert.deepEqual(worktreeStatus(worktree, { runtime: RUNTIME, ownInstalls: options.ownInstalls }).problems, []);
+  assert.deepEqual(setup(worktree, options).ownInstalls, [{ dir: "apps/docs", installed: false }]);
+  assert.equal(installs.length, 1);
+  addOwnWorkspace(worktree, "own lock v2\n");
+  assert.match(worktreeStatus(worktree, { runtime: RUNTIME, ownInstalls: options.ownInstalls }).problems.join("\n"), /apps\/docs has no install matching its own pnpm-lock.yaml/);
+  setup(worktree, options);
   assert.equal(installs.length, 2);
-  assert.equal(result.workspaces.length, 1);
-  const tree = result.workspaces[0].root;
-  assert.equal(path.basename(tree), docs.key);
-  assert.equal(fs.readlinkSync(path.join(worktree, "apps", "docs", "node_modules", "expo")), path.join(tree, "apps", "docs", "node_modules", "expo"));
-  assert.equal(fs.realpathSync(path.join(worktree, "apps", "docs", "node_modules", "@ardia", "docs-native")), path.join(worktree, "packages", "docs-native"));
-  assert.equal(fs.realpathSync(path.join(worktree, "apps", "docs", "node_modules", "@ardia", "base")), path.join(worktree, "packages", "base"));
-  assert.ok(result.projects.includes("apps/docs"));
-  const marker = JSON.parse(fs.readFileSync(path.join(worktree, "node_modules", MARKER), "utf8"));
-  assert.deepEqual(marker.workspaces.map((one) => [one.dir, one.key]), [["apps/docs", docs.key]]);
-  assert.deepEqual(marker.workspaces[0].nodeModules, [path.join(tree, "apps", "docs", "node_modules")]);
-  assert.deepEqual(markerState(worktree).keys, [own.key, docs.key]);
-  assert.deepEqual(worktreeStatus(worktree, { runtime: RUNTIME, nested }).problems, []);
-  if (process.getuid?.() !== 0) assert.throws(() => fs.writeFileSync(path.join(worktree, "apps", "docs", "node_modules", "expo", "package.json"), "x"), { code: "EACCES" });
-
-  const records = fs.readdirSync(path.join(cacheRoot, USERS_DIR)).map((name) => JSON.parse(fs.readFileSync(path.join(cacheRoot, USERS_DIR, name), "utf8")));
-  assert.deepEqual(records[0].keys, [own.key, docs.key]);
-  assert.equal(setup(makeWorktreeWithNested()).createdCache, false);
-  assert.equal(installs.length, 2);
-
-  write(path.join(worktree, "apps", "docs", "patches", "expo@1.0.0.patch"), "docs patch v2\n");
-  assert.match(worktreeStatus(worktree, { runtime: RUNTIME, nested }).problems.join("\n"), /apps\/docs's install inputs changed/);
-
-  undoWorktree(worktree, { log: quiet });
-  assert.ok(!lstatOrNullForTest(path.join(worktree, "apps", "docs", "node_modules")));
-  assert.ok(fs.existsSync(path.join(tree, CACHE_STAMP)));
-
-  function makeWorktreeWithNested() {
-    const dir = makeWorktree();
-    addNestedWorkspace(dir);
-    return dir;
-  }
+  assert.deepEqual(worktreeStatus(worktree, { runtime: RUNTIME, ownInstalls: options.ownInstalls }).problems, []);
 });
 
-test("a scratch export's nested tree stays claimed while its marker names it", () => {
-  const cacheRoot = fresh("cache");
-  const install = (staging) => (fs.readFileSync(path.join(staging, "pnpm-workspace.yaml"), "utf8").includes("docs-native") ? fakeNestedInstall(staging) : fakeInstall(staging));
-  const build = ({ worktree, cacheRoot: cache, runtime, base }) => buildCache({ worktree, cacheRoot: cache, runtime, install, base });
+test("an own install that leaves no matching lockfile fails setup loudly", () => {
+  const { setup } = harness();
   const worktree = makeWorktree();
-  addNestedWorkspace(worktree);
-  const result = setupWorktree(worktree, { cacheRoot, build, runtime: RUNTIME, log: quiet, home: fresh("home"), nested: ["apps/docs"] });
-  const removed = pruneCaches({ cacheRoot, olderThanDays: 0, now: Date.now() + 60_000, log: quiet });
-  assert.deepEqual(removed, []);
-  assert.ok(fs.existsSync(path.join(result.workspaces[0].root, CACHE_STAMP)));
-});
-
-test("a project two workspaces both list is refused", () => {
-  const worktree = makeWorktree();
-  addNestedWorkspace(worktree);
-  write(path.join(worktree, "pnpm-workspace.yaml"), WORKSPACE);
-  assert.throws(() => workspacesOf(worktree, RUNTIME, ["apps/docs"]), /packages\/docs-native belongs to two workspaces/);
+  addOwnWorkspace(worktree);
+  assert.throws(() => setup(worktree, { ownInstalls: ["apps/docs"], installInPlace: () => {} }), /didn't leave a node_modules matching its pnpm-lock.yaml/);
 });

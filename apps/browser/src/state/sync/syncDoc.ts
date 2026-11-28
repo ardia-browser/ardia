@@ -67,6 +67,7 @@ export type SyncDoc = {
   removing?: string[] | Record<string, ProfileRemoval>;
   removingDevices?: string[] | Record<string, HLC>;
   sessionMark?: string;
+  deviceCheckpoints?: true;
   themesChosenWhileJoining?: string[];
   rebaseScopes?: Record<string, string>;
 };

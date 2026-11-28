@@ -87,6 +87,37 @@ test("a checkpoint saved before it carried a version still loads", async () => {
   assert.deepEqual(doc.scopes.app.records, { "bm:x": record });
 });
 
+test("#4759: a checkpoint another device sealed is never loaded into this one's setup, and one this device sealed is", async () => {
+  const theirs = await opening({ docs: { "sync-state.nns": sealed({ covers: 0, device: "devOld", scopes: { b: scope }, version: 1 }) } });
+  assert.equal(theirs.doc.scopes.b, undefined);
+  const mine = await opening({ docs: { "sync-state.nns": sealed({ covers: 0, device: "devA", scopes: { b: scope }, version: 1 }) } });
+  assert.deepEqual(mine.doc.scopes.b.records, scope.records);
+  const unnamed = { "sync-state.nns": sealed({ covers: 0, scopes: { b: scope }, version: 1 }) };
+  assert.equal((await opening({ docs: unnamed, doc: newDoc({ deviceCheckpoints: true }) })).doc.scopes.b, undefined, "a setup made since checkpoints name their device takes no unnamed one");
+  assert.deepEqual((await opening({ docs: unnamed })).doc.scopes.b.records, scope.records, "an older setup still does");
+});
+
+test("#4759: a start-over replaced while its save is held leaves the newer one to save its own setup, and never runs the replaced one's follow-up", async () => {
+  shell.docs.clear();
+  let doc = newDoc({ deviceId: "devOld", enabled: false });
+  const files = syncFiles(() => doc);
+  const landed = [];
+  shell.heldSaves.on = true;
+  const first = files.startOver(null, async () => void landed.push("old"));
+  await tick();
+  doc = newDoc({ deviceId: "devNew" });
+  const second = files.startOver(null, async () => void landed.push("new"));
+  shell.heldSaves.on = false;
+  while (shell.heldSaves.queue.length) {
+    shell.heldSaves.queue.shift()();
+    await tick();
+  }
+  await Promise.all([first, second]);
+  assert.equal(JSON.parse(shell.docs.get("sync.json")).deviceId, "devNew");
+  assert.equal(opened("sync-state.nns").device, "devNew");
+  assert.deepEqual(landed, ["new"]);
+});
+
 test("a checkpoint from a newer app, or one whose scopes are damaged, reads as empty instead of throwing", async () => {
   assert.deepEqual((await opening({ docs: { "sync-state.nns": sealed({ version: 9, covers: 1, scopes: { app: scope } }) } })).doc.scopes.app?.records ?? {}, {});
   const { doc } = await opening({ docs: { "sync-state.nns": sealed({ version: 1, covers: 1, scopes: { app: "broken", other: { records: null } } }) } });

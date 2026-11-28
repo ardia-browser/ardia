@@ -204,8 +204,20 @@ Each scope holds a replica: `key → { h: HLC, v: value | null, o: [device, seq]
   batch's journal entry, a journal part with the cycle's base, the sealed checkpoint), and before the one that records a
   finished rebase, `sync.json` gets a new mark (`markBeforeDurable` in `syncFiles.ts`). That `sync.json` save is awaited
   before the write starts; if it fails, the write fails too and the mark stays owed for the next one, so nothing lands
-  that the mark doesn't cover. The store takes the mark too, so the session saved next carries it, and that save holds
-  everything the write reflects. Equal marks therefore always mean the session on disk covers the sync state on disk; a
+  that the mark doesn't cover. The store takes the mark only once a `sync.json` save holding that exact mark has landed
+  (`docSaved` in `sessionMarks.ts`, #4759), so the session saved next carries it, and that save holds everything the
+  write reflects; a mark `sync.json` never saved never reaches the session, nor does one acknowledged after the setup changed
+  or moved to a newer mark. Starting over (turning sync on, Stop Syncing) saves `sync.json` first and waits for
+  it, then clears the sealed checkpoint (awaited) and the journal. Until that lands the start-over stays owed:
+  nothing else writes `sync.json`, and every journal, apply or checkpoint write tries it first and refuses to
+  write without it, so a `sync.json` that didn't save reopens with all its recorded data. A newer start-over
+  replaces an older one still waiting, and only the newer one's follow-up runs. Stop Syncing forgets the sync key
+  only once its start-over has landed, and turning sync on or joining waits for any Stop still saving. Turning
+  sync on or joining waits for its own save too, and if that fails it puts sync back off, forgets the new key
+  and says so. Each checkpoint names the device that sealed it (`device`), and a setup never loads another
+  device's checkpoint; a setup made since then (`deviceCheckpoints` in `sync.json`) takes no checkpoint without
+  a name either, so one left behind by a reset that stopped part-way can't leak into the next setup.
+  Telemetry: `sync_mark_saves_refused` and `sync_start_overs_refused`. Equal marks therefore always mean the session on disk covers the sync state on disk; a
   crash anywhere in between leaves them apart. While quitting, `sync.json` still moves on but the store doesn't (the
   session has saved for the quit), so a write that lands during the quit leaves the marks apart and the next launch
   rebases. A backup or an older build's file from earlier in the same launch holds an older mark too. When the marks

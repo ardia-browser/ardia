@@ -3167,6 +3167,21 @@ Needs JDK 17 and the Android SDK (`local.properties` or `ANDROID_HOME`). The fir
 Expo's Gradle plugins and the C++ of every native module, about 15 minutes on a busy Mac; JS-only changes rebuild the
 release APK in about 2.
 
+### Android Baseline Profile
+
+`apps/phone/android/app/src/main/baseline-prof.txt` holds the startup ART Baseline Profile that AGP compiles into
+`assets/dexopt/baseline.prof` for release builds (mapped through R8 automatically). Re-run the generator after React
+Native, Expo, or Reanimated upgrades, or after large changes to Android startup paths (such as `MainActivity`,
+`MainApplication`, `ContentBlocker`, or Expo native modules), so renamed methods do not go stale:
+
+```
+apps/phone/scripts/build-apk prof-capture --no-r8
+apps/phone/scripts/generate-baseline-profile.py --apk /tmp/ardia-phone/prof-capture.apk
+```
+
+An unobfuscated (`--no-r8`) build is required for capture so `cmd package dump-profiles` emits original class and
+method signatures. Pass `--input <dump.txt>` to filter a saved dump offline, or `--self-test` to verify the parser.
+
 ### Building Android on corex
 
 Android APKs for phone runs are built on corex, not on the Mac, and so are the Kotlin unit tests. The Mac's disk

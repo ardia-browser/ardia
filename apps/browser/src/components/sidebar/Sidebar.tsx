@@ -32,6 +32,7 @@ import { SidebarPages } from "./SidebarPages";
 import { sidebarText } from "./SidebarTextScope";
 import { SidebarRowLookContext, useSidebarRowLookSource } from "./rowLook";
 import { useRevealTabs } from "./useRevealTabs";
+import { pressPeekOutsideOnDragRegion } from "../../state/peek/outsidePresses";
 
 const HEADER_RIGHT = space.m;
 
@@ -142,7 +143,7 @@ export function Sidebar({ width }: { width: number }) {
 
               <View style={{ height: header }}>
                 <ContextMenuArea style={StyleSheet.absoluteFill} onContextMenu={() => void openSidebarMenu(windowId)}>
-                  <WindowDragRegion style={StyleSheet.absoluteFill} />
+                  <WindowDragRegion style={StyleSheet.absoluteFill} onRegionPress={() => pressPeekOutsideOnDragRegion(windowId)} />
                 </ContextMenuArea>
                 {addressBar ? (
                   <>

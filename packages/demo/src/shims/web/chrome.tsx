@@ -324,8 +324,9 @@ export function WindowDragRegion({
   clickable: _clickable,
   onRegionClick,
   onRegionDoubleClick,
+  onRegionPress: _regionPress,
   ...props
-}: ViewProps & { titleBarDoubleClick?: boolean; clickable?: boolean; onRegionClick?: () => void; onRegionDoubleClick?: () => void }) {
+}: ViewProps & { titleBarDoubleClick?: boolean; clickable?: boolean; onRegionClick?: () => void; onRegionDoubleClick?: () => void; onRegionPress?: () => void }) {
   const Region = View as unknown as React.ComponentType<ViewProps & { onClick?: () => void; onDoubleClick?: () => void }>;
   return <Region {...props} onClick={onRegionClick} onDoubleClick={onRegionDoubleClick} />;
 }

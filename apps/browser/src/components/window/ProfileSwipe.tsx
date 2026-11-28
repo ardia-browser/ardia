@@ -1,7 +1,7 @@
 import { devRegister } from "../dev/devRegister";
 import { SwipeArea, type SwipeAreaHandle, type SwipeEvent, WindowBackdrop } from "../ui";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Animated, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { Animated, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { spaceLookSource } from "../../lib/profileLook";
 import { profileTheme } from "../ui/theme";
 import { currentWindow } from "../../state/browser/current";
@@ -9,14 +9,15 @@ import { useProfileLooks } from "../../state/profiles/hooks";
 import { useProfileNeighbours } from "../../state/windows/hooks";
 import { useWindowId } from "../../state/browser/hooks";
 import { pagerFor, useNativePagerPosition, usePagerNativeConfig, usePagerPages, usePagerSurface } from "../../state/windows/profilePager";
+import { PeekOutsidePresses } from "../peek/PeekOutsidePresses";
 
 
 export function ProfileSwipe({ children }: { children: ReactNode }) {
   return (
-    <View style={{ height: "100%" }}>
+    <PeekOutsidePresses style={{ height: "100%" }}>
       {children}
       <ProfileSwipeArea surface="sidebar" style={StyleSheet.absoluteFill} />
-    </View>
+    </PeekOutsidePresses>
   );
 }
 

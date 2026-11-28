@@ -20,6 +20,7 @@ import { useProfileHold, useProfileTarget } from "../sidebar/DragProvider";
 import { useSidebarTokens } from "../sidebar/tokens";
 import { useDotReorder } from "./useDotReorder";
 import { dotsRowLeftInset } from "./dotsRow";
+import { notePressSwitchesProfile } from "../../state/peek/outsidePresses";
 
 export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
 const { band: BAND, dotTooltipLift, holdPlate } = profileSwitcher;
@@ -39,7 +40,7 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
   const icons = switcherIcons(saved, width - 2 * (besideDownloads ? SIDE_ROOM_BESIDE_DOWNLOADS : SIDE_ROOM));
   const { pages, pager } = usePagerPages(windowId);
   const cells = ids.map((_, i) => switcherCellWidth(icons[i] ?? null));
-  const reorder = useDotReorder(ids, cells);
+  const reorder = useDotReorder(windowId, ids, cells);
   const rowWidth = cells.reduce((sum, cell) => sum + cell, 0);
   return (
     <View style={{ height: PROFILE_DOTS_HEIGHT, alignItems: "center", paddingLeft: besideDownloads ? dotsRowLeftInset(width, rowWidth, SIDE_ROOM_BESIDE_DOWNLOADS) : 0 }}>
@@ -104,6 +105,7 @@ function Dot({ id, windowId, icon, page, pos, offset, pan, lifted, reordering }:
           onPressOut={pressMotion.onPressOut}
           onPress={() => {
             setPressed(true);
+            notePressSwitchesProfile(windowId, id);
             noteSwitcherPress(windowId, id, !!icon);
             switchProfile(windowId, id, true);
           }}

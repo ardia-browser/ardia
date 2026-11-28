@@ -3,6 +3,7 @@ import { Animated, PanResponder, type PanResponderInstance } from "react-native"
 import { hapticTick } from "../../state/app/system";
 import { reorderProfiles } from "../../state/profiles/actions";
 import { noteProfileDotReorder } from "../../state/telemetry/pagerCounts";
+import { notePressKeepsPeek } from "../../state/peek/keptPresses";
 import { curve, duration } from "../ui/motion";
 import { dotDrag, dotShifts, movedOrder } from "./dotReorder";
 
@@ -12,7 +13,7 @@ const settle = (value: Animated.Value, toValue: number) => Animated.timing(value
 
 type DotReorder = { dragging: string | null; offsetOf(id: string): Animated.Value; panFor(id: string): PanResponderInstance };
 
-export function useDotReorder(ids: string[], widths: number[]): DotReorder {
+export function useDotReorder(windowId: string, ids: string[], widths: number[]): DotReorder {
   const offsets = useRef(new Map<string, Animated.Value>()).current;
   const pans = useRef(new Map<string, PanResponderInstance>()).current;
   const [dragging, setDragging] = useState<string | null>(null);
@@ -78,7 +79,10 @@ export function useDotReorder(ids: string[], widths: number[]): DotReorder {
           return false;
         },
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > DRAG_START_DISTANCE && Math.abs(g.dx) > Math.abs(g.dy),
-        onPanResponderGrant: () => controller.start(id),
+        onPanResponderGrant: () => {
+          notePressKeepsPeek(windowId);
+          controller.start(id);
+        },
         onPanResponderMove: (e) => controller.moveTo(e.nativeEvent.pageX),
         onPanResponderRelease: (e) => {
           controller.moveTo(e.nativeEvent.pageX);

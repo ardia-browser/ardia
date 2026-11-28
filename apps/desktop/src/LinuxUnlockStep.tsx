@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { View } from "react-native";
 import { Button, TextField } from "../../browser/src/components/ui";
 import { ErrorText, Handoff, Spacer, Title } from "../../browser/src/components/import/Parts";
-import { backTo, importNow, importsBySpaces, patchImport, type ImportFlow } from "../../browser/src/state/import/flow";
+import { backTo, importNow, importsBySpaces, patchImport, selectedProfiles, type ImportFlow } from "../../browser/src/state/import/flow";
 import { importModule } from "../../browser/src/state/import/importApi";
 import { runImport } from "../../browser/src/state/import/runImport";
 import { asksPrimaryPassword, createSecretSlot, unlockCopy, unlockForStep, unlockSource, withoutEncrypted } from "./importUnlock";
@@ -16,11 +16,12 @@ function useTypedSecret() {
 const unlockStep = (unlocking: boolean, error: string | null) => patchImport({ step: { name: "unlock", unlocking, error } });
 
 async function unlock() {
-  const { source, sourceProfiles, kinds, step } = importNow();
+  const { source, sourceProfiles, spaces, kinds, step } = importNow();
   if (!source || step.name !== "unlock" || step.unlocking) return;
-  if (asksPrimaryPassword(source, sourceProfiles) && !primaryPassword.get()) return;
+  const profiles = selectedProfiles(source, sourceProfiles, spaces).map((p) => p.id);
+  if (asksPrimaryPassword(source, profiles) && !primaryPassword.get()) return;
   unlockStep(true, null);
-  const settled = await unlockForStep(importNow, () => unlockSource(importModule(), source, sourceProfiles, kinds, primaryPassword));
+  const settled = await unlockForStep(importNow, () => unlockSource(importModule(), source, profiles, kinds, primaryPassword));
   if (!settled) return;
   unlockStep(false, settled.result);
   if (!settled.result) void runImport(importNow().kinds);
@@ -34,12 +35,13 @@ function skipEncrypted(source: NonNullable<ImportFlow["source"]>) {
 }
 
 export function UnlockBody({ flow }: { flow: ImportFlow }) {
-  const { source, sourceProfiles, kinds, step } = flow;
+  const { source, sourceProfiles, spaces, kinds, step } = flow;
   const typed = useTypedSecret();
   useEffect(() => () => primaryPassword.clear(), []);
   if (!source || step.name !== "unlock") return null;
   const { error } = step;
-  const copy = unlockCopy(source, sourceProfiles, kinds);
+  const profiles = selectedProfiles(source, sourceProfiles, spaces).map((p) => p.id);
+  const copy = unlockCopy(source, profiles, kinds);
   return (
     <>
       <Title title={copy.title} subtitle={copy.subtitle} />
@@ -62,11 +64,12 @@ export function UnlockBody({ flow }: { flow: ImportFlow }) {
 }
 
 export function UnlockFooter({ flow }: { flow: ImportFlow }) {
-  const { source, kinds, sourceProfiles, step } = flow;
+  const { source, kinds, sourceProfiles, spaces, step } = flow;
   const typed = useTypedSecret();
   if (!source || step.name !== "unlock") return null;
   const { unlocking } = step;
-  const copy = unlockCopy(source, sourceProfiles, kinds);
+  const profiles = selectedProfiles(source, sourceProfiles, spaces).map((p) => p.id);
+  const copy = unlockCopy(source, profiles, kinds);
   return (
     <>
       <Button title="Back" onPress={() => backTo(source.profiles.length > 1 || importsBySpaces(source) ? "profiles" : "choose")} />

@@ -139,7 +139,26 @@ final class ZenTests: XCTestCase {
     XCTAssertEqual(result.failed, [])
     XCTAssertEqual(result.bookmarks?.linkCount, 4)
     XCTAssertEqual(result.historyCount, 4)
-    XCTAssertEqual(result.cookieCount, 6)
+    XCTAssertEqual(result.cookies.count, 6)
+    XCTAssertEqual(result.containerCookies[2]?.map(\.name), ["container"])
+    XCTAssertEqual(result.cookieCount, 7)
+  }
+
+  func testZenSidebarContainerParsing() {
+    XCTAssertNil(ZenSidebar.container(true))
+    XCTAssertNil(ZenSidebar.container(false))
+    XCTAssertNil(ZenSidebar.container(2.7))
+    XCTAssertNil(ZenSidebar.container(0))
+    XCTAssertNil(ZenSidebar.container(-1))
+    XCTAssertEqual(ZenSidebar.container(2), 2)
+    XCTAssertEqual(ZenSidebar.container(NSNumber(value: UInt32.max)), Int(UInt32.max))
+    XCTAssertNil(ZenSidebar.container(NSNumber(value: UInt64(UInt32.max) + 1)))
+    XCTAssertEqual(ZenSidebar.container("2"), 2)
+    XCTAssertEqual(ZenSidebar.container("4294967295"), Int(UInt32.max))
+    XCTAssertNil(ZenSidebar.container("+2"))
+    XCTAssertNil(ZenSidebar.container("0"))
+    XCTAssertNil(ZenSidebar.container("4294967296"))
+    XCTAssertNil(ZenSidebar.container("9007199254740993"))
   }
 
   func testPasswordsReadLoginsDatabaseAndLoginsJSON() throws {

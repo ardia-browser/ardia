@@ -47,6 +47,21 @@ public class ImportModule: Module, ImportNative {
       var result = try self.importer.importData(browserId: browserId, profileId: profileId, kinds: kinds,
                                                 options: options.importOptions, observer: observer, cancellation: cancellation)
       result.vaultToken = self.vault.keep(cookies: result.cookies, addresses: result.addresses, cards: result.cards)
+      if !result.containerCookies.isEmpty {
+        var tokens: [String: String] = [:]
+        var counts: [String: Int] = [:]
+        for (container, cookies) in result.containerCookies {
+          if let token = self.vault.keep(cookies: cookies, addresses: [], cards: []) {
+            let key = String(container)
+            tokens[key] = token
+            counts[key] = cookies.count
+          }
+        }
+        if !tokens.isEmpty {
+          result.containerVaultTokens = tokens
+          result.containerCookieCounts = counts
+        }
+      }
       return try Self.json(result)
     }
   }

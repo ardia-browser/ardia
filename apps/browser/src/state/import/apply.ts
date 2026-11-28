@@ -1,4 +1,5 @@
 import { asSecret } from "@ardia/core";
+import { orWarn, passwordFailure } from "../../lib/fallback";
 import { savePassword } from "../../platform/passwords";
 import {
   importModule,
@@ -88,26 +89,53 @@ export async function importHistory(
   return added;
 }
 
-async function importPasswords(profileId: string, credentials: Credential[]): Promise<number> {
-  const tally = passwordImportTally("browser");
+export async function importPasswords(
+  profileId: string,
+  credentials: Credential[],
+  options: { signal?: AbortSignal; recordTelemetry?: boolean; savedIndices?: Set<number> } = {},
+): Promise<{ saved: number; failed: number }> {
+  const { signal, recordTelemetry = true, savedIndices } = options;
+  const tally = recordTelemetry ? passwordImportTally("browser") : null;
+  const warn = orWarn(false, "browser import");
   let saved = 0;
-  for (const c of credentials) {
+  let failed = 0;
+  for (let i = 0; i < credentials.length; i++) {
+    if (signal?.aborted) break;
+    const c = credentials[i]!;
     const origin = originOfLogin(c.realm?.startsWith("http") ? c.realm : c.url);
     if (!origin || !c.password) continue;
-    if (await tally.attempt(savePassword(engineProfile(useBrowser.getState(), profileId), origin, c.username, asSecret("password", c.password)))) saved++;
+    let hardFailure = false;
+    const write = savePassword(engineProfile(useBrowser.getState(), profileId), origin, c.username, asSecret("password", c.password)).then(
+      (ok) => {
+        if (!ok) hardFailure = true;
+        return ok;
+      },
+      (error) => {
+        if (passwordFailure(error) !== "refused-or-already-saved") hardFailure = true;
+        throw error;
+      },
+    );
+    if (await (tally ? tally.attempt(write) : write.catch(warn))) {
+      saved++;
+      savedIndices?.add(i);
+    } else if (hardFailure) {
+      failed++;
+    }
   }
-  tally.done();
-  return saved;
+  tally?.done();
+  return { saved, failed };
 }
 
-async function importNative(
+export async function importNative(
   profileId: string,
   token: string | undefined,
   kinds: ("cookies" | "autofill")[],
   onFailed?: (kind: ImportKind) => void,
+  held?: Set<string>,
 ): Promise<Pick<ImportCounts, "cookies" | "addresses" | "cards">> {
   const none = { cookies: 0, addresses: 0, cards: 0 };
   if (!token) return none;
+  held?.delete(token);
   const api = importModule();
   if (!kinds.length || isIncognitoProfile(profileId) || useBrowser.getState().profiles[profileId] === undefined) {
     api.discardImported(token);
@@ -152,18 +180,55 @@ export async function applyResult(
   requested: ImportKind[],
   onFailed?: (kind: ImportKind) => void,
   consent?: ConsentToken | null,
+  signal?: AbortSignal,
+  held?: Set<string>,
 ): Promise<ImportCounts> {
   const toolbar = (result.bookmarks?.children ?? []).filter((c) => c.role === "toolbar");
   importFavicons(profileId, result.favicons, [...result.favorites.map((t) => t.url), ...(result.spaces.length ? [] : result.tabs.map((t) => t.url)), ...linksOf(toolbar)]);
   const counts = emptyCounts();
   counts.bookmarks += await importBookmarks(profileId, result.bookmarks, browserName, consent, onFailed);
+  if (signal?.aborted) return counts;
   if (result.history.length) counts.history += await importHistory(profileId, result.history, onFailed, consent);
+  if (signal?.aborted) return counts;
   const native = (["cookies", "autofill"] as const).filter((k) => requested.includes(k));
-  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed));
+  Object.assign(counts, await importNative(profileId, result.vaultToken, native, onFailed, held));
+  if (signal?.aborted) return counts;
   if (result.tabs.length && !result.spaces.length) counts.tabs += importTabs(profileId, result.tabs, "Imported");
   if (result.favorites.length) counts.tabs += importTabs(profileId, result.favorites.map((t) => ({ ...t, pinned: true })), null, "tiles");
-  if (result.credentials.length) counts.passwords += await importPasswords(profileId, result.credentials);
+  if (result.credentials.length) counts.passwords += (await importPasswords(profileId, result.credentials, { signal })).saved;
   return counts;
+}
+
+export type VaultLease = {
+  tokens: Set<string>;
+  hold(result: ImportResult): void;
+  discardAll(): void;
+};
+
+export function createVaultLease(): VaultLease {
+  const tokens = new Set<string>();
+  return {
+    tokens,
+    hold(result) {
+      if (result.vaultToken) tokens.add(result.vaultToken);
+      for (const token of Object.values(result.containerVaultTokens ?? {})) tokens.add(token);
+    },
+    discardAll() {
+      if (!tokens.size) return;
+      const api = importModule();
+      for (const token of tokens) api.discardImported(token);
+      tokens.clear();
+    },
+  };
+}
+
+export async function withImportVaults(run: (lease: VaultLease) => Promise<void>) {
+  const lease = createVaultLease();
+  try {
+    await run(lease);
+  } finally {
+    lease.discardAll();
+  }
 }
 
 export async function applySafari(profileId: string, data: SafariExport, cookies = true, onFailed?: (kind: ImportKind) => void, consent?: ConsentToken | null): Promise<ImportCounts> {
@@ -173,7 +238,7 @@ export async function applySafari(profileId: string, data: SafariExport, cookies
   counts.history = await importHistory(profileId, history, onFailed, consent);
   Object.assign(counts, await importNative(profileId, data.vaultToken, cookies ? ["cookies", "autofill"] : ["autofill"], onFailed));
   if (data.tabs.length) counts.tabs += importTabs(profileId, data.tabs, "Imported");
-  counts.passwords = await importPasswords(profileId, data.credentials);
+  counts.passwords = (await importPasswords(profileId, data.credentials)).saved;
   return counts;
 }
 

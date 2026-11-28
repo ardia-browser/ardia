@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { asSecret } from "@ardia/core";
 import { CHOOSER_DEADLINE_MS, IMPORT_IDLE_MS, MAX_SPACE_IDS, UNLOCK_DEADLINE_MS, UNLOCK_LIFETIME_MS, createHostImport, nativeSpaceIds, pendingPasswords } from "./hostImport.ts";
-import { applyPendingPasswords, applyResult, setImportPasswordSink } from "./importApply.ts";
+import { applyPendingPasswords, applyResult, setImportPasswordSink, withImportVaults } from "./importApply.ts";
+import { asksPrimaryPassword } from "./importUnlock.ts";
+import { selectedProfiles } from "../../browser/src/state/import/flow.ts";
 import { IMPORT_HANDLE_LIFETIME_MS, claimImportHandle, isImportHandle, issueImportHandles } from "./importHandles.ts";
 import { savePassword } from "./importedPasswordSave.ts";
 import { randomBytes } from "node:crypto";
@@ -492,6 +494,113 @@ test("the Linux applyResult adds natively written passwords to the shared counts
   const counts = await applyResult("default", result, "Google Chrome", ["passwords"], (k) => failed.push(k));
   assert.equal(counts.passwords, 0);
   assert.deepEqual(failed, ["passwords"]);
+});
+
+test("withImportVaults discards desktop pending passwords on prompt failure or abort without double-discarding after applyResult", async () => {
+  const result = { browserId: "zen", profileId: "p2", history: [], historyCount: 0, tabs: [], tabGroups: [], credentials: [],
+    cookieCount: 0, addressCount: 0, cardCount: 0, spaces: [], favorites: [], favicons: [], failed: [], warnings: [], passwords: { token: TOKEN, count: 2 } };
+  const failedRun = sink({ added: 2, existing: 0, conflicts: 0, invalid: 0 });
+  setImportPasswordSink(failedRun);
+  try {
+    await assert.rejects(
+      () => withImportVaults(async (lease) => {
+        lease.hold(result);
+        throw new Error("destination prompt failed");
+      }),
+      /destination prompt failed/,
+    );
+    assert.deepEqual(failedRun.log, [["discard", TOKEN]]);
+  } finally {
+    setImportPasswordSink(null);
+  }
+  const applied = sink({ added: 2, existing: 0, conflicts: 0, invalid: 0 });
+  setImportPasswordSink(applied);
+  try {
+    await withImportVaults(async (lease) => {
+      lease.hold(result);
+      const counts = await applyResult("default", result, "Zen", ["passwords"], undefined, null, undefined, lease.tokens);
+      assert.equal(counts.passwords, 2);
+    });
+    assert.deepEqual(applied.log, [["write", TOKEN, ""]]);
+  } finally {
+    setImportPasswordSink(null);
+  }
+  const aborted = sink({ added: 2, existing: 0, conflicts: 0, invalid: 0 });
+  const controller = new AbortController();
+  controller.abort();
+  setImportPasswordSink(aborted);
+  try {
+    const counts = await applyResult("default", result, "Zen", ["passwords"], undefined, null, controller.signal);
+    assert.equal(counts.passwords, 0);
+    assert.deepEqual(aborted.log, [["discard", TOKEN]]);
+  } finally {
+    setImportPasswordSink(null);
+  }
+});
+
+test("host import normalizes container vault tokens and counts strictly and discards them on late abort", async () => {
+  const { api, calls, emit } = fixture();
+  const tokA = randomBytes(16).toString("hex");
+  const tokB = randomBytes(16).toString("hex");
+  const pending = api.importData("zen", "p1", ["cookies"]);
+  await Promise.resolve();
+  const jobId = calls.find((c) => c.method === "ArdiaImport.startImport").args[0];
+  emit({
+    jobId,
+    type: "done",
+    result: {
+      vaultToken: tokA,
+      containerVaultTokens: { "1": tokB, "0": tokA, "4294967296": tokA, "2": "bad", "-1": tokA },
+      containerCookieCounts: { "1": 4, "0": 1, "4294967296": 2, "2": -1, "3": 1.5, "4": Number.MAX_SAFE_INTEGER + 1 },
+    },
+  });
+  const normalized = await pending;
+  assert.equal(normalized.vaultToken, tokA);
+  assert.deepEqual(normalized.containerVaultTokens, { "1": tokB });
+  assert.deepEqual(normalized.containerCookieCounts, { "1": 4 });
+
+  const arrayCase = api.importData("zen", "p1", ["cookies"]);
+  await Promise.resolve();
+  const jobId2 = calls.filter((c) => c.method === "ArdiaImport.startImport")[1].args[0];
+  emit({ jobId: jobId2, type: "done", result: { containerVaultTokens: ["ignored", tokB], containerCookieCounts: [0, 5] } });
+  const fromArrays = await arrayCase;
+  assert.equal(fromArrays.containerVaultTokens, undefined);
+  assert.equal(fromArrays.containerCookieCounts, undefined);
+
+  const controller = new AbortController();
+  const late = api.importData("zen", "p1", ["cookies", "passwords"], { signal: controller.signal });
+  await Promise.resolve();
+  const jobId3 = calls.filter((c) => c.method === "ArdiaImport.startImport")[2].args[0];
+  controller.abort();
+  await assert.rejects(() => late, /Import cancelled/);
+  emit({
+    jobId: jobId3,
+    type: "done",
+    result: { vaultToken: tokA, containerVaultTokens: { "6": tokB }, passwords: { token: TOKEN, count: 1 } },
+  });
+  await Promise.resolve();
+  assert.deepEqual(
+    calls.filter((c) => c.method === "ArdiaImport.discardPasswords" || c.method === "ArdiaImport.discardImported"),
+    [
+      { method: "ArdiaImport.discardPasswords", args: [TOKEN] },
+      { method: "ArdiaImport.discardImported", args: [tokA] },
+      { method: "ArdiaImport.discardImported", args: [tokB] },
+    ],
+  );
+});
+
+test("selectedProfiles resolves space-driven Zen profiles for primary password unlock", () => {
+  const zenSource = {
+    id: "zen", name: "Zen", family: "firefox", sidebar: "zen", requiresExport: false, needsKeychain: true,
+    profiles: [
+      { id: "p1", name: "Default", path: "p1", isDefault: true, available: ["passwords"], needsPrimaryPassword: false, spaces: [{ id: "s1", name: "Home", pinnedCount: 1, tabCount: 0 }] },
+      { id: "p2", name: "Work", path: "p2", isDefault: false, available: ["passwords"], needsPrimaryPassword: true, spaces: [{ id: "s2", name: "Lab", pinnedCount: 1, tabCount: 0 }] },
+    ],
+  };
+  const chosen = selectedProfiles(zenSource, ["p1"], ["s2"]).map((p) => p.id);
+  assert.deepEqual(chosen, ["p2"]);
+  assert.equal(asksPrimaryPassword(zenSource, chosen), true);
+  assert.equal(asksPrimaryPassword(zenSource, selectedProfiles(zenSource, ["p1"], ["s1"]).map((p) => p.id)), false);
 });
 
 test("the Passwords pane's savePassword claims import handles instead of saving them as passwords", async () => {

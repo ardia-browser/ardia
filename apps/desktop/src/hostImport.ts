@@ -64,22 +64,10 @@ type UnlockOptions = { primaryPassword?: string; profiles?: readonly string[]; k
 
 type HostImport = Pick<
   Api,
-  | "listBrowsers"
-  | "importData"
-  | "unlockBrowser"
-  | "isBrowserUnlocked"
-  | "forgetUnlockedKeys"
-  | "writeImported"
-  | "discardImported"
-  | "listExtensions"
-  | "importSafariExport"
-  | "safariHasFullDiskAccess"
-  | "openFullDiskAccessSettings"
-  | "importSafariDirect"
-  | "importBookmarksHTML"
-  | "importPasswordsCSV"
-  | "chooseImportFile"
-  | "readDiaTabs"
+  | "listBrowsers" | "importData" | "unlockBrowser" | "isBrowserUnlocked" | "forgetUnlockedKeys"
+  | "writeImported" | "discardImported" | "listExtensions"
+  | "importSafariExport" | "safariHasFullDiskAccess" | "openFullDiskAccessSettings" | "importSafariDirect"
+  | "importBookmarksHTML" | "importPasswordsCSV" | "chooseImportFile" | "readDiaTabs"
 > & {
   writePasswords(token: string, profile: string): Promise<WrittenPasswords>;
   discardPasswords(token: string): void;
@@ -150,17 +138,16 @@ export function createHostImport(host: ArdiaHost, ImportError: ImportErrorClass,
       };
       const cancel = () => void invoke("cancelImport", [jobId]).catch(reportHostError);
       const discardLate = () =>
-        awaitEvents(
-          jobId,
-          (event) => {
-            if (event.type === "progress") return false;
-            const late = event.type === "done" ? pendingPasswords(event.result) : null;
+        awaitEvents(jobId, (event) => {
+          if (event.type === "progress") return false;
+          if (event.type === "done") {
+            const late = pendingPasswords(event.result);
             if (late) void invoke("discardPasswords", [late.token]).catch(reportHostError);
-            return true;
-          },
-          IMPORT_IDLE_MS,
-          () => {},
-        );
+            const r = normalizeResult(event.result, browserId, profileId);
+            for (const t of [r.vaultToken, ...Object.values(r.containerVaultTokens ?? {})]) if (t) void invoke("discardImported", [t]).catch(reportHostError);
+          }
+          return true;
+        }, IMPORT_IDLE_MS, () => {});
       const abort = () => {
         cancel();
         finish(() => reject(failure("cancelled", "Import cancelled")));
@@ -372,6 +359,12 @@ function isFavicon(value: unknown): value is ImportApi.ImportedFavicon {
     typeof icon.png === "string" && PNG_BASE64.test(icon.png);
 }
 
+const containerMap = <T,>(value: unknown, valid: (item: unknown) => item is T): Record<string, T> | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const kept = Object.entries(value).filter((entry): entry is [string, T] => /^[1-9]\d*$/.test(entry[0]) && Number(entry[0]) <= 0xffff_ffff && valid(entry[1]));
+  return kept.length ? Object.fromEntries(kept) : undefined;
+};
+
 function normalizeResult(value: unknown, browserId: string, profileId: string): ImportApi.ImportResult {
   const result = (value && typeof value === "object" ? value : {}) as Partial<ImportApi.ImportResult> & Record<string, unknown>;
   const list = <T,>(item: unknown) => (Array.isArray(item) ? (item as T[]) : []);
@@ -388,6 +381,8 @@ function normalizeResult(value: unknown, browserId: string, profileId: string): 
     addressCount: count(result.addressCount),
     cardCount: count(result.cardCount),
     vaultToken: typeof result.vaultToken === "string" && TOKEN.test(result.vaultToken) ? result.vaultToken : undefined,
+    containerVaultTokens: containerMap(result.containerVaultTokens, (v): v is string => typeof v === "string" && TOKEN.test(v)),
+    containerCookieCounts: containerMap(result.containerCookieCounts, (v): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0),
     spaces: list(result.spaces),
     favorites: list(result.favorites),
     favicons: list<ImportApi.ImportedFavicon>(result.favicons).filter(isFavicon),

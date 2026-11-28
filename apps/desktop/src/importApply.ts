@@ -1,4 +1,4 @@
-import { applyResult as sharedApplyResult, type ImportCounts } from "../../browser/src/state/import/apply.ts";
+import { applyResult as sharedApplyResult, createVaultLease, type ImportCounts, type VaultLease } from "../../browser/src/state/import/apply.ts";
 import { engineProfile, isIncognitoProfile } from "../../browser/src/state/browser/model.ts";
 import { useBrowser } from "../../browser/src/state/browser/store.ts";
 import type { ImportKind, ImportResult } from "../../browser/src/platform/importModule.ts";
@@ -40,9 +40,35 @@ export async function applyPendingPasswords(
 }
 
 let sink: PasswordSink | null = null;
+const pendingByTokens = new WeakMap<Set<string>, Set<string>>();
 
 export function setImportPasswordSink(next: PasswordSink | null) {
   sink = next;
+}
+
+export async function withImportVaults(run: (lease: VaultLease) => Promise<void>) {
+  const base = createVaultLease();
+  const passwords = new Set<string>();
+  pendingByTokens.set(base.tokens, passwords);
+  const lease: VaultLease = {
+    tokens: base.tokens,
+    hold(result) {
+      base.hold(result);
+      const pending = sink?.pending(result);
+      if (pending) passwords.add(pending.token);
+    },
+    discardAll() {
+      base.discardAll();
+      for (const token of passwords) sink?.discard(token);
+      passwords.clear();
+    },
+  };
+  try {
+    await run(lease);
+  } finally {
+    lease.discardAll();
+    pendingByTokens.delete(base.tokens);
+  }
 }
 
 export async function applyResult(
@@ -52,8 +78,16 @@ export async function applyResult(
   requested: ImportKind[],
   onFailed?: (kind: ImportKind) => void,
   consent?: ConsentToken | null,
+  signal?: AbortSignal,
+  held?: Set<string>,
 ): Promise<ImportCounts> {
-  const counts = await sharedApplyResult(profileId, result, browserName, requested, onFailed, consent);
+  const counts = await sharedApplyResult(profileId, result, browserName, requested, onFailed, consent, signal, held);
+  const pending = sink?.pending(result);
+  if (pending && held) pendingByTokens.get(held)?.delete(pending.token);
+  if (signal?.aborted) {
+    if (pending) sink?.discard(pending.token);
+    return counts;
+  }
   if (sink) counts.passwords += await applyPendingPasswords(sink, profileId, result, requested, onFailed);
   else if (requested.includes("passwords") && result && (result as { passwords?: unknown }).passwords) onFailed?.("passwords");
   return counts;

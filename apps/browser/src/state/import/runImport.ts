@@ -1,21 +1,20 @@
 import { ardiaError } from "@ardia/core";
 import { orWarn } from "../../lib/fallback";
-import { confirm } from "../app/system";
 import { plural } from "../browser/model";
 import { useBrowser } from "../browser/store";
 import { MAX_DRAFT_LINKS } from "../groups/draftGroups";
-import { createProfile } from "../profiles/actions";
 import { noteImportedSpaces } from "../telemetry/usage";
 import { noteDiaSidebar, noteDiaTabProfiles, noteFirefoxFavicons, noteImportCore, noteImportRun, noteUntitledBookmarks } from "../telemetry/importRuns";
 import { consentToken, type ConsentToken } from "../telemetry/client";
-import { adoptSpaceIdentity, applyResult, emptyCounts, importFavorites, importDiaProfile, profileColorFor, profileNamed, untitledLinks } from "./apply";
+import { adoptSpaceIdentity, applyResult, emptyCounts, importFavorites, importDiaProfile, profileNamed, untitledLinks, withImportVaults, type VaultLease } from "./apply";
 import type { BrowserProfile, DiaTabsResult, ImportCounts, ImportedExtension, ImportKind, ImportedSearchEngine, ImportResult } from "./apply";
+import { applyZenPartitions, droppedContainerCookiesNote, resolveDestination, type DestinationOptions, type ZenStoreLock } from "./zenPartitions";
 import { diaProfilesFor, diaProfilesWithoutFolder } from "./diaTabs";
 import { importArcSpace, importDiaSpace } from "./sidebarTree";
 import { arcNotes, importArcArchive, importArcRouting, withArcGlyph } from "./arcExtras";
 import { noteArcImport } from "../telemetry/importRuns";
 import { adoptImportedEngine } from "./searchEngine";
-import { planSidebar } from "./sidebarPlan";
+import { fallbackZenContainer, planSidebar } from "./sidebarPlan";
 import {
   APP_TAB_KINDS,
   ARC_ONCE_KINDS,
@@ -27,6 +26,7 @@ import {
   importSignal,
   importsBySpaces,
   patchImport,
+  selectedProfiles,
   spacesOf,
   startProgress,
   updateStatus,
@@ -37,7 +37,7 @@ import type { ExtensionGroup } from "./extensionListing";
 import { during } from "../app/jobActivity";
 
 export function continueImport() {
-  const { source, step, kinds, sourceProfiles } = importNow();
+  const { source, step, kinds, sourceProfiles, spaces } = importNow();
   if (!source) return;
   if (step.name === "choose") {
     if (source.needsFullDiskAccess) return patchImport({ step: { name: "access" } });
@@ -45,7 +45,7 @@ export function continueImport() {
     if (source.profiles.length > 1 || (importsBySpaces(source) && spacesOf(source).length > 1)) return patchImport({ step: { name: "profiles" } });
   }
   const sidebarKinds = DIA_SIDEBAR_KINDS.some((k) => kinds.has(k));
-  const encryptedTabs = source.profiles.some((p) => sourceProfiles.includes(p.id) && p.tabsNeedKey && (kinds.has("tabs") || (!!p.diaSidebar && sidebarKinds)));
+  const encryptedTabs = selectedProfiles(source, sourceProfiles, spaces).some((p) => p.tabsNeedKey && (kinds.has("tabs") || (!!p.diaSidebar && sidebarKinds)));
   const locked = (encryptedTabs || ENCRYPTED_KINDS.some((k) => kinds.has(k))) && source.needsKeychain && !importModule().isBrowserUnlocked(source.id);
   if ((step.name === "choose" || step.name === "profiles") && locked) return patchImport({ step: { name: "unlock", unlocking: false, error: null } });
   void runImport(kinds);
@@ -74,22 +74,6 @@ export function skipEncryptedData() {
   void runImport(kinds, true);
 }
 
-async function destination(target: string, index: number, name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean): Promise<string> {
-  if (index === 0) return target;
-  const clash = profileNamed(name);
-  if (clash) {
-    const { confirmed } = await confirm({
-      title: "Import as new profile?",
-      message:
-        "Import this data as a new profile to avoid data loss. If you replace a profile, your passwords, cookies, and payment info will be replaced, while your bookmarks and history will be combined.",
-      confirmTitle: "Import as new profile",
-      cancelTitle: "Replace this profile",
-    });
-    if (!confirmed) return clash;
-  }
-  return createProfile({ name, color: profileColorFor(color), icon: emoji ?? null, shareWith, shareTopApps });
-}
-
 type AppTabs = { result: DiaTabsResult } | { note: string };
 
 const NOT_BROUGHT = "Dia's tabs couldn't be brought over:";
@@ -116,14 +100,14 @@ type DiaSpacesImported = { tabs: number; groups: number; skipped: number; ownPro
 async function importDiaSpaces(
   dest: string,
   result: ImportResult,
-  nextDestination: (name: string, color?: string, emoji?: string, shareWith?: string | null) => Promise<string>,
+  nextDestination: (name: string, options?: DestinationOptions) => Promise<string>,
   signal: AbortSignal,
   consent: ConsentToken | null,
 ): Promise<DiaSpacesImported> {
   const out: DiaSpacesImported = { tabs: 0, groups: 0, skipped: 0, ownProfiles: 0 };
   const primary = result.diaSidebar ? result.diaSidebar.primarySpaceId : result.spaces[0]?.id;
   for (const space of result.spaces) {
-    const into = space.id === primary ? dest : await nextDestination(space.name, space.color, undefined, dest);
+    const into = space.id === primary ? dest : await nextDestination(space.name, { color: space.color, shareWith: dest });
     if (signal.aborted) return out;
     const r = importDiaSpace(into, space, result.favicons, consent);
     out.tabs += r.tabs;
@@ -166,16 +150,18 @@ const nothingRead = (browserId: string, profileId: string, failed: ImportKind[])
   warnings: [],
 });
 
-export const runImport = (wanted: ReadonlySet<ImportKind>, withoutKey = false) => during("import", () => runImportJob(wanted, withoutKey));
+export const runImport = (wanted: ReadonlySet<ImportKind>, withoutKey = false) =>
+  during("import", () => withImportVaults((lease) => runImportJob(wanted, withoutKey, lease)));
 
-async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean) {
+async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean, lease: VaultLease) {
   const { source, sourceProfiles, spaces, target } = importNow();
   if (!source) return;
   const consent = consentToken();
   const api = importModule();
   const signal = importSignal();
   const bySpaces = importsBySpaces(source);
-  const selected = source.profiles.filter((p) => sourceProfiles.includes(p.id) || (bySpaces && p.spaces?.some((sp) => spaces.includes(sp.id))));
+  const isZen = source.sidebar === "zen";
+  const selected = selectedProfiles(source, sourceProfiles, spaces);
   const tabsLocked = (p: BrowserProfile) => withoutKey && !!p.tabsNeedKey;
   const requested: ImportKind[] = [...wanted].filter((k) => k !== "tabs" || !!source.asksAppForTabs || !selected.every(tabsLocked));
   if (bySpaces && requested.includes("tabs")) requested.push("spaces", "pinnedTabs");
@@ -198,8 +184,9 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
   const add = (c: ImportCounts) => (Object.keys(total) as (keyof ImportCounts)[]).forEach((k) => (total[k] += c[k]));
   let destinationIndex = 0;
   const arc = { homes: new Map<string, string>(), home: "", glyphs: 0, cachedIcons: 0, routing: undefined as ImportResult["arcRouting"], archive: undefined as ImportResult["arcArchive"] };
-  const nextDestination = (name: string, color?: string, emoji?: string, shareWith?: string | null, shareTopApps?: boolean) =>
-    destination(target, destinationIndex++, name, color, emoji, shareWith, shareTopApps);
+  const storeOwners = new Map<string, string>();
+  const writtenStores = new Set<string>();
+  const nextDestination = (name: string, options?: DestinationOptions) => resolveDestination(target, destinationIndex++, name, signal, options);
   const found = new Map<string, ImportedExtension>();
   const engines: { profile: BrowserProfile; engine?: ImportedSearchEngine }[] = [];
   const left: string[] = [];
@@ -244,11 +231,14 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
         if (fromApp.length) {
           const tabs = await askApp();
           if (signal.aborted) return;
-          total.tabs += importAppTabs(await nextDestination(profile.name, profile.color), tabs, source.profiles, profile.id, wanted)?.tabs ?? 0;
+          const dest = await nextDestination(profile.name, { color: profile.color });
+          if (signal.aborted) return;
+          total.tabs += importAppTabs(dest, tabs, source.profiles, profile.id, wanted)?.tabs ?? 0;
         }
         continue;
       }
     }
+    lease.hold(result);
     if (signal.aborted) return;
     const sidebarMissed =
       readsSidebarFile(profile) &&
@@ -279,6 +269,8 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       const plan = planSidebar(source.sidebar!, result, profile.spaces);
       const members: string[][] = [];
       let startersNamed = 0;
+      const lockFor = (container: number | "ambiguous"): ZenStoreLock | undefined =>
+        isZen ? { owners: storeOwners, key: `${profile.id}:${container}` } : undefined;
       for (const { space: planned, partition } of plan.spaces) {
         const space = source.sidebar === "arc" ? withArcGlyph(planned) : planned;
         if (space !== planned) arc.glyphs += 1;
@@ -286,7 +278,8 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
         const head = members[partition]?.[0] ?? null;
         const shared = plan.sharesTopApps && plan.spaces.filter((p) => p.partition === partition).length > 1;
         const first = destinationIndex === 0;
-        const dest = await nextDestination(name, space.color, space.emoji, head, shared);
+        const dest = await nextDestination(name, { color: space.color, emoji: space.emoji, shareWith: head, shareTopApps: shared, storeLock: lockFor(plan.containers[partition] ?? 0) });
+        if (signal.aborted) return;
         if (first && adoptSpaceIdentity(dest, space)) startersNamed += 1;
         (members[partition] ??= []).push(dest);
         arc.homes.set(space.id, dest);
@@ -294,10 +287,25 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
         add({ ...emptyCounts(), tabs: r.tabs, bookmarks: r.bookmarks });
         if (r.skipped) left.push(`${plural(r.skipped, "link")} in ${name}'s folders weren't imported: each folder brings up to ${MAX_DRAFT_LINKS.toLocaleString("en-US")} links.`);
       }
-      const dest = members[plan.dataPartition]?.[0] ?? (await nextDestination(result.profile?.name ?? profile.name, result.profile?.color));
+      const fallbackContainer = isZen && !plan.containers.length ? fallbackZenContainer(profile.spaces, spaces) : undefined;
+      const dest =
+        members[plan.dataPartition]?.[0] ??
+        (await nextDestination(result.profile?.name ?? profile.name, { color: result.profile?.color, storeLock: lockFor(fallbackContainer ?? 0) }));
+      if (signal.aborted) return;
       members[plan.dataPartition] ??= [dest];
       arc.home ||= dest;
-      add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused, consent));
+      if (isZen) {
+        add(await applyZenPartitions({
+          dest, members, containers: plan.containers, dataPartition: plan.dataPartition, fallbackContainer, result,
+          browserName: source.name, requested: profileKinds, onFailed: refused, consent, signal, held: lease.tokens, writtenStores,
+        }));
+        if (signal.aborted) return;
+        const droppedNote = profileKinds.includes("cookies") ? droppedContainerCookiesNote(result, lease.tokens, fallbackContainer) : null;
+        if (droppedNote) left.push(droppedNote);
+      } else {
+        add(await applyResult(dest, { ...result, favorites: [] }, source.name, profileKinds, refused, consent, signal, lease.tokens));
+        if (signal.aborted) return;
+      }
       let essentials = 0;
       plan.favorites.forEach((tabs, partition) => {
         const group = members[partition] ?? [];
@@ -307,17 +315,16 @@ async function runImportJob(wanted: ReadonlySet<ImportKind>, withoutKey: boolean
       });
       total.tabs += essentials;
       noteImportedSpaces({
-        spaces: plan.spaces.length,
-        containerSpaces: plan.spaces.filter((p) => p.partition !== plan.dataPartition).length,
-        dataProfiles: members.filter(Boolean).length,
-        essentials,
-        startersNamed,
+        spaces: plan.spaces.length, containerSpaces: plan.spaces.filter((p) => p.partition !== plan.dataPartition).length,
+        dataProfiles: members.filter(Boolean).length, essentials, startersNamed,
       }, consent);
       extensionsProfile ||= dest;
       profileDest = dest;
     } else {
-      const dest = await nextDestination(result.profile?.name ?? profile.name, result.profile?.color ?? profile.color);
-      add(await applyResult(dest, result, source.name, profileKinds, refused, consent));
+      const dest = await nextDestination(result.profile?.name ?? profile.name, { color: result.profile?.color ?? profile.color });
+      if (signal.aborted) return;
+      add(await applyResult(dest, result, source.name, profileKinds, refused, consent, signal, lease.tokens));
+      if (signal.aborted) return;
       if (readsSidebarFile(profile) && !sidebarMissed && result.spaces.length) {
         const r = await importDiaSpaces(dest, result, nextDestination, signal, consent);
         if (signal.aborted) return;

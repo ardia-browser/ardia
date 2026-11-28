@@ -70,6 +70,12 @@ export const importsBySpaces = (source: BrowserSource | null) => !!source?.sideb
 export const spacesOf = (source: BrowserSource | null) =>
   (source?.profiles ?? []).flatMap((p) => (p.spaces ?? []).map((sp) => ({ ...sp, profileId: p.id })));
 export const spacelessProfiles = (source: BrowserSource | null) => (source?.profiles ?? []).filter((p) => !p.spaces?.length);
+export const selectedProfiles = (source: BrowserSource, sourceProfiles: readonly string[], spaces: readonly string[]) =>
+  source.profiles.filter((p) =>
+    source.sidebar === "zen" && p.spaces?.length
+      ? p.spaces.some((sp) => spaces.includes(sp.id))
+      : sourceProfiles.includes(p.id) || (importsBySpaces(source) && !!p.spaces?.some((sp) => spaces.includes(sp.id))),
+  );
 
 const waitsForAccess = ({ step, fullDiskAccess }: ImportFlow) => (step.name === "safari" && !fullDiskAccess) || step.name === "access";
 

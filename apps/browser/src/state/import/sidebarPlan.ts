@@ -5,12 +5,20 @@ type PlannedSpace = { space: SpaceSuggestion; partition: number };
 type SidebarPlan = {
   spaces: PlannedSpace[];
   partitions: number;
+  containers: number[];
   dataPartition: number;
   favorites: ImportedTab[][];
   sharesTopApps: boolean;
 };
 
 const containerOf = (x: { container?: number }) => x.container ?? 0;
+
+export type FallbackContainer = number | "ambiguous" | undefined;
+
+export function fallbackZenContainer(spaces: { id: string; container?: number }[] | undefined, selectedIds: readonly string[]): FallbackContainer {
+  const chosen = [...new Set((spaces ?? []).filter((s) => selectedIds.includes(s.id)).map(containerOf))];
+  return chosen.length === 1 ? chosen[0] : chosen.length > 1 && !chosen.includes(0) ? "ambiguous" : undefined;
+}
 
 export function planSidebar(
   sidebar: "arc" | "zen",
@@ -21,6 +29,7 @@ export function planSidebar(
     return {
       spaces: result.spaces.map((space) => ({ space, partition: 0 })),
       partitions: result.spaces.length ? 1 : 0,
+      containers: result.spaces.length ? [0] : [],
       dataPartition: 0,
       favorites: [result.favorites],
       sharesTopApps: false,
@@ -45,5 +54,5 @@ export function planSidebar(
     if (own >= 0) favorites[own]!.push(tab);
     else if (!everySpace.some((s) => containerOf(s) === containerOf(tab))) favorites[dataPartition]!.push(tab);
   }
-  return { spaces, partitions: containers.length, dataPartition, favorites, sharesTopApps: true };
+  return { spaces, partitions: containers.length, containers, dataPartition, favorites, sharesTopApps: true };
 }

@@ -99,6 +99,21 @@ final class CookieTests: XCTestCase {
     XCTAssertEqual(byName["port"]?.sourceScheme, "secure")
     XCTAssertEqual(byName["none"]?.sameSite, "unspecified")
     XCTAssertEqual(byName["lbd"]?.sameSite, "unspecified")
+
+    let withContainers = try Firefox.cookies(profile: firefox, includeContainers: true)
+    XCTAssertEqual(withContainers.skipped, 2)
+    XCTAssertEqual(withContainers.items.count, 6)
+    XCTAssertEqual(withContainers.containerItems[2]?.map(\.name), ["container"])
+    XCTAssertEqual(withContainers.containerItems[2]?.first?.domain, "container.example")
+    XCTAssertTrue(Firefox.originAttributes("^userContextId=2&userContextId=0").isolated)
+    XCTAssertTrue(Firefox.originAttributes("^userContextId=2&userContextId=3").isolated)
+    XCTAssertTrue(Firefox.originAttributes("^userContextId=+2").isolated)
+    XCTAssertTrue(Firefox.originAttributes("^userContextId=9007199254740993").isolated)
+    XCTAssertTrue(Firefox.originAttributes("^userContextId=2&privateBrowsingId=1").isolated)
+    let partitioned = Firefox.originAttributes("^userContextId=2&partitionKey=(https,example.com)")
+    XCTAssertFalse(partitioned.isolated)
+    XCTAssertEqual(partitioned.container, 2)
+    XCTAssertEqual(partitioned.partition, CookiePartition(topLevelSite: "https://example.com", crossSite: false))
   }
 
   func testSafariBinaryCookies() throws {
@@ -189,20 +204,28 @@ final class CookieTests: XCTestCase {
   func testResultJSONCarriesCountsNotSecrets() throws {
     var result = ImportResult(browserId: "chrome", profileId: "Default")
     result.cookies = try ChromiumSecrets.cookies(profile: chrome, key: Fixtures.chromiumKey).items
+    result.containerCookies = [6: [Cookie(domain: "alt.example", name: "alt", value: secret("c0nt4in3r"))]]
     result.cards = [ImportedCard(number: secret("4111111111111111"))]
     result.vaultToken = "token-1"
+    result.containerVaultTokens = ["6": "token-6"]
+    result.containerCookieCounts = ["6": 1]
     let json = String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
     XCTAssertFalse(json.contains("s3ss10n"))
+    XCTAssertFalse(json.contains("c0nt4in3r"))
     XCTAssertFalse(json.contains("4111"))
     let top = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
     XCTAssertNil(top["cookies"])
+    XCTAssertNil(top["containerCookies"])
     XCTAssertNil(top["cards"])
-    XCTAssertEqual(top["cookieCount"] as? Int, 6)
+    XCTAssertEqual(top["cookieCount"] as? Int, 7)
     XCTAssertEqual(top["cardCount"] as? Int, 1)
     XCTAssertEqual(top["addressCount"] as? Int, 0)
     XCTAssertEqual(top["vaultToken"] as? String, "token-1")
+    XCTAssertEqual(top["containerVaultTokens"] as? [String: String], ["6": "token-6"])
+    XCTAssertEqual(top["containerCookieCounts"] as? [String: Int], ["6": 1])
     let decoded = try JSONDecoder().decode(ImportResult.self, from: Data(json.utf8))
-    XCTAssertEqual(decoded.cookieCount, 6)
+    XCTAssertEqual(decoded.cookieCount, 7)
     XCTAssertTrue(decoded.cookies.isEmpty)
+    XCTAssertTrue(decoded.containerCookies.isEmpty)
   }
 }

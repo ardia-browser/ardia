@@ -81,18 +81,20 @@ public enum Firefox {
 
   public struct CookieOutcome {
     public var items: [Cookie]
+    public var containerItems: [Int: [Cookie]] = [:]
     public var skipped: Int
   }
 
-  public static func cookies(profile: URL, cancellation: Cancellation = .init()) throws -> CookieOutcome {
-    try cookies(database: profile.appendingPathComponent("cookies.sqlite"), cancellation: cancellation)
+  public static func cookies(profile: URL, includeContainers: Bool = false, cancellation: Cancellation = .init()) throws -> CookieOutcome {
+    try cookies(database: profile.appendingPathComponent("cookies.sqlite"), includeContainers: includeContainers, cancellation: cancellation)
   }
 
-  public static func cookies(database: URL, cancellation: Cancellation = .init()) throws -> CookieOutcome {
+  public static func cookies(database: URL, includeContainers: Bool = false, cancellation: Cancellation = .init()) throws -> CookieOutcome {
     let db = try SQLiteSnapshot(copying: database)
     guard db.tableExists("moz_cookies") else { throw ImportError.unreadable("cookies.sqlite has no cookies") }
     let now = Date().timeIntervalSince1970 * 1000
     var out: [Cookie] = []
+    var containers: [Int: [Cookie]] = [:]
     var skipped = 0
     var seen = 0
     try db.query("SELECT * FROM moz_cookies") { row in
@@ -100,7 +102,7 @@ public enum Firefox {
       if seen % 256 == 0 { try cancellation.check() }
       guard let host = row.text("host"), let name = row.text("name") else { return true }
       let attributes = originAttributes(row.text("originAttributes") ?? "")
-      if attributes.isolated {
+      if attributes.isolated || (attributes.container != 0 && !includeContainers) {
         skipped += 1
         return true
       }
@@ -108,7 +110,7 @@ public enum Firefox {
       if let expiry, expiry < now { return true }
       let secure = (row.int("isSecure") ?? 0) != 0
       let schemeMap = row.int("schemeMap") ?? 0
-      out.append(Cookie(
+      let cookie = Cookie(
         domain: host,
         name: name,
         value: row.secret("value") ?? SecretBytes(count: 0),
@@ -123,10 +125,15 @@ public enum Firefox {
         partition: attributes.partition,
         sourceScheme: schemeMap & 2 != 0 ? "secure" : schemeMap & 1 != 0 ? "nonSecure" : "unset",
         sourcePort: -1
-      ))
+      )
+      if attributes.container == 0 {
+        out.append(cookie)
+      } else {
+        containers[attributes.container, default: []].append(cookie)
+      }
       return true
     }
-    return CookieOutcome(items: out, skipped: skipped)
+    return CookieOutcome(items: out, containerItems: containers, skipped: skipped)
   }
 
   static func sameSite(_ value: Int64?, raw: Int64?, secure: Bool) -> String {
@@ -139,10 +146,12 @@ public enum Firefox {
     }
   }
 
-  static func originAttributes(_ suffix: String) -> (isolated: Bool, partition: CookiePartition?) {
+  static func originAttributes(_ suffix: String) -> (isolated: Bool, container: Int, partition: CookiePartition?) {
     var text = Substring(suffix)
     if text.hasPrefix("^") { text = text.dropFirst() }
     var isolated = false
+    var container = 0
+    var seenContainer = false
     var partition: CookiePartition?
     for pair in text.split(separator: "&") where !pair.isEmpty {
       let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
@@ -153,7 +162,19 @@ public enum Firefox {
       let key = String(first)
       let value = parts.count > 1 ? (String(parts[1]).removingPercentEncoding ?? String(parts[1])) : ""
       switch key {
-      case "userContextId", "privateBrowsingId":
+      case "userContextId":
+        if seenContainer {
+          isolated = true
+          continue
+        }
+        seenContainer = true
+        if value.isEmpty || value == "0" { continue }
+        guard value.allSatisfy(\.isASCII), value.allSatisfy(\.isNumber), let id = UInt32(value), id > 0 else {
+          isolated = true
+          continue
+        }
+        container = Int(id)
+      case "privateBrowsingId":
         if value != "0" && !value.isEmpty { isolated = true }
       case "firstPartyDomain", "geckoViewSessionContextId":
         if !value.isEmpty { isolated = true }
@@ -167,7 +188,7 @@ public enum Firefox {
         continue
       }
     }
-    return (isolated, partition)
+    return (isolated, container, partition)
   }
 
   static func partitionSite(_ key: String) -> String? {

@@ -288,8 +288,16 @@ public struct ZenSidebar: Equatable {
   }
 
   static func container(_ any: Any?) -> Int? {
-    guard let id = (any as? NSNumber)?.intValue ?? (any as? String).flatMap({ Int($0) }), id > 0 else { return nil }
-    return id
+    if let number = any as? NSNumber {
+      if CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+      let v = number.doubleValue
+      guard v.isFinite, v.rounded() == v, v >= 1, v <= Double(UInt32.max) else { return nil }
+      return Int(v)
+    }
+    if let text = any as? String, text.allSatisfy(\.isASCII), text.allSatisfy(\.isNumber), let v = UInt32(text), v > 0 {
+      return Int(v)
+    }
+    return nil
   }
 
   static func objects(_ any: Any?) -> [[String: Any]] {

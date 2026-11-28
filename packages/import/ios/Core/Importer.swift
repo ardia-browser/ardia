@@ -248,12 +248,14 @@ public final class Importer: @unchecked Sendable {
             if outcome.items.isEmpty { throw ImportError.locked("The \(def.name) key didn't decrypt any cookies") }
           }
         case (.cookies, .firefox):
-          let outcome = try Firefox.cookies(profile: dir, cancellation: cancellation)
+          let includeContainers = def.sidebar == .zen
+          let outcome = try Firefox.cookies(profile: dir, includeContainers: includeContainers, cancellation: cancellation)
           result.cookies = outcome.items
-          count = outcome.items.count
+          result.containerCookies = outcome.containerItems
+          count = result.cookieCount
           if outcome.skipped > 0 {
             result.warnings.append(ImportWarning(kind, .skipped,
-              "\(Self.count(outcome.skipped, "cookie")) from containers or private windows weren't imported"))
+              "\(Self.count(outcome.skipped, "cookie")) from \(includeContainers ? "private windows or isolated contexts" : "containers or private windows") weren't imported"))
           }
 
         case (.autofill, .chromium), (.autofill, .arc):

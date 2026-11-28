@@ -293,17 +293,24 @@ public struct ImportResult: Codable, Equatable, Sendable {
   public var warnings: [ImportWarning] = []
   public var importCore: [ImportCoreRead] = []
   public var vaultToken: String?
+  public var containerVaultTokens: [String: String]?
+  public var containerCookieCounts: [String: Int]?
 
-  public var cookies: [Cookie] = [] { didSet { cookieCount = cookies.count } }
+  public var cookies: [Cookie] = [] { didSet { updateCookieCount() } }
+  public var containerCookies: [Int: [Cookie]] = [:] { didSet { updateCookieCount() } }
   public var addresses: [ImportedAddress] = [] { didSet { addressCount = addresses.count } }
   public var cards: [ImportedCard] = [] { didSet { cardCount = cards.count } }
   public private(set) var cookieCount = 0
   public private(set) var addressCount = 0
   public private(set) var cardCount = 0
 
+  private mutating func updateCookieCount() {
+    cookieCount = cookies.count + containerCookies.values.reduce(0) { $0 + $1.count }
+  }
+
   enum CodingKeys: String, CodingKey {
     case browserId, profileId, profile, bookmarks, history, historyCount, tabs, tabGroups, credentials, spaces, favorites, favicons,
-         searchEngine, separateEssentials, diaSidebar, arcRouting, arcArchive, arcCachedIcons, failed, warnings, importCore, vaultToken, cookieCount, addressCount, cardCount
+         searchEngine, separateEssentials, diaSidebar, arcRouting, arcArchive, arcCachedIcons, failed, warnings, importCore, vaultToken, containerVaultTokens, containerCookieCounts, cookieCount, addressCount, cardCount
   }
 
   public init(browserId: String, profileId: String) {

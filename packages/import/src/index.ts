@@ -154,6 +154,8 @@ export type ImportResult = {
   addressCount: number;
   cardCount: number;
   vaultToken?: string;
+  containerVaultTokens?: Record<string, string>;
+  containerCookieCounts?: Record<string, number>;
   spaces: SpaceSuggestion[];
   favorites: ImportedTab[];
   favicons: ImportedFavicon[];

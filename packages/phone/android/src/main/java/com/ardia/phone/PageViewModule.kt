@@ -81,6 +81,8 @@ class PageViewModule : Module() {
             PhonePages.androidPermissionGate = null
         }
 
+        OnActivityEntersBackground { LongScreenshots.cancel() }
+
         OnActivityEntersForeground {
             val activity = appContext.currentActivity
             val main = android.os.Handler(android.os.Looper.getMainLooper())
@@ -206,7 +208,12 @@ class PageViewModule : Module() {
             LongScreenshots.share(activity, uri)
         }.runOnQueue(Queues.MAIN)
 
-        AsyncFunction("discardLongScreenshot") { id: String -> LongScreenshots.discard(context, id) }
+        AsyncFunction("discardLongScreenshot") { id: String -> LongScreenshots.discard(context, id) }.runOnQueue(Queues.MAIN)
+
+        AsyncFunction("cancelLongScreenshot") Coroutine { ->
+            withContext(Dispatchers.Main) { LongScreenshots.cancel()?.join() }
+            Unit
+        }
 
         AsyncFunction("summarizePage") { pageId: String -> PhonePages.summarize(pageId) }.runOnQueue(Queues.MAIN)
 

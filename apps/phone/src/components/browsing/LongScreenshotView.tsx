@@ -3,7 +3,7 @@ import { Image, StyleSheet, Text, useWindowDimensions, View, type AccessibilityA
 import { Gesture, GestureDetector, ScrollView } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { draggedCrop, minimumCropRows, wholeCrop, type Crop, type CropHandle, type Shot } from "../../lib/longScreenshot";
+import { draggedCrop, minimumCropRows, shotLabel, wholeCrop, type Crop, type CropHandle, type Shot } from "../../lib/longScreenshot";
 import { actionWords, dismissWords, ELLIPSIS } from "../../lib/sharedWords";
 import { useSystemBars } from "../../state/app/systemBars";
 import { cancelLongScreenshot, closeLongScreenshot, longScreenshotBack, saveLongScreenshot, shareLongScreenshot, useLongScreenshot, type LongScreenshotStage } from "../../state/longScreenshot/store";
@@ -14,8 +14,6 @@ const CAPTURING = `Capturing Page${ELLIPSIS}`;
 const SAVED = "Saved to Pictures › Ardia";
 const CROP_HINT = "Drag the top and bottom edges to crop.";
 const EDGE_LABELS: Record<CropHandle, string> = { top: "Top Edge", bottom: "Bottom Edge" };
-
-const screensLabel = (screens: number) => (screens === 1 ? "1 screen" : `${screens} screens`);
 
 export function LongScreenshotHost() {
   const stage = useLongScreenshot((state) => state.stage);
@@ -49,7 +47,7 @@ function LongScreenshotView({ stage }: { stage: Exclude<LongScreenshotStage, { k
             <Text style={[font.body, styles.bold, { color: theme.label }]} numberOfLines={1}>
               {actionWords.longScreenshot}
             </Text>
-            {shot ? <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{screensLabel(shot.screens)}</Text> : null}
+            {shot ? <Text style={[font.footnote, { color: theme.secondaryLabel }]}>{shotLabel(shot)}</Text> : null}
           </View>
           <View style={[styles.barSide, styles.barEnd]}>
             {saved ? null : (
@@ -102,7 +100,7 @@ function ShotPreview({ shot, crop, onCrop, locked, bottomInset }: { shot: Shot; 
   const tall = shot.height * scale;
   return (
     <ScrollView testID="longScreenshotScroll" style={styles.fill} scrollEnabled={!dragging} bounces={false} overScrollMode="never" contentContainerStyle={{ alignItems: "center", paddingTop: longScreenshotLayout.handleHit / 2 + space.s, paddingBottom: bottomInset + space.huge * 4 }}>
-      <View style={[styles.frame, { width: shown, height: tall, borderColor: longScreenshotInk.frame }]} accessibilityLabel={`${actionWords.longScreenshot}, ${screensLabel(shot.screens)}`}>
+      <View style={[styles.frame, { width: shown, height: tall, borderColor: longScreenshotInk.frame }]} accessibilityLabel={`${actionWords.longScreenshot}, ${shotLabel(shot)}`}>
         {shot.tiles.map((tile) => (
           <Image key={tile.uri} source={{ uri: tile.uri }} resizeMethod="resize" fadeDuration={0} style={{ width: shown, height: tile.height * scale }} />
         ))}

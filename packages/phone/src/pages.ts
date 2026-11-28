@@ -39,7 +39,7 @@ export type OffscreenCapture = { fileName: string; path: string; title: string |
 
 export type LongScreenshotTile = { uri: string; top: number; height: number };
 
-export type LongScreenshot = { id: string; uri: string; path: string; width: number; height: number; screens: number; tiles: LongScreenshotTile[] };
+export type LongScreenshot = { id: string; uri: string; path: string; width: number; height: number; screens: number; complete: boolean; tiles: LongScreenshotTile[] };
 
 export type SavedLongScreenshot = { uri: string; width: number; height: number };
 
@@ -83,6 +83,7 @@ type PagesNative = {
   saveLongScreenshot?(id: string, top: number, bottom: number): Promise<unknown>;
   shareLongScreenshot?(uri: string): Promise<boolean>;
   discardLongScreenshot?(id: string): Promise<void>;
+  cancelLongScreenshot?(): Promise<void>;
   sharePage?(pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null>;
   summarizePage?(pageId: string): Promise<boolean>;
   dismissPageSummaries?(): Promise<void>;
@@ -188,6 +189,7 @@ export const pages = {
   saveLongScreenshot: (id: string, top: number, bottom: number): Promise<unknown> => native().saveLongScreenshot?.(id, top, bottom) ?? Promise.resolve(null),
   shareLongScreenshot: (uri: string): Promise<boolean> => native().shareLongScreenshot?.(uri) ?? Promise.resolve(false),
   discardLongScreenshot: (id: string): Promise<void> => native().discardLongScreenshot?.(id) ?? Promise.resolve(),
+  cancelLongScreenshot: (): Promise<void> => native().cancelLongScreenshot?.() ?? Promise.resolve(),
   sharePage: (pageId: string, url: CleanedUrl, title: CleanedTitle): Promise<string | null> => native().sharePage?.(pageId, url, title) ?? Promise.resolve(null),
   sharesWithPrint: (): boolean => typeof native().sharePage === "function",
   summarize: (pageId: string): Promise<boolean> => native().summarizePage?.(pageId) ?? Promise.resolve(false),

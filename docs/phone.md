@@ -2121,22 +2121,42 @@ page too. It captures the page as one tall picture, shows it to crop, and saves 
   `LongScreenshotPlan.offset` slides the new step over the last one's rows and takes the move where the rows with
   content match (ties go to the move `scrollY` reports). On the F4, `scrollY` on English Wikipedia's Lisbon article
   once lagged a step behind the page (it said 1,262 px for a 1,740 px move), which stitched a repeated block and
-  dropped another before matching; with no matching rows the capture ends there rather than leave a seam. Before
+  dropped another before matching. A step whose rows match nothing is drawn once more after another paint and matched
+  again; if it still matches nothing the capture ends there rather than leave a seam, and the preview says so
+  ("Stopped after 3 screens", `complete: false` from the module). If only the first screen lined up on a taller page,
+  the capture fails with its toast instead of offering one screen as the whole page. Before
   the first step a quick pass scrolls to the bottom and back (a frame and 80 ms a step), so lazily loaded images and
   Wikipedia's Related Articles are in place before anything is drawn; without it they appeared between two steps and
-  the last match failed, ending the picture above them. After the first screen a script hides every `position: fixed` element (opacity 0) and
-  turns `sticky` ones into `relative`, so headers and banners appear once and never repeat; it saves each element's own
-  `style` attribute and puts it back afterwards. The scroll position, the scroll bar and the styles are always restored,
-  also after a failure or a cancel.
+  the last match failed, ending the picture above them. After the first screen a script hides every `position: fixed`
+  element (opacity 0) and turns `sticky` ones into `relative`, so headers and banners appear once and never repeat; the
+  first screen is then drawn again, without them, as the picture the second step is matched against (a translucent
+  fixed backdrop otherwise changes every overlapping row). The script keeps each element it changed and its original
+  `style` attribute in a list on `window` under a `Symbol.for` key made fresh for each capture, never in a DOM
+  attribute, so a page can't plant a marker that makes cleanup touch its own elements, and an element removed during
+  the capture still gets its style back (`lib/longScreenshotScripts.test.ts` runs the shipped scripts in jsdom). The
+  draw happens on the main thread; reading a step's pixels and matching them run on a background thread, so Back and
+  Cancel stay responsive on dense pages.
+- **Cancel, background and page changes.** A capture is a job the module owns. Back, Cancel, a tab switch and the app
+  going to the background cancel it (`cancelLongScreenshot`, and `OnActivityEntersBackground` natively): stepping
+  stops, the scroll position, the scroll bar and the styles are restored at once, and the next capture waits for that
+  cleanup instead of failing as busy. A reload, redirect or new address in the same WebView during the capture
+  (`CaptureDocument`: the page engine's URL and loading state, plus `WebView.getUrl`) aborts it, and cleanup then leaves
+  the new document's scroll and styles alone. JS drops a result that lands after its tab stopped being the current
+  one.
 - **Why stitching.** `WebView.enableSlowWholeDocumentDraw()` would let one `draw` paint the whole document, but it is
   process-wide and must be called before any WebView exists, so every page in the app would pay for it. Stitching keeps
   the normal draw path and costs only while a capture runs.
-- **Caps.** At most 20 screens. The bitmap's budget is an eighth of the memory the system reports free, kept between
-  32 and 128 MB; a taller page is scaled down to fit it (a 1080 px wide page keeps full size up to about 31,000 px).
+- **Caps.** At most 20 screens. The budget is an eighth of the memory the system reports free, kept between 48 and
+  160 MB; the viewport picture and the two pixel arrays matching needs come out of it first, and the stitched bitmap
+  gets the rest, at least 16 MB. A taller page is scaled down to fit (on the F4, 1080 × 2320 with memory to spare, a page keeps full size up
+  to about 31,900 px).
   The page's height comes only from the WebView (`contentHeight` times its scale), clamped to one to 20 screens; a page
   that stops scrolling ends the capture where it stopped (boundary row `phone-page:longScreenshot`).
-- **Files.** The stitched PNG and 2048-row JPEG tiles for the preview go to `cache/long-screenshots/<id>/`, which the
-  next capture, Cancel and Done delete. Save decodes only the kept rows (`BitmapRegionDecoder`, or a plain copy when
+- **Files.** The stitched PNG and 2048-row JPEG tiles for the preview go to `cache/long-screenshots/<id>/`. Cancel
+  and Done delete only that capture's folder, on the main queue the capture runs on, so a late discard can't remove a
+  newer capture's files; a new capture clears the whole folder; a failed or cancelled write deletes its partial files.
+  JS takes only that folder's `shot.png` and `tile-0.jpg`, `tile-1.jpg`… in order, so no other file reaches `Image`
+  and no key repeats. A save whose MediaStore update publishes no row is a failure, and its pending row is deleted. Save decodes only the kept rows (`BitmapRegionDecoder`, or a plain copy when
   nothing was cropped) into MediaStore with `IS_PENDING`, which needs no storage permission on API 29+. Share sends
   that `content://` address with a read grant through the system chooser.
 - **Preview** (`components/browsing/LongScreenshotView.tsx`, state in `state/longScreenshot/store.ts`, crop math in
@@ -2170,7 +2190,10 @@ the whole page as a PDF, opened at the part that was on screen (#4706).
   writes a PDF it gets to `Documents/FullPageProbe/probe-<n>.pdf` in the app's container and logs
   `PAGELAB fullpage probe <n>: delegate installed yes, answered … bytes, … pages of WxH, page 0 rect x,y WxH, written to …`,
   or `answered nil` after a `PAGELAB fullpage none: <reason>` line. Trigger it with
-  `xcrun simctl --set ~/.simlock/devices/ios spawn <udid> notifyutil -p com.ardia.browser.ios.lab.fullPage`. When iOS
+  `xcrun simctl --set ~/.simlock/devices/ios spawn <udid> notifyutil -p com.ardia.browser.ios.lab.fullPage`. The suffixes
+  `.navigate`, `.scroll` and `.sheet` on that name load another page, scroll 600 pt or present a sheet while the PDF
+  renders; the delegate measures the rect after the PDF returns and answers nil when the page navigated, changed tab,
+  relaid out or got covered meanwhile (`PAGELAB fullpage none: while the PDF rendered, …`). When iOS
   itself asks, the app logs `PAGELAB fullpage asked for a PDF`. Checked on the iPhone 18 Pro simulator: a scrolled
   Wikipedia article answered a one-page PDF and the rect of the part on screen; an Incognito tab, the deck and the
   Settings sheet answered nil. The simulator can't open the screenshot editor through `agent-device` (no hardware

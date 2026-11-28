@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { act, type ReactTestRenderer } from "react-test-renderer";
 import "../platform/copy";
 import { pages } from "../platform/pages";
@@ -27,6 +27,7 @@ const SHOT = {
   width: 1080,
   height: 5000,
   screens: 3,
+  complete: true,
   tiles: [
     { uri: `${dir}/tile-0.jpg`, top: 0, height: 2048 },
     { uri: `${dir}/tile-1.jpg`, top: 2048, height: 2048 },
@@ -40,6 +41,8 @@ let saved: jest.SpyInstance;
 let shared: jest.SpyInstance;
 let discarded: jest.SpyInstance;
 let counted: jest.SpyInstance;
+let cancelled: jest.SpyInstance;
+let appState: ((state: string) => void) | null;
 
 const page = (url: string) =>
   usePages.setState((state) => ({ ...state, navigation: { t0: { url, title: "Site 0", canGoBack: false, canGoForward: false, isLoading: false, pageZoom: 1, isDesktopSite: false, blockedRequests: 0 } as never } }));
@@ -58,7 +61,25 @@ beforeEach(() => {
   shared = jest.spyOn(pages, "shareLongScreenshot").mockResolvedValue(true);
   discarded = jest.spyOn(pages, "discardLongScreenshot").mockResolvedValue(undefined);
   counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
+  cancelled = jest.spyOn(pages, "cancelLongScreenshot").mockResolvedValue(undefined);
+  appState = null;
+  jest.spyOn(AppState, "addEventListener").mockImplementation(((_type: string, listener: (state: string) => void) => {
+    appState = listener;
+    return { remove: () => (appState === listener ? (appState = null) : undefined) };
+  }) as never);
 });
+
+function pending<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+async function startCapture(root: ReactTestRenderer) {
+  await pressButton(root, "Long Screenshot");
+  await settle();
+  expect(useLongScreenshot.getState().stage.kind).toBe("capturing");
+}
 
 afterEach(() => {
   act(() => jest.runOnlyPendingTimers());
@@ -116,6 +137,94 @@ onAndroid("Long Screenshot sits right after Print in each Android page menu, ena
     unmount(root);
     act(() => usePageUi.setState({ menuOpen: false }));
   }
+});
+
+onAndroid("on a page that isn't a web page the row is there but disabled, as Print is", async () => {
+  page("about:blank");
+  const root = await openMenu("redesigned");
+  const row = byTestId(root, "pageMenuRow:Long Screenshot");
+  expect(row?.props.accessibilityState).toMatchObject({ disabled: true });
+  expect(byTestId(root, "pageMenuRow:Print")?.props.accessibilityState).toMatchObject({ disabled: true });
+  unmount(root);
+  expect(taken).not.toHaveBeenCalled();
+});
+
+onAndroid("Back during the capture cancels the native capture, drops its late result, and a retry starts at once", async () => {
+  const late = pending<unknown>();
+  taken.mockReturnValueOnce(late.promise);
+  const root = await openMenu("redesigned");
+  await startCapture(root);
+  expect(taken).toHaveBeenCalledTimes(1);
+  act(() => {
+    expect(handleSystemBack()).toBe(true);
+  });
+  expect(useLongScreenshot.getState().stage.kind).toBe("idle");
+  expect(cancelled).toHaveBeenCalledTimes(1);
+  expect(counted).toHaveBeenCalledWith("long_screenshot_cancelled");
+  await act(async () => {
+    late.resolve(SHOT);
+    await Promise.resolve();
+  });
+  expect(useLongScreenshot.getState().stage.kind).toBe("idle");
+  expect(discarded).toHaveBeenCalledWith(ID);
+  act(() => usePageUi.setState({ menuOpen: false }));
+  unmount(root);
+  const again = await openMenu("redesigned");
+  await pressButton(again, "Long Screenshot");
+  await settle();
+  await settle();
+  expect(taken).toHaveBeenCalledTimes(2);
+  expect(useLongScreenshot.getState().stage.kind).toBe("preview");
+  unmount(again);
+});
+
+onAndroid("Cancel during the capture cancels the native capture too", async () => {
+  taken.mockReturnValueOnce(pending<unknown>().promise);
+  const root = await openMenu("redesigned");
+  await startCapture(root);
+  await pressId(root, "longScreenshotCancel");
+  expect(useLongScreenshot.getState().stage.kind).toBe("idle");
+  expect(cancelled).toHaveBeenCalledTimes(1);
+  unmount(root);
+});
+
+onAndroid("the app going to the background cancels a capture in progress", async () => {
+  taken.mockReturnValueOnce(pending<unknown>().promise);
+  const root = await openMenu("redesigned");
+  await startCapture(root);
+  expect(appState).not.toBeNull();
+  act(() => appState?.("background"));
+  expect(useLongScreenshot.getState().stage.kind).toBe("idle");
+  expect(cancelled).toHaveBeenCalledTimes(1);
+  expect(appState).toBeNull();
+  unmount(root);
+});
+
+onAndroid("a result that lands after the tab changed is dropped and its files discarded", async () => {
+  withTabs(2);
+  const late = pending<unknown>();
+  taken.mockReturnValueOnce(late.promise);
+  const root = await openMenu("redesigned");
+  await startCapture(root);
+  act(() => useTabs.setState((state) => ({ ...state, selectedId: state.open.find((tab) => tab.id !== state.selectedId)!.id })));
+  expect(cancelled).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    late.resolve(SHOT);
+    await Promise.resolve();
+  });
+  expect(useLongScreenshot.getState().stage.kind).toBe("idle");
+  expect(discarded).toHaveBeenCalledWith(ID);
+  unmount(root);
+});
+
+onAndroid("a capture that stopped early says how far it got in the preview", async () => {
+  taken.mockResolvedValueOnce({ ...SHOT, screens: 2, complete: false });
+  const root = await openMenu("redesigned");
+  await pressButton(root, "Long Screenshot");
+  await settle();
+  await settle();
+  expect(textOf(root)).toContain("Stopped after 2 screens");
+  unmount(root);
 });
 
 onAndroid("a private tab's page menu has no Long Screenshot row, and nothing can start one there", async () => {

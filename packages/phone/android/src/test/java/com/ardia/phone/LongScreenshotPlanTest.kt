@@ -1,6 +1,7 @@
 package com.ardia.phone
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -59,13 +60,11 @@ class LongScreenshotPlanTest {
     private fun window(source: IntArray, top: Int, rows: Int): IntArray = source.copyOfRange(top * pageWidth, (top + rows) * pageWidth)
 
     @Test
-    fun theMoveBetweenTwoStepsComesFromThePixelsWhenTheScrollPositionIsWrong() {
+    fun theMoveBetweenTwoStepsComesFromThePixelsWhateverTheScrollPositionSays() {
         val source = page(800)
         val before = window(source, 0, 200)
-        val after = window(source, 155, 200)
-        assertEquals(155, LongScreenshotPlan.offset(before, 200, after, 200, pageWidth, 140))
-        assertEquals(155, LongScreenshotPlan.offset(before, 200, after, 200, pageWidth, 170))
-        assertEquals(155, LongScreenshotPlan.offset(before, 200, after, 200, pageWidth, 155))
+        for (said in listOf(40, 140, 155, 170, 280)) assertEquals("scroll said $said", 155, LongScreenshotPlan.offset(before, 200, window(source, 155, 200), 200, pageWidth, said))
+        assertEquals(60, LongScreenshotPlan.offset(before, 200, window(source, 60, 200), 200, pageWidth, 280))
     }
 
     @Test
@@ -75,13 +74,6 @@ class LongScreenshotPlanTest {
         for (row in 185 until 200) for (column in 0 until pageWidth) before[row * pageWidth + column] = 0xFF2266FF.toInt()
         val after = window(source, 120, 200)
         assertEquals(120, LongScreenshotPlan.offset(before, 200, after, 200, pageWidth, 130))
-    }
-
-    @Test
-    fun aStaleScrollPositionIsOverruledByThePixels() {
-        val source = page(800)
-        assertEquals(150, LongScreenshotPlan.offset(window(source, 0, 200), 200, window(source, 150, 200), 200, pageWidth, 40))
-        assertEquals(60, LongScreenshotPlan.offset(window(source, 0, 200), 200, window(source, 60, 200), 200, pageWidth, 280))
     }
 
     @Test
@@ -99,6 +91,48 @@ class LongScreenshotPlanTest {
         assertNull("a jump past the screen", LongScreenshotPlan.offset(window(source, 0, 200), 200, window(source, 500, 200), 200, pageWidth, 150))
         assertNull(LongScreenshotPlan.offset(window(source, 0, 200), 200, IntArray(10), 200, pageWidth, 150))
         assertNull(LongScreenshotPlan.offset(window(source, 0, 200), 200, window(source, 150, 200), 200, 0, 150))
+    }
+
+    @Test
+    fun aTranslucentBackdropHiddenAfterTheFirstStepLeavesNoMatchWithTheFirstPicture() {
+        val source = page(800)
+        val tinted = window(source, 0, 200).map { pixel -> (pixel and 0xFF000000.toInt()) or ((pixel and 0xFEFEFE) shr 1) }.toIntArray()
+        assertNull(LongScreenshotPlan.offset(tinted, 200, window(source, 150, 200), 200, pageWidth, 150))
+        assertEquals("the first step drawn again once the backdrop is hidden matches", 150, LongScreenshotPlan.offset(window(source, 0, 200), 200, window(source, 150, 200), 200, pageWidth, 150))
+    }
+
+    @Test
+    fun aCaptureThatStopsEarlyIsMarkedPartialAndOneThatNeverMatchedFails() {
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport, matchFailed = false))
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(3_000, 5_500, viewport, matchFailed = false))
+        assertEquals(LongScreenshotPlan.Ending.Complete, LongScreenshotPlan.ending(5_500, 5_500, viewport, matchFailed = true))
+        assertEquals(LongScreenshotPlan.Ending.Stopped, LongScreenshotPlan.ending(3_500, 5_500, viewport, matchFailed = true))
+        assertEquals(LongScreenshotPlan.Ending.Failed, LongScreenshotPlan.ending(viewport, 5_500, viewport, matchFailed = true))
+    }
+
+    @Test
+    fun theViewportPictureAndBothPixelArraysComeOutOfTheBudget() {
+        assertEquals(1080L * 2400 * 4 * 3, LongScreenshotPlan.workingBytes(1080, 2400))
+        val plenty = 16L * 1024 * 1024 * 1024
+        assertEquals(LongScreenshotPlan.MAX_BUDGET_BYTES - LongScreenshotPlan.workingBytes(1080, 2400), LongScreenshotPlan.outputBudget(plenty, 1080, 2400))
+        assertEquals(LongScreenshotPlan.MIN_OUTPUT_BYTES, LongScreenshotPlan.outputBudget(0, 4000, 4000))
+        assertEquals(0L, LongScreenshotPlan.workingBytes(-1, 2400))
+    }
+
+    @Test
+    fun aReloadARedirectOrANewAddressMarksTheCapturedDocumentReplaced() {
+        val still = CaptureDocument("https://en.wikipedia.org/wiki/Lisbon", false, "https://en.m.wikipedia.org/wiki/Lisbon")
+        still.saw("https://en.wikipedia.org/wiki/Lisbon", false)
+        assertFalse(still.check("https://en.m.wikipedia.org/wiki/Lisbon"))
+        val reloaded = CaptureDocument("https://en.wikipedia.org/wiki/Lisbon", false, null)
+        reloaded.saw("https://en.wikipedia.org/wiki/Lisbon", true)
+        assertTrue(reloaded.replaced)
+        val redirected = CaptureDocument("https://en.wikipedia.org/wiki/Lisbon", true, null)
+        redirected.saw("https://en.wikipedia.org/wiki/Lisboa", true)
+        assertTrue(redirected.replaced)
+        val swapped = CaptureDocument("https://example.com/", false, "https://example.com/")
+        assertTrue(swapped.check("https://example.com/next"))
+        assertTrue("it stays replaced", swapped.check("https://example.com/"))
     }
 
     @Test

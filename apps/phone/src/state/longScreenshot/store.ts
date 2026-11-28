@@ -1,6 +1,8 @@
+import { AppState } from "react-native";
 import { create } from "zustand";
 import { isWholeCrop, savedShotOf, shotOf, type Crop, type SavedShot, type Shot } from "../../lib/longScreenshot";
 import { pages } from "../../platform/pages";
+import { currentTabs, useTabs } from "../tabs/store";
 import { countUsage } from "../telemetry/telemetry";
 import { showToast } from "../toasts/store";
 
@@ -40,18 +42,45 @@ function forget(shot: Shot) {
   void pages.discardLongScreenshot(shot.id).catch(() => undefined);
 }
 
+let unwatch: (() => void) | null = null;
+
+function stopWatching() {
+  unwatch?.();
+  unwatch = null;
+}
+
+function watchCapture(tabId: string) {
+  stopWatching();
+  const leaving = AppState.addEventListener("change", (state) => {
+    if (state === "background") cancelLongScreenshot();
+  });
+  const switching = useTabs.subscribe((tabs) => {
+    if (tabs.selectedId !== tabId) cancelLongScreenshot();
+  });
+  unwatch = () => {
+    leaving.remove();
+    switching();
+  };
+}
+
 export async function takeLongScreenshot(tabId: string, isPrivate: boolean) {
   if (isPrivate || stage().kind !== "idle" || !canTakeLongScreenshots()) return;
   const mine = ++run;
   enter({ kind: "capturing", tabId });
+  watchCapture(tabId);
   await new Promise((done) => setTimeout(done, COVERED_MS));
   if (mine !== run) return;
   const raw = await pages.takeLongScreenshot(tabId).catch(() => null);
   const shot = shotOf(raw);
-  if (mine !== run) {
+  if (mine !== run || currentTabs().selectedId !== tabId) {
     if (shot) forget(shot);
+    if (mine === run) {
+      stopWatching();
+      enter({ kind: "idle" });
+    }
     return;
   }
+  stopWatching();
   if (!shot) {
     enter({ kind: "idle" });
     failed(CAPTURE_FAILED);
@@ -65,6 +94,8 @@ export function cancelLongScreenshot() {
   if (now.kind === "idle" || now.kind === "saved") return;
   if (now.kind === "preview" && now.saving) return;
   run += 1;
+  stopWatching();
+  if (now.kind === "capturing") void pages.cancelLongScreenshot().catch(() => undefined);
   if (now.kind === "preview") forget(now.shot);
   countUsage("long_screenshot_cancelled");
   enter({ kind: "idle" });

@@ -2868,16 +2868,21 @@
   {
    "id": "phone-page:longScreenshot",
    "source": "page",
-   "guard": "Android's Long screenshot reads the page's size only through the WebView (contentHeight times scale, scrollY after each scrollTo), never from script: LongScreenshotPlan.pageHeight takes a finite value no smaller than one screen and caps it at 20 screens, the stitched bitmap is sized by LongScreenshotPlan.output inside a memory budget, and a scroll that lands short or past the rows already drawn ends the capture (LongScreenshotPlan.slice) instead of leaving a gap. The scripts it evaluates hide fixed and unstick sticky elements and put back each element's own style attribute; their results are ignored, and each waits at most 2 s. The capture refuses private tabs and pages that aren't http(s). JS takes the module's answer only as a shot whose id is a UUID, whose file:// tiles cover it top to bottom, and a saved picture only as a content://media address (shotOf, savedShotOf); a save crops in rows clamped inside the image (LongScreenshotPlan.crop) and shares only the address that save wrote",
+   "guard": "Android's Long screenshot reads the page's size only through the WebView (contentHeight times scale), never from script, and places each step by matching its pixels with the step before rather than trusting scrollY: LongScreenshotPlan.pageHeight takes a finite value no smaller than one screen and caps it at 20 screens, the stitched bitmap is sized by LongScreenshotPlan.output inside a memory budget that also counts the viewport picture and both pixel arrays, and a step with no matching rows ends the capture as partial (or fails it when only the first screen lined up) instead of leaving a seam. A reload, redirect or new address in the WebView during the capture (CaptureDocument, from the page engine's state and WebView.getUrl) aborts it and leaves the new document's scroll alone. The scripts it evaluates hide fixed and unstick sticky elements and keep each changed element and its original style attribute in a list held under a per-capture Symbol.for key on window, never a DOM attribute, so a page that plants a marker can't make cleanup touch its elements; their results are ignored, and each waits at most 2 s. The capture refuses private tabs and pages that aren't http(s). JS takes the module's answer only as a shot whose id is a UUID, whose picture is file://…/cache/long-screenshots/<id>/shot.png and whose tiles are exactly that folder's tile-0.jpg, tile-1.jpg… in order, covering it top to bottom, with a boolean complete flag, and drops a shot that lands after the tab changed; a saved picture only as a content://media address (shotOf, savedShotOf); a save crops in rows clamped inside the image (LongScreenshotPlan.crop) and shares only the address that save wrote",
    "checks": [
     "packages/phone/android/src/main/java/com/ardia/phone/LongScreenshotPlan.kt#pageHeight",
     "packages/phone/android/src/main/java/com/ardia/phone/LongScreenshotPlan.kt#slice",
     "packages/phone/android/src/main/java/com/ardia/phone/LongScreenshotPlan.kt#crop",
+    "packages/phone/android/src/main/java/com/ardia/phone/LongScreenshotPlan.kt#CaptureDocument",
     "packages/phone/android/src/main/java/com/ardia/phone/LongScreenshots.kt#capturable",
+    "packages/phone/android/src/main/java/com/ardia/phone/LongScreenshots.kt#HIDE_FIXED",
     "packages/phone/android/src/test/java/com/ardia/phone/LongScreenshotPlanTest.kt#aPageHeightTheWebViewReportsIsClampedToOneToTwentyScreens",
+    "packages/phone/android/src/test/java/com/ardia/phone/LongScreenshotPlanTest.kt#aReloadARedirectOrANewAddressMarksTheCapturedDocumentReplaced",
     "apps/phone/src/lib/longScreenshot.ts#shotOf",
     "apps/phone/src/lib/longScreenshot.ts#savedShotOf",
-    "apps/phone/src/lib/longScreenshot.test.ts#a capture that is malformed in any field is refused whole"
+    "apps/phone/src/lib/longScreenshot.test.ts#the shared hostile list never reaches Image",
+    "apps/phone/src/lib/longScreenshotScripts.test.ts#cleanup never touches an element the page marked itself",
+    "apps/phone/src/state/longScreenshot/store.ts#currentTabs().selectedId !== tabId"
    ],
    "detected": false
   }

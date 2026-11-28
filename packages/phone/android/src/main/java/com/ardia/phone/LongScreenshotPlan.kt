@@ -6,8 +6,10 @@ import kotlin.math.sqrt
 
 internal object LongScreenshotPlan {
     const val MAX_SCREENS = 20
-    const val MIN_BUDGET_BYTES = 32L * 1024 * 1024
-    const val MAX_BUDGET_BYTES = 128L * 1024 * 1024
+    const val MIN_BUDGET_BYTES = 48L * 1024 * 1024
+    const val MAX_BUDGET_BYTES = 160L * 1024 * 1024
+    const val MIN_OUTPUT_BYTES = 16L * 1024 * 1024
+    private const val WORKING_COPIES = 3
     const val TILE_HEIGHT = 2048
     private const val BYTES_PER_PIXEL = 4
     private const val OVERLAP_SHARE = 4
@@ -33,6 +35,18 @@ internal object LongScreenshotPlan {
     }
 
     fun budget(availableBytes: Long): Long = (availableBytes / 8).coerceIn(MIN_BUDGET_BYTES, MAX_BUDGET_BYTES)
+
+    fun workingBytes(width: Int, viewport: Int): Long = maxOf(0, width).toLong() * maxOf(0, viewport) * BYTES_PER_PIXEL * WORKING_COPIES
+
+    fun outputBudget(availableBytes: Long, width: Int, viewport: Int): Long = (budget(availableBytes) - workingBytes(width, viewport)).coerceAtLeast(MIN_OUTPUT_BYTES)
+
+    enum class Ending { Complete, Stopped, Failed }
+
+    fun ending(filled: Int, pageHeight: Int, viewport: Int, matchFailed: Boolean): Ending = when {
+        !matchFailed || filled >= pageHeight -> Ending.Complete
+        filled <= viewport -> Ending.Failed
+        else -> Ending.Stopped
+    }
 
     fun output(width: Int, pageHeight: Int, budgetBytes: Long): Output? {
         if (width <= 0 || pageHeight <= 0 || budgetBytes <= 0) return null
@@ -111,5 +125,23 @@ internal object LongScreenshotPlan {
         val from = top.roundToInt().coerceIn(0, height - 1)
         val to = bottom.roundToInt().coerceIn(from + 1, height)
         return Crop(from, to)
+    }
+}
+
+internal class CaptureDocument(url: String?, isLoading: Boolean, private val webUrl: String?) {
+    private val document = com.ardia.browsing.PageDocument().also { it.saw(url, isLoading) }
+    private val start = document.generation
+
+    @Volatile
+    var replaced = false
+        private set
+
+    fun saw(url: String?, isLoading: Boolean) {
+        if (document.saw(url, isLoading) != start) replaced = true
+    }
+
+    fun check(webUrl: String?): Boolean {
+        if (webUrl != this.webUrl) replaced = true
+        return replaced
     }
 }

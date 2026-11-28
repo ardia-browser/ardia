@@ -51,6 +51,22 @@ final class MouseGestureStrokesTests: XCTestCase {
     XCTAssertNil(diagonal.action)
   }
 
+  func testADiagonalTailAfterAGestureCancelsIt() {
+    var tail = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    for point in [CGPoint(x: 0, y: -48), CGPoint(x: 48, y: -48), CGPoint(x: 72, y: -24), CGPoint(x: 96, y: 0)] { tail.add(point) }
+    XCTAssertEqual(tail.directions, [.down, .right])
+    XCTAssertTrue(tail.strayed)
+    XCTAssertNil(tail.action)
+  }
+
+  func testOneRoundedCornerStillMakesTheGesture() {
+    var corner = MouseGestureStrokes(start: CGPoint(x: 0, y: 0))
+    for point in [CGPoint(x: 0, y: -48), CGPoint(x: 24, y: -72), CGPoint(x: 72, y: -72), CGPoint(x: 120, y: -72)] { corner.add(point) }
+    XCTAssertEqual(corner.directions, [.down, .right])
+    XCTAssertFalse(corner.strayed)
+    XCTAssertEqual(corner.action?.command, "closeTab")
+  }
+
   func testAStrokeThatLeansUnderAThirdOfAnAxisStillCounts() {
     XCTAssertEqual(strokes([(-120, 40)]).action?.command, "back")
     XCTAssertEqual(strokes([(0, -100), (100, -30)]).action?.command, "closeTab")

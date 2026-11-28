@@ -50,6 +50,16 @@ test("gesture runs are counted by action only, with consent, and anything else i
   assert.deepEqual(Object.values(takeMouseGestureCounts()), [0, 0, 0, 0, 0, 0, 0, 0]);
 });
 
+test("gesture runs counted while sharing never reach a payload after sharing is turned off and on again", async () => {
+  await client.setSharing(true, "onboarding");
+  noteMouseGestureRun("back", client.consentToken());
+  await client.setSharing(false, "settings");
+  await client.setSharing(true, "settings");
+  assert.equal(takeMouseGestureCounts().mouse_gesture_runs_back, 0);
+  noteMouseGestureRun("back", client.consentToken());
+  assert.equal(takeMouseGestureCounts().mouse_gesture_runs_back, 1);
+});
+
 test("Close Tab drawn on a page closes that tab only, even with a sidebar multi-selection", () => {
   S().hydrate({});
   const w = S().createWindow({ url: "https://a.com/" });

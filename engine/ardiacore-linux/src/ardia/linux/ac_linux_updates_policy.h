@@ -11,7 +11,7 @@ enum class Source { kKillSwitches, kReleases };
 
 inline constexpr std::string_view kKillSwitchesUrl = "https://ardia.dev/switches.json";
 inline constexpr std::string_view kReleasesUrl =
-    "https://api.github.com/repos/ardia-browser/ardia/releases?per_page=100";
+    "https://github.com/ardia-browser/ardia/releases/download/linux-releases/releases.json";
 inline constexpr size_t kMaxKillSwitchesBytes = 16 * 1024;
 inline constexpr size_t kMaxReleasesBytes = 4 * 1024 * 1024;
 inline constexpr int kTimeoutSeconds = 20;
@@ -29,6 +29,10 @@ inline std::optional<Source> SourceForMethod(std::string_view method) {
   if (method == "ArdiaShell.fetchKillSwitches") return Source::kKillSwitches;
   if (method == "ArdiaUpdates.releases") return Source::kReleases;
   return std::nullopt;
+}
+
+inline bool FollowsRedirects(Source source) {
+  return source == Source::kReleases;
 }
 
 inline bool AdmitFetch(int in_flight) {

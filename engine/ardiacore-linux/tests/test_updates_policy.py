@@ -21,7 +21,9 @@ class UpdatesPolicyTests(unittest.TestCase):
 int main() {
   using namespace ardia::linux_updates_policy;
   assert(UrlFor(Source::kKillSwitches) == "https://ardia.dev/switches.json");
-  assert(UrlFor(Source::kReleases) == "https://api.github.com/repos/ardia-browser/ardia/releases?per_page=100");
+  assert(UrlFor(Source::kReleases) == "https://github.com/ardia-browser/ardia/releases/download/linux-releases/releases.json");
+  assert(FollowsRedirects(Source::kReleases));
+  assert(!FollowsRedirects(Source::kKillSwitches));
   assert(MaxBytesFor(Source::kKillSwitches) == 16 * 1024);
   assert(MaxBytesFor(Source::kReleases) == 4 * 1024 * 1024);
   assert(SourceForMethod("ArdiaShell.fetchKillSwitches") == Source::kKillSwitches);
@@ -54,9 +56,10 @@ int main() {
                 raise AssertionError(compiled.stderr)
             subprocess.run([str(binary)], check=True)
 
-    def test_the_fetch_is_a_cookieless_get_with_no_redirects_on_the_system_network_context(self):
+    def test_the_fetch_is_a_cookieless_get_on_the_system_network_context_that_follows_only_allowed_redirects(self):
         fetcher = (LINUX / 'ac_linux_updates.cc').read_text()
-        for needle in ['GURL(policy::UrlFor(source))', 'request->url = RequestUrl(source_)', 'request->method = "GET"', 'CredentialsMode::kOmit', 'RedirectMode::kError',
+        for needle in ['GURL(policy::UrlFor(source))', 'request->url = RequestUrl(source_)', 'request->method = "GET"', 'CredentialsMode::kOmit', 'RedirectMode::kError', 'RedirectMode::kFollow', 'policy::FollowsRedirects(source_)',
+                       'SetOnRedirectCallback(', 'linux_self_update_policy::AllowedRedirect(', 'loader_.reset();\n    Done(Fetched());',
                        'system_network_context_manager()', 'GetSharedURLLoaderFactory()', 'DownloadToString(', 'policy::MaxBytesFor(source_)',
                        'base::Seconds(policy::kTimeoutSeconds)', 'policy::AdmitFetch(', 'cookies_allowed: NO', 'DCHECK_CURRENTLY_ON(content::BrowserThread::UI)']:
             self.assertIn(needle, fetcher)

@@ -1019,9 +1019,15 @@ caller: sync keys, sealing and opening files and passwords, and the recovery phr
 ### Updates and kill switches
 
 - **Check.** With an engine that serves `ArdiaUpdates.releases`, Settings › General shows Updates. The host reads
-  GitHub's release list for ardia-browser/ardia (`ac_linux_updates.cc`: a cookieless GET of a fixed URL, at most
-  4 MiB, no redirects, 20 s), and the shell (`hostUpdates.ts`, `updateReleases.ts`) keeps published releases that
-  carry a Linux package and a github.com release page, newest per channel (a nightly build follows nightly).
+  ardia-browser/ardia's release list from `releases/download/linux-releases/releases.json` (`ac_linux_updates.cc`: a
+  cookieless GET of a fixed URL, at most 4 MiB, 20 s, redirects only as for self-update below), and the shell
+  (`hostUpdates.ts`, `updateReleases.ts`) keeps published releases that carry a Linux package and a github.com
+  release page, newest per channel (a nightly build follows nightly). The release workflow's `linux-releases` job
+  writes that file with `scripts/linux/publish-releases.sh`: the last 100 published releases from GitHub's API, read
+  with the workflow's token, in the API's shape, on the prerelease `linux-releases` (never latest). Apps read a
+  release download rather than the API because GitHub allows 60 unauthenticated API calls an hour per IP, which a
+  shared or carrier-grade NAT address runs out of, and the check then fails. Run the script again after uploading
+  Linux packages to a release by hand.
 - **What it does.** An automatic check runs 30 s after launch, then every 6 h, in one window, never in a hidden
   instance or a build without `lib/ardia/VERSION`. Where Ardia can update itself (below), a newer release is
   downloaded and installed in the background, with "Automatically update Ardia" on (the default), or on Check Now, the

@@ -9,6 +9,7 @@
 #include "base/command_line.h"
 #include "base/environment.h"
 #include "base/functional/bind.h"
+#include "base/logging.h"
 #include "base/no_destructor.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -21,6 +22,7 @@
 #include "net/http/http_request_headers.h"
 #include "net/http/http_response_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "net/url_request/redirect_info.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -50,8 +52,8 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
         }
         data: "None. A GET of two fixed public URLs."
         destination: OTHER
-        destination_other: "api.github.com and ardia.dev."
-        last_reviewed: "2026-11-15"
+        destination_other: "github.com release downloads and ardia.dev."
+        last_reviewed: "2026-11-22"
       }
       policy {
         cookies_allowed: NO
@@ -116,21 +118,41 @@ class Load {
     request->url = RequestUrl(source_);
     request->method = "GET";
     request->credentials_mode = network::mojom::CredentialsMode::kOmit;
-    request->redirect_mode = network::mojom::RedirectMode::kError;
+    request->redirect_mode = policy::FollowsRedirects(source_)
+                                 ? network::mojom::RedirectMode::kFollow
+                                 : network::mojom::RedirectMode::kError;
     request->load_flags = net::LOAD_DISABLE_CACHE;
     request->headers.SetHeader(net::HttpRequestHeaders::kAccept,
-                               source_ == Source::kReleases
-                                   ? "application/vnd.github+json"
-                                   : "application/json");
+                               "application/json");
     loader_ = network::SimpleURLLoader::Create(std::move(request),
                                                kTrafficAnnotation);
     loader_->SetTimeoutDuration(base::Seconds(policy::kTimeoutSeconds));
+    if (policy::FollowsRedirects(source_)) {
+      loader_->SetOnRedirectCallback(
+          base::BindRepeating(&Load::OnRedirect, base::Unretained(this)));
+    }
     loader_->DownloadToString(
         factory, base::BindOnce(&Load::OnLoaded, base::Unretained(this)),
         policy::MaxBytesFor(source_));
   }
 
  private:
+  void OnRedirect(const GURL& url_before_redirect,
+                  const net::RedirectInfo& redirect_info,
+                  const network::mojom::URLResponseHead& response_head,
+                  std::vector<std::string>* removed_headers) {
+    const GURL& target = redirect_info.new_url;
+    if (linux_self_update_policy::AllowedRedirect(
+            target.scheme(), target.host(), target.EffectiveIntPort(),
+            UpdateFeed())) {
+      return;
+    }
+    LOG(WARNING) << "Ardia's update check refused a redirect to "
+                 << target.host();
+    loader_.reset();
+    Done(Fetched());
+  }
+
   void OnLoaded(std::optional<std::string> body) {
     const auto* head = loader_->ResponseInfo();
     const int http_status =
@@ -139,6 +161,10 @@ class Load {
     fetched.status = policy::ReportedStatus(loader_->NetError() == net::OK,
                                             http_status, body.has_value());
     if (fetched.status) fetched.body = std::move(*body);
+    Done(std::move(fetched));
+  }
+
+  void Done(Fetched fetched) {
     const Source source = source_;
     auto& loads = InFlight();
     std::unique_ptr<Load> self;

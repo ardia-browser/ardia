@@ -575,7 +575,7 @@ jobs:
         env:
           LINUX_RESULT: ${{ needs.linux.result }}
         run: |
-          echo "::warning::the Linux job ended $LINUX_RESULT, so v$VERSION ships without the Linux tarball: build it with scripts/linux/release.sh and upload it by hand once the engine is published"
+          echo "::warning::the Linux job ended $LINUX_RESULT, so v$VERSION ships without the Linux tarball: build it with scripts/linux/release.sh and upload it by hand once the engine is published, then run scripts/linux/publish-releases.sh so installed Linux apps see it"
           echo "- Linux: skipped (the linux job ended $LINUX_RESULT)" >> "$GITHUB_STEP_SUMMARY"
       - if: needs.linux.result == 'success' && needs.linux-sign.result == 'success'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
@@ -676,6 +676,30 @@ jobs:
             echo "- Windows: build $BUILD, signed and packed for windows-alpha, not published" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- Windows: build $BUILD (WebUI shell) is the signed update on windows-alpha" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  linux-releases:
+    needs: [publish, linux]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Offer it to installed Linux apps
+        run: |
+          args=()
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          scripts/linux/publish-releases.sh "${args[@]}"
+          if [ "$DRY_RUN" = true ]; then
+            echo "- Linux: release list for update checks written, not published" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Linux: release list for update checks published on linux-releases" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   aur:

@@ -322,3 +322,46 @@ test("a tab unloaded from a pinned folder is recorded without its folder, so res
   assert.ok(entry, "unloading the pinned folder's tab records it");
   assert.equal(entry.group, null);
 });
+
+test("a tab taken out of a pinned folder and pinned again shares no key with the tab left behind, so the pin stays when clicked once tabs are shared", () => {
+  reset();
+  const a = S().createWindow({ url: "https://one.com" });
+  const [one] = S().windows[a].tabIds;
+  const two = S().newTab(a, { url: "https://two.com" });
+  S().groupTabs([one, two], { pinned: true });
+  const b = S().createWindow({ url: "https://b.com" });
+  const away = model.viewTabIds(S(), b).find((id) => S().tabs[id].url === "https://one.com");
+  S().removeTabsFromGroup([away]);
+  const left = model.viewTabIds(S(), b).find((id) => S().tabs[id].url === "https://one.com" && !model.inPinnedContainer(S(), id));
+  const stayed = model.viewTabIds(S(), a).find((id) => S().tabs[id].url === "https://one.com" && !model.inPinnedContainer(S(), id));
+  assert.ok(left && stayed, "each window keeps its own regular tab");
+  S().pinTabs([left], true);
+  S().updateSettings({ shareTabsAcrossWindows: true });
+  const key = model.pinKeyOf(S().tabs[left]);
+  const pins = () => Object.values(S().tabs).filter((t) => model.pinKeyOf(t) === key && t.pin);
+  assert.equal(Object.values(S().tabs).filter((t) => model.pinKeyOf(t) === key && !model.inPinnedContainer(S(), t.id)).length, 0, "no regular tab shares the pin's key");
+  const before = pins().map((t) => t.windowId).sort();
+  const clicked = pins().find((t) => t.windowId === a);
+  assert.ok(clicked);
+  S().activate(clicked.id);
+  assert.deepEqual(pins().map((t) => t.windowId).sort(), before, "the pin stays in every window");
+  assert.equal(shown(a), clicked.id, "the clicked pin is shown");
+  assert.ok(S().tabs[clicked.id]?.pin, "still pinned");
+  assert.equal(pages("https://one.com").length, 1, "one live page for the pin");
+});
+
+test("regular tabs that share a key with a tab being pinned keep one key between them, apart from the pin's", () => {
+  reset();
+  const a = S().createWindow({ url: "https://one.com" });
+  const b = S().createWindow({ url: "https://one.com" });
+  const c = S().createWindow({ url: "https://one.com" });
+  const [first] = S().windows[a].tabIds;
+  const [second] = S().windows[b].tabIds;
+  const [third] = S().windows[c].tabIds;
+  useBrowser.setState((st) => ({ tabs: { ...st.tabs, [second]: { ...st.tabs[second], pinKey: first }, [third]: { ...st.tabs[third], pinKey: first } } }));
+  S().pinTabs([second], true);
+  const pinKey = model.pinKeyOf(S().tabs[second]);
+  const keys = new Set([first, third].map((id) => model.pinKeyOf(S().tabs[id])));
+  assert.equal(keys.size, 1, "the two regular tabs still share one key");
+  assert.notEqual([...keys][0], pinKey, "and it isn't the pin's");
+});

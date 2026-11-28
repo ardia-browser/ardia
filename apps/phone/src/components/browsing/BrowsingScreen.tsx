@@ -80,6 +80,7 @@ import { useDemoMotion } from "./DemoMotion";
 import { PagerAhead, PagerBackdrop, PagerNeighbour, useTabPager } from "./TabPager";
 import { TabSwipeHint } from "./tabSwipeHint";
 import { PageProgressLine } from "./PageProgressLine";
+import { useBarLoadWash } from "./barLoadWash";
 import { labTrace } from "../../platform/lab";
 import { barIsDark, shownTone } from "../../lib/pageTone";
 import { besideStrip, bottomBarLayout, DUO_BAR, duoSqueeze } from "../../lib/bottomBarSpan";
@@ -296,6 +297,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   }));
   const barSlotHeight = barHeight(insets.bottom, design);
   const collapse = useBarCollapse(tab.id, tab.isPrivate, finding, design, barSlotHeight, squeeze !== null);
+  const wash = useBarLoadWash(tab.id, tab.isPrivate, design !== "original");
   const duoBar = useMemo(() => (duoStrip ? { stripLeft: duoStrip.centerX - DUO_BAR.button / 2 - controlsSpan.left, stripTop: duoStrip.plus, squeeze, progress: collapse.fold.progress, collapsed: collapse.collapsed } : null), [duoStrip?.centerX, duoStrip?.plus, controlsSpan.left, squeeze?.marginLeft, squeeze?.marginRight, collapse.fold.progress, collapse.collapsed]);
   const folds = squeeze === null;
   const staged = design === "redesigned" && searchStageIsNative();
@@ -408,7 +410,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
   const materialBarFold = useMaterialBarFold(design === "material" ? collapse.fold.progress : null);
   const materialPillFold = useMaterialPillFold(design === "material" ? collapse.fold.progress : null);
   const materialBarHosted = useMaterialBarRegistration("page", design === "material" ? {
-    bar: { isTabOverview: false, scheme: materialScheme, tab, order: barOrder, showsPlus: !searching, addressDocked: siteSettingsSheet !== null, onTabs: showDeck, onTabsMenu: openTabsMenu, onStep: stepTab, onAddress: editAddress, onPlus: newTab, onMore: openPageMenu, onSiteSettings: openDockedSiteSettings },
+    bar: { isTabOverview: false, scheme: materialScheme, tab, order: barOrder, showsPlus: !searching, addressDocked: siteSettingsSheet !== null, wash, onTabs: showDeck, onTabsMenu: openTabsMenu, onStep: stepTab, onAddress: editAddress, onPlus: newTab, onMore: openPageMenu, onSiteSettings: openDockedSiteSettings },
     gesture: barGesture,
     tabId: tab.id,
     hidden: finding || fullscreen || (menu.mounted && !siteSettingsSheet) || readerId === tab.id || pressing || tabsMenu,
@@ -439,7 +441,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
           <PagerNeighbour key={card.id} pager={pager} tab={card} side={side} width={width} statusHeight={insets.top} statusOver={underBar} hasLeft={left !== null} hasRight={right !== null} coverId={arrivalCover ?? ARRIVAL_COVER_ID} />
         ))}
         {cutsSwipe ? aheadCards.map(({ card, side, inner }) => <PagerAhead key={`ahead:${card.id}`} pager={pager} tab={card} side={side} inner={inner} width={width} statusHeight={insets.top} statusOver={underBar} />) : null}
-        <PageProgressLine tabId={tab.id} top={insets.top} />
+        {wash ? null : <PageProgressLine tabId={tab.id} top={insets.top} />}
         </PageStack>
         </HeldFrostSource>
         </Animated.View>
@@ -482,6 +484,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
                     anchors={!folds || !collapse.collapsed}
                     duo={duoBar}
                     fold={folds ? collapse.fold.barLook : null}
+                    wash={wash}
                     swipe={swipeAddresses}
                     handover={handover}
                     onTabs={tabsOrHeld}
@@ -508,7 +511,7 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
                     <GlassBranch attached={collapse.fold.attached.pill}>
                     <GlassBehind />
                     <FoldLayer testID="hostPillFoldLayer" textured={collapse.fold.attached.pill} style={styles.pillLayer}>
-                      <HostPill tab={tab} dark={barDark} shown={collapse.fold.pillGlass} anchors={collapse.collapsed} sampleHold={pillHold} contentStyle={collapse.fold.pillContent} onExpand={collapse.expand} />
+                      <HostPill tab={tab} dark={barDark} wash={wash} shown={collapse.fold.pillGlass} anchors={collapse.collapsed} sampleHold={pillHold} contentStyle={collapse.fold.pillContent} onExpand={collapse.expand} />
                     </FoldLayer>
                     </GlassBranch>
                   </Animated.View>
@@ -517,10 +520,10 @@ const BrowsingPage = memo(function BrowsingPage({ tab }: { tab: BrowserTab }) {
             ) : design === "material" ? (
               <>
                 <Animated.View testID="materialBarFold" collapsable={false} style={[StyleSheet.absoluteFill, materialBarFold]} pointerEvents={collapse.collapsed ? "none" : "box-none"} importantForAccessibility={collapse.collapsed ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={collapse.collapsed}>
-                  <MaterialBarBand tab={tab} order={barOrder} showsPlus={!searching} addressDocked={siteSettingsSheet !== null} safeSide={safeSide} onTabs={showDeck} onTabsMenu={openTabsMenu} onStep={stepTab} onAddress={editAddress} onPlus={newTab} onMore={openPageMenu} onSiteSettings={openDockedSiteSettings} />
+                  <MaterialBarBand tab={tab} order={barOrder} showsPlus={!searching} addressDocked={siteSettingsSheet !== null} wash={wash} safeSide={safeSide} onTabs={showDeck} onTabsMenu={openTabsMenu} onStep={stepTab} onAddress={editAddress} onPlus={newTab} onMore={openPageMenu} onSiteSettings={openDockedSiteSettings} />
                 </Animated.View>
                 <Animated.View testID="materialBarPillPlace" collapsable={false} style={[styles.materialPillPlace, { bottom: insets.bottom + materialBottomBar.inset - materialBarPill.shadowRoom, left: safeSide + materialBottomBar.edge, right: safeSide + materialBottomBar.edge }, materialPillFold]} pointerEvents={collapse.collapsed ? "box-none" : "none"} importantForAccessibility={collapse.collapsed ? "auto" : "no-hide-descendants"} accessibilityElementsHidden={!collapse.collapsed}>
-                  <MaterialBarPill tab={tab} scheme={materialScheme} onExpand={collapse.expand} />
+                  <MaterialBarPill tab={tab} scheme={materialScheme} wash={wash} onExpand={collapse.expand} />
                 </Animated.View>
               </>
             ) : (

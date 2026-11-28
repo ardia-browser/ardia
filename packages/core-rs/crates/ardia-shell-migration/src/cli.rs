@@ -2,18 +2,23 @@ use std::path::{Path, PathBuf};
 
 use crate::migrate::Layout;
 
-pub const USAGE: &str = "usage: ardia-webui-migrate --from-rnw [--test-instance]
-       ardia-webui-migrate --from-rnw --rnw-data <dir> --webui-data <dir> [--test-instance]
+pub const USAGE: &str = "usage: ardia-webui-migrate --from-rnw [--chromium-profiles] [--test-instance]
+       ardia-webui-migrate --from-rnw [--chromium-profiles] --rnw-data <dir> --webui-data <dir> [--test-instance]
 
 Copies a React Native Windows Ardia's documents, window placement, config, sealed sync keys and
 Credential Manager accounts into the WebUI host's data folder, once. The React Native Windows data
 and Credential Manager items are only read. Prints a JSON report with counts and an outcome.
-Exit codes: 0 migrated or nothing to do, 1 failed (run again), 2 refused, 3 another run holds the lock, 64 usage.";
+With --chromium-profiles it instead copies the Chromium profiles (history, cookies, saved passwords,
+extensions) and the os_crypt key that unlocks them into the WebUI host's Chromium folder, once, while
+neither shell is running; the setup program runs it before it starts Ardia.
+Exit codes: 0 migrated or nothing to do, 1 failed (run again), 2 refused, 3 another run holds the lock
+or a shell is running, 64 usage.";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
     Help,
     Migrate(Box<Layout>),
+    MigrateChromium(Box<Layout>),
 }
 
 pub struct Environment {
@@ -25,6 +30,7 @@ pub struct Environment {
 pub fn parse(args: &[String], environment: &Environment) -> Result<Command, String> {
     let mut from_rnw = false;
     let mut test_instance = false;
+    let mut chromium = false;
     let mut rnw_data: Option<String> = None;
     let mut webui_data: Option<String> = None;
     let mut index = 0;
@@ -41,6 +47,7 @@ pub fn parse(args: &[String], environment: &Environment) -> Result<Command, Stri
             "-h" | "--help" => return Ok(Command::Help),
             "--from-rnw" => from_rnw = true,
             "--test-instance" => test_instance = true,
+            "--chromium-profiles" => chromium = true,
             "--rnw-data" if rnw_data.is_none() => rnw_data = Some(value("--rnw-data")?),
             "--webui-data" if webui_data.is_none() => webui_data = Some(value("--webui-data")?),
             other => return Err(format!("unknown or repeated argument: {other}")),
@@ -50,8 +57,13 @@ pub fn parse(args: &[String], environment: &Environment) -> Result<Command, Stri
     if !from_rnw {
         return Err("--from-rnw is required".into());
     }
+    let command = if chromium {
+        Command::MigrateChromium
+    } else {
+        Command::Migrate
+    };
     match (rnw_data, webui_data) {
-        (Some(rnw), Some(webui)) => Ok(Command::Migrate(Box::new(Layout::custom(
+        (Some(rnw), Some(webui)) => Ok(command(Box::new(Layout::custom(
             &rnw,
             Path::new(&webui),
             test_instance,
@@ -70,7 +82,7 @@ pub fn parse(args: &[String], environment: &Environment) -> Result<Command, Stri
                 .clone()
                 .filter(|v| !v.is_empty())
                 .ok_or("APPDATA is not set")?;
-            Ok(Command::Migrate(Box::new(Layout::standard(
+            Ok(command(Box::new(Layout::standard(
                 &PathBuf::from(local),
                 &PathBuf::from(roaming),
                 test_instance,

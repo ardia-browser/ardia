@@ -135,6 +135,20 @@ test("a failure leads with the headline, gives the reason on the second line, an
   unmount(root);
 });
 
+test("a retried download keeps the file's own name and its card, even when the link alone names it differently", async () => {
+  const root = renderSurface(<ToastHost />);
+  page({});
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  finished({ failure: "server", uri: null });
+  expect(toast()!.action!.label).toBe("Retry");
+  act(() => tapToast());
+  await settle();
+  page({ downloadId: "18", fileName: "otter" });
+  finished({ id: "18", fileName: "otter", failure: "server", uri: null });
+  expect(toast()).toMatchObject({ title: "Couldn’t download otter.pdf", detail: "The site didn’t send the file." });
+  unmount(root);
+});
+
 test("a failure that retrying can't help, or one from a private page, offers no Retry", () => {
   page({ downloadId: "18" });
   finished({ id: "18", failure: "noSpace", uri: null });

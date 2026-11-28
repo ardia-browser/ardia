@@ -45,6 +45,9 @@ type Completed = { key: string; names: string[] };
 
 const tracked = new Map<string, Tracked>();
 const cancelled = new Set<string>();
+const retrying = new Map<string, { fileName: string; key: string }>();
+
+const retryKey = (pageId: string, url: string) => `${pageId} ${url}`;
 let completed: Completed | null = null;
 
 const quietly = (call: () => Promise<unknown>) => void settled(call, undefined);
@@ -93,12 +96,14 @@ export function downloadStarted(event: PageDownload) {
     return;
   }
   const id = event.downloadId;
+  const again = retrying.get(retryKey(event.pageId, event.url));
+  if (again) retrying.delete(retryKey(event.pageId, event.url));
   const download: Tracked = {
     id,
-    key: cardKey(id),
+    key: again?.key ?? cardKey(id),
     pageId: event.pageId,
     url: event.url,
-    fileName: event.fileName,
+    fileName: again?.fileName || event.fileName,
     isPrivate: event.isPrivate,
     total: event.contentLength !== null && event.contentLength > 0 ? event.contentLength : null,
     fraction: null,
@@ -145,11 +150,12 @@ function opener(fileName: string) {
 function retryAction(download: Tracked | null, failure: Finished["failure"]): ToastAction | null {
   if (!download || !downloadRetries(failure, download.url, download.isPrivate)) return null;
   if (!findTab(currentTabs(), download.pageId)) return null;
-  const { pageId, url } = download;
+  const { pageId, url, fileName, key } = download;
   return {
     label: actionWords.retry,
     run: () => {
       countUsage("downloads_retried");
+      retrying.set(retryKey(pageId, url), { fileName, key });
       quietly(() => pages.download(pageId, url));
     },
   };
@@ -161,7 +167,7 @@ function showFailure(event: Finished, download: Tracked | null) {
   if (completed?.key === key) completed = null;
   showToast({
     key,
-    title: downloadFailedToast(event.fileName || download?.fileName || ""),
+    title: downloadFailedToast(download?.fileName || event.fileName || ""),
     detail: downloadFailureWhy(event.failure),
     tile: { kind: "icon", icon: "warning" },
     icon: "warning",
@@ -226,5 +232,6 @@ export function forgetDownloadCards() {
   for (const download of tracked.values()) if (download.timer) clearTimeout(download.timer);
   tracked.clear();
   cancelled.clear();
+  retrying.clear();
   completed = null;
 }

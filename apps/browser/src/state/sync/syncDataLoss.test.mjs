@@ -919,6 +919,7 @@ test("#4759: Stop Syncing keeps the journal, the saved state and the key when sy
     shell.refusedSaves.of.delete("sync.json");
   }
   assert.equal(forgotten.includes(device), false, "the old setup's key is kept");
+  assert.deepEqual(forgotten, [], "and so is the new one, until sync.json records sync as off");
   const onDisk = JSON.parse(a.docs.get("sync.json"));
   assert.equal(onDisk.enabled, true, "sync.json still holds the old setup");
   assert.equal(onDisk.deviceId, device);

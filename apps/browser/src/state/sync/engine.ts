@@ -266,8 +266,8 @@ async function begin(native: NonNullable<typeof SyncNative>, folder: string, dev
   if (doc !== begun) return null;
   if (!failed) return (scheduleSync(0), null);
   doc = before;
-  void startOver(consent).catch((again: unknown) => warnFor(consent, "[sync] couldn't save sync.json after a start that failed", again));
-  await native.forget(deviceId);
+  const forgetKey = async () => void (await native.forget(deviceId).catch((error: unknown) => warnFor(consent, "[sync] couldn't forget a sync key that never saved", error)));
+  void startOver(consent, forgetKey).catch((again: unknown) => warnFor(consent, "[sync] couldn't save sync.json after a start that failed", again));
   publishUi({ status: "off", error: null });
   return `Sync couldn’t save its settings on this ${PLATFORM_TERMS.computer}: ${errorText(failed.error)}`;
 }

@@ -2646,8 +2646,8 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   fully or partly open one at 600 wide or more is the open bar.
   - **Closed** (under 600 wide): Tabs on the bar's centre line, `+` 55 above it. The bar row keeps only the address
     capsule with its `···`, from 24 to 12 short of the strip (24 to 370 on 466). The start bar keeps Settings in that
-    span; the deck bar keeps only Search Tabs there (24 to 370, where the address capsule sits), and stacks three 48
-    circles in the strip as the open Duo does (`deckStripSlots`; the owner, 2026-11-27): `+` on the bar's line, the
+    span; the deck bar's row holds the space switcher and Search Tabs there (24 to 370, where the address capsule
+    sits; see the deck's switcher below), and stacks three 48 circles in the strip, as the open Duo does (`DECK_STRIP_SLOTS`; the owner, 2026-11-27): `+` on the bar's line, the
     Incognito switch 55 above it and the deck's `···` 110 above it, within reach of the thumb (on 466×678, all at x
     394 to 442: `···` y 499 to 547, Incognito 554 to 602, `+` 609 to 657). `···` opens its menu beside the strip
     (`besideStrip`), keeps the `deckHit-more` target for taps during the deck's pull and reads "More". It
@@ -2658,21 +2658,43 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
     its right end and its `···` on that slot (527 to 927 on 951). Scrolling down, whatever Collapse Bottom Bar says,
     moves only its left edge into the slot (on `barCollapse`, the host pill's spring) while the host fades, leaving
     the `···` circle; it opens the page menu (never expands the bar), shows the red open lock on an insecure page,
-    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck puts its `+` in
-    the top slot, the Incognito switch in the middle one (where the page's Tabs button turns into the Incognito
-    glyph as the deck pulls in) and Search Tabs as a 48 magnifier circle in the bottom slot that grows left into the 400-wide field when tapped (on the same spring, focused, counted in `search_tabs_opened`), runs from 24 to the slot while the keyboard is up, and shrinks back once the search closes empty; the page's capsule hands over to it on the same slot as the deck pulls in; the start page puts `+` and Tabs in the
+    is read as "Page Menu, <site>" and anchors the search tray. Scrolling up grows it back. The deck's strip is the
+    closed Duo's (the owner, 2026-11-28, after seeing both poses): `+` on the bar's line, the Incognito switch 55
+    above it (where the page's Tabs button turns into the Incognito glyph as the deck pulls in) and `···` 110 above
+    it (y 490 to 538 on 669, well below the Wi-Fi ring at about 110 to 150 and the clock); the magnifier slot and its
+    circle-grows-into-field are gone, and the deck's bar row is its own (`deckBarSpan`): 460 wide, ending 8 before the
+    strip, 399 to 859 on 951 (from 24 on a screen too narrow for 460), holding the space switcher and Search Tabs as
+    the closed Duo does; the start page puts `+` and Tabs in the
     top two and Settings in the bottom slot. On either Duo the search panel keeps 8 from the safe edges, so it ends
     short of the strip and its clock. Closing search on the open Duo lands the panel on the capsule in one move
     (`landsDirectly`): the phone's drop, fold and then narrow read as a second slide there, the panel being twice
     the capsule's width and off to its left. Each open Duo collapse counts in `bottom_bar_collapses`. The deck's grid and the search tray keep
-  the side insets (grid 84 + 16, both sides). The deck's header spans the top bar on either Duo, from 24 to 12 short of the strip, the
-  bar row's own span (`deckHeaderSides`, the owner, 2026-11-27): the space switcher is centred between two equal flanks
-  (on 197 closed, 439.5 open). On the closed Duo the header holds the switcher alone, its `···` being in the strip
-  stack above; on the open Duo `···` ends where Search Tabs ends (811 to 855, y 4 to 48), pinned there so the switcher
-  stays centred. Neither goes in the strip's top: the Duo's camera sits there (about 397 to 439, y 26 to 68 closed,
-  seen on the simulator at b166025, where `···` in the strip was half under it). With the strip on the left all of
-  it mirrors: the closed Duo's `···` stacks in the strip at 24 to 72, the open Duo's leads the header at 96 to 140.
-  A plain iPhone keeps `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
+  the side insets (grid 84 + 16, both sides). The deck has no header on a Duo
+  (the owner, 2026-11-28, to test): the space switcher moves to the bottom bar, next to Search Tabs, and `···` is in
+  the strip, so the header row would be empty. The cards grow into that room (the owner, 2026-11-28, after an empty
+  band of about 140 above them on the simulator): on a Duo the arc stack is sized from its own band (`DECK_DUO_ARC`),
+  110 below the safe top (room for the card's 28-point title row and the space above it) to 40 above the bottom
+  row, and centred in it instead of at 0.514 of the height; the card is at most 0.785 of the room beside the strip
+  and keeps the screen's aspect, so page pictures are neither cropped nor letterboxed. On either Duo the bar row is [space switcher][Search Tabs] (`deckSpacesSlot`, the
+  owner, 2026-11-28): the switcher is a 48-high glass capsule sized to its text from the row's start, the field
+  flexes in the rest, 8 between them. The switcher and its gap take at most 40% of the row, so Search Tabs keeps at
+  least 60%: the switcher at most 130.4 of 346 closed and 176 of 460 open, a longer name ending in an ellipsis
+  (`SpaceTitle`'s `truncates`). With "Personal" (about 126) the field is about 212 closed (158 to 370) and 326 open
+  (533 to 859). On the closed Duo, while Search Tabs is focused or holds text, the field grows left over the
+  switcher, drawn above it (`zIndex`), its left edge going to 24 on the bar's `barCollapse` spring (a plain timing
+  under Reduce Motion) by one negative margin, its right edge never moving; the switcher fades out underneath and
+  keeps its slot, so nothing else in the row moves, and it takes no taps or VoiceOver focus while covered. The
+  field's magnifier and text keep their offset from its left edge, so they travel with that edge as it grows and
+  never jump. Unfocused and empty, the field shrinks back and the switcher fades in. On the open Duo nothing moves
+  while searching: the switcher stays, and the field keeps its 326 with the keyboard up too (it no longer widens
+  left to 24, which would cover the switcher); the bar still rises above the keyboard as on any iPhone. The
+  switcher's menu is drawn (`MenuTrigger`'s `drawn`) 8 above the bar, left-aligned with the capsule
+  (`deckSpacesMenu`: 24 to 274 closed, 399 to 649 open) and kept inside the row, so it never reaches the strip. It
+  keeps the header's label ("Space, <name>"), hint, `deckHit-spaces` target during the deck's pull and
+  `spaces_picked` count. With one space or sync off there is no switcher, and Search Tabs fills the row. With the
+  strip on the left all of it mirrors: [Search Tabs][switcher], the closed field growing right over the switcher to
+  442, the open row 92 to 552, and the strip at 24 to 72.
+  A plain iPhone keeps its header as it was: `max(left, right)` + 24 on both sides and its leading switcher. The deck's cards keep clear of the strip
   (`deckGeometry`'s `strip`, from `deckStripOf`): Arc's stack is laid out in the screen beside the strip, as if that
   were the whole screen, so the focused card stays clear of the clock and the sensor. The cards beyond it run on under the strip, and
   a curtain of the deck's own backdrop covers the strip over them (`DeckStripCurtain`, `deckCurtain`; fade, the
@@ -2689,9 +2711,16 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   card. The strip's `+`, Incognito and `···` menus are drawn by the
   app beside the strip (`MenuTrigger`'s `drawn`), never the system menu, which grows out of the button over the
   strip's other buttons; the start page's strip `+` does the same. Closed
-  (466×678, strip from 382): cards 250×364, the focused one 78 to 328, where it used to run 165 to 470. Open
-  (951×669, strip from 867): cards 568×400, the focused one 177 to 745, where it used to run 248 to 871. The strip's
-  side gets no pile margin of its own; a plain iPhone, upright or on its side, keeps the whole screen. Nothing new is
+  (466×678, strip from 382, bottom row 609 to 657): cards 299.9×436.3, y 121.4 to 557.6 (51 above the row), the
+  focused one centred beside the strip at 41 to 341, its title row at y 93 to 113; it was 250×364 at 78 to 328, y
+  166.5 to 530.5. Open (951×669, strip from 867, bottom row 600 to 648): cards 639.7×450, y 110 to 560 (40 above the
+  row), the focused one at 113.7 to 753.3; it was 568×400 at 177 to 745. The focused card is centred in the room
+  beside the strip, leaving about 41 either side closed and 114 open; the next card starts one spacing (0.844 of a
+  card) on, at 294 closed and 654 open, and runs on under the strip. The pile behind keeps to the room left of the
+  focused card: its peek is that room less 12 and its tail half the peek (`pileEdge`, `pileTail`), so the cards
+  behind step in from 15, 11 and 7 closed. A closed Duo turned on its side (678×466) is band-limited: 378×260, y 110
+  to 370. Hit tests, the pull, the card's growth to and from the page and the curtain all read this geometry. The
+  strip's side gets no pile margin of its own; a plain iPhone, upright or on its side, keeps the whole screen. Nothing new is
   counted for it: it only moves the cards.
 - Pager: the full screen width. A sideways swipe on the bar commits past half the drag span the bar offers
   (`barSwipeSpan`): the screen's width on an iPhone and the closed Duo (201 on a 402 iPhone, 233 on the closed Duo, as
@@ -2702,7 +2731,7 @@ resets the browsing view's own state: the bar comes back expanded and the sideba
   field inset plus half the field's height); placement, height and the keyboard gap come from the same
   `searchPanelPlace` and `searchPanelPreferredHeight` as on the phone (see the new-tab search panel entry), with the
   height also capped by the room above the keyboard, which usually wins in landscape.
-- Deck: side padding `max(left, right)` for the header (+24; on a Duo 24 alone, see the Duo bullet), the Archive capsule (+24), the bottom bar (+24) and the grid (+16).
+- Deck: side padding `max(left, right)` for the header (+24; a Duo has no header, see the Duo bullet), the Archive capsule (+24), the bottom bar (+24) and the grid (+16).
   Cards take the screen's aspect: `cardW = min(W·306/440, band/(H/W))`, with `bandTop = chromeBottom + 41`,
   `bandBottom = H − max(safeBottom, 20) − 43`, band at least 120; `focusLeading = W·66/440`,
   `spacing = min(cardW, W·218/440)`, `barCenterY = H − max(safeBottom, 20) − 11`. Check at 852×393, safe top 0,

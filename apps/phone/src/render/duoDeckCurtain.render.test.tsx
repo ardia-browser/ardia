@@ -3,7 +3,6 @@ import { getAnimatedStyle, makeMutable } from "react-native-reanimated";
 import { act, type ReactTestRenderer } from "react-test-renderer";
 import { TabDeck } from "../components/tabs/TabDeck";
 import { DeckStripCurtain } from "../components/tabs/DeckStripCurtain";
-import { deckHeaderBottom } from "../components/tabs/DeckHeader";
 import { DesignProvider } from "../components/ui";
 import { deckCurtain, deckGeometry } from "../lib/deckGeometry";
 import { setRootSize } from "../state/app/rootSize";
@@ -55,7 +54,7 @@ const order = (root: ReactTestRenderer) => root.root.findAll((node) => typeof no
 for (const [name, pose] of [["closed", CLOSED], ["open", OPEN]] as const) {
   test(`on the ${name} Duo the deck's cards run on under the strip at full width, and a curtain of the deck's backdrop covers it from 32 before the strip, under the deck's own buttons`, () => {
     const root = deckOn(pose);
-    const g = deckGeometry(pose.width, pose.height, pose.insets.top, pose.insets.bottom, pose.insets.right, Platform.OS, "redesigned", deckHeaderBottom(), 55, "arc", { side: "right", inset: pose.insets.right });
+    const g = deckGeometry(pose.width, pose.height, pose.insets.top, pose.insets.bottom, pose.insets.right, Platform.OS, "redesigned", 0, 55, "arc", { side: "right", inset: pose.insets.right });
     const cards = hosts(root, "deckCard").map((card) => getAnimatedStyle(card) as { width: number });
     expect(cards.length).toBeGreaterThan(0);
     expect(cards.map((card) => card.width)).toEqual(cards.map(() => g.cardWidth));
@@ -68,7 +67,7 @@ for (const [name, pose] of [["closed", CLOSED], ["open", OPEN]] as const) {
     expect(fade.props.trailing).toBeUndefined();
     expect(curtain[0]!.findAll((node) => node.props.testID === "backdropBase" || (typeof node.type !== "string" && node.props.baseOutside === true)).length).toBeGreaterThan(0);
     const ids = order(root);
-    for (const above of ["deckHeader", "deckBottomBar", "deckStripPlus", "deckStripIncognito"]) expect(ids.indexOf("deckStripCurtain")).toBeLessThan(ids.indexOf(above));
+    for (const above of ["deckBottomBar", "deckStripPlus", "deckStripIncognito", "deckStripMore"]) expect(ids.indexOf("deckStripCurtain")).toBeLessThan(ids.indexOf(above));
     expect(ids.lastIndexOf("deckCard")).toBeLessThan(ids.indexOf("deckStripCurtain"));
     unmount(root);
   });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DECK_ARC,
+  DECK_DUO_ARC,
   DECK_ARC_HEADER,
   DECK_REDESIGN,
   deckArcHeaderPlacement,
@@ -395,20 +396,63 @@ test("Arc's stack fits a home-button iPhone and an iPhone on its side", () => {
   assert.ok(deckLeading(side, -1) >= 59 - 1e-9, "the card behind clears the side inset");
 });
 
-test("on a Duo the arc stack lays out in the screen left of the sensor strip, so the focused card ends short of the strip while the cards beyond it run on under the strip to the screen edge, 78 to 328 on the closed Duo's 466 and 177 to 745 on the open Duo's 951", () => {
-  const closed = deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 });
+const DUO_CLOSED = () => deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 0, 55, "arc", { side: "right", inset: 84 });
+const DUO_OPEN = () => deckGeometry(951, 669, 0, 34, 84, "ios", "redesigned", 0, 55, "arc", { side: "right", inset: 84 });
+const frame = (g: ReturnType<typeof deckGeometry>) => ({ width: g.cardWidth, height: g.cardHeight, top: g.cardCenterY - g.cardHeight / 2, bottom: g.cardCenterY + g.cardHeight / 2, left: deckLeading(g, 0), right: deckLeading(g, 0) + g.cardWidth, rowGap: g.barCenterY - 24 - (g.cardCenterY + g.cardHeight / 2) });
+const near = (actual: number, expected: number, label: string) => assert.ok(Math.abs(actual - expected) < 0.1, `${label}: ${actual} is not ${expected}`);
+
+test("on a Duo the arc stack fills the band between 110 below the safe top and 40 above the bottom row, centred there, in the screen left of the sensor strip, its cards keeping the screen's aspect", () => {
+  assert.deepEqual(DECK_DUO_ARC, { bandTop: 110, barClearance: 40, cardWidthRatio: 0.785, pileEdge: 12, pileTail: 0.5 });
+  const closed = frame(DUO_CLOSED());
+  near(closed.width, 299.87, "closed width");
+  near(closed.height, 436.28, "closed height");
+  near(closed.height / closed.width, 678 / 466, "closed aspect");
+  near(closed.top, 121.36, "closed top");
+  near(closed.bottom, 557.64, "closed bottom");
+  near(closed.left, 41.07, "closed left");
+  near(closed.right, 340.93, "closed right");
+  near(closed.rowGap, 51.36, "closed gap to the bottom row at 609");
+  near(382 - closed.right, closed.left, "the closed card is centred in the 382 beside the strip");
+  const open = frame(DUO_OPEN());
+  near(open.width, 639.69, "open width");
+  near(open.height, 450, "open height");
+  near(open.height / open.width, 669 / 951, "open aspect");
+  near(open.top, 110, "open top");
+  near(open.bottom, 560, "open bottom");
+  near(open.left, 113.66, "open left");
+  near(open.right, 753.34, "open right");
+  near(open.rowGap, 40, "open gap to the bottom row at 600");
+  near(867 - open.right, open.left, "the open card is centred in the 867 beside the strip");
+  assert.ok(closed.top - 28 > 0 && open.top - 28 > 0, "the title row above the card stays on screen");
+});
+
+test("on a Duo the pile behind keeps to the room left of the focused card, its edges stepping in from 15: 15, 11 and 7 closed", () => {
+  const g = DUO_CLOSED();
+  const edge = (relative: number) => deckLeading(g, relative) + (g.cardWidth * (1 - deckPileScale(g, relative))) / 2;
+  near(edge(-1), 15, "the card behind");
+  near(edge(-2), 11, "the next one");
+  assert.ok(edge(-3) < edge(-2) && edge(-3) > 0);
+  assert.ok(Math.abs(g.spacing - g.cardWidth * DECK_ARC.step) < 1e-9, "the spacing keeps its share of the card");
+});
+
+test("on a Duo the cards beyond the focused one run on under the strip, their title rows stop at it, and a tap on the strip lands on no card", () => {
+  const closed = DUO_CLOSED();
   assert.equal(closed.cardsRight, 382);
   assert.equal(closed.cardsLeft, 0);
-  assert.equal(Math.round(deckLeading(closed, 0)), 78);
-  assert.equal(Math.round(deckLeading(closed, 0) + closed.cardWidth), 328);
-  assert.equal(Math.round(closed.cardWidth), 250);
   assert.ok(deckLeading(closed, 1) + closed.cardWidth > 382, "the next card runs on under the strip");
   assert.ok(Math.abs(deckLeading(closed, 1) + deckVisibleWidth(closed, 1, true) - 382) < 1e-9, "but its title row stops at the strip");
-  const open = deckGeometry(951, 669, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 });
-  assert.equal(open.cardsRight, 867);
-  assert.equal(Math.round(deckLeading(open, 0)), 177);
-  assert.equal(Math.round(deckLeading(open, 0) + open.cardWidth), 745);
   assert.equal(deckCardAt(closed, 3, 1, 420, closed.cardCenterY), -1, "a tap on the strip lands on no card");
+  assert.equal(deckCardAt(closed, 3, 1, 190, closed.cardCenterY), 1, "a tap on the focused card finds it");
+  assert.equal(deckCardAt(closed, 3, 1, 190, closed.cardCenterY - closed.cardHeight / 2 - 2), -1, "just above it finds nothing");
+  const open = DUO_OPEN();
+  assert.equal(open.cardsRight, 867);
+  assert.equal(deckCardAt(open, 3, 1, 400, 112), 1);
+});
+
+test("the Duo band ignores the header height, as the Duo draws no header, and a pose with no strip keeps the plain stack", () => {
+  assert.deepEqual(deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", { side: "right", inset: 84 }), DUO_CLOSED());
+  const plain = deckGeometry(466, 678, 0, 34, 84, "ios", "redesigned", 48, 55, "arc", null);
+  assert.ok(Math.abs(plain.cardWidth - 466 * DECK_ARC.cardWidthRatio) < 1e-9);
 });
 
 test("a strip on the leading side mirrors it: the stack starts at the strip, and the screen's other side keeps no extra margin", () => {

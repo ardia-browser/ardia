@@ -1,4 +1,6 @@
+import type { ComponentProps } from "react";
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import Animated from "react-native-reanimated";
 import { actionWords, destinationWords } from "../../lib/sharedWords";
 import { haptics } from "../../state/app/haptics";
 import { openArchive, openSpaces } from "../../state/browse/store";
@@ -9,7 +11,7 @@ import { selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { useIncognito } from "../../state/tabs/hooks";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { browseLayout, ChromeSurface, deckChromeLayout, font, iconRoles, menuLook, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
+import { browseLayout, capsule, ChromeSurface, deckChromeLayout, font, iconRoles, menuLook, Tappable, tabsLayout, useTheme, type MenuItem } from "../ui";
 import { deckLook } from "./deckLook";
 import { MenuTrigger, nativeMenus, spaceSystemImage, type MenuOpener } from "../ui/MenuTrigger";
 import { SpaceTitle, spaceMenuSymbol } from "../search/StartSpaces";
@@ -21,9 +23,6 @@ import type { BarSpan } from "../../lib/bottomBarSpan";
 type Props = {
   safeTop: number;
   sides: BarSpan;
-  stripSide?: "left" | "right" | null;
-  showsMore?: boolean;
-  width: number;
   menusShown?: boolean;
   onMenu?: (open: boolean) => void;
   moreOpener?: MenuOpener;
@@ -106,54 +105,80 @@ export function DeckMoreButton({ opener, place, drawn = false, diameter, testID,
   );
 }
 
-export function DeckHeader({ safeTop, sides, stripSide = null, showsMore = true, width, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+type SwitcherProps = ChromeFade & {
+  opener?: MenuOpener;
+  height: number;
+  place: ViewStyle;
+  drawn?: boolean;
+  live: boolean;
+  originY: number;
+  hitStyle?: StyleProp<ViewStyle>;
+  fade?: FadeStyle;
+  covered?: boolean;
+  onWidth?: (width: number) => void;
+  truncates?: boolean;
+  underlay?: boolean;
+  menusShown: boolean;
+  onMenu?: (open: boolean) => void;
+};
+
+type FadeStyle = ComponentProps<typeof Animated.View>["style"];
+
+export function DeckSpacesSwitcher({ opener, height, place, drawn = false, live, originY, hitStyle, fade, covered = false, onWidth, truncates = false, underlay = false, menusShown, onMenu, glassShown, glassShownMs, glyphFade }: SwitcherProps) {
   const theme = useTheme();
   const incognito = useIncognito();
-  const { spaces, current, spaceItems } = useDeckSpaces();
+  const { current, spaceItems } = useDeckSpaces();
+  if (!current) return null;
+  const corner = capsule(height);
+  const trigger = (
+    <MenuTrigger opener={opener} items={spaceItems} trigger="tap" fixedOrder haptic={menuOpenedHaptic} disabled={!menusShown || covered} onOpen={() => onMenu?.(true)} onClose={() => onMenu?.(false)} previewRadius={corner} place={place} drawn={drawn}>
+      {({ onPress }) => (
+        <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={corner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
+          <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={[styles.switcherPress, { height }]}>
+            <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
+              <SpaceTitle space={current} dark={theme.dark} showsChevron truncates={truncates} />
+            </FadingGlyphs>
+          </Tappable>
+        </ChromeSurface>
+      )}
+    </MenuTrigger>
+  );
+  return (
+    <DeckHitTarget control="spaces" live={live} originY={originY} style={hitStyle}>
+      {onWidth || fade ? (
+        <Animated.View testID="deckSwitcherFade" collapsable={false} onLayout={(event) => onWidth?.(event.nativeEvent.layout.width)} pointerEvents={covered ? "none" : "box-none"} importantForAccessibility={covered ? "no-hide-descendants" : "auto"} accessibilityElementsHidden={covered} style={fade}>
+          {trigger}
+        </Animated.View>
+      ) : (
+        trigger
+      )}
+    </DeckHitTarget>
+  );
+}
+
+export function DeckHeader({ safeTop, sides, menusShown = true, onMenu, moreOpener, spacesOpener, underlay = false, hits = false, glassShown, glassShownMs, glyphFade }: Props) {
+  const theme = useTheme();
+  const { spaces, current } = useDeckSpaces();
   const below = safeTop + deckHeaderBottom() + deckChromeLayout.menuGap;
-  const opened = () => onMenu?.(true);
-  const closed = () => onMenu?.(false);
-  const menu = { trigger: "tap" as const, fixedOrder: true, haptic: menuOpenedHaptic, disabled: !menusShown, onOpen: opened, onClose: closed };
   const rowTop = safeTop + deckChromeLayout.headerCenter - browseLayout.hitTarget / 2;
   const padding = sides.left === sides.right ? { paddingHorizontal: sides.left } : { paddingLeft: sides.left, paddingRight: sides.right };
-  const centred = stripSide !== null;
-  const moreLeads = stripSide === "left";
-  const spacesLeft = centred ? Math.max((sides.left + width - sides.right - tabsLayout.menuWidth) / 2, sides.left) : sides.left;
-  const more = showsMore ? (
-    <DeckMoreButton
-      opener={moreOpener}
-      place={moreLeads ? { top: below, left: sides.left, width: tabsLayout.menuWidth } : { top: below, right: sides.right, width: tabsLayout.menuWidth }}
-      diameter={deckChromeLayout.headerCircle}
-      testID="deckHeaderMore"
-      live={hits}
-      originY={rowTop}
-      hitStyle={centred ? [styles.pinned, moreLeads ? { left: sides.left } : { right: sides.right }] : undefined}
-      dark={theme.dark}
-      underlay={underlay}
-      menusShown={menusShown}
-      onMenu={onMenu}
-      glassShown={glassShown}
-      glassShownMs={glassShownMs}
-      glyphFade={glyphFade}
-    />
-  ) : null;
   return (
     <View testID="deckHeader" pointerEvents="box-none" style={[styles.row, { top: rowTop }, padding]}>
-      {centred ? <View testID="deckHeaderLead" pointerEvents="none" style={styles.flank} /> : null}
       {current && spaces.length > 1 ? (
-        <DeckHitTarget control="spaces" live={hits} originY={rowTop} style={styles.switcher}>
-        <MenuTrigger opener={spacesOpener} items={spaceItems} {...menu} previewRadius={deckLook.switcherCorner} place={{ top: below, left: spacesLeft, width: tabsLayout.menuWidth }}>
-          {({ onPress }) => (
-            <ChromeSurface testID="deckSwitcherGlass" shape="capsule" cornerRadius={deckLook.switcherCorner} incognito={incognito} dark={theme.dark} shown={glassShown} shownMs={glassShownMs} underlay={underlay}>
-              <Tappable kind="text" label={`Space, ${current.name}`} hint="Shows your Mac’s spaces." onPress={onPress ?? noop} style={styles.switcherPress}>
-                <FadingGlyphs testID="deckSwitcher" fade={glyphFade}>
-                  <SpaceTitle space={current} dark={theme.dark} showsChevron />
-                </FadingGlyphs>
-              </Tappable>
-            </ChromeSurface>
-          )}
-        </MenuTrigger>
-        </DeckHitTarget>
+        <DeckSpacesSwitcher
+          opener={spacesOpener}
+          height={deckLook.switcherHeight}
+          place={{ top: below, left: sides.left, width: tabsLayout.menuWidth }}
+          live={hits}
+          originY={rowTop}
+          hitStyle={styles.switcher}
+          underlay={underlay}
+          menusShown={menusShown}
+          onMenu={onMenu}
+          glassShown={glassShown}
+          glassShownMs={glassShownMs}
+          glyphFade={glyphFade}
+        />
       ) : (
         <FadingGlyphs testID="deckSwitcher" fade={glyphFade} style={styles.switcher}>
           {current ? (
@@ -167,17 +192,22 @@ export function DeckHeader({ safeTop, sides, stripSide = null, showsMore = true,
           )}
         </FadingGlyphs>
       )}
-      {centred ? (
-        <>
-          <View testID="deckHeaderTrail" pointerEvents="none" style={styles.flank} />
-          {more}
-        </>
-      ) : (
-        <>
-          <View style={styles.spacer} />
-          {more}
-        </>
-      )}
+      <View style={styles.spacer} />
+      <DeckMoreButton
+        opener={moreOpener}
+        place={{ top: below, right: sides.right, width: tabsLayout.menuWidth }}
+        diameter={deckChromeLayout.headerCircle}
+        testID="deckHeaderMore"
+        live={hits}
+        originY={rowTop}
+        dark={theme.dark}
+        underlay={underlay}
+        menusShown={menusShown}
+        onMenu={onMenu}
+        glassShown={glassShown}
+        glassShownMs={glassShownMs}
+        glyphFade={glyphFade}
+      />
     </View>
   );
 }
@@ -187,9 +217,7 @@ const noop = () => undefined;
 const styles = StyleSheet.create({
   row: { position: "absolute", left: 0, right: 0, height: browseLayout.hitTarget, flexDirection: "row", alignItems: "center", gap: deckChromeLayout.headerGap },
   switcher: { flexShrink: 1 },
-  switcherPress: { height: deckLook.switcherHeight, justifyContent: "center", paddingLeft: deckLook.switcherLead, paddingRight: deckLook.switcherTrail },
+  switcherPress: { justifyContent: "center", paddingLeft: deckLook.switcherLead, paddingRight: deckLook.switcherTrail },
   spacer: { flex: 1 },
-  flank: { flex: 1, flexBasis: 0, minWidth: deckChromeLayout.headerCircle },
-  pinned: { position: "absolute", top: 0 },
   fallback: { fontWeight: "600" },
 });

@@ -45,6 +45,8 @@ export type DeckStrip = { side: "left" | "right"; inset: number };
 
 export const DECK_ARC = { cardWidthRatio: 0.655, step: 0.844, peek: 0.264, tail: 0.091, focusNudge: 0.03, centerRatio: 0.514, cardCorner: 20, nearShrink: 0.02, farShrink: 0.07, leastScale: 0.6 } as const;
 
+export const DECK_DUO_ARC = { bandTop: 110, barClearance: 40, cardWidthRatio: 0.785, pileEdge: 12, pileTail: 0.5 } as const;
+
 export const BUTTON_NAVIGATION_INSET = 32;
 const BAR_HALF_HEIGHT = 22;
 const BAR_GAP = 6;
@@ -119,11 +121,17 @@ function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, 
   const cardsRight = strip?.side === "right" ? w - strip.inset : w;
   const room = Math.max(cardsRight - cardsLeft, 1);
   const pileClearance = strip ? 0 : safeSide;
-  const cardWidth = Math.min(room * DECK_ARC.cardWidthRatio, band / aspect);
+  const duoTop = safeTop + DECK_DUO_ARC.bandTop;
+  const duoBottom = h - barCenter - FLOATING_BAR_PLACE.control / 2 - DECK_DUO_ARC.barClearance;
+  const duoBand = Math.max(duoBottom - duoTop, 120);
+  const cardWidth = strip ? Math.min(room * DECK_DUO_ARC.cardWidthRatio, duoBand / aspect) : Math.min(room * DECK_ARC.cardWidthRatio, band / aspect);
   const cardHeight = cardWidth * aspect;
   const spacing = cardWidth * DECK_ARC.step;
-  const tail = cardWidth * DECK_ARC.tail;
-  const centred = Math.min(Math.max(h * DECK_ARC.centerRatio, bandTop + cardHeight / 2), bandBottom - cardHeight / 2);
+  const focusLeading = strip ? cardsLeft + (room - cardWidth) / 2 : cardsLeft + Math.max((room - spacing) / 2 - cardWidth * DECK_ARC.focusNudge, pileClearance + cardWidth * DECK_ARC.peek);
+  const fullPeek = cardWidth * DECK_ARC.peek;
+  const peek = strip ? Math.max(Math.min(fullPeek, focusLeading - cardsLeft - DECK_DUO_ARC.pileEdge), 0) : fullPeek;
+  const tail = strip ? peek * DECK_DUO_ARC.pileTail : cardWidth * DECK_ARC.tail;
+  const centred = strip ? duoTop + duoBand / 2 : Math.min(Math.max(h * DECK_ARC.centerRatio, bandTop + cardHeight / 2), bandBottom - cardHeight / 2);
   return {
     width: w,
     height: h,
@@ -132,9 +140,9 @@ function arcGeometry(w: number, h: number, safeTop: number, safeBottom: number, 
     safeSide,
     cardWidth,
     cardHeight,
-    focusLeading: cardsLeft + Math.max((room - spacing) / 2 - cardWidth * DECK_ARC.focusNudge, pileClearance + cardWidth * DECK_ARC.peek),
+    focusLeading,
     spacing,
-    leftReach: reach(cardWidth * DECK_ARC.peek - tail, spacing - tail),
+    leftReach: reach(peek - tail, spacing - tail),
     rightReach: 0,
     stack: "arc",
     cardsLeft,

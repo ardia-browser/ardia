@@ -189,12 +189,12 @@ export function StartMark({ incognito }: { incognito: boolean }) {
   );
 }
 
-export function SpaceTitle({ space: profile, dark, showsChevron }: { space: SyncedProfile; dark: boolean; showsChevron: boolean }) {
+export function SpaceTitle({ space: profile, dark, showsChevron, truncates = false }: { space: SyncedProfile; dark: boolean; showsChevron: boolean; truncates?: boolean }) {
   const roles = rolesFor(dark);
   return (
-    <View style={styles.title}>
+    <View style={truncates ? [styles.title, styles.shrinks] : styles.title}>
       <SpaceGlyph space={profile} dark={dark} />
-      <Text style={[font.body, styles.headline, { color: roles.headerText }]} numberOfLines={1}>
+      <Text testID="spaceTitleName" style={[font.body, styles.headline, { color: roles.headerText }, truncates ? styles.shrinks : null]} numberOfLines={1} ellipsizeMode="tail">
         {profile.name}
       </Text>
       {showsChevron ? <SystemGlyph testID="spaceTitleChevron" systemName="chevron.down" pointSize={12} weight="semibold" fitted name="chevronDown" size={startLayout.chevron} color={roles.secondaryLabel} /> : null}
@@ -238,6 +238,7 @@ export function emojiOf(icon: string | null): string | null {
 const styles = StyleSheet.create({
   title: { flexDirection: "row", alignItems: "center", gap: startLayout.titleSpacing, minHeight: browseLayout.hitTarget },
   headline: { fontWeight: "600" },
+  shrinks: { flexShrink: 1, minWidth: 0 },
   logoButton: { alignItems: "center", justifyContent: "center" },
   centered: { alignItems: "center", justifyContent: "center" },
 });

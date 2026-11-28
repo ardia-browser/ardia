@@ -18,9 +18,10 @@ import { blockersToast, searchQuery, translationAsks, translationUrl, type Night
 import { backLayer, downloadedToast, downloadFailedToast, downloadingToast, opensInInstaller, pressPlan, stoppedPrivateDownloadsToast, type PressAction, type Request } from "./pagePrompts";
 import { installDownloadedPackage } from "../appUpdate/store";
 import { onboardingBack } from "../onboarding/store";
+import { refreshSitePermissions } from "../settings/sitePermissions";
 import { refreshSettings } from "../settings/actions";
 import { notePageDark } from "../settings/appearance";
-import { closeSettings, openSettings, openSettingsPage, popSettings, pushSettings, settingsNav, useSettingsNav, type SettingsRoute } from "../settings/nav";
+import { openSettings, openSettingsPage, popSettings, pushSettings, type SettingsRoute } from "../settings/nav";
 import { pinToMac, sendTab } from "../sync/actions";
 import type { SyncedDevice } from "../../platform/sync";
 import { linkToCopy } from "./linkCopy";
@@ -181,7 +182,7 @@ async function showPageMenu(menuDocked: boolean) {
   const shown = pageUi().menuSite;
   const known = tab.isPrivate || !host ? null : (knownSites.get(host) ?? null);
   const startSite = known && sameSite(shown, known) ? shown : known;
-  usePageUi.setState({ menuOpen: true, menuOpening: thisOpening.id, menuPage: "main", menuSettings: null, menuDocked, titleFeedback: null, menuSite: startSite, translationAsk: null });
+  usePageUi.setState({ menuOpen: true, menuOpening: thisOpening.id, menuPage: "main", menuDocked, titleFeedback: null, menuSite: startSite, translationAsk: null });
   markMenuPhase("open");
   if (menuDocked && !tab.isPrivate) countUsage("site_settings_sheet_opened");
   const [, capabilities, translation] = await Promise.all([
@@ -378,23 +379,21 @@ export function openSiteSettings() {
   if (!pageUi().menuOpen) return;
   usePageUi.setState({ menuPage: "siteSettings" });
   countSiteSettingsOpened();
-  void refreshSettings();
+  quietly(refreshSitePermissions);
+  quietly(refreshSettings);
 }
 
 export const openDockedSiteSettings = () => showPageMenu(true);
 
 export const closeMenuSubpage = () => usePageUi.setState({ menuPage: "main" });
 
-export function openSiteSettingsSheet() {
-  if (!pageUi().menuOpen) return;
-  usePageUi.setState({ menuPage: "siteSettings", menuSettings: settingsNav().generation + 1 });
-  openSettingsPage({ page: "siteSettings" });
-  countSiteSettingsOpened();
-}
-
 export const siteSettingsInMenu = (ui: { menuOpen: boolean; menuPage: string } = pageUi()) => ui.menuOpen && ui.menuPage === "siteSettings";
 
-export const settingsInMenu = (ui: { menuOpen: boolean; menuPage: string; menuSettings: number | null } = pageUi(), generation = settingsNav().generation) => siteSettingsInMenu(ui) && ui.menuSettings === generation;
+export function openSiteSettingsRoute(route: SettingsRoute) {
+  closePageMenu();
+  openSettingsPage({ page: "siteSettings" });
+  pushSettings(route);
+}
 
 type SiteChange = "site_settings_zoom_changed" | "site_settings_night_shade_changed" | "site_settings_desktop_site_changed";
 
@@ -402,12 +401,6 @@ function siteChangeCounter(field: SiteChange): () => void {
   if (!siteSettingsInMenu() || selectedTab()?.isPrivate) return () => undefined;
   const count = usageCountingWindow();
   return () => count(field);
-}
-
-export function openSiteSettingsRoute(route: SettingsRoute) {
-  closePageMenu();
-  openSettingsPage({ page: "siteSettings" });
-  pushSettings(route);
 }
 
 const withPage = (run: (id: string) => Promise<unknown>) => {
@@ -934,12 +927,3 @@ usePages.subscribe((pagesNow, pagesBefore) => {
   if (!before || before.isLoading || before.url !== navigation.url) prepareSearch();
 });
 
-useSettingsNav.subscribe((nav, before) => {
-  const ui = pageUi();
-  if (!siteSettingsInMenu(ui) || ui.menuSettings === null) return;
-  if (ui.menuSettings !== nav.generation || (before.open && !nav.open)) closePageMenu();
-});
-
-usePageUi.subscribe((ui, before) => {
-  if (settingsInMenu(before) && !siteSettingsInMenu(ui) && settingsNav().open) closeSettings();
-});

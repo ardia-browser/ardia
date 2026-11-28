@@ -9,6 +9,8 @@ import * as telemetry from "../state/telemetry/telemetry";
 import { followSettingsPath, openSettings, pushSettings, settingsNav } from "../state/settings/nav";
 import { usePreferences } from "../state/settings/store";
 import { PHONE_SHARING_COPY } from "../lib/telemetryCopy";
+import { PAGE_BORDER_WORDS } from "../components/settings/ExpoAppearancePage";
+import { PHONE_LAYOUT, useScreenLayout } from "../state/app/screenLayout";
 import { appVersion } from "../state/settings/actions";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 import { pages as platformPages } from "../platform/pages";
@@ -300,4 +302,50 @@ onIos("a pane being popped keeps its real content through the pop instead of tur
   expect(isPlaceholder(paneOf(root, "general"))).toBe(false);
   expect(textsIn(paneOf(root, "general"))).toContain("About Ardia");
   unmount(root);
+});
+
+const sliders = (root: Root) => hosts(root, (props) => typeof props.onValueChanged === "function" && typeof props.max === "number");
+
+onIos("on iPhone Appearance has no Page Border or Corner Radius: they belong to the iPad's full-screen card", () => {
+  act(() => useScreenLayout.setState({ layout: PHONE_LAYOUT }));
+  openSettings({ page: "appearance" });
+  const root = renderSurface(<SettingsView />);
+  const texts = hosts(root, (props) => typeof props.text === "string").map((node) => node.props.text as string);
+  expect(texts).not.toContain(PAGE_BORDER_WORDS.border);
+  expect(texts).not.toContain(PAGE_BORDER_WORDS.radius);
+  expect(sliders(root)).toHaveLength(0);
+  unmount(root);
+  act(() => useScreenLayout.setState({ layout: { name: "split", fold: { top: 400, bottom: 420 } } }));
+  const split = renderSurface(<SettingsView />);
+  expect(hosts(split, (props) => props.text === PAGE_BORDER_WORDS.border)).toHaveLength(0);
+  unmount(split);
+  act(() => useScreenLayout.setState({ layout: PHONE_LAYOUT }));
+});
+
+onIos("on a full-screen iPad Appearance has a Page Border switch and, while it is on, a 0 to 24 pt Corner Radius slider; both apply at once and are kept", () => {
+  act(() => usePreferences.setState({ pageBorder: true, pageCornerRadius: 16 }));
+  act(() => useScreenLayout.setState({ layout: { name: "wide" } }));
+  openSettings({ page: "appearance" });
+  const root = renderSurface(<SettingsView />);
+  const section = hosts(root, (props) => props.title === PAGE_BORDER_WORDS.section)[0]!;
+  expect(section).toBeDefined();
+  expect(section.findAll((node) => typeof node.type === "string" && node.props.text === PAGE_BORDER_WORDS.footerOn)).toHaveLength(1);
+  const toggle = toggleFor(root, PAGE_BORDER_WORDS.border);
+  expect(toggle.props.isOn).toBe(true);
+  const slider = sliders(root)[0]!;
+  expect(slider.props).toMatchObject({ value: 16, min: 0, max: 24, step: 1 });
+  expect(hosts(root, (props) => props.text === "16 pt")).toHaveLength(1);
+  act(() => slider.props.onValueChanged({ nativeEvent: { value: 9, eventCount: 1 } }));
+  expect(usePreferences.getState().pageCornerRadius).toBe(9);
+  expect(hosts(root, (props) => props.text === "9 pt")).toHaveLength(1);
+  act(() => sliders(root)[0]!.props.onValueChanged({ nativeEvent: { value: 31, eventCount: 2 } }));
+  expect(usePreferences.getState().pageCornerRadius).toBe(24);
+  act(() => toggleFor(root, PAGE_BORDER_WORDS.border).props.onIsOnChange({ nativeEvent: { isOn: false } }));
+  expect(usePreferences.getState().pageBorder).toBe(false);
+  expect(sliders(root)).toHaveLength(0);
+  expect(hosts(root, (props) => props.text === PAGE_BORDER_WORDS.radius)).toHaveLength(0);
+  expect(hosts(root, (props) => props.text === PAGE_BORDER_WORDS.footerOff)).toHaveLength(1);
+  unmount(root);
+  act(() => usePreferences.setState({ pageBorder: true, pageCornerRadius: 16 }));
+  act(() => useScreenLayout.setState({ layout: PHONE_LAYOUT }));
 });

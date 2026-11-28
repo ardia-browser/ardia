@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { importPreferences } from "../legacy/importRules.ts";
-import { defaultPreferences, parsePreferences, serializePreference } from "./preferences.ts";
+import { acceptsPreference, clampPageCornerRadius, defaultPreferences, PAGE_CORNER_RADIUS, parsePreferences, PREFERENCE_KEYS, serializePreference } from "./preferences.ts";
 
 test("both phones default to folding the bottom bar into the pill on scroll, including missing or invalid saved values", () => {
   for (const platform of [undefined, "ios", "android"]) {
@@ -43,4 +43,38 @@ test("the custom theme is stored as JSON on the phone, sanitized when read, and 
   assert.equal(wild.texture, "grain");
   assert.equal(wild.mode, "auto");
   assert.equal(wild.stops.length, 3);
+});
+
+test("the iPad page has its border and a 16-point corner by default, and both are saved under their own keys", () => {
+  for (const platform of [undefined, "ios", "android"]) {
+    const read = parsePreferences({}, platform);
+    assert.equal(read.pageBorder, true);
+    assert.equal(read.pageCornerRadius, 16);
+  }
+  assert.deepEqual(PAGE_CORNER_RADIUS, { min: 0, max: 24, standard: 16 });
+  assert.equal(PREFERENCE_KEYS.pageBorder, "browsing.pageBorder");
+  assert.equal(PREFERENCE_KEYS.pageCornerRadius, "browsing.pageCornerRadius");
+  assert.equal(serializePreference<"pageBorder">(false), "false");
+  assert.equal(serializePreference<"pageCornerRadius">(9), "9");
+});
+
+test("a saved page border and corner read back, the corner held to 0 to 24 whole points, and anything else falls back to the defaults", () => {
+  const read = (border: string, radius: string) => parsePreferences({ "browsing.pageBorder": border, "browsing.pageCornerRadius": radius });
+  assert.deepEqual([read("false", "0").pageBorder, read("false", "0").pageCornerRadius], [false, 0]);
+  assert.deepEqual([read("true", "24").pageBorder, read("true", "24").pageCornerRadius], [true, 24]);
+  assert.equal(read("true", "30").pageCornerRadius, 24);
+  assert.equal(read("true", "-4").pageCornerRadius, 0);
+  assert.equal(read("true", "11.6").pageCornerRadius, 12);
+  for (const junk of ["", "big", "NaN", "Infinity", "1e3", "12pt", "99999"]) assert.equal(read("true", junk).pageCornerRadius, 16, junk);
+  for (const junk of ["", "yes", "1", "TRUE"]) assert.equal(read(junk, "16").pageBorder, true, junk);
+  assert.equal(acceptsPreference("pageCornerRadius", "12"), true);
+  assert.equal(acceptsPreference("pageCornerRadius", "wide"), false);
+});
+
+test("setting the corner holds it to 0 to 24 whole points, as loading does", () => {
+  assert.equal(clampPageCornerRadius(16), 16);
+  assert.equal(clampPageCornerRadius(25), 24);
+  assert.equal(clampPageCornerRadius(-1), 0);
+  assert.equal(clampPageCornerRadius(3.4), 3);
+  assert.equal(clampPageCornerRadius(Number.POSITIVE_INFINITY), 16);
 });

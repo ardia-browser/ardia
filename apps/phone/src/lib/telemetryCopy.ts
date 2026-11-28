@@ -50,6 +50,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         fields: ["glass_render"],
       },
       {
+        text: "With each launch, whether Page Border is on in Appearance and its corner radius in points. Both can be changed only on iPad, so other devices send the defaults",
+        fields: ["page_border", "page_corner_radius"],
+      },
+      {
         text: "On Android, with each launch, whether the Material You design was off, and with it on, whether Dynamic Colors used your wallpaper, Ardia used your custom color, or the phone gave no wallpaper palette and Ardia used its own",
         fields: ["material_colors"],
       },
@@ -164,6 +168,14 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
       {
         text: "In the same daily counts, on iPhone: how often Ardia opened with a different space’s colors, or light or dark, than the space you were in when you left it, before your space showed. Counts only, never which space or colors",
         fields: ["launch_looks_stale"],
+      },
+      {
+        text: "In the same daily counts, on iPhone: how often a screenshot’s Full Page tab got the page as a PDF, never while browsing privately. Counts only, never which page",
+        fields: ["full_page_pdf_provided"],
+      },
+      {
+        text: "In the same daily counts, on Android: how often a system screenshot’s Capture more scrolled a page for a longer picture, and whether that ended with every part drawn, was cut short, or couldn’t draw the page, never while browsing privately. Counts only, never which page or what it showed",
+        fields: ["scroll_capture_started", "scroll_capture_ended_complete", "scroll_capture_ended_cancelled", "scroll_capture_failed"],
       },
       {
         text: "In the same daily counts: how often you opened one of the Settings panes, such as General or Tabs. Counts only, never which pane or what you changed",

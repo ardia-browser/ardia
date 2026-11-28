@@ -53,6 +53,7 @@ export function StartPage() {
       dark={dark}
       incognito={incognito}
       place={strip ? { bottom: height - barTop - strip.plus - DUO_BAR.button, ...besideStrip(strip, width, tabsLayout.menuWidth, space.l) } : { bottom: height - barTop + space.s, left: plusMenuLeft, width: tabsLayout.menuWidth }}
+      drawn={strip !== null}
       menusShown={!trayUp}
     />
   );

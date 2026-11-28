@@ -19,6 +19,7 @@ import { measuredOr } from "../../state/app/rootSize";
 import {
   DECK,
   deckCardAt,
+  deckCurtain,
   deckGeometry,
   archiveCardEdgeY,
   deckScrollActionTarget,
@@ -92,6 +93,7 @@ import { ArchiveIntervalCard } from "./ArchiveIntervalCard";
 import { DeckBottomBar } from "./DeckBottomBar";
 import { useBottomBarLayout } from "../ui/useBottomBarLayout";
 import { DeckHeader, deckHeaderBottom } from "./DeckHeader";
+import { DeckStripCurtain } from "./DeckStripCurtain";
 import { deckLook } from "./deckLook";
 import { tabSwitchCuts } from "../../state/browse/tabSwitch";
 import { linearGradientCss } from "../../lib/gradient";
@@ -114,7 +116,7 @@ import { cardHitSeq, currentPhoneGeneration, DECK_HIT_LABELS, deckAwaitsEntrance
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { DECK_PULL, pullTarget, stackPullTarget } from "../../lib/deckPull";
 import { glassFadeMs } from "../ui/motion";
-import { barSpanCenter } from "../../lib/bottomBarSpan";
+import { barSpanCenter, deckHeaderSides, deckStripOf } from "../../lib/bottomBarSpan";
 import { useBarGlyphFade, useDeckPulled } from "./deckPulled";
 
 type Phase = { kind: "opening" | "settled" | "closing"; id: string | null };
@@ -178,10 +180,15 @@ export const TabDeck = memo(function TabDeck() {
   const { tabs: allTabs, selectedId: heldSelected } = useHeldDeckOrder();
   const archiveOffered = useArchiveCardShowing();
   const archiveCard = archiveOffered && !side && !redesigned;
+  const deckStrip = deckStripOf(deckBarLayout, insets);
+  const stripSide = deckStrip?.side ?? null;
+  const stripInset = deckStrip?.inset ?? 0;
+  const headerSides = deckHeaderSides(insets, chromeLayout.barSideInset);
   const g = useMemo(
-    () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc")),
-    [width, height, insets.top, insets.bottom, safeSide, design],
+    () => (material ? materialDeckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, deckHeaderBottom(), DECK_SCREEN_CORNER()) : deckGeometry(width, height, insets.top, insets.bottom, safeSide, Platform.OS, design, stripSide ? 0 : deckHeaderBottom(), DECK_SCREEN_CORNER(), "arc", stripSide ? { side: stripSide, inset: stripInset } : null)),
+    [width, height, insets.top, insets.bottom, safeSide, design, stripSide, stripInset],
   );
+  const curtain = useMemo(() => (material ? null : deckCurtain(g)), [g, material]);
   useEffect(() => labTrace(`PAGELAB deck frame ${Math.round(width)}x${Math.round(height)} window ${Math.round(window.width)}x${Math.round(window.height)} insets ${insets.top}/${insets.bottom}`), [width, height, window.width, window.height, insets.top, insets.bottom]);
   const [deckHeight, setDeckHeight] = useState(height);
   const shownSpace = useShownSpace();
@@ -1380,6 +1387,7 @@ export const TabDeck = memo(function TabDeck() {
           </GestureDetector>
         </ScrollActions>
         </StackLayer>
+        {curtain && !grid ? <DeckStripCurtain curtain={curtain} width={g.width} height={g.height} expandedIndex={motion.expandedIndex} scaleProgress={motion.scaleProgress} reduceMotion={reduceMotion} darkDepth={redesigned && darkLook} incognito={privateLook} /> : null}
         {gridAvailable && (shown || (pulls && grid)) && (grid || gridLayer) ? (
           <MotionView
             testID="tabGridLayer"
@@ -1433,25 +1441,26 @@ export const TabDeck = memo(function TabDeck() {
             <ChromeGlassShown progress={chromeProgress} initiallyIn={first.progress >= DECK_CHROME_FROM} hidden={!shown} away={phase.kind === "closing" || openingCard !== null}>
               {(glassShown, barShown, barHanded) => (
                 <>
-                  <HeldChrome held={chromeGlassHeld} style={heldHeaderStyle}>
+                  {stripSide ? null : <HeldChrome held={chromeGlassHeld} style={heldHeaderStyle}>
                     <DeckHeader
                       moreOpener={moreOpener}
                       spacesOpener={spacesOpener}
                       underlay={chromeGlassHeld}
                       hits={pulls}
                       safeTop={g.safeTop}
-                      safeSide={g.safeSide}
-                      sideInset={chromeLayout.barSideInset}
+                      sides={headerSides}
                       menusShown={shown && phase.kind === "settled"}
                       onMenu={setChromeMenu}
                       glassShown={chromeGlassHeld ? shown : glassShown}
                       glassShownMs={pulledIn.current || tabSwitchCuts() ? 0 : CHROME_GLASS_MS}
                       glyphFade={glassChrome && !chromeGlassHeld ? chromeOpacity : undefined}
                     />
-                  </HeldChrome>
+                  </HeldChrome>}
                   <HeldChrome held={chromeGlassHeld} style={heldBarStyle}>
                     <DeckBottomBar
                       searchOpener={searchOpener}
+                      moreOpener={moreOpener}
+                      spacesOpener={spacesOpener}
                       hits={pulls}
                       shown={shown}
                       barCenterY={g.barCenterY}

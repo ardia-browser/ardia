@@ -45,43 +45,24 @@ const hosts = (root: Root, testID: string) => root.root.findAll((node) => node.p
 const host = (root: Root, testID: string) => hosts(root, testID)[0];
 const shown = (node: ReactTestInstance) => ({ ...StyleSheet.flatten(node.props.style), ...(node.props.style ? getAnimatedStyle(node) : {}) }) as { opacity?: number; marginLeft?: number; paddingLeft?: number; paddingRight?: number; right?: number; width?: number };
 const field = (root: Root) => root.root.findAll((node) => node.props.testID === "deckSearchField" && typeof node.props.onFocus === "function")[0]!;
-const circle = (root: Root) => root.root.findAll((node) => node.props.accessibilityLabel === "Search Tabs" && typeof node.props.onPress === "function" && node.props.testID !== "deckSearchField")[0];
 
-test("on the open Duo the deck's Search Tabs rests as a 48 magnifier circle in the strip's bottom slot, with no field showing", () => {
-  onScreen(951, 669, "fullyOpen", 84);
-  const root = deck();
-  expect(shown(host(root, "deckBottomBar")!)).toMatchObject({ paddingLeft: 527, paddingRight: 24 });
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(352, 3);
-  expect(951 - 24).toBe(903 + 24);
-  expect(shown(host(root, "deckSearchCircle")!)).toMatchObject({ right: 0, width: 48 });
-  expect(shown(host(root, "deckSearchCircle")!).opacity).toBeCloseTo(1, 3);
-  expect(root.root.findAll((node) => node.props.testID === "deckSearchCircleGlyph" && node.props.systemName === "magnifyingglass").length).toBeGreaterThan(0);
-  expect(circle(root)).toBeDefined();
-  expect(shown(host(root, "deckSearchTabsFade")!).opacity).toBeCloseTo(0, 3);
-  expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityElementsHidden === true && node.findAll((inner) => inner.props.testID === "deckSearchField").length > 0).length).toBeGreaterThan(0);
-  unmount(root);
-});
-
-test("on the open Duo pressing the circle opens Search Tabs: the field grows left out of the slot to 527..927, counts search_tabs_opened, and shrinks back when it closes empty", () => {
+test("on the open Duo the deck's Search Tabs is a field on the bar's line from 399 to 859, 8 short of the strip, with no magnifier circle; focusing it counts search_tabs_opened and moves nothing", () => {
   onScreen(951, 669, "fullyOpen", 84);
   const counted = jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined);
   const root = deck();
-  act(() => circle(root)!.props.onPress());
+  const bar = () => shown(host(root, "deckBottomBar")!);
+  expect(bar()).toMatchObject({ paddingLeft: 399, paddingRight: 92 });
+  expect(951 - 92).toBe(951 - 84 - 8);
+  expect(host(root, "deckSearchCircle")).toBeUndefined();
+  expect(host(root, "deckSearchGrow")).toBeUndefined();
+  expect(shown(host(root, "deckHit-search")!)).toMatchObject({ flex: 1 });
+  expect(root.root.findAll((node) => typeof node.type === "string" && node.props.accessibilityElementsHidden === true && node.findAll((inner) => inner.props.testID === "deckSearchField").length > 0)).toHaveLength(0);
   act(() => field(root).props.onFocus());
+  act(() => field(root).props.onChangeText("site1"));
   settle();
   expect(counted.mock.calls.filter(([name]) => name === "search_tabs_opened")).toHaveLength(1);
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(0, 3);
-  expect(shown(host(root, "deckSearchTabsFade")!).opacity).toBeCloseTo(1, 3);
-  expect(shown(host(root, "deckSearchCircle")!).opacity).toBeCloseTo(0, 3);
-  expect(host(root, "deckSearchCircle")!.props.pointerEvents).toBe("none");
-  act(() => field(root).props.onChangeText("site1"));
-  act(() => field(root).props.onBlur());
-  settle();
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(0, 3);
-  act(() => field(root).props.onChangeText(""));
-  settle();
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(352, 3);
-  expect(shown(host(root, "deckSearchCircle")!).opacity).toBeCloseTo(1, 3);
+  expect(bar()).toMatchObject({ paddingLeft: 399, paddingRight: 92 });
+  expect(shown(host(root, "deckHit-search")!).marginLeft).toBeUndefined();
   unmount(root);
 });
 
@@ -92,12 +73,11 @@ for (const [name, width, hinge, right] of [["closed Duo", 466, "closed", 84], ["
     expect(host(root, "deckSearchGrow")).toBeUndefined();
     expect(host(root, "deckSearchCircle")).toBeUndefined();
     expect(host(root, "deckSearchTabs")).toBeDefined();
-    expect(shown(host(root, "deckSearchTabsFade")!).opacity ?? 1).toBe(1);
     unmount(root);
   });
 }
 
-test("on the open Duo, while typing with the keyboard up the field runs from 24 to the slot's right edge, back to 400 with the keyboard down and a query, and into the circle once cleared", () => {
+test("on the open Duo the field stays at 399 to 859 while typing with the keyboard up and after it goes down: it no longer widens left over the switcher", () => {
   const listeners = new Map<string, ((event: KeyboardEvent) => void)[]>();
   jest.spyOn(Keyboard, "metrics").mockReturnValue(undefined);
   jest.spyOn(Keyboard, "addListener").mockImplementation((name, listener) => {
@@ -113,15 +93,12 @@ test("on the open Duo, while typing with the keyboard up the field runs from 24 
   act(() => field(root).props.onFocus());
   keyboard(true);
   settle();
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(-503, 3);
-  expect(527 - 503).toBe(24);
+  expect(shown(host(root, "deckBottomBar")!)).toMatchObject({ paddingLeft: 399, paddingRight: 92 });
+  expect(shown(host(root, "deckHit-search")!).marginLeft).toBeUndefined();
   act(() => field(root).props.onChangeText("verge"));
   keyboard(false);
   act(() => field(root).props.onBlur());
   settle();
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(0, 3);
-  act(() => field(root).props.onChangeText(""));
-  settle();
-  expect(shown(host(root, "deckSearchGrow")!).marginLeft).toBeCloseTo(352, 3);
+  expect(shown(host(root, "deckBottomBar")!)).toMatchObject({ paddingLeft: 399, paddingRight: 92 });
   unmount(root);
 });

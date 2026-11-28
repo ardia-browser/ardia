@@ -1,4 +1,5 @@
 import type { ScreenFold } from "../../state/app/screenLayout.ts";
+import { clampPageCornerRadius } from "../../state/settings/preferences.ts";
 
 export const DUO = Object.freeze({
   cardInset: 11,
@@ -66,10 +67,17 @@ export const duoCardTop = (safeTop: number) => Math.max(DUO.cardTop, safeTop + D
 
 export const duoCardBottom = (safeBottom: number) => Math.max(DUO.cardBottom, safeBottom - DUO.cardIntoHomeIndicator);
 
-export function wideCardFrame(width: number, height: number, insets: DuoInsets): DuoFrame {
+export function wideCardFrame(width: number, height: number, insets: DuoInsets, bordered = true): DuoFrame {
+  if (!bordered) return { x: insets.left, y: insets.top, width: width - insets.left - insets.right, height: height - insets.top };
   const y = duoCardTop(insets.top);
   return { x: DUO.cardInset + insets.left, y, width: width - DUO.cardInset * 2 - insets.left - insets.right, height: height - y - duoCardBottom(insets.bottom) };
 }
+
+export type CardEdge = { bordered: boolean; radius: number };
+
+export const SPLIT_CARD_EDGE: CardEdge = Object.freeze({ bordered: true, radius: DUO.cardRadius });
+
+export const wideCardEdge = (pageBorder: boolean, cornerRadius: number): CardEdge => (pageBorder ? { bordered: true, radius: clampPageCornerRadius(cornerRadius) } : { bordered: false, radius: 0 });
 
 export function splitCardFrame(width: number, insets: DuoInsets, fold: ScreenFold): DuoFrame {
   const y = duoCardTop(insets.top);

@@ -1,7 +1,7 @@
 import type { Suggestion } from "@ardia/core";
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { quietGoLabel, Symbol, Text, useHover, useTheme } from "../ui";
+import { quietGoLabel, spaceGoFill, Symbol, Text, useHover, useTheme } from "../ui";
 import { GlassFill, useGlass } from "../ui/Glass";
 import { BAR_TYPE, GO_BUTTON } from "./tokens";
 
@@ -27,7 +27,7 @@ export const GoButton = memo(function GoButton({ label, enabled, onPress }: { la
               height: GO_BUTTON.height,
               paddingHorizontal: GO_BUTTON.padX,
               borderRadius: GO_BUTTON.radius,
-              backgroundColor: glass ? undefined : enabled ? theme.goButton : theme.goButtonIdle,
+              backgroundColor: glass ? undefined : enabled ? spaceGoFill(theme) : theme.goButtonIdle,
               opacity: glass || !enabled ? 1 : pressed ? GO_BUTTON.pressedOpacity : hovered ? GO_BUTTON.hoverOpacity : 1,
               flexDirection: "row",
               alignItems: "center",

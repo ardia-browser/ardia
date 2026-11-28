@@ -2,7 +2,7 @@ import { createContext, use } from "react";
 import { opaqueThemeTint, PRESET_BACKDROP, resolveTheme, requestedDarkFor, shownLook, themeAccent, themeBackdrop, themePalette, type LookSource, type ProfileColor, type ProfileLookFields, type ProfileTheme } from "../../lib/profileLook";
 import type { ThemeBackdropProps } from "@ardia/core";
 import { backdropTint, opaqueTint, tintForHue, type BackdropTint } from "../../lib/windowTint";
-import { contrastRatio, isRgbFunction, luminance, mix, over, parseColor, rgbToHsl, toHex } from "../../lib/color";
+import { contrastRatio, hslToRgb, isRgbFunction, luminance, mix, over, parseColor, rgbToHsl, toHex } from "../../lib/color";
 import { CARD_INSET, DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
 import { WINDOW_CHROME } from "../../lib/windowChrome";
@@ -161,6 +161,27 @@ export const quietBarGlyph = (theme: Theme): string => readableInk(theme, quietI
 
 export const idleGoFill = (theme: Theme): string => over(theme.goButtonIdle, theme.ntpBarSolid);
 
+const hslOf = (color: string) => {
+  const [r, g, b] = parseColor(color);
+  return rgbToHsl(r / 255, g / 255, b / 255);
+};
+
+const spaceGoFills = new WeakMap<Theme, string>();
+
+export function spaceGoFill(theme: Theme): string {
+  const stock = stockRoles(theme);
+  const space = theme.powerUpColor;
+  if (!space || theme.goButton !== stock.goButton || theme.onPrimary !== stock.onPrimary || (theme.profileColor === "plum" && !theme.custom)) return theme.goButton;
+  let fill = spaceGoFills.get(theme);
+  if (fill === undefined) {
+    const [, saturation, lightness] = hslOf(stock.goButton);
+    const [hue, spaceSaturation] = hslOf(space);
+    fill = toHex(hslToRgb(hue, Math.min(saturation, spaceSaturation), lightness).map((channel) => channel * 255));
+    spaceGoFills.set(theme, fill);
+  }
+  return fill;
+}
+
 export const quietGoLabel = (theme: Theme): string => readableInk(theme, quietInk(theme), idleGoFill(theme), over(stockRoles(theme).goButtonIdle, stockRoles(theme).ntpBarSolid));
 
 export function surfaceTheme(theme: Theme): Theme {
@@ -196,17 +217,13 @@ export function themeFor(key: string, palette?: BasePalette | null): Theme {
 }
 
 export function nearestPreset(hexColor: string): ProfileColor {
-  const hsl = (color: string) => {
-    const [r, g, b] = parseColor(color);
-    return rgbToHsl(r / 255, g / 255, b / 255);
-  };
-  const [h, s] = hsl(hexColor);
+  const [h, s] = hslOf(hexColor);
   if (s < 0.12) return "neutral";
   let best: ProfileColor = "plum";
   let distance = Infinity;
   for (const [name, spec] of Object.entries(PROFILE_COLORS) as [ProfileColor, ProfileColorSpec][]) {
     if (name === "neutral") continue;
-    const [sh] = hsl(spec.swatch);
+    const [sh] = hslOf(spec.swatch);
     const d = Math.min(Math.abs(sh - h), 1 - Math.abs(sh - h));
     if (d < distance) [best, distance] = [name, d];
   }

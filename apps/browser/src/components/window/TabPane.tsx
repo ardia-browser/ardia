@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect } from "react";
+import { memo, useEffect, useLayoutEffect, useState } from "react";
 import { Animated, View } from "react-native";
 import { usePrewarm } from "../../state/tabs/prewarm";
 import { activate } from "../../state/tabs/actions";
@@ -23,7 +23,7 @@ import { publishPaneChrome } from "../toolbar/WindowToolbar";
 import { addressFieldShownIn, revealToolbar } from "../../state/windows/toolbarAutoHide";
 import { TabWebView } from "./TabWebView";
 import { withoutFragment } from "../../lib/url";
-import { developerBarShown, paneBar, type CardChrome } from "./paneChrome";
+import { developerBarShown, paneBar, paneHandleShown, type CardChrome } from "./paneChrome";
 import { DeveloperBar } from "../toolbar/DeveloperBar";
 import { useDeveloperMode } from "../../state/site/developerMode";
 import { PluginPageBar } from "../plugins/PluginPageBar";
@@ -126,6 +126,9 @@ export const TabPane = memo(function TabPane({
   const bookmarksBar = bookmarksBarShown(barMode, own.exists ? own : undefined) && !fullscreen && !inSplit && !small;
   const barHeight = useBookmarksBarHeight();
   const doc = withoutFragment(own.url);
+  const handle = paneHandleShown(chrome, { inSplit, visible, fullscreen, covered, lingering });
+  const [hovered, setHovered] = useState(false);
+  if (hovered && !handle) setHovered(false);
   const motion = useToolbarMotion({ enabled: autoLayout, mode, extra: bookmarksBar ? barHeight : 0, doc });
   useEffect(() => {
     if (visible) revealToolbar(tabId);
@@ -141,6 +144,8 @@ export const TabPane = memo(function TabPane({
       onTouchStart={() => {
         if (visible && !focused) activate(tabId);
       }}
+      onMouseEnter={handle ? () => setHovered(true) : undefined}
+      onMouseLeave={handle ? () => setHovered(false) : undefined}
       style={{
         position: "absolute",
         ...(fills ? { left: 0, top: 0, right: 0, bottom: 0 } : { left: frame.x, top: frame.y, width: frame.width, height: frame.height }),
@@ -181,6 +186,7 @@ export const TabPane = memo(function TabPane({
                 popovers={popovers}
                 cliPill={!peekShown && (fullscreen || focused || !inSplit)}
                 loadingPill={!addressFieldShown && !sidebarFieldShown && !small}
+                paneHandle={handle ? { hovered } : null}
               />
             )}
           </View>

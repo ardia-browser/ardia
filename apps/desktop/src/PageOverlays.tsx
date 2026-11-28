@@ -9,7 +9,7 @@ export * from "../../browser/src/components/window/PageOverlays";
 export function PageOverlays(props: ComponentProps<typeof BrowserPageOverlays>) {
   return (
     <PageOverlayRegion testID="ardia-page-overlays">
-      <BrowserPageOverlays {...props} />
+      <BrowserPageOverlays {...props} paneHandleAlways />
     </PageOverlayRegion>
   );
 }

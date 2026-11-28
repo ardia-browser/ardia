@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-const { cardChrome, developerBarShown, paneBar } = await import("./paneChrome.ts");
+const { cardChrome, developerBarShown, paneBar, paneHandleShown, paneHandleVisible } = await import("./paneChrome.ts");
 
 const card = (o = {}) => cardChrome({ addressInSidebar: false, small: false, minimal: false, split: false, fullscreen: false, hideWhileScrolling: false, ...o });
 const shown = { visible: true, fullscreen: false, lingering: false };
@@ -58,4 +58,34 @@ test("the developer bar shows only where no toolbar already holds the address", 
   assert.equal(developerBarShown({ kind: "none" }, { ...on, developerMode: false }), false);
   assert.equal(developerBarShown({ kind: "none" }, { ...on, small: true }), false);
   assert.equal(developerBarShown({ kind: "none" }, { ...on, fullscreen: true }), false);
+});
+
+test("a split pane with no toolbar gets the floating Split View handle, and a pane with one doesn't", () => {
+  const pane = { inSplit: true, visible: true, fullscreen: false, covered: false, lingering: false };
+  for (const o of [{ addressInSidebar: true, split: true }, { minimal: true, split: true }, { minimal: true, split: true, hideWhileScrolling: true }, { small: true, split: true }]) assert.equal(paneHandleShown(card(o), pane), true);
+  assert.equal(paneHandleShown(card({ split: true }), pane), false);
+  assert.equal(paneHandleShown(card({ split: true, hideWhileScrolling: true }), pane), false);
+  const none = card({ addressInSidebar: true, split: true });
+  assert.equal(paneHandleShown(none, { ...pane, inSplit: false }), false);
+  assert.equal(paneHandleShown(none, { ...pane, visible: false }), false);
+  assert.equal(paneHandleShown(none, { ...pane, fullscreen: true }), false);
+  assert.equal(paneHandleShown(none, { ...pane, covered: true }), false);
+  assert.equal(paneHandleShown(none, { ...pane, lingering: true }), false);
+});
+
+test("on a Mac the handle follows hover; where pages own the pointer it stays up", () => {
+  const at = (o) => paneHandleVisible({ always: false, hovered: false, drag: null, wasVisible: false, ...o });
+  assert.equal(at({}), false);
+  assert.equal(at({ hovered: true }), true);
+  assert.equal(at({ always: true }), true);
+});
+
+test("the handle stays through its own pane's drag only when it was up as the drag began, and hides for any other drag", () => {
+  const at = (o) => paneHandleVisible({ always: false, hovered: true, drag: null, wasVisible: false, ...o });
+  assert.equal(at({ drag: "own", wasVisible: true }), true);
+  assert.equal(at({ drag: "own", hovered: false, wasVisible: true }), true);
+  assert.equal(at({ drag: "own", wasVisible: false }), false);
+  assert.equal(at({ drag: "own", always: true, wasVisible: false }), false);
+  assert.equal(at({ drag: "other", wasVisible: true }), false);
+  assert.equal(at({ drag: "other", always: true }), false);
 });

@@ -21,6 +21,7 @@ import { SharePicker } from "../media/SharePicker";
 import { CastPicker } from "../media/CastPicker";
 import { DEVICE_CHOOSER_WIDTH, DeviceChooser } from "../site/DeviceChooser";
 import { SwipeOverlay } from "./SwipeOverlay";
+import { PaneHandle } from "../split/PaneHandle";
 import { HISTORY_MENU_WIDTH, HistoryPopover, underButton } from "./HistoryPopover";
 import { TabWebView } from "./TabWebView";
 import { fitLeft, historyMenuLeft, pageSurfaceLeft, type PageAnchor, type PageSurface } from "./pageAnchors";
@@ -47,6 +48,8 @@ export function PageOverlays({
   popovers = true,
   cliPill = false,
   loadingPill = true,
+  paneHandle = null,
+  paneHandleAlways = false,
 }: {
   tabId: string;
   windowId: string;
@@ -58,6 +61,8 @@ export function PageOverlays({
   popovers?: boolean;
   cliPill?: boolean;
   loadingPill?: boolean;
+  paneHandle?: { hovered: boolean } | null;
+  paneHandleAlways?: boolean;
 }) {
   const popover = usePages((s) => s.popover[tabId] ?? null);
   const panel = usePanelsPresence(popover, SITE_PANELS);
@@ -74,6 +79,7 @@ export function PageOverlays({
   useEffect(startPopoverEscape, []);
   return (
     <>
+      {paneHandle && <PaneHandle tabId={tabId} hovered={paneHandle.hovered} always={paneHandleAlways} />}
       {has("find") && <FindBar tabId={tabId} />}
       {has("status") && (
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, statusStyle]}>

@@ -9,6 +9,7 @@ import { openTab, showDeck, useBrowse } from "../browse/store";
 import { history } from "../history/store";
 import { useOnboarding } from "../onboarding/store";
 import { settled } from "../pages/store";
+import { webHost } from "../../lib/url";
 import { applySearchEngine, feedSources } from "../search/store";
 import type { ColorChoice } from "../settings/preferences";
 import { setPreference } from "../settings/store";
@@ -26,12 +27,14 @@ import { copy } from "../../lib/platformCopy";
 import { countUsage, usageCountingWindow } from "../telemetry/telemetry";
 import {
   CONNECTED_TOAST,
+  COULD_NOT_SEND_DETAIL,
   couldNotSendToast,
   pinAnnouncement,
   type PinOutcome,
   receivedSender,
   receivedToast,
   sendReceivers,
+  sentDetail,
   sentToast,
   SYNC_TO_PIN_TOAST,
 } from "./syncRules";
@@ -193,7 +196,8 @@ export async function sendTab(tab: BrowserTab, device: SyncedDevice) {
   const countUsage = usageCountingWindow();
   const sent = await settled(() => sync.send({ url: tab.url, title: tab.title, deviceId: device.id, profileSyncId: tab.profileSyncId, fromPrivateTab: tab.isPrivate }), false);
   if (sent && !tab.isPrivate) countUsage("tabs_sent");
-  showToast(sent ? sentToast(device.name) : couldNotSendToast(device.name), sent ? "sent" : "warning");
+  if (sent) showToast({ title: sentToast(device.name), detail: sentDetail(webHost(tab.url), tab.isPrivate), icon: "sent" });
+  else showToast({ title: couldNotSendToast(device.name), detail: COULD_NOT_SEND_DETAIL, icon: "warning" });
 }
 
 export const isTabPinned = (tab: BrowserTab | null) => Boolean(tab && syncData().status.isEnabled && isPinnedOnMac(selectedProfile(), tab.url, pinsOnTheirWay(syncData().view, syncData().pinsOnTheirWay)));

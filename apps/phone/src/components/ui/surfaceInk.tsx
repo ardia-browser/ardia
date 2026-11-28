@@ -7,7 +7,7 @@ type ChromeInk = { [Role in keyof (typeof chromeInk)["light"]]: string };
 
 export type SurfaceInk = { dark: boolean; roles: ColorRoles; chrome: ChromeInk };
 
-const TEXT_ROLES = ["label", "headerText", "foregroundPrimary", "toastLabel"] as const;
+const TEXT_ROLES = ["label", "headerText", "foregroundPrimary", "toastLabel", "toastDetail"] as const;
 
 const QUIET_ROLES = ["secondaryLabel", "foregroundSecondary", "rowIcon"] as const;
 

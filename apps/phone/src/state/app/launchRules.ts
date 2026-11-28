@@ -1,25 +1,38 @@
 import { PINNED_TOAST, receivedToast, sentToast } from "../sync/syncRules.ts";
-import type { ToastIcon } from "../toasts/store.ts";
-import { actionWords } from "../../lib/sharedWords.ts";
+import type { ToastCard } from "../toasts/store.ts";
+import { actionWords, dismissWords } from "../../lib/sharedWords.ts";
+import { CLEARED_TOAST } from "../settings/settingsRules.ts";
+import { DOWNLOAD_FAILURE_WHY, downloadedDetail, downloadFailedToast, downloadingDetail, downloadsCompleteDetail, downloadsCompleteTitle } from "../page/pagePrompts.ts";
 
-export type SampleToast = { message: string; icon: ToastIcon };
+export type SampleToast = ToastCard;
+
+const SAMPLE_FILE = "ok-report.pdf";
+const noop = () => undefined;
 
 const SAMPLE_DEVICE = "MacBook Pro";
 
 export function sampleToast(name: string): SampleToast | null {
   switch (name) {
     case "copied":
-      return { message: actionWords.copiedLink, icon: "link" };
+      return { title: actionWords.copiedLink, icon: "link" };
     case "cleared":
-      return { message: "Cleared Browsing Data", icon: "checkmark" };
+      return { title: CLEARED_TOAST, detail: "History, Cache, and Cookies · Last Hour", icon: "checkmark" };
     case "received":
-      return { message: receivedToast(SAMPLE_DEVICE, 1), icon: "laptop" };
+      return { title: receivedToast(SAMPLE_DEVICE, 1), icon: "laptop" };
     case "receivedSeveral":
-      return { message: receivedToast(SAMPLE_DEVICE, 3), icon: "laptop" };
+      return { title: receivedToast(SAMPLE_DEVICE, 3), icon: "laptop" };
     case "sent":
-      return { message: sentToast(SAMPLE_DEVICE), icon: "sent" };
+      return { title: sentToast(SAMPLE_DEVICE), detail: "example.com", icon: "sent" };
     case "pinned":
-      return { message: PINNED_TOAST, icon: "star" };
+      return { title: PINNED_TOAST, icon: "star" };
+    case "downloading":
+      return { key: "sample:download", title: SAMPLE_FILE, detail: downloadingDetail(0.45), tile: { kind: "file", ext: "pdf" }, icon: "download", progress: 0.45, action: { label: dismissWords.cancel, quiet: true, run: noop }, stage: "downloading" };
+    case "downloaded":
+      return { key: "sample:download", title: SAMPLE_FILE, detail: downloadedDetail(1_234_567, "127.0.0.1"), tile: { kind: "file", ext: "pdf" }, icon: "download", action: { label: actionWords.open, run: noop }, stage: "done" };
+    case "downloadFailed":
+      return { key: "sample:download", title: downloadFailedToast("quarterly-report.pdf"), detail: DOWNLOAD_FAILURE_WHY.server, tile: { kind: "icon", icon: "warning" }, icon: "warning", action: { label: actionWords.retry, run: noop }, titleLines: 2, stage: "failed" };
+    case "downloadsGrouped":
+      return { key: "sample:download", title: downloadsCompleteTitle(2), detail: downloadsCompleteDetail([SAMPLE_FILE, "b.zip"]), tile: { kind: "count", count: 2 }, icon: "download", action: { label: actionWords.show, run: noop }, stage: "group:2" };
     default:
       return null;
   }

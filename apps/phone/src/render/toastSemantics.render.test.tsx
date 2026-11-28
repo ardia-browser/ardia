@@ -1,10 +1,10 @@
 import { AccessibilityInfo, Platform, StyleSheet } from "react-native";
-import { ChromeSurface, chromeLayout, press } from "../components/ui";
+import { ChromeSurface, press, stroke, surfaceInkFor, toastLayout } from "../components/ui";
 import { act } from "react-test-renderer";
 import { ToastHost } from "../components/toasts/ToastHost";
 import { showToast, useToasts } from "../state/toasts/store";
 import { useTabs } from "../state/tabs/store";
-import { chromeInk, rolesFor } from "../components/ui";
+import { rolesFor } from "../components/ui";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
 
 beforeEach(() => {
@@ -76,21 +76,22 @@ test("on iPhone an actionable toast arrives as one announcement that names its a
   unmount(root);
 });
 
-test("the toast's plate is the shared chrome surface, so Glass, Classic and Reduce Transparency decide it as they do the bars, with the chrome stroke", () => {
+test("the toast's plate is an opaque card, not live glass: the theme's toast fill with a hairline edge and a soft shadow, in Glass and Classic alike", () => {
   const root = renderSurface(<ToastHost />);
   act(() => showToast("Copied Link", "link"));
-  const plates = root.root.findAll((node) => node.type === ChromeSurface);
-  expect(plates).toHaveLength(1);
-  expect(plates[0]!.props).toMatchObject({ shape: "rounded", interactive: false });
+  expect(root.root.findAll((node) => node.type === ChromeSurface)).toHaveLength(0);
   const drawn = root.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!;
   const face = StyleSheet.flatten(drawn.props.style);
-  if (face.borderWidth !== undefined) expect(face.borderWidth).toBe(chromeLayout.edge);
+  expect(face.backgroundColor).toBe(rolesFor(false).toastFill);
+  expect(face.borderWidth).toBe(stroke.hairline);
+  expect(face.shadowRadius).toBe(toastLayout.shadowRadius);
+  expect(face.shadowOffset).toEqual({ width: 0, height: toastLayout.shadowY });
   expect(StyleSheet.flatten(toastNode(root).props.style)?.backgroundColor).toBeUndefined();
   unmount(root);
 });
 
 test("Material You keeps its own snackbar plate, the inverse surface, with the named hairline stroke", () => {
-  const { DesignProvider, stroke } = require("../components/ui") as typeof import("../components/ui");
+  const { DesignProvider } = require("../components/ui") as typeof import("../components/ui");
   const root = renderSurface(
     <DesignProvider design="material">
       <ToastHost />
@@ -104,32 +105,21 @@ test("Material You keeps its own snackbar plate, the inverse surface, with the n
   unmount(root);
 });
 
-test("in Incognito the toast's shared plate and ink take the private look, never the profile tint, though the host sits outside the deck", () => {
-  const nativeModule = require("@ardia/phone-native/src/look") as typeof import("@ardia/phone-native/src/look");
-  const glass = jest.spyOn(nativeModule, "glassIsNative").mockImplementation(() => true);
-  const plate = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => node.props.testID === "toastPlate" && node.props.source !== undefined)[0]!;
+test("in Incognito the toast's card and ink take the dark shade, never the profile tint, though the host sits outside the deck", () => {
   const label = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => typeof node.type === "string" && node.props.children === "Copied Link")[0]!.props.style).color;
+  const face = (root: ReturnType<typeof renderSurface>) => StyleSheet.flatten(root.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!.props.style);
   const regular = renderSurface(<ToastHost />);
   act(() => showToast("Copied Link", "link"));
-  expect(plate(regular).props.color).not.toBe(nativeModule.INCOGNITO_LOOK);
+  expect(face(regular).backgroundColor).toBe(rolesFor(false).toastFill);
   unmount(regular);
   act(() => useToasts.setState({ toast: null }));
   act(() => useTabs.setState({ incognito: true }));
   const privately = renderSurface(<ToastHost />);
   act(() => showToast("Copied Link", "link"));
-  expect(plate(privately).props).toMatchObject({ color: nativeModule.INCOGNITO_LOOK, dark: true });
-  expect(plate(privately).props.tint).toBeUndefined();
-  expect(label(privately)).toBe(rolesFor(true).toastLabel);
+  expect(face(privately).backgroundColor).toBe(rolesFor(true).toastFill);
+  expect(label(privately)).toBe(surfaceInkFor(true).roles.toastLabel);
   expect(rolesFor(true).toastLabel).not.toBe(rolesFor(false).toastLabel);
   unmount(privately);
-  glass.mockRestore();
   act(() => useToasts.setState({ toast: null }));
-  act(() => useTabs.setState({ incognito: false }));
-  const drawn = renderSurface(<ToastHost />);
-  act(() => useTabs.setState({ incognito: true }));
-  act(() => showToast("Copied Link", "link"));
-  const face = drawn.root.findAll((node) => node.props.testID === "toastPlate" && typeof node.type === "string")[0]!;
-  expect(StyleSheet.flatten(face.props.style).backgroundColor).toBe(chromeInk.dark.surface);
-  unmount(drawn);
   act(() => useTabs.setState({ incognito: false }));
 });

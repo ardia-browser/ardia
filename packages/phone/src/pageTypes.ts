@@ -250,7 +250,7 @@ export type DownloadFailure =
 
 export type DownloadEvent =
   | { name: "downloads.progress"; downloads: DownloadProgress[] }
-  | { name: "downloads.finished"; fileName: string; uri: string | null; failure: DownloadFailure | null };
+  | { name: "downloads.finished"; id?: string; fileName: string; uri: string | null; failure: DownloadFailure | null };
 
 export type BlockingCategory = "ads" | "trackers" | "cookieBanners";
 

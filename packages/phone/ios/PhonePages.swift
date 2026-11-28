@@ -79,7 +79,7 @@ final class PhonePages {
     engine.downloads.onProgress = { [weak self] list in
       self?.downloadSink?(["name": "downloads.progress", "downloads": list.map(PagePayloads.download)])
     }
-    engine.downloads.onOutcome = { [weak self] outcome in self?.downloadFinished(outcome) }
+    engine.downloads.onOutcome = { [weak self] outcome, id in self?.downloadFinished(outcome, id: id) }
     watchBlocking(generation: 0)
     watchShareRequests(generation: 0)
     PageSnapshots.sweepPrivateLeftovers()
@@ -423,12 +423,12 @@ final class PhonePages {
     ])
   }
 
-  private func downloadFinished(_ outcome: DownloadOutcome) {
+  private func downloadFinished(_ outcome: DownloadOutcome, id: UUID) {
     switch outcome {
     case .finished(let url):
-      downloadSink?(["name": "downloads.finished", "fileName": url.lastPathComponent, "uri": url.absoluteString, "failure": nil])
+      downloadSink?(["name": "downloads.finished", "id": id.uuidString, "fileName": url.lastPathComponent, "uri": url.absoluteString, "failure": nil])
     case .failed(let fileName):
-      downloadSink?(["name": "downloads.finished", "fileName": fileName, "uri": nil, "failure": "network"])
+      downloadSink?(["name": "downloads.finished", "id": id.uuidString, "fileName": fileName, "uri": nil, "failure": "network"])
     }
   }
 

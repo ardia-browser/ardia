@@ -19,7 +19,7 @@ import type { AutoArchiveInterval } from "../tabs/tabModels";
 import { countUsage } from "../telemetry/telemetry";
 import { closeSettings } from "./nav";
 import type { ColorChoice, NightShadeMode, Preferences, SwipeNavigationMode } from "./preferences";
-import { clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
+import { CLEARED_TOAST, clearedDetail, clearSince, exportableUrls, FALLBACK_ENGINES, FILTER_LIST_ADDRESS, pickerEngines, listsUpdateFailed, websiteDataKinds, type ClearChoice, type ClearRange } from "./settingsRules";
 import { currentPreferences, setPreference } from "./store";
 
 export type { BlockingState };
@@ -147,6 +147,14 @@ export async function applyMyFilters(text: string) {
   return result;
 }
 
+function clearsByTime(): boolean {
+  try {
+    return pages.clearsWebsiteDataSince();
+  } catch {
+    return true;
+  }
+}
+
 export async function clearBrowsingData(choice: ClearChoice, range: ClearRange) {
   if (choice.history) {
     const since = clearSince(range, Date.now());
@@ -157,7 +165,7 @@ export async function clearBrowsingData(choice: ClearChoice, range: ClearRange) 
   const kinds = websiteDataKinds(choice);
   if (kinds.length) await settled(() => pages.clearWebsiteData(kinds, clearSince(range, Date.now())), undefined);
   if (choice.archive && range === "allTime") clearArchivedTabs();
-  showToast("Cleared Browsing Data", "checkmark");
+  showToast({ title: CLEARED_TOAST, detail: clearedDetail(choice, range, clearsByTime()), icon: "checkmark" });
 }
 
 export const websiteDataClearsByTime = () => pages.clearsWebsiteDataSince();

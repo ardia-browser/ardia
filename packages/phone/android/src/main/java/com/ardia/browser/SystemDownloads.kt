@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -34,6 +35,8 @@ sealed interface DownloadOutcome {
 
     data class Failed(override val fileName: String, val reason: DownloadFailure = DownloadFailure.Network) : DownloadOutcome
 }
+
+data class IdentifiedOutcome(val id: Long, val outcome: DownloadOutcome)
 
 data class DownloadProgress(val id: Long, val fileName: String, val bytes: Long, val total: Long?, val isQueued: Boolean = false) {
     val fraction: Float? get() = total?.takeIf { it > 0 }?.let { (bytes.toDouble() / it).coerceIn(0.0, 1.0).toFloat() }
@@ -61,12 +64,12 @@ class SystemDownloads(
     private val entries = ConcurrentHashMap<Long, Entry>()
     private val nextId = AtomicLong()
     private val mutableActive = MutableStateFlow<List<DownloadProgress>>(emptyList())
-    private val finished = Channel<DownloadOutcome>(capacity = 32, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private val finished = Channel<IdentifiedOutcome>(capacity = 32, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val downloadsFolderSpace: () -> Long = freeSpace ?: {
         (context.applicationContext.getExternalFilesDir(null) ?: Environment.getDataDirectory()).usableSpace
     }
 
-    private class Entry(val download: PageDownload, val call: DownloadCall) {
+    private class Entry(val id: Long, val download: PageDownload, val call: DownloadCall) {
         @Volatile
         var job: Job? = null
 
@@ -80,7 +83,7 @@ class SystemDownloads(
     }
 
     private fun announce(entry: Entry, outcome: DownloadOutcome) {
-        if (entry.announced.compareAndSet(false, true)) finished.trySend(outcome)
+        if (entry.announced.compareAndSet(false, true)) finished.trySend(IdentifiedOutcome(entry.id, outcome))
     }
 
     @Volatile
@@ -89,7 +92,9 @@ class SystemDownloads(
 
     val active: StateFlow<List<DownloadProgress>> = mutableActive.asStateFlow()
 
-    val outcomes: Flow<DownloadOutcome> = finished.receiveAsFlow()
+    val identifiedOutcomes: Flow<IdentifiedOutcome> = finished.receiveAsFlow()
+
+    val outcomes: Flow<DownloadOutcome> = identifiedOutcomes.map { it.outcome }
 
     fun enqueue(download: PageDownload): Long? {
         if (!BrowserUrl.isWeb(download.url)) return null
@@ -103,7 +108,7 @@ class SystemDownloads(
         }
         val entry = synchronized(sessionLock) {
             if (!DownloadRules.liveCheckFor(download, sessions)()) return null
-            Entry(download, transport.newCall(connectionScope)).also { entries[id] = it }
+            Entry(id, download, transport.newCall(connectionScope)).also { entries[id] = it }
         }
         report(DownloadProgress(id, requestedName, 0, download.contentLength.takeIf { it > 0 }, isQueued = true))
         val job = scope.launch {

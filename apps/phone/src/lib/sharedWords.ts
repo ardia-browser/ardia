@@ -19,6 +19,8 @@ export const actionWords = {
   open: "Open",
   setUp: "Set Up",
   showTabs: "Show Tabs",
+  show: "Show",
+  retry: "Retry",
   update: "Update",
   openSettings: "Open Settings",
   color: "Color",

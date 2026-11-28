@@ -27,7 +27,7 @@ public struct DownloadProgressInfo: Sendable, Equatable {
 @MainActor
 public final class DownloadManager {
   public let directory: URL
-  public var onOutcome: (@MainActor (DownloadOutcome) -> Void)?
+  public var onOutcome: (@MainActor (DownloadOutcome, UUID) -> Void)?
   public var onStart: (@MainActor (DownloadStart, WKWebView?) -> Void)?
   public var onProgress: (@MainActor ([DownloadProgressInfo]) -> Void)?
 
@@ -98,15 +98,15 @@ public final class DownloadManager {
   func finished(_ download: WKDownload) {
     guard let entry = remove(download) else { return }
     if let destination = entry.destination {
-      onOutcome?(.finished(destination))
+      onOutcome?(.finished(destination), entry.id)
     } else {
-      onOutcome?(.failed(fileName: entry.fileName))
+      onOutcome?(.failed(fileName: entry.fileName), entry.id)
     }
   }
 
   func failed(_ download: WKDownload) {
     guard let entry = remove(download) else { return }
-    onOutcome?(.failed(fileName: entry.fileName))
+    onOutcome?(.failed(fileName: entry.fileName), entry.id)
   }
 
   private func remove(_ download: WKDownload) -> Active? {

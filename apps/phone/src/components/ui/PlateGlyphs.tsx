@@ -5,7 +5,7 @@ import { useSurfaceInk } from "./surfaceInk";
 import { Symbol } from "./Symbol";
 import { SystemGlyph } from "./SystemGlyph";
 
-export type PlateRole = "label" | "secondaryLabel" | "tertiaryLabel" | "headerText" | "foregroundPrimary" | "foregroundSecondary" | "toastLabel" | "rowIcon" | "foregroundTertiary";
+export type PlateRole = "label" | "secondaryLabel" | "tertiaryLabel" | "headerText" | "foregroundPrimary" | "foregroundSecondary" | "toastLabel" | "toastDetail" | "rowIcon" | "foregroundTertiary";
 
 export function PlateSymbol({ role = "label", ...props }: Omit<ComponentProps<typeof Symbol>, "color"> & { role?: PlateRole }) {
   return <Symbol {...props} color={useSurfaceInk().roles[role]} />;

@@ -4,8 +4,13 @@ import { downloads } from "../platform/downloads";
 import { pages } from "../platform/pages";
 import * as browse from "../state/browse/store";
 import { startPageUi } from "../state/page/actions";
-import { useToasts } from "../state/toasts/store";
+import { forgetDownloadCards } from "../state/page/downloadCards";
+import { DOWNLOAD_CARD_DELAY_MS } from "../state/page/pagePrompts";
+import { useLibrary } from "../state/library/store";
+import { dismissToast, tapToast, useToasts } from "../state/toasts/store";
 import { renderSurface, unmount, withTabs } from "../../test/render/harness";
+
+const telemetry = require("../state/telemetry/telemetry") as typeof import("../state/telemetry/telemetry");
 
 type Listener = (event: { name: string; [key: string]: unknown }) => void;
 
@@ -21,44 +26,177 @@ jest.spyOn(downloads, "addListener").mockImplementation((listener: unknown) => {
   return { remove: () => undefined } as never;
 });
 
+let cancel: jest.SpyInstance;
+let retried: jest.SpyInstance;
+let opened: jest.SpyInstance;
+
 beforeEach(() => {
   jest.useFakeTimers();
   withTabs(1);
   browse.startBrowser();
   startPageUi();
+  forgetDownloadCards();
   useToasts.setState({ toast: null });
+  useLibrary.setState({ open: false });
+  jest.spyOn(telemetry, "countUsage").mockImplementation(() => undefined).mockClear();
+  cancel = jest.spyOn(downloads, "cancel").mockImplementation(() => Promise.resolve());
+  cancel.mockClear();
+  retried = jest.spyOn(pages, "download").mockImplementation(() => Promise.resolve());
+  retried.mockClear();
+  opened = jest.spyOn(downloads, "open").mockImplementation(() => Promise.resolve(true));
+  opened.mockClear();
+  jest.spyOn(downloads, "installsPackages").mockImplementation(() => false);
 });
 
 afterEach(() => {
+  act(() => dismissToast());
   act(() => jest.runOnlyPendingTimers());
   jest.useRealTimers();
 });
 
 const page = (fields: Record<string, unknown>) =>
-  act(() => pageListeners.forEach((listener) => listener({ name: "page.download", pageId: "t0", url: "https://files.example/otter.pdf", fileName: "otter.pdf", mimeType: "application/pdf", contentLength: 10, isPrivate: false, ...fields })));
-const finished = (fields: Record<string, unknown>) => act(() => downloadListeners.forEach((listener) => listener({ name: "downloads.finished", fileName: "otter.pdf", uri: null, ...fields })));
+  act(() => pageListeners.forEach((listener) => listener({ name: "page.download", pageId: "t0", downloadId: "17", url: "https://files.example/otter.pdf", fileName: "otter.pdf", mimeType: "application/pdf", contentLength: 1_234_567, isPrivate: false, ...fields })));
+const progress = (id: string, fraction: number | null, total: number | null = 1_234_567) =>
+  act(() => downloadListeners.forEach((listener) => listener({ name: "downloads.progress", downloads: [{ id, fileName: "otter.pdf", bytes: Math.round((fraction ?? 0) * (total ?? 0)), total, fraction, isQueued: false }] })));
+const finished = (fields: Record<string, unknown>) => act(() => downloadListeners.forEach((listener) => listener({ name: "downloads.finished", id: "17", fileName: "otter.pdf", uri: "content://downloads/17", failure: null, ...fields })));
+const wait = (ms: number) => act(() => jest.advanceTimersByTime(ms));
+const toast = () => useToasts.getState().toast;
+const counts = () => (telemetry.countUsage as unknown as jest.Mock).mock.calls.map(([field]) => field as string).filter((field) => /download/.test(field));
+const settle = () => act(async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+});
 
-const symbolShown = (root: ReturnType<typeof renderSurface>) => root.root.findAll((node) => typeof node.props.name === "string" && typeof node.props.size === "number" && typeof node.type !== "string").map((node) => node.props.name as string);
-
-test("a download the system took says Downloading with the filled arrow; one it refused at the start says it couldn't, with the filled warning", () => {
+test("a fast download shows nothing while it runs and then one finished card: file tile, size and site, and Open", async () => {
+  const shown = jest.fn();
+  const unsubscribe = useToasts.subscribe((state) => state.toast && shown(state.toast.id));
   const root = renderSurface(<ToastHost />);
-  page({ downloadId: "17" });
-  expect(useToasts.getState().toast).toMatchObject({ message: "Downloading otter.pdf", icon: "download" });
-  expect(symbolShown(root)).toContain("arrowDownCircleFill");
-  page({ downloadId: null, fileName: "seal.zip" });
-  expect(useToasts.getState().toast).toMatchObject({ message: "Couldn’t Download seal.zip", icon: "warning" });
-  expect(symbolShown(root)).toContain("exclamationmarkTriangleFill");
+  page({});
+  wait(DOWNLOAD_CARD_DELAY_MS - 100);
+  expect(toast()).toBeNull();
+  finished({});
+  expect(toast()).toMatchObject({ title: "otter.pdf", detail: "Downloaded · 1.2 MB · files.example", tile: { kind: "file", ext: "pdf" }, stage: "done", durationMs: 5000 });
+  expect(toast()!.action!.label).toBe("Open");
+  expect(root.root.findAll((node) => node.props.testID === "toastTile" && typeof node.type === "string")).toHaveLength(1);
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  expect(new Set(shown.mock.calls.map(([id]) => id)).size).toBe(1);
+  act(() => tapToast());
+  await settle();
+  expect(opened).toHaveBeenCalledWith("content://downloads/17");
+  expect(counts()).not.toContain("download_cards_updated");
+  unsubscribe();
   unmount(root);
+});
+
+test("a slow download shows its card after 800 ms with progress and Cancel, and the same card turns into the finished one in place", () => {
+  const root = renderSurface(<ToastHost />);
+  page({});
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  const running = toast()!;
+  expect(running).toMatchObject({ key: "download:17", title: "otter.pdf", detail: "Downloading…", showsProgress: true, progress: null, stage: "downloading", spoken: "otter.pdf, Downloading" });
+  expect(running.action).toMatchObject({ label: "Cancel", quiet: true });
+  progress("17", 0.456);
+  expect(toast()).toMatchObject({ id: running.id, detail: "Downloading · 45%", progress: 0.456, spoken: "otter.pdf, Downloading" });
+  expect(root.root.findAll((node) => node.props.testID === "toastProgress" && typeof node.type === "string")).toHaveLength(1);
+  expect(root.root.findAll((node) => node.props.testID === "toastButton").length).toBeGreaterThan(0);
+  finished({});
+  expect(toast()).toMatchObject({ id: running.id, detail: "Downloaded · 1.2 MB · files.example", showsProgress: false, stage: "done" });
+  expect(counts()).toEqual(["download_cards_updated"]);
+  unmount(root);
+});
+
+test("Cancel stops the download, closes the card, counts it, and the cancel's own failure never shows", async () => {
+  const root = renderSurface(<ToastHost />);
+  page({});
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  const button = root.root.findAll((node) => node.props.testID === "toastButton" && typeof node.props.onPress === "function")[0]!;
+  act(() => button.props.onPress());
+  await settle();
+  expect(cancel).toHaveBeenCalledWith("17");
+  expect(toast()).toBeNull();
+  finished({ failure: "network", uri: null });
+  expect(toast()).toBeNull();
+  expect(counts()).toEqual(["downloads_cancelled_from_card"]);
+  unmount(root);
+});
+
+test("a failure leads with the headline, gives the reason on the second line, and offers Retry that downloads the same link again", async () => {
+  const root = renderSurface(<ToastHost />);
+  page({});
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  const running = toast()!.id;
+  finished({ failure: "server", uri: null });
+  expect(toast()).toMatchObject({ id: running, title: "Couldn’t download otter.pdf", detail: "The site didn’t send the file.", tile: { kind: "icon", icon: "warning" }, titleLines: 2, icon: "warning" });
+  expect(toast()!.action!.label).toBe("Retry");
+  act(() => tapToast());
+  await settle();
+  expect(retried).toHaveBeenCalledWith("t0", "https://files.example/otter.pdf");
+  expect(counts()).toEqual(["download_cards_updated", "downloads_retried"]);
+  unmount(root);
+});
+
+test("a failure that retrying can't help, or one from a private page, offers no Retry", () => {
+  page({ downloadId: "18" });
+  finished({ id: "18", failure: "noSpace", uri: null });
+  expect(toast()).toMatchObject({ detail: "Your phone is out of space.", action: null });
+  page({ downloadId: "19", isPrivate: true });
+  finished({ id: "19", failure: "network", uri: null });
+  expect(toast()).toMatchObject({ detail: "Check your connection and try again.", action: null });
+});
+
+test("a download refused at the start says it couldn't on a warning tile", () => {
+  page({ downloadId: null, fileName: "seal.zip" });
+  expect(toast()).toMatchObject({ title: "Couldn’t download seal.zip", icon: "warning", tile: { kind: "icon", icon: "warning" } });
+});
+
+test("a second download finishing while the first's card is up merges into one card that counts them, and Show opens Downloads", () => {
+  const root = renderSurface(<ToastHost />);
+  page({});
+  page({ downloadId: "18", fileName: "b.zip", url: "https://files.example/b.zip" });
+  finished({});
+  const first = toast()!.id;
+  finished({ id: "18", fileName: "b.zip", uri: "content://downloads/18" });
+  expect(toast()).toMatchObject({ id: first, title: "2 downloads complete", detail: "otter.pdf, b.zip", tile: { kind: "count", count: 2 } });
+  expect(toast()!.action!.label).toBe("Show");
+  page({ downloadId: "20", fileName: "c.png", url: "https://files.example/c.png" });
+  finished({ id: "20", fileName: "c.png" });
+  expect(toast()).toMatchObject({ id: first, title: "3 downloads complete", detail: "otter.pdf, b.zip, c.png" });
+  act(() => tapToast());
+  expect(useLibrary.getState()).toMatchObject({ open: true, section: "downloads" });
+  expect(counts()).toEqual(["download_cards_grouped", "download_cards_grouped"]);
+  unmount(root);
+});
+
+test("an Incognito download's card names the file as before but never its site, and counts nothing", () => {
+  const root = renderSurface(<ToastHost />);
+  page({ isPrivate: true });
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  progress("17", 0.5);
+  finished({});
+  expect(toast()).toMatchObject({ title: "otter.pdf", detail: "Downloaded · 1.2 MB" });
+  page({ downloadId: "18", fileName: "b.zip", isPrivate: true });
+  finished({ id: "18", fileName: "b.zip" });
+  expect(toast()!.title).toBe("2 downloads complete");
+  expect(counts()).toEqual([]);
+  unmount(root);
+});
+
+test("an event with no id still finds its card by file name", () => {
+  page({});
+  wait(DOWNLOAD_CARD_DELAY_MS);
+  const running = toast()!.id;
+  finished({ id: undefined });
+  expect(toast()).toMatchObject({ id: running, stage: "done" });
 });
 
 test("ending incognito with three private downloads in flight gives one toast for all of them, as Compose's", () => {
   const shown = jest.fn();
   const unsubscribe = useToasts.subscribe((state) => state.toast && shown(state.toast.message));
-  for (let index = 0; index < 3; index++) finished({ fileName: `private-${index}.zip`, failure: "privateSessionEnded" });
-  act(() => jest.advanceTimersByTime(300));
+  for (let index = 0; index < 3; index++) finished({ id: `p${index}`, fileName: `private-${index}.zip`, failure: "privateSessionEnded", uri: null });
+  wait(300);
   expect(shown.mock.calls.map(([message]) => message)).toEqual(["Stopped 3 Private Downloads"]);
-  expect(useToasts.getState().toast?.icon).toBe("warning");
-  finished({ failure: "network" });
-  expect(useToasts.getState().toast?.message).toBe("Couldn’t Download otter.pdf");
+  expect(toast()?.icon).toBe("warning");
+  finished({ id: "99", failure: "network", uri: null });
+  expect(toast()?.title).toBe("Couldn’t download otter.pdf");
   unsubscribe();
 });

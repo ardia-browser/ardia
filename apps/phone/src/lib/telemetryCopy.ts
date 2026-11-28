@@ -193,6 +193,10 @@ export const PHONE_WHATS_SENT: { title: string; items: SentItem[] }[] = [
         text: "In the same daily counts: how often you opened Site Settings from the page menu, how often you changed a site’s Page Zoom, Night Shade or Desktop Site there, and how often you opened History, Bookmarks or Downloads from the tab switcher’s menu, never while browsing privately. Counts only, never which site",
         fields: ["page_menu_site_settings_opened", "site_settings_zoom_changed", "site_settings_night_shade_changed", "site_settings_desktop_site_changed", "deck_menu_history_opened", "deck_menu_bookmarks_opened", "deck_menu_downloads_opened"],
       },
+      {
+        text: "In the same daily counts: how often a download’s popup updated in place instead of showing a second one, how often finished downloads were grouped into one popup, and how often you cancelled or retried a download from its popup, never while browsing privately. Counts only, never which file or site",
+        fields: ["download_cards_updated", "download_cards_grouped", "downloads_cancelled_from_card", "downloads_retried"],
+      },
     ],
   },
 ];

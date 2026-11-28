@@ -111,7 +111,7 @@ object PhonePages {
         made.warmUp()
         blocking.start()
         scope.launch { downloads.active.collect { list -> downloadSink?.invoke(mapOf("name" to "downloads.progress", "downloads" to list.map(::progress))) } }
-        scope.launch { downloads.outcomes.collect { outcome -> downloadSink?.invoke(finished(outcome)) } }
+        scope.launch { downloads.identifiedOutcomes.collect { identified -> downloadSink?.invoke(finished(identified.id, identified.outcome)) } }
         scope.launch { blocking.changes.collect { blockingSink?.invoke(mapOf("name" to "blocking.state", "state" to blocking.state())) } }
         return made
     }
@@ -501,9 +501,9 @@ object PhonePages {
         "isQueued" to progress.isQueued,
     )
 
-    private fun finished(outcome: DownloadOutcome): Map<String, Any?> = when (outcome) {
-        is DownloadOutcome.Finished -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to outcome.uri?.toString(), "failure" to null)
-        is DownloadOutcome.Failed -> mapOf("name" to "downloads.finished", "fileName" to outcome.fileName, "uri" to null, "failure" to downloadFailure(outcome.reason))
+    private fun finished(id: Long, outcome: DownloadOutcome): Map<String, Any?> = when (outcome) {
+        is DownloadOutcome.Finished -> mapOf("name" to "downloads.finished", "id" to id.toString(), "fileName" to outcome.fileName, "uri" to outcome.uri?.toString(), "failure" to null)
+        is DownloadOutcome.Failed -> mapOf("name" to "downloads.finished", "id" to id.toString(), "fileName" to outcome.fileName, "uri" to null, "failure" to downloadFailure(outcome.reason))
     }
 
     private fun downloadFailure(failure: DownloadFailure): String = when (failure) {

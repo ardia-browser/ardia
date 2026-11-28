@@ -52,8 +52,6 @@ final class WebMedia {
   private var returning = PictureInPictureReturn()
   private var observers: [NSObjectProtocol] = []
   private var departure = 0
-  private var leftAt: TimeInterval = -.infinity
-  static let leaveResumeWindow: TimeInterval = 5
   private var inBackground = false
   private var leftWhilePlaying = false
   private var automatic: (pageID: String, token: String, departure: Int)?
@@ -132,8 +130,9 @@ final class WebMedia {
     case .left(_, let outcome):
       Self.trace("left \(pageID) \(outcome.rawValue)")
       if outcome == .refused { report(.resumeRefused, pageID: pageID) }
-    case .hello(let token):
+    case .hello(let token, let keepsPlaying):
       remember(token, frame: frame, pageID: pageID)
+      catchUp(token, keepsPlaying: keepsPlaying, pageID: pageID)
     case .gone(let token):
       known[pageID]?[token] = nil
       if known[pageID]?.isEmpty == true { known[pageID] = nil }
@@ -147,15 +146,21 @@ final class WebMedia {
     known[pageID] = pageFrames
   }
 
+  private func catchUp(_ token: String, keepsPlaying: Bool?, pageID: String) {
+    guard let keepsPlaying, keepsPlaying != settings.keepsPlaying else { return }
+    Self.trace("catchUp \(pageID) \(token) keepsPlaying=\(settings.keepsPlaying)")
+    run(.keepPlaying, pageID: pageID, token: token, seconds: settings.keepsPlaying ? 1 : 0)
+  }
+
   private func take(_ report: PageMediaReport, frame: WKFrameInfo, pageID: String) {
     Self.trace("report \(pageID) \(report.token) \(report.state.rawValue) t=\(String(format: "%.1f", report.position)) video=\(report.hasVideo) pip=\(report.inPictureInPicture) main=\(frame.isMainFrame) app=\(UIApplication.shared.applicationState.rawValue)")
     let now = ProcessInfo.processInfo.systemUptime
     let before = best(pageID)
     remember(report.token, frame: frame, pageID: pageID)
+    catchUp(report.token, keepsPlaying: report.keepsPlaying, pageID: pageID)
     var pageFrames = frames[pageID] ?? [:]
     let previous = pageFrames[report.token]
-    let resumedAfterLeaving = previous?.report.state == .paused && now - leftAt < Self.leaveResumeWindow
-    let started = report.state == .playing && !resumedAfterLeaving && (previous?.report.state != .playing || (previous?.report.plays ?? 0) < report.plays)
+    let started = report.state == .playing && (previous.map { $0.report.plays < report.plays } ?? true)
     if report.state == .none {
       pageFrames[report.token] = nil
     } else {
@@ -280,7 +285,6 @@ final class WebMedia {
 
   private func willLeave() {
     departure += 1
-    leftAt = ProcessInfo.processInfo.systemUptime
     returning.resignedActive()
     let playing = frames.flatMap { pageID, pageFrames in pageFrames.values.filter { $0.report.state == .playing }.map { (pageID, $0) } }
     leftWhilePlaying = !playing.isEmpty

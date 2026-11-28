@@ -86,7 +86,11 @@ struct PageMediaReportTests {
   }
 
   @Test func framesAnnounceThemselvesAndLeaveWithTheirToken() {
-    #expect(PageMediaMessage.parse(["type": "hello", "token": "abc123def0"]) == .hello(token: "abc123def0"))
+    #expect(PageMediaMessage.parse(["type": "hello", "token": "abc123def0"]) == .hello(token: "abc123def0", keepsPlaying: nil))
+    #expect(PageMediaMessage.parse(["type": "hello", "token": "abc123def0", "keepsPlaying": false]) == .hello(token: "abc123def0", keepsPlaying: false))
+    #expect(PageMediaMessage.parse(["type": "hello", "token": "abc123def0", "keepsPlaying": 1]) == .hello(token: "abc123def0", keepsPlaying: nil))
+    #expect(PageMediaReport.parse(["type": "media", "token": "abc123def0", "state": "none", "keepsPlaying": true])?.keepsPlaying == true)
+    #expect(PageMediaReport.parse(["type": "media", "token": "abc123def0", "state": "none", "keepsPlaying": "yes"])?.keepsPlaying == nil)
     #expect(PageMediaMessage.parse(["type": "gone", "token": "abc123def0"]) == .gone(token: "abc123def0"))
     #expect(PageMediaMessage.parse(["type": "hello", "token": "ABC"]) == nil)
     #expect(PageMediaMessage.parse(["type": "hello"]) == nil)
@@ -119,6 +123,7 @@ struct PageMediaCommandTests {
     #expect(PageMediaCommand.skip.script(token: "abc123def0", seconds: nil) == nil)
     #expect(PageMediaCommand.play.script(token: "abc\"); alert(1); (\"", seconds: nil) == nil)
     #expect(try #require(PageMediaCommand.keepPlaying.script(token: "abc123def0", seconds: 1)).contains("\"keepPlaying\", 1)"))
+    #expect(script.hasSuffix("=== true"))
   }
 
   @Test func settingsKeepTheSkipLengthToAChoice() {
@@ -181,7 +186,7 @@ final class MediaMessages: NSObject, WKScriptMessageHandler {
 @MainActor
 struct PageMediaScriptTests {
   static let page = """
-  <!doctype html><html><body><audio id="a" src="https://media.example.com/quiet.wav"></audio><script>
+  <!doctype html><html><body><audio id="a" src="https://media.example.com/quiet.wav"></audio><audio id="b" src="https://media.example.com/other.wav" data-duration="9"></audio><audio id="beep" src="https://media.example.com/beep.wav" data-duration="1"></audio><script>
   window.seen = [];
   document.addEventListener("visibilitychange", () => window.seen.push(document.visibilityState));
   </script></body></html>
@@ -193,20 +198,20 @@ struct PageMediaScriptTests {
     const states = new WeakMap();
     const state = (element) => { if (!states.has(element)) states.set(element, { paused: true, time: 0 }); return states.get(element); };
     Object.defineProperty(proto, "paused", { configurable: true, get() { return state(this).paused; } });
-    Object.defineProperty(proto, "duration", { configurable: true, get() { return 8; } });
+    Object.defineProperty(proto, "duration", { configurable: true, get() { return Number(this.dataset.duration || 8); } });
     Object.defineProperty(proto, "currentTime", { configurable: true, get() { return state(this).time; }, set(value) { state(this).time = Math.min(Math.max(0, Number(value) || 0), 8); } });
     proto.play = function () { if (this.dataset.refuse) return Promise.reject(new Error("refused")); state(this).paused = false; this.dispatchEvent(new Event("play")); this.dispatchEvent(new Event("playing")); return Promise.resolve(); };
     proto.pause = function () { if (state(this).paused) return; state(this).paused = true; this.dispatchEvent(new Event("pause")); };
   })();
   """
 
-  func load(keepsPlaying: Bool) async throws -> (WKWebView, MediaMessages) {
+  func load(keepsPlaying: Bool, pausedHold: TimeInterval = PageMediaScript.pausedHold) async throws -> (WKWebView, MediaMessages) {
     let configuration = WKWebViewConfiguration()
     configuration.mediaTypesRequiringUserActionForPlayback = []
     let messages = MediaMessages()
     configuration.userContentController.add(messages, contentWorld: .page, name: PageMediaScript.handlerName)
     configuration.userContentController.addUserScript(WKUserScript(source: Self.playableMedia, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
-    configuration.userContentController.addUserScript(WKUserScript(source: PageMediaScript.source(keepsPlaying: keepsPlaying), injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
+    configuration.userContentController.addUserScript(WKUserScript(source: PageMediaScript.source(keepsPlaying: keepsPlaying, pausedHold: pausedHold), injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
     let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 400, height: 800), configuration: configuration)
     try await PageLoader().load(into: webView, Self.page, base: "https://media.example.com/")
     return (webView, messages)
@@ -216,8 +221,17 @@ struct PageMediaScriptTests {
     try await webView.callAsyncJavaScript(script, contentWorld: .page)
   }
 
-  func command(_ webView: WKWebView, _ command: PageMediaCommand, token: String, seconds: Int? = nil) async throws {
-    _ = try await webView.evaluateJavaScript(try #require(command.script(token: token, seconds: seconds)), in: nil, contentWorld: .page)
+  @discardableResult
+  func command(_ webView: WKWebView, _ command: PageMediaCommand, token: String, seconds: Int? = nil) async throws -> Bool {
+    try await webView.evaluateJavaScript(try #require(command.script(token: token, seconds: seconds)), in: nil, contentWorld: .page) as? Bool == true
+  }
+
+  func hide(_ webView: WKWebView) async throws {
+    _ = try await run(webView, "document.dispatchEvent(new Event('visibilitychange', { bubbles: true })); return true;")
+  }
+
+  func seen(_ webView: WKWebView) async throws -> [String]? {
+    try await run(webView, "return [document.visibilityState, String(window.seen.length)]") as? [String]
   }
 
   func until(_ seconds: Double = 4, _ check: () async -> Bool) async throws {
@@ -338,6 +352,99 @@ struct PageMediaScriptTests {
     #expect(!messages.reports().contains { $0.state == .playing })
   }
 
+  @Test func aCommandWithNothingToControlAnswersNoAndReportsAgain() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    let token = try await helloToken(messages)
+    let before = messages.reports().count
+    #expect(try await command(webView, .play, token: token) == false)
+    try await until { messages.reports().count > before }
+    #expect(messages.reports().last?.state == PageMediaReport.State.none)
+    #expect(try await command(webView, .play, token: "zzzzzzzzzz") == false)
+    #expect(try await command(webView, .keepPlaying, token: token, seconds: 1) == true)
+  }
+
+  @Test func aShortSoundDoesNotTakeOverFromTheLongOne() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    _ = try await startPlaying(webView, messages)
+    _ = try await run(webView, "await document.getElementById('beep').play(); return true;")
+    try await Task.sleep(for: .milliseconds(300))
+    let last = try #require(messages.reports().last)
+    #expect(last.state == .playing)
+    #expect(last.duration.map { abs($0 - 8) < 0.1 } == true)
+  }
+
+  @Test func whenTheNewerSoundPausesTheOneStillPlayingIsReportedAndHeld() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    let first = try await startPlaying(webView, messages)
+    _ = try await run(webView, "await document.getElementById('b').play(); return true;")
+    try await until { messages.reports().last?.duration.map { abs($0 - 9) < 0.1 } == true }
+    let second = try #require(messages.reports().last)
+    #expect(second.plays == first.plays + 1)
+    _ = try await run(webView, "document.getElementById('b').pause(); return true;")
+    try await until { messages.reports().last?.duration.map { abs($0 - 8) < 0.1 } == true }
+    let back = try #require(messages.reports().last)
+    #expect(back.state == .playing)
+    #expect(back.plays == second.plays)
+    try await hide(webView)
+    #expect(try await seen(webView) == ["visible", "0"])
+  }
+
+  func leaveAndLetWebKitPause(_ webView: WKWebView, _ messages: MediaMessages, token: String) async throws {
+    #expect(try await command(webView, .leave, token: token))
+    try await hide(webView)
+    _ = try await run(webView, "document.getElementById('a').pause(); return true;")
+    try await until { messages.bodies.contains { $0["type"] as? String == "left" && $0["outcome"] as? String == "resumed" } }
+    try await until { messages.reports().last?.state == .playing }
+  }
+
+  @Test func undoingWebKitsPauseIsNotANewStartButARestartIs() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    let first = try await startPlaying(webView, messages)
+    try await leaveAndLetWebKitPause(webView, messages, token: first.token)
+    #expect(messages.reports().last?.plays == first.plays)
+    try await command(webView, .returned, token: first.token)
+    _ = try await run(webView, "document.getElementById('a').pause(); return true;")
+    try await until { messages.reports().last?.state == .paused }
+    _ = try await run(webView, "await document.getElementById('a').play(); return true;")
+    try await until { messages.reports().last?.state == .playing }
+    #expect(messages.reports().last?.plays == first.plays + 1)
+  }
+
+  @Test func aPauseAfterTheRecoveryStillLetsThePageHideAfterTheHold() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true, pausedHold: 0.4)
+    let first = try await startPlaying(webView, messages)
+    try await leaveAndLetWebKitPause(webView, messages, token: first.token)
+    _ = try await run(webView, "document.getElementById('a').pause(); return true;")
+    try await Task.sleep(for: .milliseconds(150))
+    #expect(try await run(webView, "return document.getElementById('a').paused") as? Bool == true)
+    #expect(try await seen(webView) == ["visible", "0"])
+    try await until(2) { (try? await seen(webView)) == ["hidden", "1"] }
+    #expect(try await seen(webView) == ["hidden", "1"])
+  }
+
+  @Test func aPlayAgainKeepsTheHoldPastItsPause() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true, pausedHold: 0.4)
+    _ = try await startPlaying(webView, messages)
+    try await hide(webView)
+    _ = try await run(webView, "document.getElementById('a').pause(); return true;")
+    try await Task.sleep(for: .milliseconds(200))
+    _ = try await run(webView, "await document.getElementById('a').play(); return true;")
+    try await Task.sleep(for: .milliseconds(600))
+    #expect(try await seen(webView) == ["visible", "0"])
+  }
+
+  @Test func aRestoredPageSaysWhichSettingItHas() async throws {
+    let (webView, messages) = try await load(keepsPlaying: true)
+    let token = try await helloToken(messages)
+    #expect(messages.bodies.first { $0["type"] as? String == "hello" }?["keepsPlaying"] as? Bool == true)
+    try await command(webView, .keepPlaying, token: token, seconds: 0)
+    _ = try await run(webView, "window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })); return true;")
+    try await until { messages.bodies.filter { $0["type"] as? String == "hello" }.count == 2 }
+    #expect(messages.bodies.last { $0["type"] as? String == "hello" }?["keepsPlaying"] as? Bool == false)
+    try await until { messages.reports().last?.keepsPlaying == false }
+    #expect(messages.reports().last?.keepsPlaying == false)
+  }
+
   @Test func thePageCannotTakeTheCommandEntry() async throws {
     let (webView, _) = try await load(keepsPlaying: true)
     let kept = try await run(webView, "try { window.__ardiaMediaCommand = () => 'mine'; } catch (_) {} return window.__ardiaMediaCommand('zzzzzzzzzz', 'play', 0) === false;") as? Bool
@@ -355,8 +462,8 @@ struct PageMediaRetentionTests {
       Candidate(id: "c", audible: false, startedAt: 30, pausedAt: 35),
     ], now: 40)
     #expect(kept.audible == ["a"])
-    #expect(kept.paused == ["c"])
-    #expect(kept.nextExpiry == 35 + PageMediaRetention.pausedFor)
+    #expect(kept.paused == ["c", "b"])
+    #expect(kept.nextExpiry == 25 + PageMediaRetention.pausedFor)
   }
 
   @Test func pausedPagesExpire() {
@@ -364,15 +471,17 @@ struct PageMediaRetentionTests {
     #expect(kept.audible.isEmpty && kept.paused.isEmpty && kept.nextExpiry == nil)
   }
 
-  @Test func twoAudiblePagesLeaveNoRoomForPausedOnes() {
+  @Test func everyAudiblePageIsKeptAndOnlyPausedOnesAreBounded() {
     let kept = PageMediaRetention.kept([
       Candidate(id: "a", audible: true, startedAt: 1, pausedAt: nil),
       Candidate(id: "b", audible: true, startedAt: 2, pausedAt: nil),
       Candidate(id: "c", audible: true, startedAt: 3, pausedAt: nil),
       Candidate(id: "d", audible: false, startedAt: 4, pausedAt: 5),
-    ], now: 6)
-    #expect(kept.audible == ["c", "b"])
-    #expect(kept.paused.isEmpty)
+      Candidate(id: "e", audible: false, startedAt: 5, pausedAt: 6),
+      Candidate(id: "f", audible: false, startedAt: 6, pausedAt: 7),
+    ], now: 8)
+    #expect(kept.audible == ["c", "b", "a"])
+    #expect(kept.paused == ["f", "e"])
   }
 }
 
@@ -393,5 +502,21 @@ struct MediaRosterTests {
     #expect(pages[0].isLive)
     #expect(!pages[1].isLive)
     #expect(pages[7].isLive)
+  }
+
+  @Test func threePlayingPagesAllOutliveATightLimitAndMemoryPressure() {
+    let roster = LivePageRoster<FakePage>(limit: 2)
+    let ids = (0..<6).map { _ in UUID() }
+    let pages = ids.map { _ in FakePage() }
+    for (id, page) in zip(ids, pages) { roster.register(page, for: id) }
+    let kept = PageMediaRetention.kept((0..<3).map { PageMediaRetention.Candidate(id: String($0), audible: true, startedAt: Double($0), pausedAt: nil) } + [PageMediaRetention.Candidate(id: "3", audible: false, startedAt: 3, pausedAt: 3)], now: 4)
+    roster.kept = Set(kept.audible.compactMap { Int($0) }.map { ids[$0] })
+    roster.keptWhileMemoryAllows = Set(kept.paused.compactMap { Int($0) }.map { ids[$0] })
+    for id in ids { roster.activate(id) }
+    #expect(pages[0].isLive && pages[1].isLive && pages[2].isLive && pages[3].isLive)
+    roster.discardAll(keeping: [ids[5]])
+    #expect(pages[0].isLive && pages[1].isLive && pages[2].isLive)
+    #expect(!pages[3].isLive && !pages[4].isLive)
+    #expect(pages[5].isLive)
   }
 }

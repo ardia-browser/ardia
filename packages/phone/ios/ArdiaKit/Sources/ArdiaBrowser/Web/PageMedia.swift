@@ -22,6 +22,7 @@ public struct PageMediaReport: Equatable, Sendable {
   public var inPictureInPicture: Bool
   public var isFullscreen: Bool
   public var plays: Int
+  public var keepsPlaying: Bool?
 
   public static let longestText = 200
   public static let longestArtworkURL = 2048
@@ -29,7 +30,7 @@ public struct PageMediaReport: Equatable, Sendable {
   public static let fastestRate: Double = 16
   public static let mostPlays = 1_000_000
 
-  public init(token: String, state: State, hasVideo: Bool = false, title: String = "", artist: String = "", artworkURL: String? = nil, duration: Double? = nil, position: Double = 0, rate: Double = 1, canPrevious: Bool = false, canNext: Bool = false, canPictureInPicture: Bool = false, inPictureInPicture: Bool = false, isFullscreen: Bool = false, plays: Int = 0) {
+  public init(token: String, state: State, hasVideo: Bool = false, title: String = "", artist: String = "", artworkURL: String? = nil, duration: Double? = nil, position: Double = 0, rate: Double = 1, canPrevious: Bool = false, canNext: Bool = false, canPictureInPicture: Bool = false, inPictureInPicture: Bool = false, isFullscreen: Bool = false, plays: Int = 0, keepsPlaying: Bool? = nil) {
     self.token = token
     self.state = state
     self.hasVideo = hasVideo
@@ -45,6 +46,7 @@ public struct PageMediaReport: Equatable, Sendable {
     self.inPictureInPicture = inPictureInPicture
     self.isFullscreen = isFullscreen
     self.plays = plays
+    self.keepsPlaying = keepsPlaying
   }
 
   public static func parse(_ body: Any?) -> PageMediaReport? {
@@ -68,7 +70,8 @@ public struct PageMediaReport: Equatable, Sendable {
       canPictureInPicture: flag(fields["canPictureInPicture"]),
       inPictureInPicture: flag(fields["inPictureInPicture"]),
       isFullscreen: flag(fields["isFullscreen"]),
-      plays: Int(min(max(finite(fields["plays"]) ?? 0, 0), Double(mostPlays)))
+      plays: Int(min(max(finite(fields["plays"]) ?? 0, 0), Double(mostPlays))),
+      keepsPlaying: setting(fields["keepsPlaying"])
     )
   }
 
@@ -107,6 +110,11 @@ public struct PageMediaReport: Equatable, Sendable {
     return double.isFinite ? double : nil
   }
 
+  static func setting(_ value: Any?) -> Bool? {
+    guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+    return number.boolValue
+  }
+
   static func flag(_ value: Any?) -> Bool {
     guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return false }
     return number.boolValue
@@ -122,13 +130,13 @@ public enum PageMediaLeaveOutcome: String, Sendable {
 public enum PageMediaMessage: Sendable, Equatable {
   case report(PageMediaReport)
   case left(token: String, outcome: PageMediaLeaveOutcome)
-  case hello(token: String)
+  case hello(token: String, keepsPlaying: Bool?)
   case gone(token: String)
 
   public static func parse(_ body: Any?) -> PageMediaMessage? {
     if let report = PageMediaReport.parse(body) { return .report(report) }
     if let fields = body as? [String: Any], let kind = fields["type"] as? String, kind == "hello" || kind == "gone", let token = token(fields["token"]) {
-      return kind == "hello" ? .hello(token: token) : .gone(token: token)
+      return kind == "hello" ? .hello(token: token, keepsPlaying: PageMediaReport.setting(fields["keepsPlaying"])) : .gone(token: token)
     }
     guard let fields = body as? [String: Any], fields["type"] as? String == "left", let token = token(fields["token"]),
           let outcome = (fields["outcome"] as? String).flatMap(PageMediaLeaveOutcome.init(rawValue:)) else { return nil }
@@ -165,7 +173,7 @@ public enum PageMediaCommand: String, CaseIterable, Sendable {
     guard PageMediaMessage.token(token) != nil else { return nil }
     if self == .skip, seconds == nil { return nil }
     let argument = self == .skip || self == .keepPlaying ? String(seconds ?? 0) : "0"
-    return "window.\(PageMediaScript.commandName) && window.\(PageMediaScript.commandName)(\"\(token)\", \"\(rawValue)\", \(argument)); true"
+    return "typeof window.\(PageMediaScript.commandName) === \"function\" && window.\(PageMediaScript.commandName)(\"\(token)\", \"\(rawValue)\", \(argument)) === true"
   }
 }
 
@@ -227,9 +235,13 @@ public enum PageMediaScript {
   public static let handlerName = "ardiaMedia"
   public static let commandName = "__ardiaMediaCommand"
   static let keepsPlayingPlaceholder = "__ARDIA_MEDIA_KEEPS_PLAYING__"
+  static let pausedHoldPlaceholder = "__ARDIA_MEDIA_PAUSED_HOLD_MS__"
+  public static let pausedHold: TimeInterval = 600
 
-  public static func source(keepsPlaying: Bool) -> String {
-    body.replacingOccurrences(of: keepsPlayingPlaceholder, with: keepsPlaying ? "true" : "false")
+  public static func source(keepsPlaying: Bool, pausedHold: TimeInterval = pausedHold) -> String {
+    body
+      .replacingOccurrences(of: keepsPlayingPlaceholder, with: keepsPlaying ? "true" : "false")
+      .replacingOccurrences(of: pausedHoldPlaceholder, with: String(Int((max(0, pausedHold) * 1000).rounded())))
   }
 
   static let body = #"""
@@ -266,13 +278,20 @@ public enum PageMediaScript {
     const isEnded = (element) => read(elementEnded, element, false) === true;
     const isPlaying = (element) => !!element && !isPaused(element) && !isEnded(element);
     let keepsPlaying = __ARDIA_MEDIA_KEEPS_PLAYING__;
-    const PAUSED_HOLD_MS = 600000;
+    const PAUSED_HOLD_MS = __ARDIA_MEDIA_PAUSED_HOLD_MS__;
+    const ENDED_HOLD_MS = 1000;
+    const RECENT_LIMIT = 8;
     let held = false;
+    let holdVersion = 0;
+    let holdWhy = "";
     let leaving = null;
     let plays = 0;
     let current = null;
+    const recent = [];
     const wired = new WeakMap();
     const heard = new WeakSet();
+    const fresh = new WeakSet();
+    const recovering = new WeakSet();
     const actions = new Map();
     let lastSent = "";
     let scheduled = false;
@@ -286,14 +305,26 @@ public enum PageMediaScript {
     const sessionSaysPlaying = () => { try { return navigator.mediaSession && navigator.mediaSession.playbackState !== "none"; } catch (_) { return false; } };
     const longEnough = (element) => {
       const duration = Number(read(elementDuration, element, 0));
-      return duration === Infinity || duration > 5 || sessionSaysPlaying();
+      if (duration === Infinity || duration > 5) return true;
+      return !(duration > 0) && sessionSaysPlaying();
     };
     const attached = (element) => !(element instanceof HTMLVideoElement) || element.isConnected !== false;
     const controllable = (element) => !!element && attached(element) && heard.has(element) && longEnough(element);
 
     const pick = () => {
-      if (current && !controllable(current)) current = null;
-      return current;
+      let chosen = null;
+      for (let at = recent.length - 1; at >= 0; at -= 1) {
+        if (controllable(recent[at]) && isPlaying(recent[at])) { chosen = recent[at]; break; }
+      }
+      if (!chosen && current && controllable(current)) chosen = current;
+      if (chosen && fresh.has(chosen)) { fresh.delete(chosen); plays += 1; }
+      current = chosen;
+      return chosen;
+    };
+    const forgetElement = (element) => {
+      const at = recent.indexOf(element);
+      if (at >= 0) recent.splice(at, 1);
+      if (current === element) current = null;
     };
 
     const metadata = () => {
@@ -330,7 +361,8 @@ public enum PageMediaScript {
     const report = () => {
       scheduled = false;
       const element = pick();
-      const body = { type: "media", token, state: "none", plays };
+      settleHold(element);
+      const body = { type: "media", token, state: "none", plays, keepsPlaying };
       if (element) {
         const meta = metadata();
         const duration = Number(read(elementDuration, element, 0));
@@ -362,19 +394,39 @@ public enum PageMediaScript {
       setTimeout(report, 0);
     };
 
+    const unhold = () => {
+      held = false;
+      holdVersion += 1;
+      holdWhy = "";
+    };
     const release = () => {
       if (!held) return;
-      held = false;
+      unhold();
+      leaving = null;
       if (reallyHidden()) document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
     };
+    function settleHold(element) {
+      const why = !held || isPlaying(element) ? "" : element && !isEnded(element) ? "paused" : "ended";
+      if (why === holdWhy) return;
+      holdWhy = why;
+      holdVersion += 1;
+      if (!why) return;
+      const version = holdVersion;
+      setTimeout(() => {
+        if (version !== holdVersion || isPlaying(pick())) return;
+        release();
+      }, why === "paused" ? PAUSED_HOLD_MS : ENDED_HOLD_MS);
+    }
 
     const RESUME_RETRIES_MS = [60, 150, 400];
     const resume = (element, attempt) => {
       const trip = leaving;
       if (!element || !trip || trip.element !== element || trip.resumed || trip.resuming || !isPaused(element)) return;
       trip.resuming = true;
+      recovering.add(element);
       const failed = () => {
         trip.resuming = false;
+        recovering.delete(element);
         const wait = RESUME_RETRIES_MS[attempt];
         if (wait !== undefined && leaving === trip && Date.now() < trip.until) setTimeout(() => resume(element, attempt + 1), wait);
         else send({ type: "left", token, outcome: "refused" });
@@ -391,15 +443,19 @@ public enum PageMediaScript {
       }
     };
 
-    const becameCurrent = (element) => {
-      if (current !== element) plays += 1;
-      current = element;
+    const started = (element) => {
+      const at = recent.indexOf(element);
+      if (at >= 0) recent.splice(at, 1);
+      recent.push(element);
+      if (recent.length > RECENT_LIMIT) recent.shift();
+      if (recovering.has(element)) { recovering.delete(element); return; }
+      if (current !== element || lastSent.indexOf('"state":"paused"') >= 0) fresh.add(element);
     };
     const listenForSound = (element) => {
       [600, 1500, 3500].forEach((delay) => setTimeout(() => {
         if (heard.has(element) || !isPlaying(element) || !hasAudio(element)) return;
         heard.add(element);
-        becameCurrent(element);
+        started(element);
         schedule();
       }, delay));
     };
@@ -411,22 +467,14 @@ public enum PageMediaScript {
         if (kind === "playing" || kind === "play") {
           if (hasAudio(element)) heard.add(element);
           else if (kind === "playing") listenForSound(element);
-          if (kind === "playing" && heard.has(element)) {
-            if (current === element && lastSent.indexOf('"state":"paused"') >= 0) plays += 1;
-            becameCurrent(element);
-          }
-        } else if (kind === "volumechange" && isPlaying(element) && hasAudio(element)) {
+          if (kind === "playing" && heard.has(element)) started(element);
+        } else if (kind === "volumechange" && isPlaying(element) && hasAudio(element) && !heard.has(element)) {
           heard.add(element);
-          becameCurrent(element);
-        } else if (kind === "pause" && leaving && leaving.element === element && Date.now() < leaving.until) {
+          started(element);
+        } else if (kind === "pause" && leaving && leaving.element === element && !leaving.resumed && Date.now() < leaving.until) {
           queueMicrotask(() => resume(element, 0));
-        } else if (kind === "ended" && element === current && held) {
-          setTimeout(() => { if (held && element === current && isEnded(element)) release(); }, 1000);
-        } else if (kind === "pause" && element === current && held && !(leaving && Date.now() < leaving.until)) {
-          const pausedAt = plays;
-          setTimeout(() => { if (held && element === current && plays === pausedAt && isPaused(element)) release(); }, PAUSED_HOLD_MS);
-        } else if (kind === "emptied" && element === current && !element.currentSrc) {
-          current = null;
+        } else if (kind === "emptied" && !element.currentSrc) {
+          forgetElement(element);
         }
         schedule();
       };
@@ -484,7 +532,7 @@ public enum PageMediaScript {
     const playingOrLeaving = () => {
       const element = pick();
       if (isPlaying(element)) return true;
-      return !!(leaving && leaving.element === element && Date.now() < leaving.until);
+      return !!(leaving && leaving.element === element && !leaving.resumed && Date.now() < leaving.until);
     };
     const onVisibility = (event) => {
       if (event.target !== document) return;
@@ -494,17 +542,18 @@ public enum PageMediaScript {
           event.stopImmediatePropagation();
           send({ type: "left", token, outcome: "held" });
           if (leaving && isPaused(leaving.element)) resume(leaving.element, 0);
+          settleHold(pick());
         } else if (held) {
           event.stopImmediatePropagation();
         }
       } else if (held) {
-        held = false;
+        unhold();
         event.stopImmediatePropagation();
       }
     };
     window.addEventListener("visibilitychange", onVisibility, true);
-    window.addEventListener("pagehide", () => { held = false; leaving = null; lastSent = ""; send({ type: "media", token, state: "none", plays }); send({ type: "gone", token }); }, true);
-    window.addEventListener("pageshow", (event) => { if (event.persisted) { send({ type: "hello", token }); schedule(); } }, true);
+    window.addEventListener("pagehide", () => { unhold(); leaving = null; lastSent = ""; send({ type: "media", token, state: "none", plays, keepsPlaying }); send({ type: "gone", token }); }, true);
+    window.addEventListener("pageshow", (event) => { if (event.persisted) { send({ type: "hello", token, keepsPlaying }); schedule(); } }, true);
     window.addEventListener("webkitvisibilitychange", (event) => { if (held) event.stopImmediatePropagation(); }, true);
 
     const command = (from, name, seconds) => {
@@ -520,7 +569,7 @@ public enum PageMediaScript {
         }
         case "returned":
           leaving = null;
-          if (held && !reallyHidden()) held = false;
+          if (held && !reallyHidden()) unhold();
           lastSent = "";
           schedule();
           return true;
@@ -536,7 +585,7 @@ public enum PageMediaScript {
           return true;
         }
       }
-      if (!element) return false;
+      if (!element) { lastSent = ""; schedule(); return false; }
       switch (name) {
         case "play": {
           const refused = () => { lastSent = ""; schedule(); };
@@ -576,7 +625,7 @@ public enum PageMediaScript {
       return false;
     };
     Object.defineProperty(window, COMMAND, { value: command, configurable: false, enumerable: false, writable: false });
-    send({ type: "hello", token });
+    send({ type: "hello", token, keepsPlaying });
   })();
   """#
 }
@@ -602,13 +651,13 @@ public enum PageMediaRetention {
     public var nextExpiry: TimeInterval?
   }
 
-  public static let slots = 2
+  public static let pausedSlots = 2
   public static let pausedFor: TimeInterval = 600
 
   public static func kept(_ candidates: [Candidate], now: TimeInterval) -> Kept {
-    let audible = candidates.filter(\.audible).sorted { $0.startedAt > $1.startedAt }.prefix(slots).map(\.id)
+    let audible = candidates.filter(\.audible).sorted { $0.startedAt > $1.startedAt }.map(\.id)
     let fresh = candidates.filter { !$0.audible && now - ($0.pausedAt ?? now) < pausedFor }.sorted { ($0.pausedAt ?? 0) > ($1.pausedAt ?? 0) }
-    let paused = fresh.prefix(max(0, slots - audible.count))
+    let paused = fresh.prefix(pausedSlots)
     let nextExpiry = paused.compactMap(\.pausedAt).map { $0 + pausedFor }.min()
     return Kept(audible: Array(audible), paused: paused.map(\.id), nextExpiry: nextExpiry)
   }

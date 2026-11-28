@@ -60,6 +60,7 @@ chromium chromium-helium-search-assets-off.patch
 chromium chromium-helium-bangs-off.patch
 chromium chromium-helium-web-push-off.patch
 chromium chromium-helium-translate-providers-off.patch
+chromium chromium-helium-spellcheck-dictionaries.patch linux
 chromium chromium-helium-rlz-for-cdm-storage-id.patch
 chromium chromium-helium-ntp-third-party.patch
 chromium chromium-helium-context-menu-cast.patch

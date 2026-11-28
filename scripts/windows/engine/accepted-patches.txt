@@ -46,6 +46,7 @@ chromium-helium-search-assets-off.patch
 chromium-helium-bangs-off.patch
 chromium-helium-web-push-off.patch
 chromium-helium-translate-providers-off.patch
+chromium-helium-spellcheck-dictionaries.patch
 chromium-helium-rlz-for-cdm-storage-id.patch
 chromium-helium-ntp-third-party.patch
 chromium-helium-context-menu-cast.patch

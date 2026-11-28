@@ -1,0 +1,62 @@
+SPDX-License-Identifier: GPL-3.0-only
+Changes code from Helium's helium/core/reenable-spellcheck-downloads.patch and services-prefs.patch
+(GPL-3.0, The Helium Authors).
+
+Hunspell dictionaries download from Chromium's own server again (redirector.gvt1.com, where the component updater
+already goes), lowercased as Chromium names them. Helium sends them to its services, which Ardia keeps off for good
+(chromium-helium-branding.patch), so every download went to the unresolvable placeholder and failed, and Retry
+could never succeed. The download error's help text is Chromium's again: it named a services setting Ardia doesn't
+have. Only Linux and Windows build Hunspell; the Mac checks spelling with AppKit.
+
+--- a/chrome/browser/spellchecker/spellcheck_hunspell_dictionary.cc
++++ b/chrome/browser/spellchecker/spellcheck_hunspell_dictionary.cc
+@@ -24,10 +24,8 @@
+ #include "base/task/thread_pool.h"
+ #include "base/threading/scoped_blocking_call.h"
+ #include "build/build_config.h"
+-#include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/spellchecker/spellcheck_service.h"
+ #include "chrome/common/chrome_paths.h"
+-#include "components/helium_services/helium_services_helpers.h"
+ #include "components/spellcheck/browser/spellcheck_platform.h"
+ #include "components/spellcheck/common/spellcheck_common.h"
+ #include "components/spellcheck/common/spellcheck_features.h"
+@@ -279,23 +277,11 @@
+   std::string bdict_file = dictionary_file_.path.BaseName().MaybeAsASCII();
+   DCHECK(!bdict_file.empty());
+ 
+-  if (browser_context_) {
+-    const Profile* profile = Profile::FromBrowserContext(browser_context_);
+-    if (!profile) {
+-      goto fail;
+-    }
+-
+-    const PrefService* prefs = profile->GetPrefs();
+-    if (!prefs) {
+-      goto fail;
+-    }
+-
+-    return helium::GetSpellcheckURL(*prefs)
+-            .Resolve(bdict_file);
+-  }
++  static const char kDownloadServerUrl[] =
++      "https://redirector.gvt1.com/edgedl/chrome/dict/";
+ 
+-fail:
+-  return GURL("https://failed-getting-spellcheck.qjz9zk/");
++  return GURL(std::string(kDownloadServerUrl) +
++              base::ToLowerASCII(bdict_file));
+ }
+ 
+ void SpellcheckHunspellDictionary::DownloadDictionary(GURL url) {
+--- a/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
++++ b/chrome/browser/ui/webui/settings/settings_localized_strings_provider.cc
+@@ -1581,7 +1581,7 @@
+       {"languagesDictionaryDownloadError",
+        IDS_SETTINGS_LANGUAGES_DICTIONARY_DOWNLOAD_FAILED},
+       {"languagesDictionaryDownloadErrorHelp",
+-       IDS_SETTINGS_LANGUAGES_DICTIONARY_DOWNLOAD_FAILED_HELP_HELIUM},
++       IDS_SETTINGS_LANGUAGES_DICTIONARY_DOWNLOAD_FAILED_HELP},
+ #endif
+ #endif  // !BUILDFLAG(IS_CHROMEOS)
+ #if BUILDFLAG(IS_CHROMEOS)

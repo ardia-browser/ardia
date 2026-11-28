@@ -14,6 +14,7 @@ import { splitOf, splitTabIdsOf } from "../splits/splits";
 import { activated, apply, removeTabs } from "./tabs";
 import { isAdoptKind } from "./adoptIds";
 import { adoptOf } from "./pageSession";
+import { isMaterialized } from "./materialized";
 import { orderSections } from "../groups/groups";
 
 type Keyed = StripTab & { key: string };
@@ -65,7 +66,8 @@ export function chromeChanged(
   const was = new Map((before?.tabs ?? []).map((t) => [t.browser, t]));
   const now = after.tabs.filter((t): t is Keyed => known(s, t));
   const stayed = (t: Keyed) => was.get(t.browser)?.key === t.key;
-  const firstFromChrome = (t: Keyed) => !stayed(t) && !seen.has(t.key) && madeByChrome(s, t.key);
+  const firstFromChrome = (t: Keyed) =>
+    !stayed(t) && !seen.has(t.key) && (madeByChrome(s, t.key) || isMaterialized(t.key));
   const home = homeWindow(s, after, siblings, stayed);
   const movedIn = (t: Keyed) =>
     !was.has(t.browser) && !!home && s.tabs[t.key]!.windowId !== home && engineProfile(s, s.tabs[t.key]!.profileId) === after.profile;
@@ -73,10 +75,13 @@ export function chromeChanged(
 
   for (const t of now) if (movedIn(t)) s = intoWindow(s, t.key, home!);
 
-  const followed = now.filter((t) => (stayed(t) || taken.has(t.key)) && !pending.arranged.has(t.key));
+  const followed = now.filter(
+    (t) => (stayed(t) || taken.has(t.key) || isMaterialized(t.key)) && !pending.arranged.has(t.key),
+  );
+  const ordered = followed.filter((t) => !isMaterialized(t.key));
   const weight = (t: Keyed) => (chromeGroupOf(s, t.key) ? 2 : 1);
   const kept = new Set([
-    ...keptOrder(followed.filter(stayed), (t) => was.get(t.browser)!.index, weight).map((t) => t.key),
+    ...keptOrder(ordered.filter(stayed), (t) => was.get(t.browser)!.index, weight).map((t) => t.key),
     ...pending.arranged,
     ...(pending.regrouped ?? []),
   ]);
@@ -87,7 +92,7 @@ export function chromeChanged(
     const id = groups.get(t.group);
     return id && s.groups[id] ? id : undefined;
   };
-  for (const t of [...followed].reverse()) {
+  for (const t of [...ordered].reverse()) {
     const tab = s.tabs[t.key];
     if (!tab) continue;
     if (!!tab.pin !== t.pinned && splitOf(s, t.key)) continue;

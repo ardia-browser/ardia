@@ -205,3 +205,29 @@ test("moving a pinned group's unloaded tab to a window that has its copy shows i
   assert.deepEqual(pinned(a), ["/https://jira.com", "/https://wiki.com"], "one wiki in A's group");
   assert.deepEqual(pinned(b), ["/https://jira.com", "/https://wiki.com"], "B keeps its member, unloaded");
 });
+
+test("a kept empty tab pinned in one window and unpinned from its copy in another stays a kept, listed tab there", async () => {
+  const { isEmptyCardTab } = await import("../omnibox/newTabBarPolicy.ts");
+  const { sidebarEntries } = await import("../sidebar/entries.ts");
+  reset();
+  S().updateSettings({ newTabOpens: "commandBar" });
+  const a = S().createWindow({ url: "https://a.com" });
+  const kept = S().newTab(a, { newTabCommand: true, keptEmpty: true });
+  S().pinTabs([kept], true, true);
+  const b = S().createWindow({ url: "https://b.com" });
+  const copy = model.viewTabIds(S(), b).find((id) => model.pinKeyOf(S().tabs[id]) === model.pinKeyOf(S().tabs[kept]));
+  assert.ok(copy && copy !== kept, "the pin is mirrored into the other window");
+  assert.equal(S().tabs[copy].keptEmpty, true, "its copy is kept too");
+  S().activate(copy);
+  const shown = model.activeTabId(S(), b);
+  S().pinTabs([shown], false);
+  const t = S().tabs[shown];
+  assert.equal(t.url, "");
+  assert.equal(t.keptEmpty, true, "unpinned, it is still kept");
+  assert.equal(isEmptyCardTab(S(), t), false);
+  assert.ok(sidebarEntries(S(), b).list.includes(`t:${shown}`), "listed in that window's sidebar");
+  S().activate(model.viewTabIds(S(), b).find((id) => S().tabs[id].url === "https://b.com"));
+  S().closeAbandonedNewTabs();
+  assert.ok(S().tabs[shown], "leaving the app doesn't close it");
+  S().updateSettings({ newTabOpens: "page" });
+});

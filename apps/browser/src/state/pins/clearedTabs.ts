@@ -54,7 +54,7 @@ export function clearedTabIds(s: BrowserState, windowId: string): string[] {
 
 function isBlankTab(s: BrowserState, id: string): boolean {
   const t = s.tabs[id];
-  return !!t && !t.url && !hasPage(t) && !splitOf(s, id);
+  return !!t && !t.keptEmpty && !t.url && !hasPage(t) && !splitOf(s, id);
 }
 
 export function blankSplitPanes(s: BrowserState, ids: string[]): ClosedTab[] {

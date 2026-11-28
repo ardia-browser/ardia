@@ -67,7 +67,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   closedTabs: [],
 
   newTab(windowId, options) {
-    const home = options?.newTabCommand && !options.url && !options.adoptId && !options.gated ? newTabPageChoice(get(), windowId, options.profileId) : undefined;
+    const home = options?.newTabCommand && !options.keptEmpty && !options.url && !options.adoptId && !options.gated ? newTabPageChoice(get(), windowId, options.profileId) : undefined;
     if (home?.url) return get().newTab(windowId, { ...options, url: home.url });
     const small = get().windows[windowId];
     if (small?.kind === "small" && small.tabIds.length) {
@@ -199,7 +199,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     if (!switching) startNavigation(id, navigation);
     const page = switching ? loadedPage(navigation) : renavigated(tab, navigation);
     const { chromeOpened: _, ...typed } = tab;
-    const navigated = userInitiated ? typed : tab;
+    const { keptEmpty: _kept, ...navigated } = userInitiated ? typed : tab;
     set(apply(base, { tabs: withEntry(base.tabs, id, { ...navigated, openerId: base.tabs[id]!.openerId, page, url: tab.url || url, ...(engine ? { engine } : {}) }) }));
     const ui = get().windowUi[tab.windowId];
     if (ui?.panel.open) get().closePanel(tab.windowId);

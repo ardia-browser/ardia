@@ -295,3 +295,107 @@ test("Move out of Pinned: two tabs pinned one after the other, unpinned together
   togglePinnedRows(w);
   assert.deepEqual(list(w), ["https://a.com/", "https://b.com/", "https://c.com/", "https://d.com/"], "pinned in the other order");
 });
+
+test("a kept empty tab is listed, gets no bar over it, and ⌘T opens a new tab beside it; navigating makes it an ordinary tab", async () => {
+  const { sidebarEntries } = await import("../sidebar/entries.ts");
+  const { stripEntries } = await import("../tabs/topStrip.ts");
+  reset("commandBar");
+  const { w, ids: [a] } = windowWith("a", "b");
+  const card = S().newTab(w, { newTabCommand: true });
+  const kept = S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  assert.equal(model.activeTabId(S(), w), kept, "the kept empty tab is selected");
+  assert.equal(S().tabs[kept].keptEmpty, true);
+  assert.equal(urlOf(kept), "");
+  const listed = (id) => [sidebarEntries(S(), w).list.includes(`t:${id}`), JSON.stringify(stripEntries(S(), w, S().windows[w].profileId)).includes(`"${id}"`)];
+  assert.deepEqual(listed(kept), [true, true], "listed in the sidebar and the strip");
+  assert.deepEqual(listed(card), [false, false], "an empty card stays hidden");
+  showOnceOverEmptyCard(w, kept);
+  assert.equal(panel(w).open, false, "no bar over it");
+  assert.equal(toggleNewTabBar(w), true);
+  assert.deepEqual(panel(w).newTab, { kind: "list" }, "⌘T targets a new tab, not into the kept one");
+  openFromNewTabBar(w, panel(w).newTab, "https://picked.com/");
+  const picked = model.activeTabId(S(), w);
+  assert.notEqual(picked, kept);
+  assert.equal(urlOf(picked), "https://picked.com/");
+  assert.equal(urlOf(kept), "", "the kept tab stays empty");
+  S().activate(a);
+  S().closeAbandonedNewTabs();
+  assert.ok(S().tabs[kept], "leaving the app keeps it open");
+  assert.equal(S().tabs[card], undefined, "while an abandoned empty card closes");
+  const copy = S().duplicateTab(kept);
+  assert.equal(S().tabs[copy].keptEmpty, true, "a duplicate is kept too");
+  S().navigate(kept, "https://typed.com/");
+  assert.equal(urlOf(kept), "https://typed.com/");
+  assert.equal("keptEmpty" in S().tabs[kept], false, "a page makes it an ordinary tab");
+});
+
+test("Clear closes a kept empty tab with the other tabs, counts it, and Undo brings it back kept; an empty card is left out", () => {
+  reset("commandBar");
+  const { w, ids: [a, b] } = windowWith("a", "b");
+  const card = S().newTab(w, { newTabCommand: true });
+  const kept = S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  S().activate(a);
+  const cleared = S().clearUnpinnedTabs(w);
+  assert.deepEqual(cleared.entries.map((e) => e.tabId).sort(), [b, kept].sort(), "the kept tab is recorded, the empty card isn't");
+  assert.equal(S().tabs[kept], undefined);
+  assert.equal(S().tabs[card], undefined);
+  S().undoClearTabs(cleared);
+  const back = S().windows[w].tabIds.map((id) => S().tabs[id]).filter((t) => t.keptEmpty);
+  assert.equal(back.length, 1, "Undo puts the kept tab back");
+  assert.equal(back[0].url, "");
+  assert.deepEqual(list(w), ["https://a.com/", "https://b.com/", ""]);
+});
+
+test("a lone kept empty tab is cleared like any tab; a lone empty card isn't", () => {
+  reset("commandBar");
+  const { w, ids: [a] } = windowWith("a");
+  S().pinTabs([a], true);
+  const kept = S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  const cleared = S().clearUnpinnedTabs(w);
+  assert.deepEqual(cleared?.entries.map((e) => e.tabId), [kept]);
+  const card = model.activeTabId(S(), w);
+  assert.equal(S().tabs[card]?.keptEmpty, undefined);
+  assert.equal(S().clearUnpinnedTabs(w), null, "Clear leaves a lone empty card alone");
+});
+
+test("reopening a closed window brings its kept empty tab back kept, listed and not filled by ⌘T", async () => {
+  const { sidebarEntries } = await import("../sidebar/entries.ts");
+  reset("commandBar");
+  const { w } = windowWith("a", "b");
+  S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  S().createWindow({ url: "https://other.com/" });
+  S().closeWindow(w);
+  assert.equal(S().windows[w], undefined);
+  S().reopenClosed();
+  const back = S().windowOrder.find((id) => S().windows[id].tabIds.some((t) => S().tabs[t].url === "https://a.com/"));
+  const kept = S().windows[back].tabIds.find((t) => S().tabs[t].keptEmpty);
+  assert.ok(kept, "the reopened blank tab is still kept");
+  assert.equal(urlOf(kept), "");
+  assert.ok(sidebarEntries(S(), back).list.includes(`t:${kept}`), "and listed");
+  S().activate(kept);
+  toggleNewTabBar(back);
+  assert.deepEqual(panel(back).newTab, { kind: "list" }, "⌘T opens a new tab instead of filling it");
+});
+
+test("Reopen Closed Tab brings back a closed kept empty tab kept; a closed empty card isn't recorded", () => {
+  reset("commandBar");
+  const { w } = windowWith("a");
+  const kept = S().newTab(w, { newTabCommand: true, keptEmpty: true });
+  S().closeTab(kept);
+  assert.equal(S().tabs[kept], undefined);
+  S().reopenClosed(w);
+  const back = S().windows[w].tabIds.find((id) => S().tabs[id].keptEmpty);
+  assert.ok(back, "the closed kept tab comes back kept");
+  assert.equal(urlOf(back), "");
+  const card = S().newTab(w);
+  const recorded = S().closedTabs.length;
+  S().closeTab(card);
+  assert.equal(S().closedTabs.length, recorded, "an empty card leaves no entry");
+});
+
+test("a snapshot's kept flag only holds on a tab with no address", () => {
+  reset("commandBar");
+  const { w } = windowWith("a");
+  const id = S().newTab(w, { url: "https://page.com/", snapshot: { keptEmpty: true } });
+  assert.equal("keptEmpty" in S().tabs[id], false);
+});

@@ -7,7 +7,7 @@ const { multiTabMenuItems } = await import("./multiTabMenu.ts");
 const { groupMenuItems } = await import("./groupMenu.ts");
 const { sidebarMenuItems, runBrowserLayoutChoice, openSidebarMenu } = await import("./sidebarMenu.ts");
 const { appMenuItems } = await import("../app/appMenu.ts");
-const { tabLayoutOf } = await import("../browser/model.ts");
+const { activeTabId, tabLayoutOf } = await import("../browser/model.ts");
 const { tileFolderContextItems } = await import("./tileFolderUi.ts");
 const { addToTileFolder } = await import("../pins/tileFolders.ts");
 const { openTabMenu } = await import("./tabMenu.ts");
@@ -390,6 +390,24 @@ test("Browser Layout moves the tabs between the sides and the top in one pick, a
   runBrowserLayoutChoice(small, "layout:top");
   assert.equal(tabLayoutOf(S(), w), "sidebar");
   assert.equal(runBrowserLayoutChoice(w, "newTab"), false);
+});
+
+test("New Empty Tab sits under New Tab only while New Tab opens the command bar, and opens a selected empty tab with no bar", async () => {
+  const { w } = windowWith("a", "b");
+  assert.equal(top(sidebarMenuItems(S(), w)).some((l) => l.startsWith("New Empty Tab")), false, "not with the New Tab page");
+  S().updateSettings({ newTabOpens: "commandBar" });
+  try {
+    assert.deepEqual(top(sidebarMenuItems(S(), w)).slice(0, 2), ["New Tab [plus.app] ⌘T", "New Empty Tab [app]"]);
+    const before = S().windows[w].tabIds.length;
+    await whileMenuIsUp(() => openSidebarMenu(w), () => {}, "newEmptyTab");
+    const id = activeTabId(S(), w);
+    assert.equal(S().windows[w].tabIds.length, before + 1);
+    assert.equal(S().tabs[id].url, "");
+    assert.equal(S().tabs[id].keptEmpty, true);
+    assert.equal(S().windowUi[w]?.panel.open ?? false, false, "no command bar over it");
+  } finally {
+    S().updateSettings({ newTabOpens: "page" });
+  }
 });
 
 test("multi-select Move to › Top Apps converts pinned rows into Top Apps tiles", async () => {

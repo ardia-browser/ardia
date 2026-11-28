@@ -209,7 +209,7 @@ export function copyOf(src: Tab, windowId: string, tile: boolean, profileId = sr
       customTitle: src.customTitle,
       customIcon: src.customIcon,
       ...(src.tileLetters ? { tileLetters: src.tileLetters } : {}),
-      ...(src.reopenAtPinnedUrl !== undefined ? { reopenAtPinnedUrl: src.reopenAtPinnedUrl } : {}),
+      ...(src.reopenAtPinnedUrl !== undefined ? { reopenAtPinnedUrl: src.reopenAtPinnedUrl } : {}), ...(src.keptEmpty && !url ? { keptEmpty: src.keptEmpty } : {}),
       muted: src.muted,
       zoom: src.zoom,
     }),

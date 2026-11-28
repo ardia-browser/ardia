@@ -7,6 +7,7 @@ import { groupLabel, withGroup } from "./tabGrouping";
 import type { BrowserWindow, ClosedGroup, ClosedTab, ClosedWindow, NestedGroupSnapshot, Tab, TabGroup } from "../browser/types";
 import { sleepsNow } from "../tabs/openers";
 import { isAsleep } from "../tabs/pageSession";
+import { splitOf } from "../splits/splits";
 
 export const MAX_CLOSED_TABS = 50;
 export const MAX_CLOSED_WINDOWS = 10;
@@ -86,7 +87,7 @@ export function closedEntries(s: BrowserState, ids: string[]): ClosedTab[] {
   const now = Date.now();
   return ids
     .map((id) => s.tabs[id])
-    .filter((t): t is Tab => !!t && !!t.url)
+    .filter((t): t is Tab => !!t && (!!t.url || (!!t.keptEmpty && !splitOf(s, t.id))))
     .map((t) => closedTabEntry(s, t, { windowId: t.windowId, index: s.windows[t.windowId]?.tabIds.indexOf(t.id) ?? 0 }, now));
 }
 

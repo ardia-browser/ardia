@@ -143,15 +143,24 @@ export function lookForApp(
   fallback: string,
   customTheme: ProfileTheme | null = null,
 ): ProfileLook {
-  if (choice === CUSTOM_CHOICE && customTheme) return customLook(customTheme, "own");
   const chosen = presets.find((preset) => preset.key === choice);
+  if (customTheme && chosen) return { ...customLook(customTheme, "own"), preset: chosen.key };
+  if (customTheme && choice === CUSTOM_CHOICE) return customLook(customTheme, "own");
   if (chosen) return presetLook(chosen);
   return lookOf(syncEnabled && profile && choice === null ? profile : { color: null, theme: null }, presets, fallback);
 }
 
+export type OwnThemeSource = { colorChoice: string | null; customTheme: ProfileTheme | null; presetThemes: Partial<Record<string, ProfileTheme>>; materialYou: boolean };
+
+export function ownThemeOf({ colorChoice, customTheme, presetThemes, materialYou }: OwnThemeSource): ProfileTheme | null {
+  if (colorChoice === null) return null;
+  if (colorChoice === CUSTOM_CHOICE) return customTheme;
+  return materialYou ? null : (presetThemes[colorChoice] ?? null);
+}
+
 export function activeCustomLook(choice: string | null, customTheme: ProfileTheme | null, syncEnabled: boolean, profile: LookSource | null): CustomLook | null {
-  if (choice === CUSTOM_CHOICE) return customTheme ? { theme: customTheme, source: "own" } : null;
-  if (choice !== null || !syncEnabled) return null;
+  if (choice !== null) return customTheme ? { theme: customTheme, source: "own" } : null;
+  if (!syncEnabled) return null;
   const synced = syncedTheme(profile?.theme);
   return synced ? { theme: synced, source: "app" } : null;
 }
@@ -188,7 +197,7 @@ export function themeLookFor(look: ProfileLook, dark: boolean): NativeThemeLook 
 }
 
 export const choiceAfterMatchToggle = (matches: boolean, look: ProfileLook, fallback: string): string | null =>
-  matches ? null : look.custom ? CUSTOM_CHOICE : (look.preset ?? fallback);
+  matches ? null : (look.preset ?? (look.custom ? CUSTOM_CHOICE : fallback));
 
 export const themeStops = (look: ProfileLook, dark: boolean): readonly string[] => (dark ? (look.darkTheme ?? look.theme) : look.theme);
 
@@ -229,5 +238,5 @@ const GLASS_TINT_SHARE = 0.15;
 export const lookGlassTint = (look: ProfileLook): string | undefined => (look.isNeutral ? undefined : withAlpha(look.tint, GLASS_TINT_SHARE));
 
 export function nativeLookColors(look: ProfileLook, dark: boolean): NativeLookColors {
-  return { color: look.preset ?? look.swatch, themeColors: [...look.theme], darkThemeColors: look.darkTheme ? [...look.darkTheme] : null, themeLook: themeLookFor(look, dark) };
+  return { color: look.custom ? look.swatch : (look.preset ?? look.swatch), themeColors: [...look.theme], darkThemeColors: look.darkTheme ? [...look.darkTheme] : null, themeLook: themeLookFor(look, dark) };
 }

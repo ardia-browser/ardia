@@ -63,7 +63,7 @@ import { useTabs } from "../../state/tabs/store";
 import { ExpoClearDataPage } from "../settings/ExpoClearDataPage";
 import { actionWords } from "../../lib/sharedWords";
 import { DoneToolbarItem } from "../settings/ExpoSettingsDone";
-import { contentMargins, iconRoles, modifierList, neverBounces, settingsChrome, sfName } from "../ui";
+import { bouncesWhenLong, contentMargins, iconRoles, modifierList, settingsChrome, sfName } from "../ui";
 import { LinkMenuItems, ListLoading, ListNoResults, ListRow, ListRowSubtitle, listSheetWords, opensPage } from "./listSheet";
 import { libraryLayout as L, listRowLayout } from "./listSheetTokens";
 
@@ -104,7 +104,7 @@ export function LibraryNavigation() {
     navigationBarTitleDisplayMode("inline"),
     tint(PlatformColor("systemBlue")),
     settingsChrome(),
-    neverBounces(),
+    bouncesWhenLong(),
     prompt ? searchable(searchText, { placement: "navigationBarDrawer", prompt, onChange: setQuery }) : null,
   );
   const content = section === "history" ? <HistoryContent query={query} page={page} /> : section === "bookmarks" ? <BookmarksContent query={query} page={page} /> : <DownloadsContent page={page} />;
@@ -334,7 +334,7 @@ function findFolder(items: readonly BookmarkItem[], key: string): BookmarkItem |
 function BookmarkFolderPage({ folderKey }: { folderKey: string }) {
   const bookmarks = useBookmarks();
   const folder = findFolder(bookmarks, folderKey);
-  const page = modifierList(navigationTitle(folder?.title ?? ""), navigationBarTitleDisplayMode("inline"), settingsChrome(), neverBounces());
+  const page = modifierList(navigationTitle(folder?.title ?? ""), navigationBarTitleDisplayMode("inline"), settingsChrome(), bouncesWhenLong());
   const children = folder?.children ?? [];
   if (!children.length) return <ContentUnavailableView title="Empty Folder" systemImage="folder" modifiers={page} />;
   return (

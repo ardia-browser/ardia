@@ -157,7 +157,7 @@ export function Sidebar({ width }: { width: number }) {
                     {profileRow.centered ? <View pointerEvents="none" style={{ flex: 1 }} /> : null}
                     <ProfileIndicator room={profileRow.room} profileShown={profileShown} />
                     <View pointerEvents="none" style={{ flex: 1 }} />
-                    {headerDownloads ? <View style={{ marginLeft: DOWNLOADS_GAP }}><DownloadsButton windowId={windowId} /></View> : null}
+                    {headerDownloads ? <View style={{ marginLeft: profileRow.centered ? DOWNLOADS_GAP : 0 }}><DownloadsButton windowId={windowId} /></View> : null}
                   </View>
                 )}
               </View>

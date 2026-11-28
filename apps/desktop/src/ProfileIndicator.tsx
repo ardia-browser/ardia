@@ -8,7 +8,11 @@ import { setMeasuredWidth, useMeasuredWidth } from "../../browser/src/state/wind
 import { useAppMenuInHeader } from "./appMenuPlacement";
 import { headerIndicatorLayout } from "./profileIndicatorLayout";
 
+import { sidebarProfileRow as macSidebarProfileRow } from "../../browser/src/components/profiles/ProfileIndicator";
+
 export { profileIndicatorX } from "../../browser/src/components/profiles/ProfileIndicator";
+
+export const sidebarProfileRow = (row: Parameters<typeof macSidebarProfileRow>[0]) => macSidebarProfileRow({ ...row, fullScreen: false });
 
 function useIndicator(room: number, profileShown: boolean) {
   const incognito = useIsIncognito();

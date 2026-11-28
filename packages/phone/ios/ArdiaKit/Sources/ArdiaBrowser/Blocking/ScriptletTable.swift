@@ -99,10 +99,24 @@ public struct ScriptletTable: Codable, Equatable, Sendable {
     case "trusted-replace-argument":
       guard body.count >= 3, !body[1].isEmpty, body[2].wholeMatch(of: /-?[0-9]+/) != nil else { return false }
       let value = body.count > 3 ? body[3] : ""
-      return !value.hasPrefix("repl:") && !value.hasPrefix("add:")
+      if value.hasPrefix("repl:") || value.hasPrefix("add:") { return false }
+      if value.hasPrefix("json:") { return parsesAsJSON(value.dropFirst(5)) }
+      if value.hasPrefix("{"), value.hasSuffix("}") {
+        return (try? JSONSerialization.jsonObject(with: Data(value.utf8))) is [String: Any]
+      }
+      return true
     default:
       return false
     }
+  }
+
+  static func parsesAsJSON(_ text: Substring) -> Bool {
+    (try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])) != nil
+  }
+
+  var isWellFormed: Bool {
+    let valid = 0..<bodies.count
+    return hosts.values.allSatisfy { $0.allSatisfy(valid.contains) } && exceptions.values.allSatisfy { $0.allSatisfy(valid.contains) }
   }
 
   static let quotes: Set<Character> = ["'", "\"", "`"]

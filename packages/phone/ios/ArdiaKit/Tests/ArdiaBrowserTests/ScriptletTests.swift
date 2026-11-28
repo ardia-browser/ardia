@@ -97,6 +97,38 @@ let adShieldBody = ["trusted-replace-argument", "Element.prototype.setAttribute"
     #expect(Set(list.blockedDomains) == ["not-chromium.example", "safari-ublock.example", "mobile.example", "after.example"])
     #expect(list.scriptlets.isEmpty)
   }
+
+  @Test func deepOrLongPreparserExpressionsAreFalseNotACrash() {
+    #expect(Preparser.holds(Substring(String(repeating: "!", count: 100_000) + "env_safari")) == false)
+    #expect(Preparser.holds(Substring(String(repeating: "(", count: 100_000) + "env_safari" + String(repeating: ")", count: 100_000))) == false)
+    #expect(Preparser.holds(Substring(String(repeating: "(", count: 8) + "env_safari" + String(repeating: ")", count: 8))) == true)
+    #expect(Preparser.holds("!!env_safari") == true)
+    #expect(Preparser.holds(Substring(String(repeating: "!", count: 20) + "env_safari")) == false)
+    let text = "!#if " + String(repeating: "(", count: 50_000) + "\n||inside.example^\n!#endif\n||outside.example^"
+    #expect(FilterListConverter.parse(text, id: "ublock-filters").blockedDomains == ["outside.example"])
+  }
+
+  @Test func replacementValuesMustBeOnesTheRuntimeCanUse() {
+    let text = """
+    good.example##+js(trusted-replace-argument, a.b, 0, 'json:{"x":[1,2]}')
+    broken.example##+js(trusted-replace-argument, a.b, 0, 'json:{"x":')
+    object.example##+js(trusted-replace-argument, a.b, 0, '{"value":"y"}')
+    badobject.example##+js(trusted-replace-argument, a.b, 0, '{"value":')
+    """
+    let list = FilterListConverter.parse(text, id: "ublock-filters")
+    #expect(list.skippedLines == 2)
+    #expect(!list.scriptlets.bodies(forHost: "good.example").isEmpty)
+    #expect(!list.scriptlets.bodies(forHost: "object.example").isEmpty)
+    #expect(list.scriptlets.bodies(forHost: "broken.example").isEmpty)
+    #expect(list.scriptlets.bodies(forHost: "badobject.example").isEmpty)
+  }
+
+  @Test func aTableWithAMissingBodyIsNotWellFormed() {
+    var table = FilterListConverter.parse(adShieldFilter, id: "ublock-filters").scriptlets
+    #expect(table.isWellFormed)
+    table.hosts["allrecipes.com"] = [7]
+    #expect(!table.isWellFormed)
+  }
 }
 
 @MainActor
@@ -182,6 +214,19 @@ enum ScriptletPages {
     let reloaded = FilterLists(directory: fixture.directory, defaults: fixture.defaults, session: StubProtocol.session, languages: ["en-US"], isMobile: true, catalog: fixture.lists.catalog)
     await reloaded.loadCompiled()
     #expect(reloaded.scriptlets == fixture.lists.scriptlets)
+
+    let saved = try Data(contentsOf: fixture.lists.scriptletsURL)
+    for tampered in [
+      String(decoding: saved, as: UTF8.self).replacingOccurrences(of: #""build":""#, with: #""build":"other-"#),
+      String(decoding: saved, as: UTF8.self).replacingOccurrences(of: #""allrecipes.com":[0]"#, with: #""allrecipes.com":[9]"#),
+      "{",
+    ] {
+      try Data(tampered.utf8).write(to: fixture.lists.scriptletsURL)
+      let stale = FilterLists(directory: fixture.directory, defaults: fixture.defaults, session: StubProtocol.session, languages: ["en-US"], isMobile: true, catalog: fixture.lists.catalog)
+      await stale.loadCompiled()
+      #expect(stale.scriptlets.isEmpty, "a scriptlets file from another build or with a missing body must be rebuilt, not used")
+    }
+    try saved.write(to: fixture.lists.scriptletsURL)
 
     let settings = BlockingSettings(defaults: defaults)
     let blocker = ContentBlocker(settings: settings, directory: fixture.directory.appending(path: "Blocker"), filterLists: reloaded)

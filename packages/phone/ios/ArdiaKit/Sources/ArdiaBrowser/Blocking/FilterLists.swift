@@ -144,6 +144,12 @@ struct FilterBuildRecord: Codable, Equatable, Sendable {
   var chunkCategories: [String: String] = [:]
   var builtAt: Date?
   var signature: String?
+  var scriptletBuild: String?
+}
+
+struct SavedScriptlets: Codable, Sendable {
+  var build: String
+  var lists: [String: ScriptletTable]
 }
 
 struct CompiledFilterList {
@@ -394,7 +400,7 @@ public final class FilterLists {
     }
     compiled = loaded
     blockedDomains = await Self.readDomains(directory.appending(path: "domains.txt"))
-    if let saved = await Self.readScriptlets(scriptletsURL) {
+    if let saved = await Self.readScriptlets(scriptletsURL, build: record.scriptletBuild) {
       scriptlets = saved
       hasScriptlets = true
     }
@@ -477,7 +483,9 @@ public final class FilterLists {
     lastBuildStats = (reused, output.chunks.count - reused, compileStart.timeIntervalSince(convertStart), Date.now.timeIntervalSince(compileStart))
     var nextScriptlets = output.scriptlets
     for id in failed { nextScriptlets[id] = scriptlets[id] }
-    let wroteScriptlets = (try? await Self.writeScriptlets(nextScriptlets, to: scriptletsURL)) != nil
+    let scriptletBuild = UUID().uuidString
+    let wroteScriptlets = (try? await Self.writeScriptlets(SavedScriptlets(build: scriptletBuild, lists: nextScriptlets), to: scriptletsURL)) != nil
+    record.scriptletBuild = wroteScriptlets ? scriptletBuild : nil
     record.chunkHashes = hashes
     record.chunkCategories = categories
     record.signature = failed.isEmpty && wroteScriptlets ? signature : nil
@@ -678,13 +686,14 @@ public final class FilterLists {
   }
 
   @concurrent
-  static func readScriptlets(_ url: URL) async -> [String: ScriptletTable]? {
-    guard let data = try? Data(contentsOf: url) else { return nil }
-    return try? JSONDecoder().decode([String: ScriptletTable].self, from: data)
+  static func readScriptlets(_ url: URL, build: String?) async -> [String: ScriptletTable]? {
+    guard let build, let data = try? Data(contentsOf: url), let saved = try? JSONDecoder().decode(SavedScriptlets.self, from: data),
+          saved.build == build, saved.lists.values.allSatisfy(\.isWellFormed) else { return nil }
+    return saved.lists
   }
 
   @concurrent
-  static func writeScriptlets(_ scriptlets: [String: ScriptletTable], to url: URL) async throws {
+  static func writeScriptlets(_ scriptlets: SavedScriptlets, to url: URL) async throws {
     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try JSONEncoder().encode(scriptlets).write(to: url, options: .atomic)
   }

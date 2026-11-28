@@ -133,7 +133,7 @@ public enum FilterListConverter {
         ? raw.trimmingCharacters(in: .whitespacesAndNewlines) : raw
       let applies = conditions.last.map { $0.outer && $0.holds } ?? true
       if line.hasPrefix("!#if ") {
-        conditions.append((outer: applies, holds: Preparser.holds(line.dropFirst(5))))
+        conditions.append((outer: applies, holds: applies && Preparser.holds(line.dropFirst(5))))
         return
       }
       if line.hasPrefix("!#else"), let last = conditions.popLast() {
@@ -692,8 +692,11 @@ public enum FilterListConverter {
 
 enum Preparser {
   static let tokens: Set<String> = ["ext_ublock", "env_safari", "env_mobile", "cap_user_stylesheet"]
+  static let longestExpression = 256
+  static let deepestNesting = 16
 
   static func holds(_ expression: Substring) -> Bool {
+    guard expression.count <= longestExpression else { return false }
     var reader = Reader(text: Array(expression.filter { !$0.isWhitespace }))
     guard let value = reader.either(), reader.index == reader.text.count else { return false }
     return value
@@ -702,6 +705,7 @@ enum Preparser {
   struct Reader {
     let text: [Character]
     var index = 0
+    var depth = 0
 
     mutating func take(_ symbol: String) -> Bool {
       let characters = Array(symbol)
@@ -729,6 +733,9 @@ enum Preparser {
     }
 
     mutating func single() -> Bool? {
+      depth += 1
+      defer { depth -= 1 }
+      guard depth <= Preparser.deepestNesting else { return nil }
       if take("!") { return single().map { !$0 } }
       if take("(") {
         guard let value = either(), take(")") else { return nil }

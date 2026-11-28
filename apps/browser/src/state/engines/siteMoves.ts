@@ -3,7 +3,7 @@ import { useBrowser } from "../browser/store";
 import { patchPage } from "../tabs/pageState";
 import { canSwitchEngine, chosenEngine, chromiumOnly, modeEngineFor, needsChromium, singleEngine, siteOf, tabEngine, webStorePage } from "./engines";
 import { navigationOf } from "../tabs/pageSession";
-import { declineSite, modeStillHolds, openPageIn, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
+import { declineSite, modeStillHolds, openPageIn, pageDocumentOf, pageUrl, showEngineOffer, siteDeclined, tellChromiumModeBlocks } from "./actions";
 import { openedByPage, openerState } from "./openedPages";
 import { noteSiteMove } from "../telemetry/engineSwitchCounts";
 import { heldByCli } from "../tabs/cliHolds";
@@ -169,9 +169,12 @@ function settlePending(tabId: string, move: Move) {
 async function moveOpenedTab(tabId: string, url: string, move: Move) {
   const holds = modeStillHolds();
   const visit = movesOf(tabId).visit;
+  const document = pageDocumentOf(tabId);
   const sameVisit = () => tabMoves.get(tabId)?.visit === visit && navigationNow(tabId) === move.navigation;
-  const stillOnSite = () => !!store().tabs[tabId] && holds() && sameVisit() && siteOf(pageUrl(store().tabs[tabId])) === siteOf(url) && tabEngine(store(), tabId) === move.from;
+  const onSite = () => !!store().tabs[tabId] && holds() && sameVisit() && siteOf(pageUrl(store().tabs[tabId])) === siteOf(url) && tabEngine(store(), tabId) === move.from;
+  const stillOnSite = () => onSite() && pageDocumentOf(tabId) === document;
   const opener = await openerState(tabId, stillOnSite);
+  if (onSite() && pageDocumentOf(tabId) !== document) return moveOpenedTab(tabId, url, move);
   if (!stillOnSite() || !routedTo(tabId, move.to)(pageUrl(store().tabs[tabId]))) return;
   if (opener === "live") return noteSiteMove("keptForOpener", true, move.consent);
   if (opener === "unknown") return noteSiteMove("dropped", true, move.consent);

@@ -1415,6 +1415,23 @@ test("S13: an opener answer that arrives after the page-made tab left its site a
   webviews.clear();
 });
 
+test("S13: an opener answer from the page-made tab's last page doesn't keep a later same-site page that cut its opener in Chromium", async () => {
+  const { w, opener } = streamingWindow();
+  const held = heldAnswer();
+  const popup = openedTab(w, opener, "https://www.netflix.com/start", [held.answer, answer(false)]);
+  S().updateTab(popup, { url: "https://www.netflix.com/start" });
+  notePageCommit(popup, 1000);
+  arrivedOnFirstPage(popup, "https://www.netflix.com/start", "chromium");
+  await settle();
+  S().updateTab(popup, { url: "https://www.netflix.com/next" });
+  notePageCommit(popup, 2000);
+  held.release(true);
+  assert.ok(await waitFor(() => tabEngine(S(), popup) === "webkit"), "the new page is asked again and, with no opener, moves");
+  assert.equal(S().tabs[popup].page.nav.url, "https://www.netflix.com/next");
+  dropSwap(popup);
+  webviews.clear();
+});
+
 test("S13: a protected video on a platform without WebKit stores no WebKit offer", async () => {
   const { PLATFORM_FEATURES } = await import("../../lib/platformFeatures.ts");
   const had = PLATFORM_FEATURES.webKit;

@@ -145,7 +145,16 @@ test("the phone's own theme is a look of its own: accent swatch, palette, and th
 test("Custom wins with a saved theme, and without one falls back to the default preset", () => {
   assert.equal(lookForApp("custom", true, macTheme, presets, "plum", blue).custom?.source, "own");
   assert.equal(lookForApp("custom", true, macTheme, presets, "plum", null).preset, "plum");
-  assert.equal(lookForApp("green", true, macTheme, presets, "plum", blue).preset, "green");
+  assert.equal(lookForApp("green", true, macTheme, presets, "plum", null).custom, null);
+});
+
+test("an edited preset keeps its swatch chosen and draws its own edits, as on the Mac", () => {
+  const edited = lookForApp("green", true, macTheme, presets, "plum", blue);
+  assert.equal(edited.preset, "green");
+  assert.equal(edited.custom?.source, "own");
+  assert.equal(nativeLookColors(edited, false).color, edited.swatch);
+  assert.equal(activeCustomLook("green", blue, true, macFull)?.source, "own");
+  assert.equal(choiceAfterMatchToggle(false, edited, "plum"), "green");
 });
 
 test("Match My Mac draws the Mac's full theme, its dark look in dark, and follows the app's appearance", () => {
@@ -159,7 +168,7 @@ test("Match My Mac draws the Mac's full theme, its dark look in dark, and follow
   assert.equal(lookForApp(null, false, macFull, presets, "plum").preset, "plum");
   assert.deepEqual(activeCustomLook(null, null, true, macFull)?.source, "app");
   assert.equal(activeCustomLook(null, null, false, macFull), null);
-  assert.equal(activeCustomLook("blue", blue, true, macFull), null);
+  assert.equal(activeCustomLook("blue", null, true, macFull), null);
   assert.equal(activeCustomLook("custom", blue, false, null)?.source, "own");
 });
 

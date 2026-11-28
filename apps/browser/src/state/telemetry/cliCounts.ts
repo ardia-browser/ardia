@@ -15,6 +15,18 @@ export type DoorbellOutcome = (typeof DOORBELL_OUTCOMES)[number];
 const DEVTOOLS_ENDPOINT_OUTCOMES = ["given", "control_off", "unsupported", "server_off", "unreadable", "stale", "left"] as const;
 export type DevtoolsEndpointOutcome = (typeof DEVTOOLS_ENDPOINT_OUTCOMES)[number];
 
+const CONTROL_STOP_KINDS = ["policy", "listen", "deadline", "stopped", "other"] as const;
+export type ControlStopKind = (typeof CONTROL_STOP_KINDS)[number];
+const CONTROL_STOP_REASONS: readonly (readonly [ControlStopKind, RegExp])[] = [
+  ["policy", /turned off by your administrator/],
+  ["listen", /^Couldn't listen/],
+  ["deadline", /^The control server didn't start/],
+  ["stopped", /^The control server stopped/],
+];
+export const controlStopKind = (reason: string): ControlStopKind => CONTROL_STOP_REASONS.find(([, pattern]) => pattern.test(reason))?.[0] ?? "other";
+const CONTROL_RESTORE_CAUSES = ["launch", "approval"] as const;
+export type ControlRestoreCause = (typeof CONTROL_RESTORE_CAUSES)[number];
+
 const ENGINE_CLI_TOTALS = {
   sessionsOpened: "sessions_opened",
   sessionsRefused: "sessions_refused",
@@ -54,6 +66,7 @@ const NONE = {
   cli_auto_installs: 0,
   cli_auto_install_failures: 0,
   cli_auto_enables: 0,
+  cli_control_restored: 0,
   cli_upgrades: 0,
   cli_upgrade_failures: 0,
   cli_settings_installs: 0,
@@ -75,6 +88,8 @@ const NONE = {
   ...(Object.fromEntries(ENGINE_CLI_FIELDS.map((field) => [`cli_engine_${field}`, 0])) as Record<`cli_engine_${EngineCliField}`, number>),
   ...(Object.fromEntries(DOORBELL_OUTCOMES.map((outcome) => [`cli_socket_doorbell_${outcome}`, 0])) as Record<`cli_socket_doorbell_${DoorbellOutcome}`, number>),
   ...(Object.fromEntries(DEVTOOLS_ENDPOINT_OUTCOMES.map((outcome) => [`cli_socket_devtools_endpoint_${outcome}`, 0])) as Record<`cli_socket_devtools_endpoint_${DevtoolsEndpointOutcome}`, number>),
+  ...(Object.fromEntries(CONTROL_STOP_KINDS.map((kind) => [`cli_control_self_stop_${kind}`, 0])) as Record<`cli_control_self_stop_${ControlStopKind}`, number>),
+  ...(Object.fromEntries(CONTROL_RESTORE_CAUSES.map((cause) => [`cli_control_restore_tries_${cause}`, 0])) as Record<`cli_control_restore_tries_${ControlRestoreCause}`, number>),
   cli_devtools_traces: 0,
   cli_devtools_trace_failures: 0,
   cli_devtools_trace_analysis_ms: 0,
@@ -159,6 +174,11 @@ export function noteTabInput(action: InputAction, outcome: TabToolOutcome, acked
   });
 }
 export const noteCliAutoEnabled = () => void counts.cli_auto_enables++;
+export const noteControlSelfStop = (reason: string, consent?: ConsentToken | null) =>
+  countFor(consentOrNow(consent), () => void counts[`cli_control_self_stop_${controlStopKind(reason)}`]++);
+export const noteControlRestoreTry = (cause: ControlRestoreCause, consent?: ConsentToken | null) =>
+  countFor(consentOrNow(consent), () => void counts[`cli_control_restore_tries_${cause}`]++);
+export const noteControlRestored = (consent?: ConsentToken | null) => countFor(consentOrNow(consent), () => void counts.cli_control_restored++);
 
 let windowlessBaselineStale = false;
 let tokenCommandsBaselineStale = false;

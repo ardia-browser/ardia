@@ -86,6 +86,8 @@ source_set("core") {
     "ac_host_visibility.mm",
     "ac_fatal_note.cc",
     "ac_fatal_note.h",
+    "ac_feature_switches.cc",
+    "ac_feature_switches.h",
     "ac_hooks.h",
     "ac_icon_fetch.mm",
     "ac_installed_bubble.h",

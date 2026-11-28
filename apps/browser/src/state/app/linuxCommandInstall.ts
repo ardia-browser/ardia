@@ -9,7 +9,7 @@ import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib
 import { errorText } from "../../lib/errors";
 import { noteCliAutoEnabled, noteCliInstall, type CliInstallReason } from "../telemetry/cliCounts";
 import { consentToken } from "../telemetry/client";
-import { programControlOn, setProgramControl, userTurnedControlOff } from "./programControlSetting";
+import { programControlOn, setControlByApp, userTurnedControlOff } from "./programControlSetting";
 
 export const installsCommandItself = PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins;
 
@@ -112,7 +112,7 @@ const autoInstallUnfinished = (record: Saved) => !!record.autoInstallTries && !r
 function finishAutoInstall() {
   save({ autoInstalledAt: Date.now() });
   if (programControlOn(useBrowser.getState()) || userTurnedControlOff()) return;
-  setProgramControl(true);
+  setControlByApp(true);
   noteCliAutoEnabled();
 }
 

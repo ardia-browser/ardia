@@ -28,10 +28,15 @@ const sealedLogins = (read = stub.readLogins) => ({
       const origin = l.origin.replace(/\/$/, "");
       return /^https?:\/\/[^/\s]+$/.test(origin) ? [{ origin, username: l.username, created: l.created, sealed: fakeSeal(origin, l.username, l.password) }] : [];
     }),
-  save: async (profile, origin, username, sealed, replacing) => {
+  save: async (profile, origin, username, sealed, replaced) => {
     const [o, u, password] = JSON.parse(Buffer.from(sealed, "base64").toString());
     if (o !== origin || u !== username) return false;
-    if (replacing && !(await passwords.deletePassword(profile, origin, username))) return false;
+    if (replaced) {
+      const [ro, ru, expected] = JSON.parse(Buffer.from(replaced, "base64").toString());
+      const current = (await stub.readLogins()).find((l) => l.origin.replace(/\/$/, "") === origin && l.username === username);
+      if (ro !== origin || ru !== username || current?.password !== expected) return false;
+      if (!(await passwords.deletePassword(profile, origin, username))) return false;
+    }
     return passwords.savePassword(profile, origin, username, asSecret("password", password));
   },
 });
@@ -1195,6 +1200,29 @@ test("passwords: saved on one Mac, changed or deleted on another; the newer edit
   assert.deepEqual(list(a), ["https://bank.example alice=correct horse", "https://shop.example bob=sh0p"]);
   assert.equal((await a.sync()).published, 0);
   for (const d of [a, b]) assert.ok(!JSON.stringify(d.scopes.p).includes("correct horse"), "the sync state holds only sealed passwords");
+});
+
+test("passwords: a synced change names the saved password it replaces, and a new login names none", async () => {
+  const folder = new Folder();
+  const a = new Device("devA", folder);
+  const b = new Device("devB", folder);
+  await a.with(() => passwords.savePassword("", "https://bank.example", "alice", asSecret("password", "one")));
+  await syncAll([a, b]);
+  await a.with(() => passwords.updatePassword("", "https://bank.example", "alice", { password: asSecret("password", "two") }));
+  await a.with(() => passwords.savePassword("", "https://new.example", "alice", asSecret("password", "fresh")));
+  await a.sync();
+  const logins = sealedLogins();
+  const saves = [];
+  b.passwords = adapters.passwordsAdapter("default", { ...logins, save: async (...args) => (saves.push([args[1], args[4]]), logins.save(...args)) })(true);
+  await b.sync();
+  assert.deepEqual(saves.sort(), [
+    ["https://bank.example", fakeSeal("https://bank.example", "alice", "one")],
+    ["https://new.example", ""],
+  ]);
+  assert.deepEqual([...stub.passwordStores.get("devB").values()].map((l) => `${l.url} ${l.password}`).sort(), [
+    "https://bank.example two",
+    "https://new.example fresh",
+  ]);
 });
 
 test("passwords: a login whose read is still out when quitting begins isn't saved, and waits to be applied", async () => {

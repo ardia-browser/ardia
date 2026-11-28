@@ -6,7 +6,11 @@ const stub = await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 503 });
 const client = await import("../telemetry/client.ts");
 const { useMedia } = await import("../media/media.ts");
-const { recordSelectionByApp, judgeStripSelection, takeStripBounceCounts } = await import("./stripBounce.ts");
+const { recordSelectionByApp, judgeStripSelection, takeStripBounceCounts: takeAll } = await import("./stripBounce.ts");
+const takeStripBounceCounts = () => {
+  const { strip_bounces_back, strip_bounces_back_pip, strip_bounces_back_native_press, strip_bounces_elsewhere } = takeAll();
+  return { strip_bounces_back, strip_bounces_back_pip, strip_bounces_back_native_press, strip_bounces_elsewhere };
+};
 
 const state = (selected, extra = {}) => ({
   windows: { w1: { id: "w1", profileId: "default", activeTabIds: { default: selected } } },

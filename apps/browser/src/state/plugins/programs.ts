@@ -4,12 +4,14 @@ import { notePlugin, notePluginTimes, programLinkCause } from "../telemetry/plug
 import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { onConsentPeriodChange } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
+import { controlStoppedItself, restoreControlAtLaunch } from "../app/programControlSetting";
 import { programsBlocked, refreshLegacyInstalls, REGISTRY_UNREADABLE } from "./programRegistry";
 import { activeManifest, currentPlugins, usePlugins, type ProgramsState } from "./store";
 
 const requested = new Map<string, string[]>();
 let requests = 0;
 let sweptAtLaunch = false;
+let controlRetried = false;
 
 function setPrograms(name: string, state: ProgramsState | null) {
   usePlugins.setState((s) => {
@@ -96,8 +98,17 @@ async function countAfterUpdateQuitStops(consent: ConsentToken | null) {
   notePluginTimes("program_after_update_quit_kills", stops.killed, consent);
 }
 
+function retryControlAtLaunch(consent: ConsentToken | null) {
+  if (controlRetried || !controlStoppedItself()) return;
+  const s = currentPlugins();
+  if (!s.loaded || !s.order.some((name) => activeManifest(s, name)?.permissions.control)) return;
+  controlRetried = true;
+  restoreControlAtLaunch(consent);
+}
+
 export function reconcilePrograms(consent?: ConsentToken | null) {
   sweepAtLaunch(consent ?? null);
+  retryControlAtLaunch(consent ?? null);
   const s = currentPlugins();
   for (const name of s.order) {
     const manifest = activeManifest(s, name);

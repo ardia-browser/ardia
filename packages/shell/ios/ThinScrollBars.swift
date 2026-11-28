@@ -21,7 +21,9 @@ enum ThinScrollBars {
     typealias Preferred = @convention(c) (AnyClass, Selector) -> Int
     let system = unsafeBitCast(method_getImplementation(method), to: Preferred.self)
     let preferred: @convention(block) (AnyClass) -> Int = { scroller in
-      thin ? NSScroller.Style.overlay.rawValue : system(scroller, selector)
+      thin && UserDefaults.standard.string(forKey: "AppleShowScrollBars") != "Always"
+        ? NSScroller.Style.overlay.rawValue
+        : system(scroller, selector)
     }
     method_setImplementation(method, imp_implementationWithBlock(preferred))
     installed = true

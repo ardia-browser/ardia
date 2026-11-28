@@ -14,6 +14,8 @@ import { isWebPageUrl } from "../../lib/url";
 import { BOOKMARK, DEVICE, DEVICE_TABS, RECEIVES_TABS, SHARE, bookmarkValue, passwordValue, recordId, type BookmarkValue, type DeviceRecord, type DeviceTabs, type PasswordValue, type ShareRecord } from "./records";
 import { isAsleep } from "../tabs/pageSession";
 import { withSyncWorkCounts } from "../telemetry/workCounts";
+import { consentToken } from "../telemetry/consentPeriod";
+import { notePasswordAdd, notePasswordReplace } from "../telemetry/syncSafetyCounts";
 
 const store = () => useBrowser.getState();
 
@@ -208,12 +210,12 @@ const PASSWORD_READ_INTERVAL = 30_000;
 
 type SealedPasswords = {
   read: (engineProfile: string) => Promise<SealedLogin[] | null | undefined>;
-  save: (engineProfile: string, origin: string, username: string, sealed: string, replacing: boolean) => Promise<boolean>;
+  save: (engineProfile: string, origin: string, username: string, sealed: string, replaced: string) => Promise<boolean>;
 };
 
 const nativePasswords: SealedPasswords = {
   read: async (p) => SyncNative?.readPasswords(p),
-  save: async (p, origin, username, sealed, replacing) => !!(await SyncNative?.savePassword(p, origin, username, sealed, replacing)),
+  save: async (p, origin, username, sealed, replaced) => !!(await SyncNative?.savePassword(p, origin, username, sealed, replaced)),
 };
 
 export function passwordsAdapter(profileId: string, logins: SealedPasswords = nativePasswords): (forced: boolean) => Adapter {
@@ -247,6 +249,7 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
       return (value && created.get(keyOf(value.o, value.u))) || undefined;
     },
     apply: async (visible, changed, base, records) => {
+      const consent = consentToken();
       const local = await read();
       if (!local) return false;
       let ok = true;
@@ -263,7 +266,8 @@ export function passwordsAdapter(profileId: string, logins: SealedPasswords = na
         if (have && known?.s !== have.s) continue;
         if (v) {
           if (have?.s === v.s) continue;
-          const saved = await logins.save(profile(), v.o, v.u, v.s, !!have).catch(orWarn(false));
+          const saved = await logins.save(profile(), v.o, v.u, v.s, have?.s ?? "").catch(orWarn(false));
+          (have ? notePasswordReplace : notePasswordAdd)(consent, saved);
           if (saved) records.landed(key);
           ok = saved && ok;
         } else if (have) {

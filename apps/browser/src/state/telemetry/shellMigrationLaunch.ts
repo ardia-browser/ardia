@@ -1,7 +1,7 @@
 import { capture, queueSavedDurably, stillValid, type ConsentToken } from "./client";
 import { telemetryRelay } from "./relay";
 import { HOST_SHELL, type HostShell } from "./hostShell";
-import { reportShellMigration } from "./shellMigration";
+import { reportShellMigrations } from "./shellMigration";
 import { documentSaved, readDocument, saveDocument } from "../../platform/documents";
 
 let launchReport: Promise<string> | null = null;
@@ -18,7 +18,7 @@ export function reportShellMigrationAfterLead() {
 export async function reportShellMigrationAtLaunch(consent: ConsentToken | null, shell: HostShell | null = HOST_SHELL) {
   if (shell !== "webui") return "none";
   if (telemetryRelay()) return "held";
-  launchReport ??= reportShellMigration({
+  launchReport ??= reportShellMigrations({
     read: readDocument,
     save: async (name, contents) => {
       await saveDocument(name, contents);

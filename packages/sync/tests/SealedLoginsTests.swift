@@ -29,6 +29,18 @@ final class SealedLoginsTests: XCTestCase {
     XCTAssertFalse(logins.contains { ($0["sealed"] as? String)?.contains("b-secret") == true })
   }
 
+  func testTheNewestCopyOfALoginIsSyncedWhicheverStoreItIsIn() throws {
+    let copies: [String: Any] = ["logins": [
+      ["realm": "https://a.example/", "username": "ada", "password": "profile", "created": 1.0, "modified": 5.0],
+      ["realm": "https://a.example/", "username": "ada", "password": "account", "created": 2.0, "modified": 9.0],
+      ["realm": "https://b.example/", "username": "bo", "password": "newer", "created": 1.0, "modified": 7.0],
+      ["realm": "https://b.example/", "username": "bo", "password": "older", "created": 1.0, "modified": 3.0],
+    ]]
+    let logins = try XCTUnwrap(SealedLogins.from(copies) { password, origin, username in "\(password)@\(origin)/\(username)" })
+    XCTAssertEqual(logins.map { $0["sealed"] as? String }, ["account@https://a.example/ada", "newer@https://b.example/bo"])
+    XCTAssertEqual(logins.map { $0["created"] as? Double }, [2.0, 1.0])
+  }
+
   func testEveryLoginSealsWithRealKeys() throws {
     let keys = SyncKeys(entropy: Data(repeating: 3, count: 32))
     let logins = try XCTUnwrap(SealedLogins.from(reply, seal: keys.sealPassword))

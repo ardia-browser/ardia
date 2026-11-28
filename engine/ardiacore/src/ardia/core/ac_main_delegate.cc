@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ardia/core/ac_fatal_note.h"
+#include "ardia/core/ac_feature_switches.h"
 #include "base/base_switches.h"
 #include "base/command_line.h"
 #include "base/environment.h"
@@ -317,13 +318,6 @@ void KeepMemoryReducer(base::CommandLine* command_line) {
   }
 }
 
-void MergeFeatures(base::CommandLine* command_line, const char* list, std::string_view features) {
-  const std::string current = command_line->GetSwitchValueASCII(list);
-  command_line->RemoveSwitch(list);
-  command_line->AppendSwitchASCII(list, current.empty() ? std::string(features)
-                                                        : current + "," + std::string(features));
-}
-
 constexpr int kDiskSpaceCheckSeconds = 60;
 
 void QuietIdleTimers(base::CommandLine* command_line) {
@@ -356,6 +350,7 @@ std::optional<int> ACMainDelegate::BasicStartupComplete() {
     command_line->AppendSwitch("keep-old-history");
     command_line->RemoveSwitch(switches::kMakeDefaultBrowser);
     MergeFeatures(command_line, switches::kEnableFeatures, "WebContentsDiscard");
+    ReportDanglingUnretainedWithoutCrashing(command_line);
     QuietIdleTimers(command_line);
   }
   if (command_line->HasSwitch(extensions::switches::kExtensionProcess)) {

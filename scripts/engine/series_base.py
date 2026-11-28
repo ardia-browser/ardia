@@ -104,6 +104,10 @@ def default_base(platform, cpu):
     return os.path.join(chromium_build(), name)
 
 
+def default_cache():
+    return os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "ardia", "series-base")
+
+
 def default_src():
     return os.environ.get("CHROMIUM_SRC", os.path.join(chromium_build(), "chromium_git/chromium/src"))
 
@@ -167,8 +171,10 @@ def asset_prefix(ident):
 
 
 def content_revision(manifest):
-    files = json.dumps({"files": manifest["files"], "absent": manifest["absent"],
-                        "provenance": manifest.get("provenance")}, sort_keys=True)
+    content = {"files": manifest["files"], "absent": manifest["absent"], "provenance": manifest.get("provenance")}
+    if "extensions" in manifest:
+        content["extensions"] = manifest["extensions"]
+    files = json.dumps(content, sort_keys=True)
     return hashlib.sha256(files.encode()).hexdigest()[:12]
 
 

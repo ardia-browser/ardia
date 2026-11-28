@@ -3,12 +3,11 @@ import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View, type
 import { useShallow } from "zustand/react/shallow";
 import { haptics } from "../../state/app/haptics";
 import { hideArchiveCard } from "../../state/browse/archiveCard";
-import { closeAllFromDeck, closeTabFromDeck, newTab, openArchive, openSpaces, openTab } from "../../state/browse/store";
-import { libraryMenuItems } from "../tabs/DeckHeader";
+import { closeAllFromDeck, closeTabFromDeck, newTab, openTab } from "../../state/browse/store";
+import { deckMoreMenuItems } from "../tabs/DeckHeader";
 import { PLUS_HINT, plusMenuItems } from "../tabs/ChromeButtons";
 import { menuOpenedHaptic, tabTitle } from "../../state/browse/tabMenus";
 import { editPageQuery } from "../../state/page/actions";
-import { openSettings } from "../../state/settings/hooks";
 import { openRemote, selectProfile } from "../../state/sync/actions";
 import { useSelectedProfile, useSyncStatus, useSyncView } from "../../state/sync/hooks";
 import { remoteTitle } from "../../state/sync/spaces";
@@ -18,8 +17,8 @@ import { tabsInSpace } from "../../state/tabs/spaces";
 import { useTabs } from "../../state/tabs/store";
 import { recencyOrder, type BrowserTab } from "../../state/tabs/tabModels";
 import { countUsage } from "../../state/telemetry/telemetry";
-import { actionWords, destinationWords } from "../../lib/sharedWords";
-import { backdropShade, capsule, ChromeSurface, ConfirmSheet, Favicon, font, iconRoles, IncognitoSpecs, PlateInk, rolesFor, shadowCss, smoothCorners, startInk, startLayout, SurfaceInkProvider, surfaceInkFor, Symbol, Tappable, tabsInk, tabsLayout, useTheme, type Confirmation, type MenuItem, usePressStyle } from "../ui";
+import { actionWords } from "../../lib/sharedWords";
+import { backdropShade, capsule, ChromeSurface, ConfirmSheet, Favicon, font, iconRoles, IncognitoSpecs, PlateInk, rolesFor, shadowCss, smoothCorners, startInk, startLayout, SurfaceInkProvider, surfaceInkFor, Symbol, Tappable, tabsInk, tabsLayout, useTheme, type Confirmation, usePressStyle } from "../ui";
 import { legibleInk } from "../../lib/color";
 import { plateIsDark } from "../../lib/readableInk";
 import { confirmInSheet, MenuTrigger, spaceSystemImage } from "../ui/MenuTrigger";
@@ -119,14 +118,7 @@ const noop = () => undefined;
 
 function MoreMenu({ dark, syncEnabled }: { dark: boolean; syncEnabled: boolean }) {
   const updateDot = useUpdateDot();
-  const items: MenuItem[] = [
-    { label: destinationWords.archive, icon: "archivebox", onPress: openArchive },
-    ...(syncEnabled ? [{ label: destinationWords.spaces, icon: "macAndPhone" as const, onPress: openSpaces }] : []),
-    "divider",
-    ...libraryMenuItems(),
-    "divider",
-    { label: destinationWords.settings, icon: "gearshape", dot: updateDot, onPress: () => openSettings() },
-  ];
+  const items = deckMoreMenuItems({ syncEnabled, updateDot });
   return (
     <MenuTrigger frost={null} items={items} trigger="tap" fixedOrder haptic={menuOpenedHaptic} dark={dark} place={{ width: tabsLayout.menuWidth }}>
       {({ onPress }) => (

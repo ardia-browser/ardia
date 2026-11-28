@@ -156,7 +156,7 @@ test("the sidebar's More menu reads Archive, Spaces, then History, Bookmarks and
   settle();
   const more = triggerAround(root, "duoSidebarMore");
   expect(more.props.trigger).toBe("tap");
-  expect(menuWords(more)).toEqual(["Archive", "Spaces", "—", "History", "Bookmarks", "Downloads", "—", "Settings"]);
+  expect(menuWords(more)).toEqual(["Archive", "Spaces", "History", "Bookmarks", "Downloads", "Settings"]);
   act(() => menuItem(more, "Bookmarks").onPress());
   expect(useLibrary.getState()).toMatchObject({ open: true, section: "bookmarks" });
   expect(counted.mock.calls.map(([field]) => field)).toContain("deck_menu_bookmarks_opened");

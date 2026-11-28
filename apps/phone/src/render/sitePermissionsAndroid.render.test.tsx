@@ -50,7 +50,7 @@ onAndroid("Android's Site Settings lists the sites kept with camera, microphone 
   openSettings({ page: "siteSettings" });
   const root = renderSurface(<SettingsView />);
   await settle();
-  expect(textOf(root)).toContain("Camera, Microphone and Location");
+  expect(textOf(root)).toContain("Permissions");
   const row = pressable(root, "meet.example, Camera and Microphone") ?? root.root.findAll((node) => node.props.testID === "allowedSite" && typeof node.props.onPress === "function")[0]!;
   expect(row).toBeDefined();
   act(() => row!.props.onPress());
@@ -63,7 +63,7 @@ onAndroid("Android's Site Settings lists the sites kept with camera, microphone 
   act(() => button(root, "Revoke All")!.props.onPress());
   await settle();
   expect(revoked.at(-1)).toEqual(["https://meet.example", undefined]);
-  expect(textOf(root)).toContain("None");
+  expect(textOf(root)).not.toContain("Permissions");
   unmount(root);
 });
 
@@ -72,6 +72,6 @@ onAndroid("where the page engine can't list kept permissions, Site Settings show
   openSettings({ page: "siteSettings" });
   const root = renderSurface(<SettingsView />);
   await settle();
-  expect(textOf(root)).not.toContain("Camera, Microphone and Location");
+  expect(textOf(root)).not.toContain("Permissions");
   unmount(root);
 });

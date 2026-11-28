@@ -4349,14 +4349,35 @@ trace glass visibility and the search stage during a close.
 
 Both phones, every look (the iPhone's system sheet and its drawn fallback, Android's default and Material You, the
 docked Material menu, Duo):
-- Site Settings in the page menu opens inside the menu's sheet (`menuPage: "siteSettings"`): on iPhone the SwiftUI
-  sheet swaps to Settings' navigation at the large stop, on Android the drawn sheet cross-fades to the page. Closing
-  either closes both (`siteSettingsInMenu` and the two subscribers in `state/page/actions.ts`). Android's back returns
-  to the menu. Filter Lists and Trusted Sites still open in Settings.
+- Site Settings in the page menu (owner, 2026-11-28) starts with the site: its host, Night Shade, Page Zoom, Desktop
+  Site and, outside private tabs, a switch for each of camera, microphone and location the site holds (off revokes it). A grant belongs to the
+  page when their origins match (`siteOrigin` in `lib/siteOrigin.ts`: scheme, host and non-default port, so
+  `www.` and ports count, two ports on one host stay apart, and Android's `https://host/` form matches).
+  Below it is the whole Site settings list: Content blocking (Block Ads, Block Trackers, Block Cookie Banners, Filter
+  Lists, Trusted Sites) and Browsing (the Night Shade default, Swipe to Navigate, Collapse Bottom Bar), the same
+  settings as Settings › Site settings. Filter Lists and Trusted Sites close the menu for Settings on that page over Site
+  Settings (`openSiteSettingsRoute`). It is offered only on a web page (`menuPage: "siteSettings"`, `openSiteSettings`).
+  On iPhone it is a card that rises inside the menu's own sheet over the menu's rows, which stay behind it dimmed
+  (`SiteCardOverMenu` in `SystemPageMenu.tsx`, the menu's own rows from `MenuSiteWords`, spring 0.32 s, no
+  overshoot). Opening it also moves the menu's sheet to the large detent (`SITE_SHEET`: selection "large", and a drag
+  down to the menu's own detent goes back), so the sheet and the card rise together and the card fills most of the
+  screen; going back returns the sheet to the menu's height. The card fills the sheet to its top, inset like its sides, under a pinned header (‹ Back and the site's
+  host, `MenuSiteHeader`); the rows scroll below it. Its corners are concentric with what holds it (owner, 2026-11-28:
+  the same roundness inside as outside): the top is the sheet's 38 pt less the 12 pt inset, the bottom the screen's
+  corner radius (`screenCornerRadius`) less the inset, and the last group's bottom that less the inset again
+  (`concentricRadius` in `ui/tokens.ts`; use it for any rounded shape inside another). The pickers' choices are short so
+  each row stays on one line: Night Shade Off, Auto, Always; Swipe to Navigate Anywhere, Edges, Off (the same words in
+  Settings). Back, or a tap on the dimmed menu around the card, goes back. The card's rows are built 450 ms after the menu opens (`SITE_CARD_WARM_MS`, after the sheet
+  has landed, so the menu's own opening pays nothing) and kept, so opening it only animates: it moves on the frame
+  after the tap. A tap before then builds them at once. Two earlier versions were dropped: swapping the menu sheet's content to Settings at the large stop (about 0.5 s
+  before anything moved, the menu gone), and a second SwiftUI sheet presented from the menu's (iOS slides the
+  presenting sheet away under a shorter one, so the menu never stayed behind, and mounting the Settings stack still
+  cost about 0.5 s). Android's drawn sheet cross-fades to the same page, and its back returns to the menu.
 - Page Zoom, Night Shade and Desktop Site left the page menu for a section of Site Settings titled with the site's host
   (`ThisSite.tsx`, `ExpoThisSite`), shown only when Site Settings comes from the page menu on a web page.
-- History, Bookmarks and Downloads left the page menu. The deck's ⋯ menu reads Spaces / History, Bookmarks, Downloads /
-  Settings (Duo: Archive, Spaces / History, Bookmarks, Downloads / Settings). New Incognito Tab and Reopen Closed Tab
+- History, Bookmarks and Downloads left the page menu. The deck's ⋯ menu reads Spaces, History, Bookmarks, Downloads,
+  Settings with no dividers on iPhone (owner, 2026-11-28: five rows need no lines); Duo's sidebar menu is the same list
+  with Archive first (`deckMoreMenuItems`). Material You keeps its three Expressive groups. New Incognito Tab and Reopen Closed Tab
   were already in the + button's touch-and-hold menu; Close All Tabs joins them there, under a divider, when there are
   tabs (`plusMenuItems`; on Duo the sidebar's New Tab row takes the same touch and hold). The Incognito switch's own
   touch and hold still closes the Incognito tabs.
@@ -4556,8 +4577,8 @@ under it where the Mac has one, no icon tile. Titles and section headers use the
   Tabs pane opens with its layout), "Clean up" (Archive inactive tabs, a menu picker), "Export" (Export open tabs).
 - Search: "Search engine" (the engine row with its name, Search suggestions), "New tabs" (Auto-open keyboard).
 - Site settings: "Content blocking" (Block ads, Block trackers, Block cookie banners, Filter lists, Trusted sites),
-  "Browsing" (Night Shade, Swipe to navigate, Collapse bottom bar; the change-one-site footer), then "Camera,
-  microphone and location".
+  "Browsing" (Night Shade, Swipe to navigate, Collapse bottom bar), then "Permissions" when a site holds camera,
+  microphone or location access. No row subtitles or footers: the section headers say enough (owner, 2026-11-28).
 - Experimental: Browse for Me (with "ChatGPT" or "On iPhone"), Pinch to Summarize with its footer.
 - Telemetry: `settings_panes_opened` counts a pane opening (not which pane).
 
@@ -4650,25 +4671,25 @@ Custom theme (the Mac's custom profile theme on the phone, 2026-11-22):
   the editor.
 
 Site Settings (`SiteSettingsPage.swift`):
-- From the page menu's Site Settings it opens inside the page menu's own sheet, which grows to the large stop (#4529,
+- Until 2026-11-28, from the page menu's Site Settings it opened inside the page menu's own sheet, which grew to the large stop (#4529,
   the `openSiteSettingsSheet` action): the sheet's content becomes Settings' navigation with Site Settings as its first
   page, so it keeps Settings' inline title, Done button, 12 pt list top and grouped colours, and nothing is dismissed
   first. It used to close the menu and then present the Settings sheet, which showed the page between the two (the
-  owner: Site Settings should come up straight from the menu). Done, a swipe down or Desktop Site closes both. From
-  Settings › Site Settings it is still a pushed page. `ExpoSettingsDone` is the one Done toolbar both use. Watch
+  owner: Site Settings should come up straight from the menu). The page menu now opens its own card instead (the site first, then these same settings),
+  so this page is reached only from Settings › Site Settings, as a pushed page. `ExpoSettingsDone` is the one Done toolbar both use. Watch
   `site_permissions_revoked`.
-- Opened from the page menu, its first section is the site itself, titled with its host: Night Shade, Page Zoom and
-  Desktop Site, which left the page menu (#4529). Night Shade and Page Zoom were already kept per site (the site
+- The page menu's Site Settings is not this page any more: it is the card described under "Page menu, Site Settings
+  and the deck menu", which carries the same settings below the site's own. Night Shade, Page Zoom and Desktop Site left the page menu for it (#4529). Night Shade and Page Zoom were already kept per site (the site
   preferences' `nightShade` and `pageZoom`, over the global Night Shade default); Desktop Site still applies to the
-  tab, and the section's footer says so. Watch `page_menu_site_settings_opened` and the three `site_settings_*_changed`
+  tab. Page Zoom is one filled capsule of minus, percentage and plus in the label colour, as the page menu's was. Watch `page_menu_site_settings_opened` and the three `site_settings_*_changed`
   counts.
 - Toggles "Block Ads" ("hand.raised.fill", #FF5A5F), "Block Trackers" ("eyeglasses", #FFC829), "Block Cookie
   Banners" ("list.bullet.rectangle.portrait.fill", #FF901A); links "Filter Lists" (`LabeledContent` count,
   "line.3.horizontal.decrease", neutral) and "Trusted Sites" (count, "checkmark.shield.fill", #3EA82E).
 - Pickers "Night Shade" ("moon.fill", #5856D6) and "Swipe to Navigate" ("hand.draw.fill", #458AFF); toggle "Collapse
-  Bottom Bar" ("platter.filled.bottom.and.arrow.down.iphone", #30B0C7). Footer: "Change one site from Site Settings in its page menu."
-- "Camera, Microphone and Location": allowed sites, "None" when empty, `.swipeActions` "Revoke" (destructive), and a
-  `confirmationDialog` titled with the host listing "Revoke <permission>" per kind. Footer about private tabs.
+  Bottom Bar" ("platter.filled.bottom.and.arrow.down.iphone", #30B0C7).
+- "Permissions": allowed sites, hidden when none, `.swipeActions` "Revoke" (destructive), and a
+  `confirmationDialog` titled with the host listing "Revoke <permission>" per kind. No footer; private tabs still always ask.
 
 Sync With Mac (`SyncSettingsPage.swift`): `SettingsHero` (tile 64, title2 bold, subheadline secondary, clear row) with
 "Connect to Your Mac" when not connected; "What You Get" section; an attention section ("Choose Folder…" or

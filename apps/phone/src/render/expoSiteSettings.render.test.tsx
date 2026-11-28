@@ -41,15 +41,17 @@ const page = (root: Root) => hosts(root, (props) => props.name === "destination"
 const within = (node: ReactTestInstance, has: (props: Record<string, unknown>) => boolean) => node.findAll((inner) => typeof inner.type === "string" && has(inner.props));
 const press = async (node: ReactTestInstance) => act(async () => void (node.props.onButtonPress ?? node.props.onPress)({ nativeEvent: {} }));
 
-onIos("on iPhone Site settings reads like the Mac's panes: plain rows with no icon tiles under Content blocking and Browsing, the change-one-site footer, and the sites allowed the camera, microphone or location with what each may use", async () => {
+onIos("on iPhone Site settings reads like the Mac's panes: plain rows with no icon tiles or footers under Content blocking and Browsing, and the sites allowed the camera, microphone or location under Permissions with what each may use", async () => {
   openSettings({ page: "siteSettings" });
   const root = renderSurface(<SettingsView />);
   await act(async () => undefined);
   expect(titlesIn(page(root))).toEqual(ROW_TITLES);
   expect(within(page(root), (props) => typeof props.title === "string" && typeof props.systemImage === "string")).toHaveLength(0);
   expect(hosts(root, (props) => props.title === "Content blocking" || props.title === "Browsing").map((node) => node.props.title)).toEqual(["Content blocking", "Browsing"]);
-  expect(within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text)).toEqual(expect.arrayContaining(["Change one site from Site Settings in its page menu.", "meet.example", "Camera and Microphone", "Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.", "Allowed: Camera and Microphone"]));
-  expect(hosts(root, (props) => props.title === "Camera, microphone and location")).toHaveLength(1);
+  const texts = within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text);
+  expect(texts).toEqual(expect.arrayContaining(["meet.example", "Camera and Microphone", "Allowed: Camera and Microphone"]));
+  for (const gone of ["Change one site from Site Settings in its page menu.", "Sites you allowed keep access on this iPhone until you revoke it. Private tabs always ask.", "Darkens light pages.", "Extra filter lists for the blocker."]) expect(texts).not.toContain(gone);
+  expect(hosts(root, (props) => props.title === "Permissions")).toHaveLength(1);
   unmount(root);
 });
 
@@ -67,7 +69,7 @@ onIos("Site settings opened from Settings has no section for a site, even while 
   unmount(root);
 });
 
-onIos("a site's swipe Revoke takes all its access, counts once, and leaves the list saying None; the dialog can revoke one permission alone", async () => {
+onIos("a site's swipe Revoke takes all its access, counts once, and the Permissions section goes once no site is left; the dialog can revoke one permission alone", async () => {
   const counts = jest.spyOn(telemetry, "countUsage");
   openSettings({ page: "siteSettings" });
   const root = renderSurface(<SettingsView />);
@@ -80,7 +82,7 @@ onIos("a site's swipe Revoke takes all its access, counts once, and leaves the l
   await press(swipe);
   expect(revoked).toEqual([["https://meet.example", undefined]]);
   expect(counts.mock.calls.filter(([field]) => field === "site_permissions_revoked")).toHaveLength(2);
-  expect(within(page(root), (props) => typeof props.text === "string").map((node) => node.props.text)).toContain("None");
+  expect(hosts(root, (props) => props.title === "Permissions")).toHaveLength(0);
   unmount(root);
 });
 

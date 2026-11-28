@@ -7,7 +7,7 @@ use std::process::Command;
 
 use ardia_shell_migration::credentials::{self, assemble, Assembled};
 use ardia_shell_migration::windows::{delete_generic, write_generic, CredentialManager, Dpapi};
-use ardia_shell_migration::{migrate, names, Faults, Layout, Outcome, Sealer, Vault};
+use ardia_shell_migration::{migrate, migrate_chromium, names, Faults, Layout, Outcome, Sealer, Vault};
 use common::*;
 
 const NO_LOGON_SESSION: i32 = 1312;
@@ -136,7 +136,7 @@ fn junctions_are_never_followed_on_either_side() {
     write(&layout.rnw_data.join("session.json"), b"{}");
     junction(&layout.rnw_data.join("Sync"), &outside);
     junction(&layout.rnw_data.join("linked.json"), &outside);
-    let report = migrate(&layout, &Dpapi, &CredentialManager, &Faults::default());
+    let report = migrate(&layout, &Dpapi, &FakeVault::empty(), &Faults::default());
     assert_eq!(report.outcome, Outcome::MigratedWithSkips, "{report:?}");
     assert_eq!(report.counts.skipped_links, 2);
     assert!(!layout.webui_data.join("Sync").exists());
@@ -154,7 +154,7 @@ fn junctions_are_never_followed_on_either_side() {
     fs::create_dir_all(&second.webui_data).unwrap();
     junction(&second.webui_data.join("Sync"), &outside);
     let before = tree(&outside);
-    let report = migrate(&second, &Dpapi, &CredentialManager, &Faults::default());
+    let report = migrate(&second, &Dpapi, &FakeVault::empty(), &Faults::default());
     assert_eq!(report.outcome, Outcome::Failed);
     assert_eq!(tree(&outside), before, "nothing was written through the junction");
 }
@@ -168,7 +168,7 @@ fn a_junction_root_is_refused() {
     junction(&rnw, &outside);
     let layout = Layout::custom(&rnw.to_string_lossy(), &scratch.0.join("webui"), false);
     assert_eq!(
-        migrate(&layout, &Dpapi, &CredentialManager, &Faults::default()).outcome,
+        migrate(&layout, &Dpapi, &FakeVault::empty(), &Faults::default()).outcome,
         Outcome::Refused
     );
 }
@@ -185,7 +185,7 @@ fn hard_links_are_skipped_on_windows_too() {
     write(&outside, b"private");
     write(&layout.rnw_data.join("session.json"), b"{}");
     fs::hard_link(&outside, layout.rnw_data.join("hard.json")).unwrap();
-    let report = migrate(&layout, &Dpapi, &CredentialManager, &Faults::default());
+    let report = migrate(&layout, &Dpapi, &FakeVault::empty(), &Faults::default());
     assert_eq!(report.outcome, Outcome::MigratedWithSkips, "{report:?}");
     assert_eq!(report.counts.skipped_invalid, 1);
     assert!(!layout.webui_data.join("hard.json").exists());
@@ -200,12 +200,12 @@ fn a_junction_above_any_root_is_refused() {
     junction(&linked, &real);
     let through = Layout::custom(&linked.join("rnw").to_string_lossy(), &scratch.0.join("webui"), false);
     assert_eq!(
-        migrate(&through, &Dpapi, &CredentialManager, &Faults::default()).outcome,
+        migrate(&through, &Dpapi, &FakeVault::empty(), &Faults::default()).outcome,
         Outcome::Refused
     );
     let into = Layout::custom(&real.join("rnw").to_string_lossy(), &linked.join("webui"), false);
     assert_eq!(
-        migrate(&into, &Dpapi, &CredentialManager, &Faults::default()).outcome,
+        migrate(&into, &Dpapi, &FakeVault::empty(), &Faults::default()).outcome,
         Outcome::Refused
     );
     assert!(!real.join("webui").exists(), "nothing was created through the junction");
@@ -220,7 +220,7 @@ fn the_webui_sync_key_name_and_entropy_match_the_webui_store() {
         &layout.rnw_data.join("Sync").join("sync-key-caseTest.dpapi"),
         &Dpapi.seal(&key, "ardia-sync-key/v1/test-instance/caseTest").unwrap(),
     );
-    let report = migrate(&layout, &Dpapi, &CredentialManager, &Faults::default());
+    let report = migrate(&layout, &Dpapi, &FakeVault::empty(), &Faults::default());
     assert_eq!(report.outcome, Outcome::Migrated, "{report:?}");
     let sealed = fs::read(layout.webui_data.join("Sync").join("sync-key-x6361736554657374.dpapi")).unwrap();
     assert_eq!(
@@ -230,4 +230,158 @@ fn the_webui_sync_key_name_and_entropy_match_the_webui_store() {
             .as_slice(),
         &key
     );
+}
+
+fn chromium_key_text(plain_key: &[u8]) -> String {
+    use windows_sys::Win32::Foundation::{LocalFree, HLOCAL};
+    use windows_sys::Win32::Security::Cryptography::{CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB};
+    let input = CRYPT_INTEGER_BLOB {
+        cbData: plain_key.len() as u32,
+        pbData: plain_key.as_ptr() as *mut u8,
+    };
+    let mut output = CRYPT_INTEGER_BLOB {
+        cbData: 0,
+        pbData: std::ptr::null_mut(),
+    };
+    let sealed = unsafe {
+        CryptProtectData(
+            &input,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut output,
+        )
+    };
+    assert_ne!(sealed, 0, "{}", std::io::Error::last_os_error());
+    let mut wrapped = b"DPAPI".to_vec();
+    wrapped.extend_from_slice(unsafe { std::slice::from_raw_parts(output.pbData, output.cbData as usize) });
+    unsafe { LocalFree(output.pbData as HLOCAL) };
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut text = String::new();
+    for chunk in wrapped.chunks(3) {
+        let word = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |w, (i, b)| w | (u32::from(*b) << (16 - 8 * i)));
+        for index in 0..4 {
+            text.push(if index <= chunk.len() {
+                ALPHABET[(word >> (18 - 6 * index) & 63) as usize] as char
+            } else {
+                '='
+            });
+        }
+    }
+    text
+}
+
+#[test]
+fn a_chromium_key_sealed_by_real_dpapi_without_entropy_is_carried() {
+    let scratch = Scratch::new("chromium-dpapi");
+    let rnw = scratch.0.join("rnw");
+    let layout = Layout::custom(rnw.to_str().unwrap(), &scratch.0.join("webui"), true);
+    let key = chromium_key_text(&[3u8; 32]);
+    assert!(ardia_shell_migration::chromium::chromium_key_opens(&Dpapi, &key));
+    assert!(!ardia_shell_migration::chromium::chromium_key_opens(
+        &Dpapi,
+        &chromium_key_text(&[3u8; 16])
+    ));
+    let state = format!("{{\"os_crypt\":{{\"encrypted_key\":\"{key}\"}}}}");
+    write(&layout.rnw_chromium.join("Local State"), state.as_bytes());
+    write(&layout.rnw_chromium.join("Default/Network/Cookies"), b"v10 cookies");
+    let report = migrate_chromium(&layout, &Dpapi, &Faults::default());
+    assert_eq!(report.outcome, Outcome::Migrated, "{}", report.to_json());
+    assert_eq!(report.counts.key_carried, 1);
+    let carried = fs::read_to_string(scratch.0.join("webui/Chromium/Local State")).unwrap();
+    assert!(carried.contains(&key));
+    assert_eq!(
+        fs::read(scratch.0.join("webui/Chromium/Ardia default/Network/Cookies")).unwrap(),
+        b"v10 cookies"
+    );
+}
+
+#[test]
+fn a_lockfile_chromium_holds_open_means_busy_and_a_stale_one_does_not() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 1;
+    const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x0400_0000;
+    let scratch = Scratch::new("chromium-lockfile");
+    let sealer = FakeDpapi::new();
+    let rnw = scratch.0.join("rnw");
+    let layout = Layout::custom(rnw.to_str().unwrap(), &scratch.0.join("webui"), true);
+    write(&layout.rnw_chromium.join("Default/History"), b"history");
+    let held = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .share_mode(FILE_SHARE_READ)
+        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE)
+        .open(layout.rnw_chromium.join("lockfile"))
+        .unwrap();
+    let busy = migrate_chromium(&layout, &sealer, &Faults::default());
+    assert_eq!(busy.outcome, Outcome::Busy, "{}", busy.to_json());
+    assert!(!scratch.0.join("webui/Chromium").exists());
+    drop(held);
+    write(&layout.rnw_chromium.join("lockfile"), b"");
+    let report = migrate_chromium(&layout, &sealer, &Faults::default());
+    assert_eq!(report.outcome, Outcome::Migrated, "{}", report.to_json());
+}
+
+#[test]
+fn a_profile_folder_moves_on_ntfs_while_its_siblings_stay() {
+    let scratch = Scratch::new("chromium-ntfs");
+    let sealer = FakeDpapi::new();
+    let rnw = scratch.0.join("rnw");
+    let layout = Layout::custom(rnw.to_str().unwrap(), &scratch.0.join("webui"), true);
+    write(&layout.rnw_chromium.join("Default/History"), b"rnw");
+    write(&layout.rnw_chromium.join("Ardia p-a/History"), b"rnw a");
+    write(&scratch.0.join("webui/Chromium/Ardia default/History"), b"webui");
+    write(&scratch.0.join("webui/Chromium/Ardia default/Deep/Er/file"), b"deep");
+    let report = migrate_chromium(&layout, &sealer, &Faults::default());
+    assert_eq!(report.outcome, Outcome::Migrated, "{}", report.to_json());
+    assert_eq!(
+        fs::read(scratch.0.join("webui/Chromium/Ardia default/History")).unwrap(),
+        b"rnw"
+    );
+    let kept: Vec<_> = fs::read_dir(scratch.0.join("webui").join(names::KEPT_FOLDER))
+        .unwrap()
+        .collect();
+    assert_eq!(kept.len(), 1);
+    let kept = kept[0].as_ref().unwrap().path();
+    assert_eq!(fs::read(kept.join("Ardia default/Deep/Er/file")).unwrap(), b"deep");
+    assert!(!scratch.0.join("webui").join(names::CHROMIUM_STAGING_FOLDER).exists());
+}
+
+#[test]
+fn a_held_lockfile_keeps_chromium_from_starting_and_goes_away_with_its_holder() {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 1;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    let scratch = Scratch::new("chromium-hold");
+    let root = ardia_shell_migration::fsafe::Root::new(&scratch.0).unwrap();
+    let held = root.dir().hold_lockfile("lockfile").unwrap();
+    let chromium = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(scratch.0.join("lockfile"));
+    assert_eq!(
+        chromium.err().and_then(|e| e.raw_os_error()),
+        Some(ERROR_SHARING_VIOLATION),
+        "Chromium's own lockfile open fails while the migrator holds it"
+    );
+    assert!(root.dir().held_open("lockfile").unwrap());
+    drop(held);
+    assert!(!scratch.0.join("lockfile").exists());
+
+    fs::write(scratch.0.join("elsewhere"), b"not a lockfile").unwrap();
+    fs::hard_link(scratch.0.join("elsewhere"), scratch.0.join("linked")).unwrap();
+    assert!(root.dir().hold_lockfile("linked").is_err());
+    assert!(
+        scratch.0.join("linked").exists(),
+        "a refused lockfile is left where it was"
+    );
+    assert_eq!(fs::read(scratch.0.join("elsewhere")).unwrap(), b"not a lockfile");
 }

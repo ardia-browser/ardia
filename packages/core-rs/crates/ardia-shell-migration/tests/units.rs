@@ -407,6 +407,27 @@ fn the_command_line_needs_an_explicit_request() {
     assert_eq!(custom.credential_prefix, "Ardia Connected Accounts [C:\\s\\rnw]/");
     assert_eq!(custom.rnw_config, PathBuf::from("C:/s/rnw").join("config"));
     assert!(custom.test_instance);
+    assert_eq!(custom.rnw_chromium, PathBuf::from("C:/s/rnw").join("Chromium"));
+    assert_eq!(layout.rnw_chromium, PathBuf::from("/L").join("Ardia").join("User Data"));
+    let Ok(Command::MigrateChromium(chromium)) = parse(&args(&["--from-rnw", "--chromium-profiles"]), &env) else {
+        panic!("the Chromium step");
+    };
+    assert_eq!(*chromium, *layout);
+    assert!(matches!(
+        parse(
+            &args(&[
+                "--chromium-profiles",
+                "--from-rnw",
+                "--rnw-data",
+                "C:/s/rnw",
+                "--webui-data",
+                "C:/s/webui"
+            ]),
+            &env
+        ),
+        Ok(Command::MigrateChromium(_))
+    ));
+    assert!(parse(&args(&["--chromium-profiles"]), &env).is_err());
 }
 
 #[test]

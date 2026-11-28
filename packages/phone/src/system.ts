@@ -15,6 +15,8 @@ export type SystemLink = (
 
 type NativeLink = Omit<SystemLink, "query"> & { query?: string };
 
+export type KeyboardWarmUp = { outcome: string; ms?: number; holder?: string };
+
 type SystemNative = {
   labLog?: (line: string) => void;
   labFrameMark?: (label: string) => void;
@@ -26,6 +28,9 @@ type SystemNative = {
   processStartedAt?(): number;
   launchBackdropShownAt?(): number | null;
   launchInterfaceDrawn?(): void;
+  prepareKeyboardWarmUp?(): Promise<void>;
+  warmKeyboard?(): Promise<KeyboardWarmUp>;
+  endKeyboardWarmUp?(): Promise<void>;
   restoredValue?(key: string): string | null;
   setRestorableValue?(key: string, value: string | null): void;
   labMemory?(): string | null;
@@ -53,6 +58,16 @@ export const system = {
   processStartedAt: (): number | null => (native?.processStartedAt ? native.processStartedAt() : null),
   launchBackdropShownAt: (): number | null => native?.launchBackdropShownAt?.() ?? null,
   launchInterfaceDrawn: (): void => native?.launchInterfaceDrawn?.(),
+  prepareKeyboardWarmUp: (): void => void native?.prepareKeyboardWarmUp?.()?.catch(() => undefined),
+  endKeyboardWarmUp: (): void => void native?.endKeyboardWarmUp?.()?.catch(() => undefined),
+  warmKeyboard: async (): Promise<KeyboardWarmUp> => {
+    if (!native?.warmKeyboard) return { outcome: "unsupported" };
+    try {
+      return await native.warmKeyboard();
+    } catch {
+      return { outcome: "failed" };
+    }
+  },
   displayCornerRadius: (): number | null => native?.displayCornerRadius?.() ?? null,
   setWidgetColorChoice: (choice: string | null): void => native?.setWidgetColorChoice?.(choice),
   takePendingCounts: (): Record<string, number> => native?.takePendingCounts?.() ?? {},

@@ -2150,7 +2150,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `launch_ms`, `js_ms` (`perf_launch`) | c6ebf08a8 | Cold launch time, process start to first screen, and the JavaScript share of it |
 | `backdrop_ms` (`perf_backdrop`) | e9012f25a's native backdrop | Process start to the themed backdrop's first frame on iPhone; it should sit well under `launch_ms` (about 1,100 against 1,450 ms on the simulator), and rising toward it means the backdrop waits for JavaScript again |
 | `tray_ms` (`perf_launch_tray`) | the launch tray at rest from its first frame | Process start to the launch tray being up. It should sit within a frame or two of `launch_ms`; a gap near 450 ms on Android means the launch tray waits for the keyboard again, and a blank start page catches taps behind an unseen tray |
-| `open_ms` (`perf_search_open`) | #3932 | Press to the search panel presented. It sat near 60 to 80 ms on the simulator; a rise means the open does work before it moves again |
+| `open_ms` (`perf_search_open`) | #3932, #4708 | Press to the search panel presented. It sat near 60 to 80 ms on the simulator; a rise means the open does work before it moves again. The first open of a launch used to pay for UIKit setting up the keyboard (#4708). The keyboard warm-up after launch takes that out, so a jump in the first open alone means the warm-up stopped running or found the app busy every time |
 | `local_ms`, `remote_ms` (`perf_search_suggest`) | #3932 | First letter to the local rows (a frame or two) and to the engine's rows (about one network round trip). A `remote_ms` that grows toward a typing pause means the store waits for the field to go quiet again before asking |
 | `legacy_import_failures` (`app_launched`) | 12a33bf03 | Whether the upgrade import fails in the field, and how many tries it takes |
 | `look_mode` (`app_launched`) | 428c9a18d | How many phones the look's budget turns down, and to what; a share that grows after a release means the look got dearer |
@@ -2220,6 +2220,7 @@ Every count and timing the phone can send, for the owner to read as one set and 
 | `drawn_menu_actions_chosen` | Android menu tap fix (#3463) | Watch Android selections against `drawn_menus_opened`. Steady opens and fewer selections can flag lost taps. Opens also include confirmations, so this is a trend, not a tap success rate |
 | `web_videos_floated`, `web_videos_kept_playing` | iPhone Picture in Picture fix (the app's `audio` background mode; a customer's PiP showed Ardia's squashed UI instead of the video) | Read `kept_playing` against `floated` on iPhone. `kept_playing` needs a live page to report playing media (`requestMediaPlaybackState`) 5 s after Ardia left, so a return within 5 s or a pause from the PiP window counts in `floated` only, and the two never match exactly. Without the `audio` mode the simulator showed the video paused at the home screen; with it the ratio should rise clearly. A ratio that falls back toward zero means web video stops in the background again: check `UIBackgroundModes` and WebKit's presentation window |
 | `glass_unsourced` | Glass everywhere on Android (#3949: Reader's buttons sat inside their own source and drew the flat fill, unseen) | Counted natively and drained with the pending counts: a native Glass that, for a second after it settled, had no frost source or sat inside the one it names, so it drew the flat fill instead of glass. Counted once per glass. It should stay near zero; a rise after a release means a screen's glass lost its backdrop: look for `path=fallback (no source)` or `(inside its own source)` in the lab's `PAGELAB look frost` lines |
+| `blocker_engines_installed` | the Android content blocker (#4683: compact `NetworkRule`, about 11 MB less heap with the default lists) | Counted natively and drained with the pending counts: one each time the blocker builds and installs a rule engine, at launch and after a list or setting changes. It follows the blocker being on; a drop against `app_launched` on Android with the blocker on means engines stopped building |
 | `night_shade_verdicts_reused`, `night_shade_verdicts_learned`, `night_shade_verdicts_corrected` | Night Shade's cached verdicts on Android (a tester's report: yahoo.com loaded white until half way) | Counted natively and drained with the pending counts, never for private tabs. `reused` is a page load, with Night Shade not off, whose site's verdict was already known, so the shade was decided before the first paint; `learned` is a site measured for the first time, whose first load can still shade late; `corrected` is a site whose verdict changed, so that load showed the old one until `DOMContentLoaded`. Read `reused` against `learned` for the hit rate, which should climb as testers revisit sites; a `corrected` share that grows means the measurement disagrees with itself between loads |
 | `bar_load_washes` | the load wash in the bottom bar (#4633), which replaced the top progress line in the redesigned and Material You designs | How many loads are slow enough to show progress at all; never counted for Incognito tabs, a tab switch onto a loading page or the original design. Read it against `tabs_opened` and `searches`: a share that drops to zero after a release means the wash stopped reaching the capsule (the frame driver never starts), and one that jumps means loads got slower or the 120 ms reveal delay stopped holding back cached pages |
 
@@ -4324,6 +4325,26 @@ Open, from the round-five review: sheet replacement during a swipe-down, Find ac
 cache identity for paint proof, keyboard geometry with two scenes, Unicode case in archive search, and cold Search with a
 large History. All of these need a real iPhone: touch-to-screen latency, 120 Hz hitches and Find's keyboard.
 
+#### The keyboard warm-up (#4708)
+
+The first time anything takes focus in a launch, UIKit sets the keyboard up: the keyboard window, input modes and layout. On the simulator that held the first search open for about 110 ms of a 170 ms frame, with the Search field alone over the page. Later opens don't pay it.
+
+`FirstKeyboardWarmUp` in `SearchTray.tsx` asks `KeyboardWarmUp.attempt()` (`packages/phone/ios/KeyboardWarmUp.swift`) to do that work at an idle moment after launch. On the main thread, a hidden 1 pt `UITextField` in the main window takes focus and resigns in the same call. Nothing is drawn.
+
+It skips, and JavaScript tries again 1.5 s later (six tries from 2.5 s after launch, then it gives up), when:
+- anything holds focus. UIKit is asked directly, with a nil-targeted action that reaches the first responder in any window (a page's form in WebKit included), and every window's views are checked as well;
+- the app isn't active, or the key window isn't the main window;
+- a finger is down, or was lifted less than a second ago. A passive recognizer on the main window counts touches and never claims them; it is attached when the scene first becomes active, and until it is, the warm-up reports `notWatching` and waits. WebKit focuses a tapped form field a moment after the touch ends, so without the quiet second the warm-up could land in that gap;
+- something is scrolling: the run loop is tracking, or any scroll view in the app's windows is dragging or decelerating (a fling coasts on after the finger lifts), the pages' WebKit scroll views and React Native's included;
+- a view controller is presented or mid-transition;
+- something of the app's own is over the page: search, the page menu (the redesigned one is drawn in the view tree, not presented), Find, the reader, Library, Settings, onboarding, a sheet, or the deck (`overlay`, decided in JavaScript from `pageCovered()`, `findOpen` and the deck surface).
+
+The touch watcher is removed once the warm-up succeeds, gives up after six tries, or its component unmounts.
+
+Lab builds print `PAGELAB search warm keyboard <outcome> [<ms>] attempt <n>`, where `<ms>` is the main-thread time of the warm-up itself.
+
+It runs on every device that takes the staged search panel, an iPad running the iPhone build in compatibility mode included. That is on purpose: the iPhone app there pays the same first-focus cost.
+
 #### Measuring speed on a real iPhone
 
 What it needs, for a yes or no:
@@ -5124,7 +5145,7 @@ starts in that space. Captures without touch: `-BrowseQuery <text>`, `-BrowseSur
 `-ArdiaOnboarding YES`, `-ArdiaOpenSheet archive|spaces|history|bookmarks|downloads`, `-BrowsePlus`,
 `-BrowseOverlay <text>`, `-BrowseCollapsed`, `-BrowseOpen <url>`, `-ArdiaRestingStart`, `-ArdiaColor <name>`,
 `-ArdiaInterfaceStyle glass|classic`, `-ArdiaColorScheme light|dark`, `-ArdiaSettingsPage <route>`,
-`-ArdiaNoSitePermissions`, `-ArdiaDeckQuery <text>` and `-ArdiaDuoCanvas open|half`. Browse for Me's: `-BrowseResearch <query>`,
+`-ArdiaNoSitePermissions`, `-ArdiaDeckQuery <text>`, `-ArdiaDuoCanvas open|half` and, with `-ArdiaDemo`, `-ArdiaKeyboardWarmDelay <s>` (when the keyboard warm-up first tries; for testing it against a focused page form). Browse for Me's: `-BrowseResearch <query>`,
 `-ArdiaResearchWriter excerpts`, `-ArdiaChatGPTIssuer <url>`,
 `-ArdiaChatGPTAPI <url>` and `-ArdiaVoiceHeard <text>` ("Browse for Me (iPhone only)" above). Motion captures:
 `-BrowsePagerFreeze <fraction>`, `-BrowsePagerScript` and `-BrowseLoadFreeze <progress>`. `-BrowseDeckPull <n>`

@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use ardia_shell_migration::{migrate, names, Faults, Outcome, Sealer};
+use ardia_shell_migration::{migrate, migrate_chromium, names, Faults, Outcome, Sealer};
 use common::*;
 
 fn corpus() -> Vec<String> {
@@ -149,4 +149,72 @@ fn the_shared_hostile_corpus_never_lands_outside_the_webui_layout() {
             "{value:?} was sealed for its own account"
         );
     }
+}
+
+#[test]
+fn the_shared_hostile_corpus_as_profile_and_file_names_stays_inside_the_chromium_folder() {
+    let hostile = corpus();
+    let scratch = Scratch::new("hostile-chromium");
+    let sealer = FakeDpapi::new();
+    let layout = layout(&scratch.0);
+    let user_data = layout.rnw_chromium.clone();
+    write(&user_data.join("Default").join("History"), b"control history");
+    for value in &hostile {
+        if !plantable(value) {
+            continue;
+        }
+        let _ = fs::create_dir_all(user_data.join(value));
+        plant(user_data.join(value).join("History"), b"hostile profile");
+        plant(user_data.join("Default").join(value), b"hostile file");
+        let _ = fs::create_dir_all(user_data.join(format!("Ardia {value}")));
+        plant(
+            user_data.join(format!("Ardia {value}")).join("History"),
+            b"hostile ardia profile",
+        );
+    }
+    let outside_before: Vec<String> = tree(&scratch.0)
+        .into_keys()
+        .filter(|path| !path.starts_with("Local/Ardia WebUI"))
+        .collect();
+    let rnw_before = tree(&layout.rnw_data);
+
+    let report = migrate_chromium(&layout, &sealer, &Faults::default());
+    assert!(
+        matches!(report.outcome, Outcome::Migrated | Outcome::MigratedWithSkips),
+        "{}",
+        report.to_json()
+    );
+    let outside_after: Vec<String> = tree(&scratch.0)
+        .into_keys()
+        .filter(|path| !path.starts_with("Local/Ardia WebUI"))
+        .collect();
+    assert_eq!(
+        outside_after, outside_before,
+        "nothing appeared or vanished outside the WebUI folder"
+    );
+    assert_eq!(tree(&layout.rnw_data), rnw_before, "the RNW profile is untouched");
+
+    for path in tree(&layout.webui_data).keys() {
+        let parts: Vec<&str> = path.trim_end_matches('/').split('/').collect();
+        let allowed = match parts.as_slice() {
+            [name] => [
+                names::CHROMIUM_FOLDER,
+                names::LOCK_NAME,
+                names::CHROMIUM_ATTEMPT_NAME,
+                names::CHROMIUM_MARKER_NAME,
+            ]
+            .contains(name),
+            [chromium, profile, ..] if *chromium == names::CHROMIUM_FOLDER => {
+                names::webui_profile_folder(profile).as_deref() == Some(*profile)
+                    || *profile == names::WEBUI_DEFAULT_PROFILE
+            }
+            _ => false,
+        };
+        assert!(allowed, "an unexpected file landed in the WebUI folder: {path:?}");
+    }
+    assert_eq!(
+        fs::read(layout.webui_data.join("Chromium/Ardia default/History")).unwrap(),
+        b"control history",
+        "positive control"
+    );
 }

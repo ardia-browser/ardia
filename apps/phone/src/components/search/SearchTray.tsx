@@ -1,7 +1,7 @@
-import { probes } from "../../state/app/launchFlags";
+import { launchArguments, probes } from "../../state/app/launchFlags";
 import { createContext, memo, startTransition, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { labTrace, markShownFrame, traceSlice } from "../../platform/lab";
-import { hardwareKeyboardShown } from "@ardia/phone-native";
+import { labLog, labTrace, markShownFrame, traceSlice } from "../../platform/lab";
+import { hardwareKeyboardShown, system, type KeyboardWarmUp } from "@ardia/phone-native";
 import { IncognitoEyes } from "../ui/IncognitoEyes";
 import { FabricCatchUp } from "../ui/FabricCatchUp";
 import { countRender } from "../../state/app/interactionPerf";
@@ -11,7 +11,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { cancelAnimation, FadeIn, FadeOut, runOnJS, runOnUI, useAnimatedProps, useAnimatedReaction, useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import type { GestureType } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { activateRow, cancelSearch, submitSearch, toggleTrayIncognito } from "../../state/browse/store";
+import { activateRow, cancelSearch, pageCovered, submitSearch, toggleTrayIncognito } from "../../state/browse/store";
 import { copyLink, menuOpenedHaptic, trayRowActions, trayRowHoldAction, type RowAction } from "../../state/browse/tabMenus";
 import { rowMenuItems, useRowConfirm } from "./rowConfirm";
 import { useSearchEditsPage, useSearchFieldVersion, useSearchInitialText, useSearchOpen, useSearchOrigin, useSearchRows, useSearchSession, useSearchText } from "../../state/search/hooks";
@@ -33,6 +33,7 @@ import { completingFieldIsNative } from "../../platform/completingField";
 import { UiFrameMark, uiFrameMarkStyle } from "../ui/UiFrameMark";
 import { preparedIdleKey, preparedIdleRows, searchPresented, searchState, setSearchClearsPagePrefill, setSearchText, typeSearch, warmSearchWhenIdle, whenSearchPresents, type SearchOrigin, type SearchPresenting } from "../../state/search/store";
 import { useBrowse } from "../../state/browse/store";
+import { pageUi } from "../../state/page/store";
 import { endSearchTiming, markSearchClosePhase, markSearchPhase, markSearchPresented } from "../../state/search/searchTiming";
 import { coverTray, followTrayBack, trayBackTravel, useTrayCovers } from "../../state/search/trayBack";
 import { useIncognito, useSelectedTab, useSelectedTabId } from "../../state/tabs/hooks";
@@ -118,7 +119,46 @@ function useTrayTheme() {
 export function SearchTray() {
   const design = useDesign();
   if (design === "material") return <MaterialSearchTray />;
-  return searchStageIsNative() ? <StagedTray /> : <SheetTray />;
+  if (!searchStageIsNative()) return <SheetTray />;
+  return (
+    <>
+      <StagedTray />
+      <FirstKeyboardWarmUp />
+    </>
+  );
+}
+
+const KEYBOARD_WARM_AFTER_LAUNCH_MS = 2500;
+const KEYBOARD_WARM_RETRY_MS = 1500;
+const KEYBOARD_WARM_ATTEMPTS = 6;
+const KEYBOARD_WARM_FINAL = new Set(["warmed", "refused", "done", "unsupported", "failed"]);
+
+const overlayOpen = () => pageCovered() || pageUi().findOpen || useBrowse.getState().surface === "deck";
+
+function FirstKeyboardWarmUp() {
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+    let attempts = 0;
+    system.prepareKeyboardWarmUp();
+    const attempt = async () => {
+      timer = null;
+      attempts += 1;
+      const result: KeyboardWarmUp = searchState().open ? { outcome: "searchOpen" } : overlayOpen() ? { outcome: "overlay" } : await system.warmKeyboard();
+      if (stopped) return;
+      labLog(`PAGELAB search warm keyboard ${result.outcome}${typeof result.ms === "number" ? ` ${Math.round(result.ms)}ms` : ""}${result.holder ? ` ${result.holder}` : ""} attempt ${attempts}`);
+      if (KEYBOARD_WARM_FINAL.has(result.outcome) || attempts >= KEYBOARD_WARM_ATTEMPTS) return system.endKeyboardWarmUp();
+      timer = setTimeout(attempt, KEYBOARD_WARM_RETRY_MS);
+    };
+    const delaySeconds = launchArguments().keyboardWarmDelaySeconds;
+    timer = setTimeout(attempt, delaySeconds === null ? KEYBOARD_WARM_AFTER_LAUNCH_MS : delaySeconds * 1000);
+    return () => {
+      stopped = true;
+      if (timer !== null) clearTimeout(timer);
+      system.endKeyboardWarmUp();
+    };
+  }, []);
+  return null;
 }
 
 function SheetTray() {

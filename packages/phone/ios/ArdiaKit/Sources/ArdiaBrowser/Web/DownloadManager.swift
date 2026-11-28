@@ -131,14 +131,26 @@ public final class DownloadManager {
   func destination(for download: WKDownload, response: URLResponse, suggestedFilename: String) -> URL? {
     let key = ObjectIdentifier(download)
     guard let entry = active[key] else { return nil }
+    let length = response.expectedContentLength
+    func announce(_ fileName: String) {
+      onStart?(
+        DownloadStart(id: entry.id, url: download.originalRequest?.url ?? response.url, fileName: fileName, mimeType: response.mimeType, contentLength: length >= 0 ? length : nil),
+        download.webView
+      )
+    }
     if let status = (response as? HTTPURLResponse)?.statusCode, let refused = DownloadFailure.of(status: status) {
-      active[key]?.fileName = Self.uniqueURL(in: directory, for: suggestedFilename).lastPathComponent
+      let fileName = Self.uniqueURL(in: directory, for: suggestedFilename).lastPathComponent
+      active[key]?.fileName = fileName
+      announce(fileName)
       failed(download, reason: refused)
       return nil
     }
     do {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     } catch {
+      let fileName = Self.uniqueURL(in: directory, for: suggestedFilename).lastPathComponent
+      active[key]?.fileName = fileName
+      announce(fileName)
       failed(download, reason: DownloadFailure.of(error))
       return nil
     }
@@ -148,11 +160,7 @@ public final class DownloadManager {
     active[key]?.observation = download.progress.observe(\.completedUnitCount, options: []) { [weak self] _, _ in
       MainActor.assumeIsolated { self?.reportProgress() }
     }
-    let length = response.expectedContentLength
-    onStart?(
-      DownloadStart(id: entry.id, url: download.originalRequest?.url ?? response.url, fileName: url.lastPathComponent, mimeType: response.mimeType, contentLength: length >= 0 ? length : nil),
-      download.webView
-    )
+    announce(url.lastPathComponent)
     reportProgress()
     return url
   }

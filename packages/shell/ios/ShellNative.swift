@@ -59,6 +59,7 @@ protocol AppWindowsNative {
   static func closeWindow(_ id: String)
   static func animateWindowClose(_ id: String, _ after: String?, _ promise: Promise)
   static func setTrafficLightsCenter(_ id: String, _ center: CGPoint?, _ trailing: Bool)
+  static func setTrafficLightsStack(_ id: String, _ stack: Double)
   static func watchSidebarEdge(_ id: String, _ on: Bool, _ hold: Double, _ right: Bool, _ whilePressed: Bool)
   static func focusWindow(_ id: String)
   static func setWindowShown(_ id: String, _ shown: Bool, _ burst: Bool)
@@ -113,6 +114,10 @@ extension AppWindowsNative {
 
   static var setTrafficLightsCenterFunction: AnyDefinition {
     AsyncFunction("setTrafficLightsCenter") { (id: String, center: CGPoint?, trailing: Bool) in Self.setTrafficLightsCenter(id, center, trailing) }.runOnQueue(.main)
+  }
+
+  static var setTrafficLightsStackFunction: AnyDefinition {
+    AsyncFunction("setTrafficLightsStack") { (id: String, stack: Double) in Self.setTrafficLightsStack(id, stack) }.runOnQueue(.main)
   }
 
   static var watchSidebarEdgeFunction: AnyDefinition {

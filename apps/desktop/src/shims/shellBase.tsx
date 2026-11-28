@@ -123,6 +123,7 @@ const shellLocals: Record<string, unknown> = {
   setAppearance,
   isDarkAppearance,
   windowIds,
+  setTrafficLightsStack: async () => {},
   setTrafficLightsCenter: async (id: string, center: [number, number] | null, trailing = false) => {
     await setTrafficLightsCenter(id, center, trailing);
     await placeNativeTrafficLights(id, center, trailing);

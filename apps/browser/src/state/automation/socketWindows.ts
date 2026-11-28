@@ -1,5 +1,5 @@
 import type { BrowserState } from "../browser/store";
-import { activeTabId, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { activeTabId, sidebarModeIn, sidebarSideOf, tabLayoutOf, autoHidesTabsIn } from "../browser/model";
 import { openInMainWindow, openLittleArdia } from "../littleArdia/actions";
 import { focusWindow } from "../windows/nativeWindow";
 import { focusedWindowOf } from "../windows/ui";
@@ -24,7 +24,8 @@ export function windowRow(s: BrowserState, id: string) {
     tabs: windowTabIds(s, id).length,
     layout: tabLayoutOf(s, id),
     sidebarSide: sidebarSideOf(s, id),
-    tabsShown: tabsShownIn(s, id),
+    tabsShown: !autoHidesTabsIn(s, id),
+    sidebarMode: sidebarModeIn(s, id),
     frame: w.frame,
     maximized: !!w.maximized,
     fullScreen: !!w.fullScreen,
@@ -51,7 +52,7 @@ function setLayout(params: Record<string, unknown>) {
   const w = windowOf(params.window, ["normal"]);
   if (params.layout === undefined && params.tabsShown === undefined) throw new OpError("bad_request", "windows.setLayout needs layout or tabsShown.");
   if (params.layout !== undefined && tabLayoutOf(now(), w.id) !== params.layout) now().toggleTabLayout(w.id);
-  if (params.tabsShown !== undefined && tabsShownIn(now(), w.id) !== params.tabsShown) now().toggleSidebar(w.id);
+  if (params.tabsShown !== undefined) now().setSidebarCollapsed(w.id, !params.tabsShown);
   const row = windowRow(now(), w.id);
   expect((params.layout === undefined || row.layout === params.layout) && (params.tabsShown === undefined || row.tabsShown === params.tabsShown), "the layout didn't change.");
   return row;

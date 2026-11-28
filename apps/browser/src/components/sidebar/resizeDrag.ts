@@ -25,13 +25,19 @@ export const clampWidth = (width: number, { min, max }: ResizeBounds) => Math.mi
 
 export const grabbedWidth = (width: number, direction: 1 | -1, pointerFromEdge: number) => width + direction * pointerFromEdge;
 
+export type ResizeSnap = { below?: number; above?: number; onSnap: () => void };
+
 export type ResizeDragOptions = ResizeBounds & {
   direction: 1 | -1;
   saved: () => number;
   pointerFromEdge?: (e: GestureResponderEvent) => number;
   onLive: (width: number | null) => void;
   onCommit: (width: number, dragged: boolean) => void;
+  snap?: ResizeSnap;
 };
+
+export const snapsAt = (pointerWidth: number, snap: ResizeSnap | undefined): boolean =>
+  !!snap && ((snap.below !== undefined && pointerWidth < snap.below) || (snap.above !== undefined && pointerWidth > snap.above));
 
 export function resizeGesture(latest: { current: ResizeDragOptions }) {
   let live: number | null = null;
@@ -48,7 +54,8 @@ export function resizeGesture(latest: { current: ResizeDragOptions }) {
     latest.current.onCommit(width, dragged);
     latest.current.onLive(null);
   };
-  const at = (dx: number) => rubberBand((dragged ? grabbed : rest) + latest.current.direction * dx, latest.current);
+  const pointerAt = (dx: number) => (dragged ? grabbed : rest) + latest.current.direction * dx;
+  const at = (dx: number) => rubberBand(pointerAt(dx), latest.current);
   return {
     onStartShouldSetPanResponder: () => true,
     onPanResponderGrant: (e: GestureResponderEvent) => {
@@ -66,6 +73,11 @@ export function resizeGesture(latest: { current: ResizeDragOptions }) {
       show(at(g.dx));
     },
     onPanResponderRelease: (_: GestureResponderEvent, g: PanResponderGestureState) => {
+      if (dragged && snapsAt(pointerAt(g.dx), latest.current.snap)) {
+        live = null;
+        latest.current.onLive(null);
+        return latest.current.snap!.onSnap();
+      }
       const raw = at(g.dx);
       const target = clampWidth(raw, latest.current);
       if (raw === target) return commit(target);

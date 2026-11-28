@@ -2,7 +2,8 @@ import { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "../../ui/theme";
 import { useSettings, useTabLayout } from "../../../state/browser/hooks";
-import { chooseScrollToolbar, chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
+import { chooseScrollToolbar, chooseSidebarMode, chooseSidebarSide, chooseTabLayout, updateSettings } from "../../../state/settings/actions";
+import { chosenSidebarMode, type SidebarMode } from "../../../state/browser/model";
 import { customNewTabUrl, type Settings } from "../../../state/settings/settings";
 import { Box, Button, Checkbox, DialogActions, DialogTitle, PopUp, Segmented, Sheet, space, Text, TextField, Toggle, type Option, type SegmentOption } from "../../ui";
 import { durationMinutes, durationParts, type DurationUnit } from "../../../lib/time";
@@ -97,6 +98,7 @@ function LayoutSection() {
   const top = useTabLayout() === "top";
   const sidebarSide = useSettings((s) => s.sidebarSide);
   const autoHideKeys = useShortcutHint("toggleSidebar");
+  const mode = useSettings(chosenSidebarMode);
   const autoHideConflicts = useCommandConflicts("toggleSidebar");
   return (
     <>
@@ -109,9 +111,10 @@ function LayoutSection() {
           </Box>
         </Anchor>
         <Group>
-          <SettingToggle anchor="tabs.autoHideTabs" description={autoHideConflicts.length ? <ShortcutConflict titles={autoHideConflicts} /> : autoHideDescription(top, autoHideKeys)}>
+          <Row anchor="tabs.autoHideTabs" description={autoHideConflicts.length ? <ShortcutConflict titles={autoHideConflicts} /> : sidebarModeDescription(top, mode, autoHideKeys)}>
             <CommandKeyField command="toggleSidebar" onChange={(change) => change !== "mouse" && noteSettingsPick("autoHideTabsKeys", change)} />
-          </SettingToggle>
+            <Segmented options={top ? TAB_STRIP_MODES : SIDEBAR_MODES} value={top && mode === "icons" ? "hidden" : mode} onChange={(mode) => chooseSidebarMode(mode, top)} />
+          </Row>
           <Row anchor="tabs.sidebarSide">
             <Segmented options={SIDEBAR_SIDES} value={sidebarSide} onChange={chooseSidebarSide} />
           </Row>
@@ -123,7 +126,28 @@ function LayoutSection() {
   );
 }
 
-const autoHideDescription = (top: boolean, keys: string | undefined) => `Tabs slide away until you point at the ${top ? "top edge" : "edge"}.${keys ? ` ${keys} toggles.` : ""}`;
+const SIDEBAR_MODES: SegmentOption<SidebarMode>[] = [
+  { value: "full", title: "Full" },
+  { value: "icons", title: "Icons" },
+  { value: "hidden", title: "Hidden" },
+];
+
+const TAB_STRIP_MODES: SegmentOption<SidebarMode>[] = [
+  { value: "full", title: "Shown" },
+  { value: "hidden", title: "Hidden" },
+];
+
+function sidebarModeDescription(top: boolean, mode: SidebarMode, keys: string | undefined): string {
+  const shown = top ? (mode === "full" ? "Tabs stay across the top." : "Tabs slide away until you point at the top edge.") : SIDEBAR_MODE_LINES[mode];
+  const toggle = mode === "full" ? (top ? "hides them" : "collapses it") : "brings it back";
+  return `${shown}${keys ? ` ${keys} ${toggle}.` : ""}`;
+}
+
+const SIDEBAR_MODE_LINES: Record<SidebarMode, string> = {
+  full: "Full width, or icons in a window too narrow for it.",
+  icons: "One column of icons; point at it for the full sidebar.",
+  hidden: "Tabs slide away until you point at the edge.",
+};
 
 const SCROLL_TOOLBAR: { hides: boolean; title: string; caption: string }[] = [
   { hides: false, title: "Keep the toolbar", caption: "Stays put while the page scrolls." },

@@ -1510,8 +1510,8 @@
       "types": "packages/shell/src/generated/native.ts",
       "swift": "packages/shell/ios/ShellNative.swift",
       "sha256": {
-        "types": "06503bc68a8671906f150d0d1be7518834ce298287002970a5db2ae16b4eb4f3",
-        "swift": "1b0f1f7827a5f96df5bb21b9bb6725cc0e33419e7e003532f1c8d4492be92645"
+        "types": "552a971ce1f6908fc636ac8ee9129a29e2d932b206c25281a1d9334123f2bd69",
+        "swift": "3a1d59419ff8c7b4dc2279c0d875e08b185f3c0aef21b7150ff8b717acacafd5"
       },
       "modules": {
         "ArdiaShell": {
@@ -1661,6 +1661,16 @@
               "mac": "custom",
               "desktop": "absent",
               "windows": "custom"
+            },
+            "setTrafficLightsStack": {
+              "args": [
+                "id",
+                "stack"
+              ],
+              "async": true,
+              "mac": "custom",
+              "desktop": "absent",
+              "windows": "absent"
             },
             "watchSidebarEdge": {
               "args": [

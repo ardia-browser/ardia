@@ -2,7 +2,7 @@ import { withEntry } from "../browser/changes";
 import type { BrowserState } from "../browser/store";
 import { rejoinGroups } from "../groups/groups";
 import { withShownTab } from "../groups/shownTabs";
-import { findLast, inPinnedContainer, isIncognitoProfile, makeTab, newId, pinKeyOf, resolveWindowId } from "../browser/model";
+import { findLast, inPinnedContainer, isIncognitoProfile, makeTab, newId, pinKeyOf, resolveWindowId, isCollapsedSidebar } from "../browser/model";
 import { restoreId } from "../tabs/adoptIds";
 import { adoptedPage, hasPage } from "../tabs/pageSession";
 import { adoptParkedPins } from "../pins/parkedPins";
@@ -144,6 +144,7 @@ export function restoreWindow(s: BrowserState, entry: ClosedWindow): BrowserStat
   if (entry.window.maximized) w.maximized = true;
   if (entry.window.tabLayout) w.tabLayout = entry.window.tabLayout;
   if (entry.window.autoHideTabs !== undefined) w.autoHideTabs = entry.window.autoHideTabs;
+  if (isCollapsedSidebar(entry.window.collapsedSidebar)) w.collapsedSidebar = entry.window.collapsedSidebar;
   const tabs = { ...s.tabs };
   const ids: string[] = [];
   for (const { active, tabId, ...snap } of entry.tabs) {

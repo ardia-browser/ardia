@@ -55,6 +55,8 @@ void TranslateTrafficLights(NSWindow *window, CGFloat dx);
 void RetileTrafficLights(NSWindow *window);
 void TuckTrafficLightsOutsideWindow(NSWindow *window);
 bool MoveTrafficLights(NSWindow *window, NSValue *center);
+void InstallTrafficLightsStack(Class frameClass);
+CGFloat TrafficLightsStackDrop(NSWindow *window);
 
 NSMenuItem *ReservedMenuItemForEvent(NSEvent *event);
 bool IsReservedKey(NSEvent *event);

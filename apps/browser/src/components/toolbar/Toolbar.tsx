@@ -8,6 +8,7 @@ import { TOOLBAR_ROWS, toolbarTrailing, urlFieldOf, type ToolbarRow } from "../.
 import { ToolbarRowContext, useToolbarRowContext } from "../ui/toolbarRowContext";
 import { activate } from "../../state/tabs/actions";
 import { toggleSidebar } from "../../state/windows/actions";
+import { useToolbarRowMeasure } from "./useToolbarRowMeasure";
 import { openBarFromAddress } from "../../state/omnibox/barState";
 import { useIsBookmarked, useSettings, useTab, useTabLive, useTabsPlace, useTabsShown } from "../../state/browser/hooks";
 import type { Tab } from "../../state/browser/types";
@@ -125,10 +126,11 @@ export const Toolbar = memo(function Toolbar({
   const right = trailing.fieldRight + geometry.trailing;
   const extensionsRight = trailing.extensionsRight + geometry.trailing;
   const urlStyle = useMemo(() => ({ position: "absolute" as const, left: geometry.urlLeft, right, top: urlFieldOf(row).top }), [geometry.urlLeft, right, row]);
+  const rowMeasure = useToolbarRowMeasure(windowId, !!tab && geometry.sidebarButton !== null, row.center);
   if (!tab) return <View style={{ height: row.height }} />;
 
   return (
-    <View style={{ height: row.height }}>
+    <View ref={rowMeasure.ref} onLayout={rowMeasure.onLayout} style={{ height: row.height }}>
       {!bare && <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: band }]} />}
       <WindowDragRegion style={StyleSheet.absoluteFill} />
       <TabSwipeArea windowId={windowId} surface="toolbar" />

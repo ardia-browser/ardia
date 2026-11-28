@@ -194,7 +194,7 @@ export const noteTileDoubleClick = (what: TileDoubleClick, consent?: ConsentToke
 
 export const notePagePressRefused = () => void tally.page_refused++;
 
-export const noteDragBegan = (drag: object) => void startedIn.set(drag, period);
+export const noteDragBegan = (drag: object, consent?: ConsentToken | null) => void startedIn.set(drag, consent === undefined || consent === consentOrNow(undefined) ? period : {});
 
 export const noteDragWithoutDrop = (drag?: object) => void (ofThisPeriod(drag) && tally.drags_without_drop++);
 

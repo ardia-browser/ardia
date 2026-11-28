@@ -1,3 +1,4 @@
+import { isCollapsedSidebar } from "../browser/model";
 import type { HydrateData } from "../browser/store";
 import type { BrowserWindow, ClosedWindow, ParkedPins, Profile, SplitView, Tab } from "../browser/types";
 import { parseSaved, type Migrations, type SavedObject } from "../../lib/savedDocument";
@@ -77,7 +78,7 @@ export function sessionFromSaved(saved: SavedObject): SavedSession {
     orphanedProfileData: strings(raw.orphanedProfileData),
     settings,
     settingsMeta: parseSettingsMeta(raw.settingsMeta),
-    windows: byId(rows<Omit<BrowserWindow, "autoHideTabs"> & { incognito?: unknown; sidebarOpen?: unknown; autoHideTabs?: unknown }>(raw.windows, windowOk).map(({ incognito: _i, sidebarOpen: _s, autoHideTabs, ...w }): BrowserWindow => ({ ...w, kind: "main", ...(typeof autoHideTabs === "boolean" ? { autoHideTabs } : {}) }))),
+    windows: byId(rows<Omit<BrowserWindow, "autoHideTabs" | "collapsedSidebar"> & { incognito?: unknown; sidebarOpen?: unknown; autoHideTabs?: unknown; collapsedSidebar?: unknown }>(raw.windows, windowOk).map(({ incognito: _i, sidebarOpen: _s, autoHideTabs, collapsedSidebar, ...w }): BrowserWindow => ({ ...w, kind: "main", ...(typeof autoHideTabs === "boolean" ? { autoHideTabs } : {}), ...(isCollapsedSidebar(collapsedSidebar) ? { collapsedSidebar } : {}) }))),
     windowOrder: strings(raw.windowOrder).filter(notInherited),
     focusedWindowId: ownId(raw.focusedWindowId),
     lastProfileId: ownId(raw.lastProfileId),

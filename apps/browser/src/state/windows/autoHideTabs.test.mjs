@@ -239,3 +239,43 @@ test("a saved session that disagreed with the setting is written back in line at
   assert.equal(saved.settings.autoHideTabs, false);
   stop();
 });
+
+const { chooseSidebarMode } = await import("../settings/actions.ts");
+const { sidebarModeIn, chosenSidebarMode } = await import("../browser/model.ts");
+const { collapseWindowToIcons, expandWindowSidebar } = await import("../sidebar/sidebarMode.ts");
+
+test("Settings' Full, Icons and Hidden set every window; an old true is Hidden and false is Full", () => {
+  const a = fresh();
+  const b = S().createWindow();
+  assert.equal(chosenSidebarMode(S().settings), "full");
+  S().updateSettings({ autoHideTabs: true });
+  assert.deepEqual([sidebarModeIn(S(), a), sidebarModeIn(S(), b)], ["hidden", "hidden"], "a saved true with no style is Hidden, as before");
+  S().toggleSidebar(a);
+  chooseSidebarMode("icons");
+  assert.deepEqual([sidebarModeIn(S(), a), sidebarModeIn(S(), b)], ["icons", "icons"], "a new style puts a window ⌘S showed back in line");
+  assert.deepEqual([S().settings.autoHideTabs, S().settings.collapsedSidebar], [true, "icons"]);
+  chooseSidebarMode("full");
+  assert.deepEqual([sidebarModeIn(S(), a), sidebarModeIn(S(), b)], ["full", "full"]);
+  assert.equal(S().settings.collapsedSidebar, "icons", "Full remembers which collapsed mode ⌘S goes to");
+  S().toggleSidebar(a);
+  assert.equal(sidebarModeIn(S(), a), "icons");
+  assert.equal(menuState(S()).titles.toggleSidebar, "Sidebar as Icons");
+  assert.equal(sidebarMenuChecked(a), true);
+  assert.equal(browserLayoutItems(S(), a).find((item) => item.id === "layout:autoHide")?.title, "Sidebar as Icons");
+  chooseSidebarMode("hidden");
+  assert.equal(menuState(S()).titles.toggleSidebar, "Auto-Hide Tabs");
+});
+
+test("dragging the edge snaps one window to icons and back, and tabs across the top never show icons", () => {
+  const a = fresh();
+  const b = S().createWindow();
+  collapseWindowToIcons(a);
+  assert.deepEqual([sidebarModeIn(S(), a), sidebarModeIn(S(), b)], ["icons", "full"]);
+  assert.equal(S().settings.autoHideTabs, false, "a drag changes its own window, not the setting");
+  expandWindowSidebar(a);
+  assert.equal(sidebarModeIn(S(), a), "full");
+  chooseSidebarMode("icons");
+  S().toggleTabLayout(b);
+  assert.equal(sidebarModeIn(S(), b), "hidden");
+  assert.equal(shown(b), false);
+});

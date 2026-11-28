@@ -1,11 +1,13 @@
 import type { Shortcut } from "../commands/shortcuts";
 import { storeAction, useBrowser } from "../browser/store";
-import { tabLayoutOf } from "../browser/model";
+import { tabLayoutOf, type SidebarMode } from "../browser/model";
 import { steppedInterfaceScale } from "../../lib/interfaceScale";
 import { noteTabLayoutSwitch } from "../telemetry/tabLayoutCounts";
 import type { ConsentToken } from "../telemetry/choice";
 import { noteSettingsPick } from "../telemetry/settingsPickerCounts";
 import type { Settings } from "./settings";
+import type { HLC } from "../../platform/sync";
+import { picksLeft } from "./sidebarPicks";
 
 export const updateSettings = storeAction("updateSettings");
 export const setSearchEngine = storeAction("setSearchEngine");
@@ -24,6 +26,19 @@ export function setShortcutOverride(id: string, combo: Shortcut | null) {
 export function chooseAddressBar(addressBar: Settings["addressBar"]) {
   useBrowser.getState().updateSettings({ addressBar });
   noteSettingsPick("addressBar", addressBar);
+}
+
+export function settleSidebarPicks(syncedStamp: (name: string) => HLC | undefined) {
+  const meta = useBrowser.getState().settingsMeta;
+  const picks = picksLeft(meta.picks, syncedStamp);
+  if (picks === meta.picks) return;
+  const { picks: _, ...rest } = meta;
+  useBrowser.setState({ settingsMeta: picks ? { ...rest, picks } : rest });
+}
+
+export function chooseSidebarMode(mode: SidebarMode, tabsOnTop = false) {
+  useBrowser.getState().updateSettings(mode === "full" ? { autoHideTabs: false } : tabsOnTop ? { autoHideTabs: true } : { autoHideTabs: true, collapsedSidebar: mode });
+  noteSettingsPick("sidebarMode", mode);
 }
 
 export function chooseScrollToolbar(hideToolbarWhileScrolling: boolean) {

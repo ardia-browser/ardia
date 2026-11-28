@@ -20,7 +20,7 @@ using namespace ardia_early_window;
 
 namespace {
 
-constexpr int kLayoutVersion = 5;
+constexpr int kLayoutVersion = 8;
 
 constexpr CGFloat kMinPage = 100;
 
@@ -33,13 +33,13 @@ NSString *StateOf(ArdiaSavedSession *session, NSString *windowId) {
   NSDictionary *window = [session windowWithId:windowId];
   if (!window) return nil;
   NSMutableDictionary *state = [NSMutableDictionary dictionary];
-  for (NSString *key in @[ @"tabLayout", @"sidebarSide", @"addressBar", @"sidebarWidth", @"bookmarksBar", @"appearance", @"hideToolbarWhileScrolling", @"showFullUrl" ])
+  for (NSString *key in @[ @"tabLayout", @"sidebarSide", @"addressBar", @"sidebarWidth", @"collapsedSidebar", @"bookmarksBar", @"appearance", @"hideToolbarWhileScrolling", @"showFullUrl" ])
     if (settings[key]) state[[@"s." stringByAppendingString:key]] = settings[key];
   if ([settings[@"compactToolbar"] isEqual:@YES]) state[@"s.compactToolbar"] = @YES;
   if ([settings[@"borderlessMode"] isEqual:@YES]) state[@"s.borderlessMode"] = @YES;
   if ([settings[@"minimalismMode"] isEqual:@YES]) state[@"s.minimalismMode"] = @YES;
   if ([settings[@"pageFrame"] isKindOfClass:NSNumber.class] && ![settings[@"pageFrame"] isEqual:@9]) state[@"s.pageFrame"] = settings[@"pageFrame"];
-  for (NSString *key in @[ @"tabLayout", @"profileId", @"incognito" ])
+  for (NSString *key in @[ @"tabLayout", @"profileId", @"incognito", @"iconsForWidth", @"collapsedSidebar" ])
     if (window[key]) state[[@"w." stringByAppendingString:key]] = window[key];
   NSNumber *autoHideTabs = [window[@"autoHideTabs"] isKindOfClass:NSNumber.class] ? window[@"autoHideTabs"]
                          : [settings[@"autoHideTabs"] isKindOfClass:NSNumber.class] ? settings[@"autoHideTabs"] : nil;
@@ -157,6 +157,7 @@ NSDictionary *WindowLayout(ArdiaWindowController *controller, ArdiaSavedSession 
   if (web.transferKey.length) layout[@"tab"] = web.transferKey;
   if (NSValue *lights = ArdiaTrafficLightsCenter(window))
     layout[@"lights"] = @[ @(lights.pointValue.x), @(lights.pointValue.y), @(ArdiaTrafficLightsTrailing(window)) ];
+  if (const CGFloat stack = ArdiaTrafficLightsStack(window); stack > 0) layout[@"lightsStack"] = @(stack);
   if (window.appearance.name) layout[@"appearance"] = window.appearance.name;
   if (NSColor *color = [web.pageBackgroundColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace])
     layout[@"pageColor"] = @[ @(color.redComponent), @(color.greenComponent), @(color.blueComponent), @(color.alphaComponent) ];

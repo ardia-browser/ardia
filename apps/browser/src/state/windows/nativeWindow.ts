@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
-import { setTrafficLightsCenter as placeTrafficLights, type LightsPlace } from "../../platform/windows";
+import { setTrafficLightsCenter as placeTrafficLights, setTrafficLightsStack, type LightsPlace } from "../../platform/windows";
+
+export { setTrafficLightsStack };
 
 export { closeWindow, focusWindow, onWindowEvent, raiseView, watchSidebarEdge } from "../../platform/windows";
 export { discardKeyResponder, restoreKeyResponder, saveKeyResponder } from "../../platform/focus";

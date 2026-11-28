@@ -6,7 +6,7 @@ await import("../../test-native/index.ts");
 globalThis.fetch = async () => ({ status: 503 });
 const client = await import("./client.ts");
 const { useBrowser } = await import("../browser/store.ts");
-const { chooseAfterClosingTab, chooseTabSwitcherOrder, chooseTabSwitcherView } = await import("../settings/actions.ts");
+const { chooseAfterClosingTab, chooseSidebarMode, chooseTabSwitcherOrder, chooseTabSwitcherView } = await import("../settings/actions.ts");
 client.loadChoice();
 client.setSharing(true, "settings");
 after(() => client.setSharing(false, "settings"));
@@ -28,6 +28,9 @@ const ZERO = {
   after_closing_tab_picks_below: 0,
   auto_hide_tabs_keys_changed: 0,
   auto_hide_tabs_keys_cleared: 0,
+  sidebar_mode_picks_full: 0,
+  sidebar_mode_picks_icons: 0,
+  sidebar_mode_picks_hidden: 0,
   shortcuts_keyword_finds: 0,
 };
 
@@ -83,4 +86,13 @@ test("the Auto-hide tabs row counts its shortcut changes and removals, and Keybo
   noteShortcutsKeywordFind();
   client.setSharing(true, "settings");
   assert.deepEqual(takeSettingsPickerCounts(), ZERO);
+});
+
+test("the Sidebar row counts its picks by mode", () => {
+  useBrowser.getState().hydrate({});
+  takeSettingsPickerCounts();
+  chooseSidebarMode("icons");
+  chooseSidebarMode("full");
+  chooseSidebarMode("icons");
+  assert.deepEqual(takeSettingsPickerCounts(), { ...ZERO, sidebar_mode_picks_icons: 2, sidebar_mode_picks_full: 1 });
 });

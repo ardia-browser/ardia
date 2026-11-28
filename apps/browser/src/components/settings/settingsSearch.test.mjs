@@ -33,7 +33,8 @@ const TOP = [
   ["import", ["general.importBrowser", "profiles.importPasswords"]],
   ["import from chrome", ["general.importBrowser"]],
   ["profile", ["profiles.defaultProfile", "profiles.profiles"]],
-  ["sidebar", ["tabs.sidebarSide"]],
+  ["sidebar", ["tabs.autoHideTabs"]],
+  ["sidebar side", ["tabs.sidebarSide"]],
   ["right sidebar", ["tabs.sidebarSide"]],
   ["vertical tabs", ["tabs.layout"]],
   ["tab menu button", ["tabs.showTabMenuButton"]],
@@ -129,7 +130,6 @@ const TOP = [
   ["restore", ["general.windowsAndTabs"]],
   ["recently closed", ["general.windowsAndTabs"]],
   ["autohide", ["tabs.autoHideTabs"]],
-  ["auto hide", ["tabs.autoHideTabs"]],
   ["borderless mode", ["appearance.pageFrame"]],
   ["minimal", ["appearance.minimalismMode"]],
   ["minimalism", ["appearance.minimalismMode"]],
@@ -196,8 +196,8 @@ test("results that land on the same place collapse into one", () => {
 });
 
 test("rows named by the query stay apart even when they share a place", () => {
-  const tabs = search(SETTINGS_INDEX, "tabs").filter((h) => h.entry.section === "Layout" && h.title.length);
-  assert.ok(tabs.length >= 2, "several Layout rows say tabs in their names");
+  const named = search(SETTINGS_INDEX, "sidebar").filter((h) => h.entry.section === "Layout" && h.title.length);
+  assert.ok(named.length >= 2, "several Layout rows say sidebar in their names");
   assert.equal(first("command line"), "plugins.cli");
   assert.equal(first("devtools"), "advanced.ardiaCommand");
 });

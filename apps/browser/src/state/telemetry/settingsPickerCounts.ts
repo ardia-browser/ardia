@@ -9,6 +9,7 @@ type Picks = {
   scrollToolbar: "keep" | "hide";
   afterClosingTab: "recent" | "above" | "below";
   autoHideTabsKeys: "changed" | "cleared";
+  sidebarMode: "full" | "icons" | "hidden";
 };
 
 const ZERO = {
@@ -28,6 +29,9 @@ const ZERO = {
   after_closing_tab_picks_below: 0,
   auto_hide_tabs_keys_changed: 0,
   auto_hide_tabs_keys_cleared: 0,
+  sidebar_mode_picks_full: 0,
+  sidebar_mode_picks_icons: 0,
+  sidebar_mode_picks_hidden: 0,
   shortcuts_keyword_finds: 0,
 };
 
@@ -41,6 +45,7 @@ const FIELD_PREFIX: { [P in keyof Picks]: string } = {
   scrollToolbar: "scroll_toolbar_picks",
   afterClosingTab: "after_closing_tab_picks",
   autoHideTabsKeys: "auto_hide_tabs_keys",
+  sidebarMode: "sidebar_mode_picks",
 };
 
 let counts = { ...ZERO };

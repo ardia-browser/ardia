@@ -2,7 +2,7 @@ import type { MenuBookmark, MenuState } from "../../platform/commands";
 import { engineBookmarkRoots, folderChildren, isBookmarked, isWithin, ROOT_TITLES } from "../bookmarks/bookmarks";
 import type { BrowserState } from "../browser/store";
 import { noRecordReads, recordReadsChanged, trackedRecord, type RecordReads } from "../browser/recordReads";
-import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { activeTab, bookmarkProfileId, engineProfile, IDLE_LIVE, isPinnedRow, tabLabel, togglePinTitle, windowTitle, tabLayoutOf, autoHidesTabsIn, collapseSidebarTitle } from "../browser/model";
 import { switchableEngine, tabEngine } from "../engines/engines";
 import { readerState as readerFor, type ReaderState } from "../reader/reader";
 import { peekTabId } from "../peek/peek";
@@ -125,9 +125,9 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
   } else {
     checked.push("setTabLayout:top");
   }
-  if (w && !tabsShownIn(s, w.id)) checked.push("toggleSidebar");
+  if (w && autoHidesTabsIn(s, w.id)) checked.push("toggleSidebar");
 
-  const titles: Record<string, string> = {};
+  const titles: Record<string, string> = { toggleSidebar: collapseSidebarTitle(s, windowId) };
   if (tab?.pin) titles.togglePin = togglePinTitle(tab);
   if (isPinnedRow(tab)) titles["togglePin:tile"] = "Move to Top Apps";
   else disabled.push("togglePin:tile");

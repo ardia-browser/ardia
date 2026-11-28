@@ -339,7 +339,7 @@ function snapshotSettings(consent: ConsentToken | null) {
   const today = utcDay(Date.now()), passwordManagers = passwordManagerSnapshot();
   if (settingsSnapshotDay() === today || !passwordManagers) return;
   const state = useBrowser.getState();
-  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles, state.settings.defaultProfileId), ...openTabSyncProfiles(state.profiles), ...narrowWindows(state.windows, state.settings.sidebarWidth), ...airTrafficSnapshot(), ...currentThemeFileSnapshot(), ...pluginsSnapshot(), ...windowButtonLayoutSnapshot(), ...passwordManagers, ctrl_tab_mode: ctrlTabKeys(state) };
+  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles, state.settings.defaultProfileId), ...openTabSyncProfiles(state.profiles), ...narrowWindows(state.windows), ...airTrafficSnapshot(), ...currentThemeFileSnapshot(), ...pluginsSnapshot(), ...windowButtonLayoutSnapshot(), ...passwordManagers, ctrl_tab_mode: ctrlTabKeys(state) };
   void Promise.all([currentAppIcon().catch(() => null), listComponents().catch(() => null)]).then(([icon, components]) => (capture(SETTINGS_SNAPSHOT_EVENT, { ...settings, ...appIconSetting(icon), ...widevineSetting(components) }, consent), stillValid(consent) && markSettingsSnapshot(today)));
 }
 

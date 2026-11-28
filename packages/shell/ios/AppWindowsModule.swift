@@ -22,6 +22,8 @@ public class AppWindowsModule: Module, AppWindowsNative {
 
   static func setTrafficLightsCenter(_ id: String, _ center: CGPoint?, _ trailing: Bool) { WindowManager.shared.setTrafficLightsCenter(id: id, center: center, trailing: trailing) }
 
+  static func setTrafficLightsStack(_ id: String, _ stack: Double) { WindowManager.shared.setTrafficLightsStack(id: id, stack: CGFloat(stack)) }
+
   static func watchSidebarEdge(_ id: String, _ on: Bool, _ hold: Double, _ right: Bool, _ whilePressed: Bool) { SidebarEdgeWatcher.shared.watch(id: id, on: on, hold: CGFloat(hold), right: right, whilePressed: whilePressed) }
 
   static func focusWindow(_ id: String) { WindowManager.shared.focus(id: id) }
@@ -115,6 +117,7 @@ public class AppWindowsModule: Module, AppWindowsNative {
     Self.closeWindowFunction
     Self.animateWindowCloseFunction
     Self.setTrafficLightsCenterFunction
+    Self.setTrafficLightsStackFunction
     Self.watchSidebarEdgeFunction
     Self.focusWindowFunction
     Self.setWindowShownFunction

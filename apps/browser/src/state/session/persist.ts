@@ -2,7 +2,7 @@ import { createDocument, documentSaved, writeDocument } from "../../platform/doc
 import { SESSION_DOCUMENT } from "./sessionDocument";
 import { cosmeticChange, doc, field, listed, type Doc } from "./documentJson";
 import { useBrowser, type BrowserState } from "../browser/store";
-import { isIncognitoProfile, tabsShownIn } from "../browser/model";
+import { autoHidesTabsIn, isIncognitoProfile } from "../browser/model";
 import { earlyLaunchTabOn, launchTab, linkProfile } from "../tabs/launchTab";
 import { launchBackdrop } from "../windows/launchBackdrop";
 import { restoreLaunchLook, saveLaunchLook } from "../windows/launchLook";
@@ -35,7 +35,7 @@ const publicProfiles = <T,>(byProfile: Record<string, T>) => Object.fromEntries(
 const persistedTab = (t: Tab) => ({ ...t, page: savedPage(t) });
 const savedWindows = (s: Pick<BrowserState, "windows">) =>
   Object.values(s.windows).filter(isRegularWindow).map(({ chromeWindow: _c, kind: _k, ...w }) => ({ ...w, incognito: false }));
-const savedWindowsWithTabsShown = (s: Pick<BrowserState, "windows" | "settings">) => savedWindows(s).map((w) => ({ ...w, sidebarOpen: tabsShownIn(s, w.id) }));
+const savedWindowsWithTabsShown = (s: Pick<BrowserState, "windows" | "settings">) => savedWindows(s).map((w) => ({ ...w, sidebarOpen: !autoHidesTabsIn(s, w.id) }));
 const savedWindowIds = (s: Pick<BrowserState, "windows">) => new Set(savedWindows(s).map((w) => w.id));
 const savedFocus = (s: Pick<BrowserState, "windows" | "ui">) => {
   const kept = savedWindowIds(s);

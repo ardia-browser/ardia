@@ -187,7 +187,7 @@ function PlainSelectedTile({ width, outline, children }: { width: number; outlin
   );
 }
 
-export function RestingTile({ width, selected, hovered, pressed, bare = false, children }: Omit<FaceState, "active"> & { bare?: boolean; children: ReactNode }) {
+export function RestingTile({ width, height = layout.pinnedHeight, selected, hovered, pressed, bare = false, children }: Omit<FaceState, "active"> & { height?: number; bare?: boolean; children: ReactNode }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
   const quiet = useQuietRows();
@@ -197,7 +197,7 @@ export function RestingTile({ width, selected, hovered, pressed, bare = false, c
       <View
         style={{
           width,
-          height: layout.pinnedHeight,
+          height,
           ...clippedContinuousCorners(radius.pinned),
           borderWidth: selected ? 1 : 0,
           borderColor: tokens.dragBorder,
@@ -211,16 +211,16 @@ export function RestingTile({ width, selected, hovered, pressed, bare = false, c
     );
   if (glass)
     return (
-      <GlassTile width={width} active={false} selected={selected} hovered={hovered} pressed={pressed} tileTheme={null} bare={bare}>
+      <GlassTile width={width} height={height} active={false} selected={selected} hovered={hovered} pressed={pressed} tileTheme={null} bare={bare}>
         {children}
       </GlassTile>
     );
-  if (bare && !selected && !hovered && !pressed) return <View style={{ width, height: layout.pinnedHeight, alignItems: "center", justifyContent: "center" }}>{children}</View>;
+  if (bare && !selected && !hovered && !pressed) return <View style={{ width, height, alignItems: "center", justifyContent: "center" }}>{children}</View>;
   return (
     <View
       style={{
         width,
-        height: layout.pinnedHeight,
+        height,
         ...clippedContinuousCorners(radius.pinned),
         borderWidth: selected ? 1 : StyleSheet.hairlineWidth,
         borderColor: selected ? tokens.dragBorder : theme.pinnedRestingStroke,
@@ -234,12 +234,12 @@ export function RestingTile({ width, selected, hovered, pressed, bare = false, c
   );
 }
 
-function GlassTile({ width, active, selected, hovered, pressed, tileTheme, topApp = "ring", bare = false, children }: FaceState & { tileTheme: TileTheme | null; topApp?: TopAppLook; bare?: boolean; children: ReactNode }) {
+function GlassTile({ width, height = layout.pinnedHeight, active, selected, hovered, pressed, tileTheme, topApp = "ring", bare = false, children }: FaceState & { height?: number; tileTheme: TileTheme | null; topApp?: TopAppLook; bare?: boolean; children: ReactNode }) {
   const theme = useTheme();
   const tokens = useSidebarTokens();
-  if (bare && !active && !selected && !hovered && !pressed) return <View style={{ width, height: layout.pinnedHeight, alignItems: "center", justifyContent: "center" }}>{children}</View>;
+  if (bare && !active && !selected && !hovered && !pressed) return <View style={{ width, height, alignItems: "center", justifyContent: "center" }}>{children}</View>;
   return (
-    <View style={{ width, height: layout.pinnedHeight }}>
+    <View style={{ width, height }}>
       <GlassFill radius={radius.pinned} state={pressed ? "pressed" : active && topApp !== "outline" ? "active" : hovered || selected ? "lit" : "rest"}>
         {active ? (
           <DockSelection

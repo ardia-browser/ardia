@@ -358,6 +358,9 @@ export function folderPalette(color: GroupColor | null | undefined, dark: boolea
   return { stroke, face, insideTop: mix(face, stroke, ink.insideTop), insideBottom: mix(face, stroke, ink.insideBottom) };
 }
 
+export const folderInk = (color: GroupColor | null | undefined, theme: { dark: boolean; powerUpColor: string | null; accent: string; windowTint: readonly string[] }, folderStyle: FolderStyle) =>
+  folderPalette(color, theme.dark, theme.powerUpColor ?? theme.accent, folderStyle, theme.windowTint);
+
 export function groupSurface(color: GroupColor | null | undefined, tokens: SidebarTokens): { fill: string; stroke: string } {
   if (color === "none") return { fill: "transparent", stroke: "transparent" };
   const tint = groupTint(color);

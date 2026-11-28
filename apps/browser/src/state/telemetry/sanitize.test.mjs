@@ -328,20 +328,27 @@ test("the snapshot says how many profiles have a custom colour, never which", ()
   assert.deepEqual(cleanProperties(counted), counted);
 });
 
-test("the snapshot counts browser windows narrower than the old 720 point minimum and those that narrow the sidebar, never their size", () => {
+test("the snapshot counts browser windows narrower than the old 720 point minimum and those showing icons for their width, never their size", () => {
   const frame = (width) => [10, 20, width, 600];
   const counted = narrowWindows({
-    a: { kind: "main", frame: frame(500) },
-    b: { kind: "private", frame: frame(719) },
+    a: { kind: "main", frame: frame(500), iconsForWidth: true },
+    b: { kind: "private", frame: frame(719), iconsForWidth: true },
     c: { kind: "main", frame: frame(720) },
-    d: { kind: "small", frame: frame(400) },
+    d: { kind: "small", frame: frame(400), iconsForWidth: true },
     e: { kind: "main", frame: null },
-    f: { kind: "main", frame: frame(600), fullScreen: 1700000000000 },
+    f: { kind: "main", frame: frame(600), fullScreen: 1700000000000, iconsForWidth: true },
     g: { kind: "main", frame: frame(640) },
-  }, 400);
-  assert.deepEqual(counted, { narrow_windows: "3", sidebar_narrowed_windows: "2" });
+  });
+  assert.deepEqual(counted, { narrow_windows: "3", sidebar_icons_for_width_windows: "2" });
   assert.deepEqual(cleanProperties(counted), counted);
-  assert.deepEqual(narrowWindows({ a: { kind: "main", frame: frame(500) } }, 190), { narrow_windows: "1", sidebar_narrowed_windows: "0" });
+  assert.deepEqual(narrowWindows({ a: { kind: "main", frame: frame(500) } }), { narrow_windows: "1", sidebar_icons_for_width_windows: "0" });
+});
+
+test("the snapshot names the chosen sidebar mode, from the collapsed flag and its style", () => {
+  assert.equal(settingsSnapshot(DEFAULT_SETTINGS).setting_sidebar_mode, "full");
+  assert.equal(settingsSnapshot({ ...DEFAULT_SETTINGS, autoHideTabs: true }).setting_sidebar_mode, "hidden");
+  assert.equal(settingsSnapshot({ ...DEFAULT_SETTINGS, autoHideTabs: true, collapsedSidebar: "icons" }).setting_sidebar_mode, "icons");
+  assert.equal(settingsSnapshot({ ...DEFAULT_SETTINGS, collapsedSidebar: "icons" }).setting_sidebar_mode, "full");
 });
 
 test("a value the spec doesn't allow is left out rather than sent", () => {
@@ -411,8 +418,8 @@ test("the snapshot reports the interface size in whole percent with its default,
     assert.equal(snap.default_interfaceScale, "100");
     assert.deepEqual(cleanProperties(snap), snap);
     const wide = { kind: "main", frame: [0, 0, 800, 700] };
-    assert.deepEqual(narrowWindows({ a: wide }, 190), { narrow_windows: "1", sidebar_narrowed_windows: "0" }, "800 window points are 640 root points at 125%");
-    assert.deepEqual(narrowWindows({ a: wide }, 400), { narrow_windows: "1", sidebar_narrowed_windows: "1" });
+    assert.deepEqual(narrowWindows({ a: wide }), { narrow_windows: "1", sidebar_icons_for_width_windows: "0" }, "800 window points are 640 root points at 125%");
+    assert.deepEqual(narrowWindows({ a: { ...wide, iconsForWidth: true } }), { narrow_windows: "1", sidebar_icons_for_width_windows: "1" });
   } finally {
     useInterfaceScale.setState({ scale: 1 });
   }

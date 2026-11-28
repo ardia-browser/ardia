@@ -5,12 +5,22 @@ export const SIDEBAR_MAX_WIDTH = 400;
 
 export const MIN_WINDOW_WIDTH = 500;
 
-const SIDEBAR_PAGE_ROOM = MIN_WINDOW_WIDTH - DEFAULT_SIDEBAR_WIDTH;
+export const SIDEBAR_PAGE_ROOM = 410;
+
+export const SIDEBAR_ICONS_HYSTERESIS = 24;
+
+export const ICON_STRIP = { width: 46, square: 30, gap: 4 } as const;
 
 export const sidebarWidthLimit = (windowWidth: number | null | undefined): number =>
   windowWidth ? Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.floor(windowWidth - SIDEBAR_PAGE_ROOM))) : SIDEBAR_MAX_WIDTH;
 
-export const shownSidebarWidth = (saved: number, windowWidth: number | null | undefined): number => Math.min(saved, sidebarWidthLimit(windowWidth));
+export const shownSidebarWidth = (saved: number): number => Math.min(SIDEBAR_MAX_WIDTH, saved);
+
+export function iconsForWidth(saved: number, windowWidth: number | null | undefined, showingIcons: boolean): boolean {
+  if (!windowWidth) return showingIcons;
+  const threshold = shownSidebarWidth(saved) + SIDEBAR_PAGE_ROOM;
+  return showingIcons ? windowWidth < threshold + SIDEBAR_ICONS_HYSTERESIS : windowWidth < threshold;
+}
 
 export const CARD_INSET = 9;
 

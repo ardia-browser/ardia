@@ -2,6 +2,7 @@ import { layout } from "../ui/theme";
 import { DOCK_SLIDE, DOCK_SLIDE_CURVE } from "./tokens";
 import type { SpringSpec } from "../ui/motion";
 import { TRAFFIC_LIGHTS_WIDTH, WINDOW_CHROME, type WindowChrome } from "../../lib/windowChrome";
+import { ICON_STRIP } from "../../lib/windowLayout";
 
 export const easeOutCubic = (u: number) => 1 - (1 - u) ** 3;
 export const easeInOutCubic = (u: number) => (u < 0.5 ? 4 * u ** 3 : 1 - (-2 * u + 2) ** 3 / 2);
@@ -113,8 +114,10 @@ export const peekHoldWidth = (sidebarWidth: number, peekLeft: number) => peekLef
 export const peekSpan = (sidebarWidth: number, right: boolean, windowWidth: number, peekLeft: number): readonly [number, number] =>
   right ? [windowWidth - peekLeft - sidebarWidth, Infinity] : [-Infinity, peekLeft + sidebarWidth];
 
-export const edgeWatchWidth = (peeking: boolean, draggingTab: boolean, holdWidth: number, inset: number) =>
-  peeking ? holdWidth : draggingTab ? TAB_DRAG_EDGE_STRIP : edgeStripOverPage(inset) ? PEEK_EDGE_STRIP : 0;
+export const edgeWatchWidth = (peeking: boolean, draggingTab: boolean, holdWidth: number, inset: number, dragBand: number = TAB_DRAG_EDGE_STRIP, iconStrip = false) =>
+  peeking ? holdWidth : draggingTab ? dragBand : !iconStrip && edgeStripOverPage(inset) ? PEEK_EDGE_STRIP : 0;
+
+export const dragEdgeBand = (iconStrip: boolean) => (iconStrip ? ICON_STRIP.width : TAB_DRAG_EDGE_STRIP);
 
 export const edgeStripOverPage = (inset: number) => inset < PEEK_EDGE_STRIP;
 

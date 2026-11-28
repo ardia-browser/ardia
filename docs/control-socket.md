@@ -249,7 +249,7 @@ changes it today, 🔍 read only, 🗺️ designed below, ⛔ deliberately not e
 | Favicons | icon per page | Chrome's Favicons database, app cache | 🔍 `favicons.get` |
 | Shared folders | groups backed by a folder, their identities | `shared-folders.json`, `.ardia-folder.json` | 🔍 `sharedFolders.list`; 🗺️ share, add, sync, stop |
 | Live folders | pull request and document folders, their items, hidden and read state, connected accounts | `live.json` | ✅ `live.*`; ⛔ account tokens |
-| Sidebar layout | width, side, pinned collapsed, auto-hide | `settings` (`sidebarWidth`, `sidebarSide`, `autoHideTabs`), profiles (`pinnedCollapsed`) | ✅ through `settings.set`, `profiles.update`, `windows.setLayout` |
+| Sidebar layout | width, side, pinned collapsed, Full / Icons / Hidden | `settings` (`sidebarWidth`, `sidebarSide`, `autoHideTabs` for collapsed, `collapsedSidebar` for `icons` or `hidden`), profiles (`pinnedCollapsed`) | ✅ through `settings.set`, `profiles.update`, `windows.setLayout`. A window row's `tabsShown` is the window's choice (false when collapsed by ⌘S or the setting) and `sidebarMode` is what it shows (`full`, `icons` or `hidden`; a Full window too narrow for its sidebar shows `icons`) |
 | Presets and themes | setup codes, profile looks, theme files | `settings`, `themes/*.json`, profiles (`theme`) | ✅ `profiles.setLook`, `presets.apply`, `presets.describe` |
 | Omnibox | providers, bangs state, approvals | `settings.omniboxProviders`, `bangs-state.json`, `automation-approvals.json` | ✅ providers through `settings.set`; 🗺️ bangs |
 | Session and restore | the whole workspace | `session.json` | ✅ through the areas above; ⛔ the raw document |

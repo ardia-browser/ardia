@@ -6,7 +6,7 @@ import { type PresetLookFields } from "../../lib/profileLook";
 import { editedPresetCount } from "../../lib/presetLook";
 import { currentThemeLook } from "../config/basePalette";
 import type { BrowserWindow } from "../browser/types";
-import { shownSidebarWidth } from "../../lib/windowLayout";
+import { chosenSidebarMode } from "../browser/model";
 import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
 import { isMouseKey } from "../commands/mouseButtons";
@@ -54,6 +54,8 @@ export function settingsSnapshot(settings: Settings): Record<string, string> {
     ...out,
     ...commandBarStartFlags(settings.commandBarStart),
     ...customShortcutCounts(settings.shortcuts),
+    setting_sidebar_mode: chosenSidebarMode(settings),
+    default_sidebar_mode: "full",
     custom_mouse_shortcuts: String(Object.values(settings.mouseShortcuts ?? {}).filter((stored) => isMouseKey(stored[0] ?? "")).length),
     setting_interfaceScale: String(interfaceScalePercent(currentInterfaceScale())),
     default_interfaceScale: String(interfaceScalePercent(INTERFACE_SCALE.default)),
@@ -96,11 +98,12 @@ export const openTabSyncProfiles = (profiles: Record<string, { syncTabs?: true }
 
 const FORMER_MIN_WINDOW_WIDTH = 720;
 
-export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen">>, sidebarWidth: number, scale = currentInterfaceScale()): Record<string, string> {
-  const widths = Object.values(windows).flatMap((w) => (w.kind !== "small" && !w.fullScreen && w.frame ? [rootLength(w.frame[2], scale)] : []));
+export function narrowWindows(windows: Record<string, Pick<BrowserWindow, "kind" | "frame" | "fullScreen" | "iconsForWidth">>, scale = currentInterfaceScale()): Record<string, string> {
+  const shown = Object.values(windows).filter((w) => w.kind !== "small" && !w.fullScreen);
+  const widths = shown.flatMap((w) => (w.frame ? [rootLength(w.frame[2], scale)] : []));
   return {
     narrow_windows: String(widths.filter((width) => width < FORMER_MIN_WINDOW_WIDTH).length),
-    sidebar_narrowed_windows: String(widths.filter((width) => shownSidebarWidth(sidebarWidth, width) < sidebarWidth).length),
+    sidebar_icons_for_width_windows: String(shown.filter((w) => w.iconsForWidth).length),
   };
 }
 

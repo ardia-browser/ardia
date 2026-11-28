@@ -32,6 +32,7 @@ import { SidebarPages } from "./SidebarPages";
 import { sidebarText } from "./SidebarTextScope";
 import { SidebarRowLookContext, useSidebarRowLookSource } from "./rowLook";
 import { useRevealTabs } from "./useRevealTabs";
+import { registerSidebarDrag } from "./stripDrag";
 
 const HEADER_RIGHT = space.m;
 
@@ -86,6 +87,7 @@ export function Sidebar({ width }: { width: number }) {
   useLayoutEffect(() => dismissHoverIn(windowId), [windowId, current, paging]);
   useLayoutEffect(() => void (current && drag.current?.profileShown(current)), [current]);
   useEffect(() => closeAnchoredWhenControlsRowChanges(windowId), [windowId]);
+  useEffect(() => registerSidebarDrag(windowId, () => drag.current), [windowId]);
 
   return (
     <DragProvider>

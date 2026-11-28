@@ -33,6 +33,8 @@ type WindowBase = {
   activeTabIds: Record<string, string>;
   tabLayout?: "sidebar" | "top";
   autoHideTabs?: boolean;
+  collapsedSidebar?: CollapsedSidebar;
+  iconsForWidth?: true;
   frame: Frame | null;
   restoredFrame?: Frame;
   maximized?: boolean;
@@ -40,6 +42,8 @@ type WindowBase = {
   display?: string;
   createdAt: number;
 };
+
+export type CollapsedSidebar = "icons" | "hidden";
 
 export type BrowserWindow =
   | (WindowBase & { kind: "main"; chromeWindow?: string; opensBehind?: string })
@@ -178,7 +182,7 @@ export type ClosedTab = {
 export type ClosedWindow = {
   kind: "window";
   id: string;
-  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
+  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs" | "collapsedSidebar">;
   tabs: (TabSnapshot & { active: boolean; tabId?: string })[];
   groups: (Omit<TabGroup, "tabIds" | "windowId" | "shownTabIds"> & { tabIndexes: number[] })[];
   splits?: Pick<SplitView, "orientation" | "slots">[];

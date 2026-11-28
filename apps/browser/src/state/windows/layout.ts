@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import { autoHidesTabsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { autoHidesTabsIn, collapsesToIconsIn, sidebarSideOf, tabLayoutOf, tabsShownIn } from "../browser/model";
 import { switchOn } from "../../platform/killSwitches";
-import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
+import { ARC_LIGHTS_CENTER, lightsCenter, sidebarLightsCenter, stackedLightsCenter, toolbarLightsCenter, TOP_STRIP_LIGHTS_CENTER } from "./dockMotion";
 import { frameCornerRadius, windowFrame, type LightsPlace } from "../../platform/windows";
 import { rootSizeOfFrame } from "../settings/interfaceScale";
 import { DEFAULT_SIDEBAR_WIDTH, pageFrameInsetOf } from "../../lib/windowLayout";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { useSettings, useWindowId } from "../browser/hooks";
 import { useWindowSettings } from "../browser/keyedWatch";
@@ -68,7 +69,14 @@ export function openingLightsCenter(s: BrowserState, windowId: string): LightsPl
     tabsHidden: autoHidesTabsIn(s, windowId),
   });
   const base = sidebarAddressChosen(s.settings) ? ARC_LIGHTS_CENTER : toolbarLightsCenter(s.settings.compactToolbar, frame);
+  if (openingLightsStack(s, windowId)) return stackedLightsCenter(base, cardTopInset(s, windowId, frame) - frame);
   return sidebarLightsCenter(sidebarSideOf(s, w.id) === "right", width, open ? 0 : width, 0, base);
+}
+
+export function openingLightsStack(s: BrowserState, windowId: string): number {
+  const w = s.windows[windowId];
+  const stacks = !!w && PLATFORM_FEATURES.stacksTrafficLights && !w.fullScreen && !tabsShownIn(s, windowId) && sidebarSideOf(s, windowId) !== "right" && collapsesToIconsIn(s, windowId);
+  return stacks ? 1 : 0;
 }
 
 export function usePageFrameInset(): number {
@@ -145,6 +153,13 @@ export function windowControlsPlace(s: BrowserState, windowId: string, frame: nu
 }
 
 export const windowControlsBottom = (place: WindowControlsPlace | null): number => (place ? place.centerY + place.size / 2 : 0);
+
+export function iconStripTop(s: BrowserState, windowId: string, frame: number, chrome: WindowChrome = WINDOW_CHROME): number {
+  const top = cardTopInset(s, windowId, frame, chrome);
+  if (sidebarSideOf(s, windowId) !== "right" || !chrome.trailingWidth) return top;
+  const place = windowControlsPlace(s, windowId, frame, chrome);
+  return place ? Math.max(top, Math.ceil(windowControlsBottom(place)) + WINDOW_CONTROLS.gap) : top;
+}
 
 export function windowControlsLeading(s: BrowserState, windowId: string, chrome: WindowChrome = WINDOW_CHROME): boolean {
   const w = s.windows[windowId];

@@ -1,18 +1,18 @@
 import { useBrowser, type BrowserState } from "../browser/store";
 import { ALL, useKeyed, watchSettings } from "../browser/keyedWatch";
-import { shownSidebarWidth, sidebarWidthLimit } from "../../lib/windowLayout";
-import { useWindowRootWidth, windowRootWidth } from "../windows/rootSize";
+import { shownSidebarWidth, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, sidebarWidthLimit } from "../../lib/windowLayout";
+import { useWindowRootWidth } from "../windows/rootSize";
 
-const windowWidthOf = (s: Pick<BrowserState, "windows">, windowId: string): number | undefined => windowRootWidth(s, windowId);
+export const sidebarWidthIn = (s: Pick<BrowserState, "settings">, _windowId?: string): number => shownSidebarWidth(s.settings.sidebarWidth);
 
-export const sidebarWidthIn = (s: BrowserState, windowId: string): number => shownSidebarWidth(s.settings.sidebarWidth, windowWidthOf(s, windowId));
-
-export const keptSidebarWidth = (dragged: number, limit: number, saved = useBrowser.getState().settings.sidebarWidth): number => (dragged >= limit ? Math.max(dragged, saved) : dragged);
-
-export function useShownSidebarWidth(windowId: string): number {
+export function useShownSidebarWidth(_windowId: string): number {
   const saved = useKeyed(watchSettings, ALL, () => useBrowser.getState().settings.sidebarWidth);
-  return shownSidebarWidth(saved, useWindowRootWidth(windowId));
+  return shownSidebarWidth(saved);
 }
+
+export const sidebarResizeBounds = (docked: boolean, windowWidth: number | null | undefined) => ({ min: SIDEBAR_MIN_WIDTH, max: docked ? sidebarWidthLimit(windowWidth) : SIDEBAR_MAX_WIDTH });
+
+export const widthToSave = (width: number, dragged: boolean): number | null => (dragged ? width : null);
 
 export function useSidebarWidthLimit(windowId: string): number {
   return sidebarWidthLimit(useWindowRootWidth(windowId));

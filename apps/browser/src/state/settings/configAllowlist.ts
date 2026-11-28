@@ -2,7 +2,7 @@ import type { SettingKey } from "./settings";
 
 export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
   "warnBeforeQuitting", "warnBeforeClosingWindow", "restoreSession", "separateDownloadFolders", "searchEngine", "searchSuggestions", "commandBarHistory", "showSelectionSearch", "blockNotificationRequests",
-  "tabLayout", "autoHideTabs", "sidebarSide", "hideToolbarWhileScrolling", "newTabPosition", "newTabButtonPosition", "showTabMenuButton", "appLinksFirst", "newTabOpens",
+  "tabLayout", "autoHideTabs", "collapsedSidebar", "sidebarSide", "hideToolbarWhileScrolling", "newTabPosition", "newTabButtonPosition", "showTabMenuButton", "appLinksFirst", "newTabOpens",
   "warnBeforeClosingLastTab", "afterClosingTab", "tabSwitcherOrder", "tabSwitcherView", "keepTopAppsRunning", "undoReopensClosedTab", "warnBeforeMovingTabsToProfile", "shareTabsAcrossWindows", "tabReorderHaptics", "swipeBetweenTabs",
   "extendWebsiteColor", "cmdClickCreatesTabGroup", "optShiftClickOpensInGroup", "peekModifier", "peekLinksToOtherSites", "newTabLinksOpenIn", "popupsOpenAsTabs", "peekButtons",
   "splitLinkModifier", "autoGroupMeetingTabs", "cleanUpInactiveTabsAfterMinutes", "suggestCleanUp", "mutedSites", "showUnreadCounts", "showTopAppBadges", "showTabHoverMenu", "showFullUrlInTabHoverMenu", "closedTopAppTiles", "topAppFolders", "unreadHiddenSites", "neverTranslateSites", "developerModeSites",

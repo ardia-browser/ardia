@@ -1,5 +1,5 @@
 import { showMenu, type MenuItem } from "../../platform/menus";
-import { activeTabId, tabLayoutOf, tabsShownIn } from "../browser/model";
+import { activeTabId, autoHidesTabsIn, collapseSidebarTitle, tabLayoutOf } from "../browser/model";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { menuShortcut } from "../commands/commandShortcuts";
 import { bookmarksBarShownIn, bookmarksShown } from "../bookmarks/visibility";
@@ -43,7 +43,7 @@ export function browserLayoutItems(s: BrowserState, windowId: string): MenuItem[
       addressInToolbar && { id: "layout:compactToolbar", title: "Compact Toolbar", symbol: "rectangle.compress.vertical", checked: s.settings.compactToolbar },
     ],
     [
-      { id: "layout:autoHide", title: "Auto-Hide Tabs", symbol: "eye.slash", checked: !!w && !tabsShownIn(s, windowId), ...menuShortcut("toggleSidebar", s) },
+      { id: "layout:autoHide", title: collapseSidebarTitle(s, windowId), symbol: s.settings.collapsedSidebar === "icons" && inSidebar ? "square.grid.2x2" : "eye.slash", checked: !!w && autoHidesTabsIn(s, windowId), ...menuShortcut("toggleSidebar", s) },
       { id: "layout:minimalism", title: "Minimalism Mode", symbol: "rectangle.leftthird.inset.filled", checked: s.settings.minimalismMode, ...menuShortcut("toggleMinimalism", s) },
       bookmarksShown(s.settings) && w?.kind !== "private" && { id: "layout:bookmarksBar", title: "Bookmarks Bar", symbol: "bookmark", checked: bookmarksBarShownIn(s, windowId), ...menuShortcut("toggleBookmarksBar", s) },
       ...pinnedFoldMenuItem(s, windowId),

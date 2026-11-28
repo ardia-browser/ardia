@@ -5,16 +5,21 @@ import type { GroupColor } from "../../state/browser/types";
 import { useSettings } from "../../state/browser/hooks";
 import { hasOwnGroupIcon } from "../../state/groups/groupIcons";
 import { TabIcon } from "./TabIcon";
-import { folderPalette } from "./tokens";
+import { folderInk } from "./tokens";
 
 const FOLDER_SIDE = 16;
 
-export const AnimatedFolder = memo(function AnimatedFolder({ open, color, size }: { open: boolean; color?: GroupColor | null; size?: number }) {
+export function useFolderInk(color: GroupColor | null | undefined) {
   const theme = useTheme();
   const folderStyle = useSettings((s) => s.folderStyle);
+  return folderInk(color, theme, folderStyle);
+}
+
+export const AnimatedFolder = memo(function AnimatedFolder({ open, color, size }: { open: boolean; color?: GroupColor | null; size?: number }) {
+  const ink = useFolderInk(color);
   const inSidebar = useContext(TextScopeContext) === "sidebar";
   const side = size ?? (inSidebar ? sidebarIconSize(FOLDER_SIDE) : FOLDER_SIDE);
-  return <FolderIcon open={open} {...folderPalette(color, theme.dark, theme.powerUpColor ?? theme.accent, folderStyle, theme.windowTint)} style={{ width: side, height: side }} />;
+  return <FolderIcon open={open} {...ink} style={{ width: side, height: side }} />;
 });
 
 export function FolderOrIcon({ icon, open, color }: { icon: string | null | undefined; open: boolean; color?: GroupColor | null }) {

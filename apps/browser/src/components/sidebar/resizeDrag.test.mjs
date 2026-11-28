@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { animations } from "react-native";
-const { clampWidth, grabbedWidth, resizeGesture, rubberBand, unstretch } = await import("./resizeDrag.ts");
+const { clampWidth, grabbedWidth, resizeGesture, rubberBand, snapsAt, unstretch } = await import("./resizeDrag.ts");
 
 const bounds = { min: 160, max: 400 };
 
@@ -92,4 +92,41 @@ test("past min and max the width stretches and settles back inside", () => {
   assert.ok(Math.abs(unstretch(rubberBand(450, bounds), bounds) - 450) < 1e-6);
   assert.equal(clampWidth(450, bounds), 400);
   assert.equal(clampWidth(100, bounds), 160);
+});
+
+function snappingDrag(snap, saved = 190) {
+  const commits = [];
+  const live = [];
+  let snapped = 0;
+  const gesture = resizeGesture({
+    current: { ...bounds, direction: 1, saved: () => saved, onLive: (w) => live.push(w), onCommit: (width) => commits.push(width), snap: { ...snap, onSnap: () => snapped++ } },
+  });
+  return { commits, live, snapped: () => snapped, drag: (dx) => (gesture.onPanResponderGrant({}), gesture.onPanResponderMove({}, { dx }), gesture.onPanResponderRelease({}, { dx })) };
+}
+
+test("dragging the docked sidebar's edge well past its minimum snaps to icons and keeps the saved width", () => {
+  const short = snappingDrag({ below: 120 });
+  short.drag(-50);
+  assert.equal(short.snapped(), 0, "30 pt past the minimum springs back");
+  const far = snappingDrag({ below: 120 });
+  far.drag(-80);
+  assert.equal(far.snapped(), 1);
+  assert.deepEqual(far.commits, [], "the saved width is left alone");
+  assert.equal(far.live.at(-1), null, "the live width is let go");
+});
+
+test("dragging the icons' edge outward past the snap returns to the full sidebar, and a click does nothing", () => {
+  const strip = { min: 46, max: 46 };
+  let snapped = 0;
+  const gesture = resizeGesture({ current: { ...strip, direction: -1, saved: () => 46, onLive: () => {}, onCommit: () => {}, snap: { above: 86, onSnap: () => snapped++ } } });
+  gesture.onPanResponderGrant({});
+  gesture.onPanResponderRelease({}, { dx: 0 });
+  assert.equal(snapped, 0);
+  gesture.onPanResponderGrant({});
+  gesture.onPanResponderMove({}, { dx: -60 });
+  gesture.onPanResponderRelease({}, { dx: -60 });
+  assert.equal(snapped, 1, "a right-side strip grows leftward");
+  assert.equal(snapsAt(87, { above: 86, onSnap() {} }), true);
+  assert.equal(snapsAt(86, { above: 86, onSnap() {} }), false);
+  assert.equal(snapsAt(100, undefined), false);
 });

@@ -23,10 +23,10 @@ export const tabRows = {
           shown: inSidebar,
         },
         autoHideTabs: {
-          title: "Auto-hide tabs",
+          title: "Sidebar",
           explained: true,
-          description: "Tabs slide away until you point at the edge.",
-          keywords: ["hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "sidebar shortcut", "cmd s", "change shortcut", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen", "window edge", "slide", "one window"],
+          description: "Full, one column of icons, or auto-hide until you point at the edge.",
+          keywords: ["auto-hide tabs", "auto hide tabs", "autohide", "auto hide", "icons", "icons only", "favicons", "icon sidebar", "compact sidebar", "collapsed sidebar", "collapse sidebar", "narrow sidebar", "mini sidebar", "expand on hover", "hover", "helium", "microsoft edge", "full", "hidden", "hide tabs", "hide sidebar", "show sidebar", "toggle sidebar", "sidebar shortcut", "cmd s", "change shortcut", "hide tab bar", "tab strip", "top tabs", "focus mode", "full screen", "zen", "window edge", "slide", "one window"],
         },
         hideToolbarWhileScrolling: {
           title: "Hide toolbar while scrolling",

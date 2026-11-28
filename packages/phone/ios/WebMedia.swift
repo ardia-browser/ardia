@@ -324,7 +324,8 @@ final class WebMedia {
       try? await Task.sleep(for: .seconds(Self.keptPlayingCheck))
       guard let self, self.departure == departed, UIApplication.shared.applicationState == .background,
             await Self.anyPlaying(self.host.liveWebViews()),
-            self.departure == departed, UIApplication.shared.applicationState == .background else { return }
+            self.departure == departed, UIApplication.shared.applicationState == .background,
+            self.frames.values.contains(where: { $0.values.contains { $0.report.state == .playing } }) else { return }
       self.report(floated ? .keptPlaying : .playingInBackground, pageID: nil)
     }
   }
